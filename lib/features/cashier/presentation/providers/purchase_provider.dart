@@ -58,13 +58,6 @@ class PurchaseProvider extends ChangeNotifier {
     required StoreTable table,
     required String paymentMethod, // "CASH" / "QRIS"
   }) async {
-    // 1) ambil token: sesuaikan fungsi token di repo kamu
-    // contoh umum:
-    final token = await repo.storage.getToken(); // <-- PAKAI repo (bukan repository)
-    if (token == null || token.isEmpty) {
-      throw Exception('Authentication token not found');
-    }
-
     final itemsPayload = cart.map((it) {
       final optionIds = it.selected.values.expand((s) => s).toList();
 
@@ -77,16 +70,15 @@ class PurchaseProvider extends ChangeNotifier {
       };
     }).toList();
 
+    // ✅ token tidak perlu, karena DioClient interceptor yg pasang Authorization header
     final resp = await repo.api.checkout(
-      token: token,
       orderTable: table.id,
       orderName: customerName,
-      paymentMethod: paymentMethod, // "CASH"/"QRIS"
+      paymentMethod: paymentMethod,
       totalAmount: cartGrandTotal,
       items: itemsPayload,
     );
 
-    // kalau CASH biasanya clear cart
     if (paymentMethod == "CASH") {
       cart.clear();
       notifyListeners();
@@ -94,6 +86,7 @@ class PurchaseProvider extends ChangeNotifier {
 
     return resp;
   }
+
 
 
 
@@ -133,7 +126,8 @@ class PurchaseProvider extends ChangeNotifier {
     }
 
 
-    final unitFinal = product.price + optionExtra;
+    final baseAfterPromo = _promoFinalUnitPrice(product);
+    final unitFinal = baseAfterPromo + optionExtra;
 
     // kalau mau: merge item yang sama persis (product + selected + note)
     final same = cart.indexWhere((c) =>
@@ -270,6 +264,30 @@ class PurchaseProvider extends ChangeNotifier {
     if (index < 0 || index >= cart.length) return;
     cart.removeAt(index);
     notifyListeners();
+  }
+
+  void clearCartAndReset() {
+    cart.clear();
+    selectedCategoryId = -1;
+    query = '';
+    notifyListeners();
+  }
+
+  num _promoFinalUnitPrice(Product p) {
+    final promo = p.promotion;
+    final base = p.price; // num
+    if (promo == null) return base;
+
+    final v = promo.value; // num
+    if (promo.type == 'percentage') {
+      final pct = (v.toDouble() / 100.0);
+      final after = base.toDouble() * (1.0 - pct);
+      return after < 0 ? 0 : after;
+    } else {
+      // amount
+      final after = base.toDouble() - v.toDouble();
+      return after < 0 ? 0 : after;
+    }
   }
 
 }

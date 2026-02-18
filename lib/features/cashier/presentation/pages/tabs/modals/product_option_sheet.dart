@@ -28,7 +28,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
 
       // DEBUG
       // ignore: avoid_print
-      print('group=${g.name} min=${g.min} max=${g.max} count=$count');
+      // print('group=${g.name} min=${g.min} max=${g.max} count=$count');
 
       if (count < g.min) return false;
       if (g.max > 0 && count > g.max) return false;
@@ -48,7 +48,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
     return extra;
   }
 
-  num get unitFinal => widget.product.price + optionExtra;
+  num get unitFinal => promoUnitPrice(widget.product) + optionExtra;
   num get total => unitFinal * qty;
 
   @override
@@ -282,4 +282,32 @@ T? firstWhereOrNull<T>(Iterable<T> list, bool Function(T) test) {
     if (test(x)) return x;
   }
   return null;
+}
+
+num promoUnitPrice(Product p) {
+  final promo = p.promotion;
+  final base = p.price;
+
+  if (promo == null) return base;
+
+  final v = promo.value; // num
+  if (promo.type == 'percentage') {
+    final after = base.toDouble() * (1.0 - (v.toDouble() / 100.0));
+    return after < 0 ? 0 : after;
+  } else {
+    final after = base.toDouble() - v.toDouble();
+    return after < 0 ? 0 : after;
+  }
+}
+
+String _rupiah(num n) {
+  final v = n.toDouble().round();
+  final s = v.toString();
+  final buf = StringBuffer();
+  for (int i = 0; i < s.length; i++) {
+    final idxFromEnd = s.length - i;
+    buf.write(s[i]);
+    if (idxFromEnd > 1 && idxFromEnd % 3 == 1) buf.write('.');
+  }
+  return buf.toString();
 }

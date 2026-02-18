@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 import 'checkout_sheet.dart';
+import '/core/utils/open_url.dart';
 
 class CartSheet extends StatelessWidget {
   const CartSheet({super.key});
@@ -199,12 +200,27 @@ class CartSheet extends StatelessWidget {
                                       paymentMethod: pm,
                                     );
 
-                                    // kalau QRIS ada redirect url
-                                    final redirect = resp["redirect"];
-                                    if (redirect is String && redirect.isNotEmpty) {
-                                      // TODO: buka redirect (url_launcher / webview)
-                                      // print("QRIS URL: $redirect");
+                                    if (pm == "QRIS") {
+                                      final redirect = resp["redirect"];
+                                      if (redirect is String && redirect.isNotEmpty) {
+                                        // 1️⃣ tutup CheckoutSheet
+                                        Navigator.of(context, rootNavigator: true).pop();
+
+                                        // 2️⃣ buka halaman Xendit
+                                        await openInAppUrl(redirect);
+                                      } else {
+                                        throw Exception("URL pembayaran QRIS tidak ditemukan");
+                                      }
+                                    } else {
+                                      // CASH
+                                      Navigator.of(context, rootNavigator: true).pop();
+
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Pembayaran CASH berhasil')),
+                                      );
                                     }
+
+                                    return resp; // ✅ WAJIB agar tidak return null
                                   },
                                 ),
                               ),

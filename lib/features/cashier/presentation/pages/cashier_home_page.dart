@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
+
 import 'tabs/purchase_tab.dart' as purchase_tab;
+import 'tabs/payment_tab.dart' as payment_tab;
+import 'package:flutter/services.dart';
 
 
-class PaymentTab extends StatelessWidget {
-  const PaymentTab({super.key});
-  @override
-  Widget build(BuildContext context) => const Center(child: Text('Tab: Pembayaran'));
-}
+import '/features/cashier/presentation/pages/printer/printer_settings_page.dart';
 
 class ProcessTab extends StatelessWidget {
   const ProcessTab({super.key});
@@ -31,10 +31,12 @@ class CashierHomePage extends StatefulWidget {
 }
 
 class _CashierHomePageState extends State<CashierHomePage> {
-  int _index = 0; // default: Pembayaran (sesuai screenshot)
+  DateTime? _lastBackPressed;
+
+  int _index = 0;
   final _tabs = const [
     purchase_tab.PurchaseTab(),
-    PaymentTab(),
+    payment_tab.PaymentTab(),
     ProcessTab(),
     DoneTab(),
   ];
@@ -44,6 +46,7 @@ class _CashierHomePageState extends State<CashierHomePage> {
   Future<void> _logout() async {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
@@ -51,61 +54,96 @@ class _CashierHomePageState extends State<CashierHomePage> {
   }
 
   void _openBarcode() {
-    // nanti bisa push ke halaman scanner
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Open barcode scanner...')),
     );
+  }
+
+  Future<bool> _onWillPop() async {
+    final now = DateTime.now();
+
+    if (_lastBackPressed == null ||
+        now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
+      _lastBackPressed = now;
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tekan sekali lagi untuk keluar aplikasi'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      return false; // jangan keluar dulu
+    }
+
+    return true; // keluar aplikasi
   }
 
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
 
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 12,
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/cavaa_logo.png',
-              height: 28,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => const Text(
-                'Cavaa',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+
+        final now = DateTime.now();
+        if (_lastBackPressed == null ||
+            now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
+          _lastBackPressed = now;
+
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Tekan sekali lagi untuk keluar aplikasi'),
+              duration: Duration(seconds: 2),
             ),
-          ],
+          );
+          return;
+        }
+
+        // keluar aplikasi (pop route root)
+        SystemNavigator.pop();
+      },
+      child: Scaffold(
+        drawer: _AppDrawer(
+          onOpenPrinterSettings: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
+            );
+          },
+          onLogout: _logout,
         ),
-        actions: [
-          IconButton(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
+        appBar: AppBar(
+          titleSpacing: 12,
+          title: Row(
+            children: [
+              Image.asset(
+                'assets/images/cavaa_logo.png',
+                height: 28,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Text(
+                  'Cavaa',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-
-      // IndexedStack = state tiap tab aman (scroll, input, dsb)
-      body: IndexedStack(
-        index: _index,
-        children: _tabs,
-      ),
-
-      // Tombol barcode menonjol di tengah
-      
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-
-      // Bottom nav style “notch”
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 64, // kunci tinggi bar
+        ),
+        body: IndexedStack(
+          index: _index,
+          children: _tabs,
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        bottomNavigationBar: BottomAppBar(
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8,
+          child: SafeArea(
+            top: false,
             child: Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 2),
               child: Row(
                 children: [
                   _NavItem(
@@ -120,13 +158,10 @@ class _CashierHomePageState extends State<CashierHomePage> {
                     active: _index == 1,
                     onTap: () => _onTap(1),
                   ),
-
                   _BarcodeNavItem(
                     active: false,
                     onTap: _openBarcode,
                   ),
- // ruang untuk FAB (lebih aman)
-
                   _NavItem(
                     icon: Icons.sync_rounded,
                     label: 'Proses',
@@ -146,7 +181,6 @@ class _CashierHomePageState extends State<CashierHomePage> {
           ),
         ),
       ),
-
     );
   }
 }
@@ -189,7 +223,11 @@ class _NavItem extends StatelessWidget {
               ),
               child: Text(
                 '$badge',
-                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -206,9 +244,7 @@ class _NavItem extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               iconWidget,
-
               const SizedBox(height: 2),
-
               Text(
                 label,
                 maxLines: 1,
@@ -224,10 +260,8 @@ class _NavItem extends StatelessWidget {
         ),
       ),
     );
-
   }
 }
-
 
 class _BarcodeNavItem extends StatelessWidget {
   const _BarcodeNavItem({
@@ -246,7 +280,7 @@ class _BarcodeNavItem extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Transform.translate(
-          offset: const Offset(0, -10), // ⬅️ naik sedikit (floating)
+          offset: const Offset(0, -10),
           child: Container(
             height: 52,
             width: 52,
@@ -267,6 +301,49 @@ class _BarcodeNavItem extends StatelessWidget {
               size: 26,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppDrawer extends StatelessWidget {
+  const _AppDrawer({
+    required this.onOpenPrinterSettings,
+    required this.onLogout,
+  });
+
+  final VoidCallback onOpenPrinterSettings;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    const brand = Color(0xFFAE1504);
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.print_outlined, color: brand),
+              title: const Text('Pairing Printer'),
+              subtitle: const Text('Bluetooth / Kabel (USB)'),
+              onTap: () {
+                Navigator.of(context).pop();
+                onOpenPrinterSettings();
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text('Logout'),
+              onTap: () {
+                Navigator.of(context).pop();
+                onLogout();
+              },
+            ),
+          ],
         ),
       ),
     );

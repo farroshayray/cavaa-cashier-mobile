@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/data/models/purchase_models.dart';
+import '/core/utils/open_url.dart';
 
 enum PayMethod { cash, qris }
 
@@ -11,11 +12,12 @@ class CheckoutSheet extends StatefulWidget {
     this.onSubmit,
   });
 
-  final Future<void> Function({
+  final Future<Map<String, dynamic>> Function({
     required String customerName,
     required StoreTable table,
     required PayMethod method,
   })? onSubmit;
+
 
   @override
   State<CheckoutSheet> createState() => _CheckoutSheetState();
@@ -217,14 +219,17 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                           : () async {
                               setState(() => _submitting = true);
                               try {
-                                debugPrint("SUBMIT checkout: name=${_nameCtrl.text.trim()} table=${_selectedTable!.id} method=$_method cart=${items.length}");
-                                // Kamu bisa taruh validasi stok/checkout di sini
-                                if (widget.onSubmit != null) {
-                                  await widget.onSubmit!(
-                                    customerName: _nameCtrl.text.trim(),
-                                    table: _selectedTable!,
-                                    method: _method!,
-                                  );
+                                final resp = await widget.onSubmit!(
+                                  customerName: _nameCtrl.text.trim(),
+                                  table: _selectedTable!,
+                                  method: _method!,
+                                );
+
+                                final redirect = resp['redirect'];
+                                if (_method == PayMethod.qris && redirect is String && redirect.isNotEmpty) {
+                                  if (mounted) Navigator.pop(context);
+                                  await openExternalUrl(redirect); // atau openInAppUrl (lihat opsi di bawah)
+                                  return; // biasanya jangan auto pop dulu kalau mau user lihat web
                                 }
 
                                 if (mounted) Navigator.pop(context);

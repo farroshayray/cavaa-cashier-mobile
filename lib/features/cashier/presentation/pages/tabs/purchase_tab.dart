@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '/features/cashier/data/purchase_api.dart';
-import '/features/cashier/data/models/purchase_repository.dart';
 import '../../../presentation/providers/purchase_provider.dart';
-import '../../../../../core/storage/secure_storage_service.dart';
 import '../../../data/models/purchase_models.dart';
 import '/features/cashier/presentation/pages/tabs/modals/product_option_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/cart_sheet.dart';
@@ -12,24 +9,32 @@ import '/features/cashier/presentation/pages/tabs/modals/checkout_sheet.dart';
 
 
 
-class PurchaseTab extends StatelessWidget {
+class PurchaseTab extends StatefulWidget {
   const PurchaseTab({super.key});
 
   @override
+  State<PurchaseTab> createState() => _PurchaseTabState();
+}
+
+class _PurchaseTabState extends State<PurchaseTab> {
+  bool _loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loaded) return;
+    _loaded = true;
+
+    // ✅ pakai PurchaseProvider yang sudah ada di root (app.dart)
+    Future.microtask(() => context.read<PurchaseProvider>().load());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Provider dibuat di sini supaya tab ini mandiri.
-    // Kalau kamu nanti mau global (dipakai tab lain), pindahin ke atas (CashierHomePage).
-    return ChangeNotifierProvider(
-      create: (_) => PurchaseProvider(
-        PurchaseRepository(
-          api: PurchaseApi(),
-          storage: SecureStorageService(),
-        ),
-      )..load(),
-      child: const _PurchaseView(),
-    );
+    return const _PurchaseView();
   }
 }
+
 
 class _PurchaseView extends StatelessWidget {
   const _PurchaseView();
@@ -187,6 +192,7 @@ class _MiniCartBar extends StatelessWidget {
 
                 showModalBottomSheet(
                   context: context,
+                  useRootNavigator: true,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
                   builder: (_) => ChangeNotifierProvider.value(
@@ -297,11 +303,7 @@ class _MiniCartBar extends StatelessWidget {
                               paymentMethod: pm,
                             );
 
-                            final redirect = resp["redirect"];
-                            if (redirect is String && redirect.isNotEmpty) {
-                              // TODO: buka redirect
-                              // print("QRIS URL: $redirect");
-                            }
+                            return resp; // ✅ PENTING: balikin ke CheckoutSheet
                           },
                         ),
                       ),
@@ -590,6 +592,7 @@ class _ProductCard extends StatelessWidget {
                   final purchaseVm = context.read<PurchaseProvider>();
                   await showModalBottomSheet(
                     context: context,
+                    useRootNavigator: true,
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (_) => ChangeNotifierProvider.value(
@@ -742,6 +745,7 @@ class _ProductCard extends StatelessWidget {
                                         final purchaseVm = context.read<PurchaseProvider>();
                                         await showModalBottomSheet(
                                           context: context,
+                                          useRootNavigator: true,
                                           isScrollControlled: true,
                                           backgroundColor: Colors.transparent,
                                           builder: (_) => ChangeNotifierProvider.value(
