@@ -2,6 +2,7 @@ import '../../../core/storage/secure_storage_service.dart';
 import 'auth_api.dart';
 import 'models/login_request.dart';
 import 'models/login_response.dart';
+import '/features/auth/data/models/user_model.dart';
 
 class AuthRepository {
   final AuthApi api;
@@ -31,4 +32,9 @@ class AuthRepository {
     final t = await storage.getToken();
     return t != null && t.isNotEmpty;
   }
+
+  Future<UserModel> me() async {
+    return await api.me();
+  }
+
 }

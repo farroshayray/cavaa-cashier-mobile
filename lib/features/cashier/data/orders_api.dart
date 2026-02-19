@@ -71,6 +71,33 @@ class OrdersApi {
     throw Exception('HTTP ${resp.statusCode}: $msg');
   }
 
+  Future<Map<String, dynamic>> printDetail({
+    required String token,
+    required int id,
+  }) async {
+    final uri = Uri.parse('${Env.baseUrl}/api/v1/mobile/cashier/print-detail/$id');
+
+    final resp = await http.get(uri, headers: {
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $token',
+    });
+
+    dynamic body;
+    if (resp.body.isNotEmpty) {
+      try { body = jsonDecode(resp.body); } catch (_) { body = resp.body; }
+    }
+
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      if (body is Map<String, dynamic>) return body;
+      throw Exception('Response JSON bukan object');
+    }
+
+    final msg = (body is Map && body['message'] != null)
+        ? body['message'].toString()
+        : 'Request gagal';
+    throw Exception('HTTP ${resp.statusCode}: $msg');
+  }
+
   Future<Map<String, dynamic>> softDeleteOrder({
     required String token,
     required int id,
@@ -145,5 +172,89 @@ class OrdersApi {
         : 'Request gagal';
     throw Exception('HTTP ${resp.statusCode}: $msg');
   }
+
+    Future<Map<String, dynamic>> processOrder({
+      required String token,
+      required int id,
+    }) async {
+      final uri = Uri.parse('${Env.baseUrl}/api/v1/mobile/cashier/process-order/$id');
+
+      final resp = await http.post(uri, headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      });
+
+      dynamic body;
+      if (resp.body.isNotEmpty) {
+        try { body = jsonDecode(resp.body); } catch (_) { body = resp.body; }
+      }
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        if (body is Map<String, dynamic>) return body;
+        return {'status': 'ok'};
+      }
+
+      final msg = (body is Map && body['message'] != null) ? body['message'].toString() : 'Request gagal';
+      throw Exception('HTTP ${resp.statusCode}: $msg');
+    }
+
+    Future<Map<String, dynamic>> cancelProcessOrder({
+      required String token,
+      required int id,
+    }) async {
+      final uri = Uri.parse('${Env.baseUrl}/api/v1/mobile/cashier/cancel-process-order/$id');
+
+      final resp = await http.post(uri, headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      });
+
+      dynamic body;
+      if (resp.body.isNotEmpty) {
+        try { body = jsonDecode(resp.body); } catch (_) { body = resp.body; }
+      }
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        if (body is Map<String, dynamic>) return body;
+        return {'status': 'ok'};
+      }
+
+      final msg = (body is Map && body['message'] != null) ? body['message'].toString() : 'Request gagal';
+      throw Exception('HTTP ${resp.statusCode}: $msg');
+    }
+
+    Future<Map<String, dynamic>> finishOrder({
+      required String token,
+      required int id,
+      String? note,
+    }) async {
+      final uri = Uri.parse('${Env.baseUrl}/api/v1/mobile/cashier/finish-order/$id');
+
+      final resp = await http.post(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+        }),
+      );
+
+      dynamic body;
+      if (resp.body.isNotEmpty) {
+        try { body = jsonDecode(resp.body); } catch (_) { body = resp.body; }
+      }
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        if (body is Map<String, dynamic>) return body;
+        return {'status': 'ok'};
+      }
+
+      final msg = (body is Map && body['message'] != null) ? body['message'].toString() : 'Request gagal';
+      throw Exception('HTTP ${resp.statusCode}: $msg');
+    }
+
 
 }

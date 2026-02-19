@@ -1,9 +1,10 @@
+// lib/features/cashier/presentation/providers/done_provider.dart
 import 'package:flutter/foundation.dart';
 import '../../data/models/orders_repository.dart';
 
-class PaymentProvider extends ChangeNotifier {
+class DoneProvider extends ChangeNotifier {
   final OrdersRepository repo;
-  PaymentProvider(this.repo);
+  DoneProvider(this.repo);
 
   bool isLoading = false;
   String? error;
@@ -22,7 +23,7 @@ class PaymentProvider extends ChangeNotifier {
 
       final res = await repo.api.getOrdersData(
         token: token,
-        tab: 'pembayaran',
+        tab: 'selesai', // ✅ ganti ini
         q: query.isEmpty ? null : query,
       );
 
@@ -51,32 +52,5 @@ class PaymentProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> getPrintDetail(int id) async {
     return repo.fetchPrintDetail(id);
-  }
-
-  Future<void> deleteOrder(int id) async {
-    // opsional: set loading khusus delete, tapi minimal gini dulu
-    try {
-      await repo.softDeleteOrder(id); // kita buat di repository
-      // setelah delete sukses, refresh list
-      await load();
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>> payOrder({
-    required int id,
-    required num paidAmount,
-    required num changeAmount,
-    String? note,
-    String? email,
-  }) async {
-    return repo.paymentOrder(
-      id: id,
-      paidAmount: paidAmount,
-      changeAmount: changeAmount,
-      note: note,
-      email: email,
-    );
   }
 }

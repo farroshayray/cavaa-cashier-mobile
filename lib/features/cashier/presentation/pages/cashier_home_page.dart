@@ -1,27 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 
+import '/features/cashier/presentation/widgets/notif_bell_button.dart';
+import '/features/cashier/presentation/providers/notifications_provider.dart';
+
+import '/features/cashier/presentation/realtime/pusher_orders_service.dart';
+import '/core/storage/secure_storage_service.dart';
+
+import '/features/cashier/data/orders_api.dart';
+import '/features/cashier/data/models/orders_repository.dart';
+import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/providers/process_provider.dart';
+// kalau kamu punya done_provider, import juga
+
 import 'tabs/purchase_tab.dart' as purchase_tab;
 import 'tabs/payment_tab.dart' as payment_tab;
-import 'package:flutter/services.dart';
-
+import 'tabs/process_tab.dart' as process_tab;
+import 'tabs/done_tab.dart' as done_tab;
 
 import '/features/cashier/presentation/pages/printer/printer_settings_page.dart';
-
-class ProcessTab extends StatelessWidget {
-  const ProcessTab({super.key});
-  @override
-  Widget build(BuildContext context) => const Center(child: Text('Tab: Proses'));
-}
-
-class DoneTab extends StatelessWidget {
-  const DoneTab({super.key});
-  @override
-  Widget build(BuildContext context) => const Center(child: Text('Tab: Selesai'));
-}
 
 class CashierHomePage extends StatefulWidget {
   const CashierHomePage({super.key});
@@ -31,15 +34,79 @@ class CashierHomePage extends StatefulWidget {
 }
 
 class _CashierHomePageState extends State<CashierHomePage> {
-  DateTime? _lastBackPressed;
+  // ===== Realtime =====
+  final _pusherSvc = PusherOrdersService(SecureStorageService());
+  bool _pusherStarted = false;
 
+  // ===== UI =====
+  DateTime? _lastBackPressed;
   int _index = 0;
-  final _tabs = const [
-    purchase_tab.PurchaseTab(),
-    payment_tab.PaymentTab(),
-    ProcessTab(),
-    DoneTab(),
-  ];
+
+  // ===== Focus/highlight order =====
+  int? _focusOrderId;
+  Timer? _focusTimer;
+
+  // ===== Repos (biar ga bikin berkali2) =====
+  late final OrdersRepository _ordersRepo;
+  late final PaymentProvider _payVm;
+  late final ProcessProvider _procVm;
+
+
+  @override
+  void initState() {
+    super.initState();
+    _ordersRepo = OrdersRepository(api: OrdersApi(), storage: SecureStorageService());
+
+    _payVm = PaymentProvider(_ordersRepo)..load();
+    _procVm = ProcessProvider(_ordersRepo)..load();
+  }
+
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _startRealtimeIfReady();
+  }
+
+  Future<void> _startRealtimeIfReady() async {
+    if (!mounted || _pusherStarted) return;
+
+    final auth = context.read<AuthProvider>();
+    final partnerId = auth.user?.partnerId;
+
+    if (partnerId == null) {
+      debugPrint('PUSHER: partnerId null, belum start');
+      return;
+    }
+
+    final notif = context.read<NotificationsProvider>();
+
+    try {
+      await _pusherSvc.start(
+        partnerId: partnerId,
+        onOrderCreated: (data) {
+          debugPrint('✅ OrderCreated: $data');
+          notif.pushFromPusher(data);
+        },
+      );
+
+      _pusherStarted = true;
+      debugPrint('✅ PUSHER STARTED partner=$partnerId');
+    } catch (e, st) {
+      debugPrint('❌ PUSHER start error: $e');
+      debugPrint('$st');
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusTimer?.cancel();
+    _pusherSvc.stop();
+    _payVm.dispose();
+    _procVm.dispose();
+    super.dispose();
+  }
+
 
   void _onTap(int i) => setState(() => _index = i);
 
@@ -59,11 +126,92 @@ class _CashierHomePageState extends State<CashierHomePage> {
     );
   }
 
-  Future<bool> _onWillPop() async {
-    final now = DateTime.now();
+  // ======= INI KUNCI: notif click -> pindah tab + refresh + fokus & blink =======
+  Future<void> _handleNotifTap(dynamic n) async {
+    // asumsi model notif kamu punya:
+    // n.status (String), n.orderId (int?) atau n.id, n.code
+    final st = (n.status ?? '').toString().toUpperCase();
+    debugPrint('NOTIF RAW = $n');
 
-    if (_lastBackPressed == null ||
-        now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
+    int targetIndex = 0;
+    if (st == 'UNPAID' || st == 'EXPIRED' || st == 'PAYMENT REQUEST') {
+      targetIndex = 1; // pembayaran
+    } else if (st == 'PAID' || st == 'PROCESSED') {
+      targetIndex = 2; // proses
+    } else if (st == 'SERVED' || st == 'DONE' || st == 'FINISHED') {
+      targetIndex = 3; // selesai
+    } else {
+      // fallback, kalau status tidak dikenal
+      targetIndex = 1;
+    }
+
+    // ambil orderId dari notif
+    final int? orderId = _pickOrderId(n);
+    debugPrint('NOTIF TAP status=$st orderId=$orderId code=${n.code}');
+
+    // 1) pindah tab
+    if (mounted) setState(() => _index = targetIndex);
+
+    // 2) refresh tab tujuan (tunggu selesai)
+    if (targetIndex == 1) {
+      _payVm.setQuery('');
+      await _payVm.load();
+    } else if (targetIndex == 2) {
+      _procVm.setQuery('');
+      await _procVm.load();
+    }
+
+    // 3) set focus setelah load + setelah frame (biar list sudah kebangun)
+    if (orderId != null && orderId > 0 && mounted) {
+      _focusTimer?.cancel();
+
+      // trik: reset dulu supaya walau orderId sama, tetap dianggap "berubah"
+      setState(() => _focusOrderId = null);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _focusOrderId = orderId);
+
+        _focusTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) setState(() => _focusOrderId = null);
+        });
+      });
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Buka order ${n.code ?? ''}'.trim())),
+    );
+  }
+
+  int? _pickOrderId(dynamic n) {
+    try {
+      // ✅ kasus notif kamu (IncomingOrderNotif)
+      if (n is IncomingOrderNotif) return n.id;
+
+      // ✅ kalau suatu saat notif berubah jadi Map
+      if (n is Map) {
+        final v = n['id'] ?? n['orderId'] ?? n['order_id'] ?? n['booking_order_id'];
+        if (v == null) return null;
+        if (v is int) return v;
+        return int.tryParse(v.toString());
+      }
+
+      // ✅ fallback object lain
+      final v = (n.id ?? n.orderId ?? n.order_id);
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+
+  // ======= BACK PRESS double-tap exit =======
+  Future<void> _handleBack() async {
+    final now = DateTime.now();
+    if (_lastBackPressed == null || now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
       _lastBackPressed = now;
 
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -73,109 +221,111 @@ class _CashierHomePageState extends State<CashierHomePage> {
           duration: Duration(seconds: 2),
         ),
       );
-
-      return false; // jangan keluar dulu
+      return;
     }
-
-    return true; // keluar aplikasi
+    SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    // ✅ INI yang kamu ubah: build milik _CashierHomePageState
     const brand = Color(0xFFAE1504);
 
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-
-        final now = DateTime.now();
-        if (_lastBackPressed == null ||
-            now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
-          _lastBackPressed = now;
-
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tekan sekali lagi untuk keluar aplikasi'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-          return;
-        }
-
-        // keluar aplikasi (pop route root)
-        SystemNavigator.pop();
-      },
-      child: Scaffold(
-        drawer: _AppDrawer(
-          onOpenPrinterSettings: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
-            );
-          },
-          onLogout: _logout,
-        ),
-        appBar: AppBar(
-          titleSpacing: 12,
-          title: Row(
-            children: [
-              Image.asset(
-                'assets/images/cavaa_logo.png',
-                height: 28,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Text(
-                  'Cavaa',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<PaymentProvider>.value(value: _payVm),
+        ChangeNotifierProvider<ProcessProvider>.value(value: _procVm),
+      ],
+      child: PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) async {
+          if (didPop) return;
+          await _handleBack();
+        },
+        child: Scaffold(
+          drawer: _AppDrawer(
+            onOpenPrinterSettings: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
+              );
+            },
+            onLogout: _logout,
+          ),
+          appBar: AppBar(
+            titleSpacing: 12,
+            title: Row(
+              children: [
+                Image.asset(
+                  'assets/images/cavaa_logo.png',
+                  height: 28,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Text(
+                    'Cavaa',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
+              ],
+            ),
+            actions: [
+              NotifBellButton(
+                onTapItem: _handleNotifTap, // ✅ pakai handler baru
               ),
             ],
           ),
-        ),
-        body: IndexedStack(
-          index: _index,
-          children: _tabs,
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        bottomNavigationBar: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 8,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Row(
-                children: [
-                  _NavItem(
-                    icon: Icons.shopping_cart_outlined,
-                    label: 'Pembelian',
-                    active: _index == 0,
-                    onTap: () => _onTap(0),
-                  ),
-                  _NavItem(
-                    icon: Icons.payments_outlined,
-                    label: 'Pembayaran',
-                    active: _index == 1,
-                    onTap: () => _onTap(1),
-                  ),
-                  _BarcodeNavItem(
-                    active: false,
-                    onTap: _openBarcode,
-                  ),
-                  _NavItem(
-                    icon: Icons.sync_rounded,
-                    label: 'Proses',
-                    active: _index == 2,
-                    onTap: () => _onTap(2),
-                  ),
-                  _NavItem(
-                    icon: Icons.check_circle_outline_rounded,
-                    label: 'Selesai',
-                    active: _index == 3,
-                    badge: 2,
-                    onTap: () => _onTap(3),
-                  ),
-                ],
+          body: IndexedStack(
+            index: _index,
+            children: [
+              const purchase_tab.PurchaseTab(),
+
+              // ✅ kirim focusOrderId ke tab supaya bisa blink + scroll
+              payment_tab.PaymentTab(focusOrderId: _focusOrderId),
+
+              process_tab.ProcessTab(focusOrderId: _focusOrderId),
+
+              const done_tab.DoneTab(),
+            ],
+          ),
+          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          bottomNavigationBar: BottomAppBar(
+            shape: const CircularNotchedRectangle(),
+            notchMargin: 8,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(
+                  children: [
+                    _NavItem(
+                      icon: Icons.shopping_cart_outlined,
+                      label: 'Pembelian',
+                      active: _index == 0,
+                      onTap: () => _onTap(0),
+                    ),
+                    _NavItem(
+                      icon: Icons.payments_outlined,
+                      label: 'Pembayaran',
+                      active: _index == 1,
+                      onTap: () => _onTap(1),
+                    ),
+                    _BarcodeNavItem(
+                      active: false,
+                      onTap: _openBarcode,
+                    ),
+                    _NavItem(
+                      icon: Icons.sync_rounded,
+                      label: 'Proses',
+                      active: _index == 2,
+                      onTap: () => _onTap(2),
+                    ),
+                    _NavItem(
+                      icon: Icons.check_circle_outline_rounded,
+                      label: 'Selesai',
+                      active: _index == 3,
+                      badge: 2,
+                      onTap: () => _onTap(3),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
-import '../../../data/orders_api.dart';
-import '../../../data/models/orders_repository.dart';
-import '../../../../../core/storage/secure_storage_service.dart';
 import '../../providers/payment_provider.dart';
 import '../../../../scanner/pages/barcode_scanner_page.dart';
 import '/features/cashier/presentation/pages/tabs/modals/payment_process_sheet.dart';
@@ -12,21 +10,19 @@ import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart
 
 
 class PaymentTab extends StatelessWidget {
-  const PaymentTab({super.key});
+  const PaymentTab({super.key, this.focusOrderId});
+
+  final int? focusOrderId;
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => PaymentProvider(
-        OrdersRepository(api: OrdersApi(), storage: SecureStorageService()),
-      )..load(),
-      child: const _PaymentView(),
-    );
+    return _PaymentView(focusOrderId: focusOrderId);
   }
 }
 
 class _PaymentView extends StatefulWidget {
-  const _PaymentView();
+  const _PaymentView({this.focusOrderId});
+  final int? focusOrderId;
 
   @override
   State<_PaymentView> createState() => _PaymentViewState();
@@ -34,20 +30,55 @@ class _PaymentView extends StatefulWidget {
 
 class _PaymentViewState extends State<_PaymentView> {
   final _searchCtrl = TextEditingController();
+  final ScrollController _listCtrl = ScrollController();
+
+  int? _blinkOrderId;
+  Timer? _blinkTimer;
+  int? _lastHandledFocus;
+
 
   @override
   void initState() {
     super.initState();
+
     _searchCtrl.addListener(() {
-      if (mounted) setState(() {}); // 🔑 bikin SearchBar rebuild saat text berubah
+      if (mounted) setState(() {});
     });
   }
 
   @override
+  void didUpdateWidget(covariant _PaymentView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final id = widget.focusOrderId;
+    if (id != null && id > 0 && id != _lastHandledFocus) {
+      _lastHandledFocus = id;
+      _goToAndBlink(id);
+    }
+  }
+
+
+  @override
   void dispose() {
+    _blinkTimer?.cancel();
     _searchCtrl.dispose();
+    _listCtrl.dispose();
     super.dispose();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final id = widget.focusOrderId;
+    if (id != null && id > 0 && id != _lastHandledFocus) {
+      _lastHandledFocus = id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _goToAndBlink(id);
+      });
+    }
+  }
+
 
   Future<void> _scanAndSearch() async {
     final code = await Navigator.of(context).push<String>(
@@ -57,28 +88,62 @@ class _PaymentViewState extends State<_PaymentView> {
     if (!mounted) return;
 
     if (code != null && code.trim().isNotEmpty) {
-      // 1) isi searchfield
       _searchCtrl.text = code.trim();
-
-      // 2) simulasi tombol search
       final provider = context.read<PaymentProvider>();
       provider.setQuery(_searchCtrl.text);
       await provider.load();
-
-      // opsional: tutup keyboard
       FocusScope.of(context).unfocus();
     }
   }
 
+  int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
+
+  Future<void> _goToAndBlink(int orderId) async {
+    final vm = context.read<PaymentProvider>();
+
+    // 1) pastikan list sudah ada data terbaru
+    // (kalau dari Home sudah load(), ini tetap aman)
+    if (vm.items.isEmpty) {
+      await vm.load();
+    }
+
+    if (!mounted) return;
+
+    final idx = vm.items.indexWhere((e) => _toId(e['id']) == orderId);
+    if (idx < 0) {
+      // order tidak ketemu di tab ini (bisa karena statusnya sudah pindah tab)
+      return;
+    }
+
+    // 2) scroll ke index (perkiraan tinggi item)
+    // kalau kamu butuh akurat banget, nanti kita bisa pakai package scrollable_positioned_list
+    const approxItemHeight = 160.0; // estimasi tinggi card + spacing
+    final targetOffset = (idx * (approxItemHeight + 10)).toDouble();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_listCtrl.hasClients) return;
+      final max = _listCtrl.position.maxScrollExtent;
+      _listCtrl.animateTo(
+        targetOffset.clamp(0.0, max),
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOut,
+      );
+    });
+
+    // 3) blink border
+    _blinkTimer?.cancel();
+    setState(() => _blinkOrderId = orderId);
+    _blinkTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _blinkOrderId = null);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    const brand = Color(0xFFAE1504);
     final vm = context.watch<PaymentProvider>();
 
     return Column(
       children: [
-        // ===== Search Bar (mirip web) =====
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
           child: _SearchBar(
@@ -97,7 +162,6 @@ class _PaymentViewState extends State<_PaymentView> {
           ),
         ),
 
-        // ===== Sticky header style =====
         Container(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
           decoration: BoxDecoration(
@@ -110,17 +174,13 @@ class _PaymentViewState extends State<_PaymentView> {
           child: Row(
             children: [
               const Expanded(
-                child: Text(
-                  'Pembayaran',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                ),
+                child: Text('Pembayaran', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
               ),
               _Badge(text: '${vm.items.length} order'),
             ],
           ),
         ),
 
-        // ===== Body =====
         Expanded(
           child: RefreshIndicator(
             onRefresh: () => context.read<PaymentProvider>().load(),
@@ -166,102 +226,111 @@ class _PaymentViewState extends State<_PaymentView> {
                 }
 
                 return ListView.separated(
+                  controller: _listCtrl, // ✅ penting untuk scroll
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                   itemCount: vm.items.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) => _PaymentOrderCard(
-                    data: vm.items[i],
-                    onDetail: () async {
-                      final idRaw = vm.items[i]['id'];
-                      final id = (idRaw is int) ? idRaw : int.tryParse(idRaw.toString()) ?? 0;
-                      if (id <= 0) return;
+                  itemBuilder: (_, i) {
+                    final data = vm.items[i];
+                    final id = _toId(data['id']);
+                    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
-                      await showModalBottomSheet(
-                        context: context,
-                        useRootNavigator: true,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.92,
-                          child: DetailOrderSheet(
-                            orderId: id,
-                            loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
-                          ),
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: blinking ? Colors.red : Colors.transparent,
+                          width: 2,
                         ),
-                      );
-                    },
-                    onDelete: () async {
-                      final idRaw = vm.items[i]['id'];
-                      final id = (idRaw is int) ? idRaw : int.tryParse(idRaw.toString()) ?? 0;
-                      if (id <= 0) return;
+                      ),
+                      child: _PaymentOrderCard(
+                        data: data,
+                        onDetail: () async {
+                          if (id <= 0) return;
 
-                      final ok = await showDialog<bool>(
-                        context: context,
-                        useRootNavigator: true,
-                        builder: (ctx) {
-                          return AlertDialog(
-                            title: const Text('Hapus order?'),
-                            content: const Text(
-                              'Order yang dihapus tidak dapat dikembalikan.',
+                          await showModalBottomSheet(
+                            context: context,
+                            useRootNavigator: true,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.92,
+                              child: DetailOrderSheet(
+                                orderId: id,
+                                loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
+                              ),
                             ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(false),
-                                child: const Text('Batal'),
-                              ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color.fromARGB(255, 146, 10, 0),
-                                  foregroundColor: Colors.white,
-                                  ),
-                                onPressed: () => Navigator.of(ctx).pop(true),
-                                child: const Text('Hapus'),
-                              ),
-                            ],
                           );
                         },
-                      );
+                        onDelete: () async {
+                          if (id <= 0) return;
 
-                      if (ok != true) return;
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            useRootNavigator: true,
+                            builder: (ctx) {
+                              return AlertDialog(
+                                title: const Text('Hapus order?'),
+                                content: const Text('Order yang dihapus tidak dapat dikembalikan.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(ctx).pop(false),
+                                    child: const Text('Batal'),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color.fromARGB(255, 146, 10, 0),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: () => Navigator.of(ctx).pop(true),
+                                    child: const Text('Hapus'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
 
-                      try {
-                        await context.read<PaymentProvider>().deleteOrder(id);
+                          if (ok != true) return;
 
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Order berhasil dihapus.')),
-                        );
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Gagal hapus order: $e')),
-                        );
-                      }
-                    },
-                    onProcess: () async {
-                      final idRaw = vm.items[i]['id'];
-                      final id = (idRaw is int) ? idRaw : int.tryParse(idRaw.toString()) ?? 0;
-                      if (id <= 0) return;
+                          try {
+                            await context.read<PaymentProvider>().deleteOrder(id);
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Order berhasil dihapus.')),
+                            );
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Gagal hapus order: $e')),
+                            );
+                          }
+                        },
+                        onProcess: () async {
+                          if (id <= 0) return;
 
-                      final result = await showModalBottomSheet<bool>(
-                        context: context,
-                        useRootNavigator: true,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.92,
-                          child: PaymentProcessSheet(
-                            orderId: id,
-                            loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
-                          ),
-                        ),
-                      );
+                          final result = await showModalBottomSheet<bool>(
+                            context: context,
+                            useRootNavigator: true,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.92,
+                              child: PaymentProcessSheet(
+                                orderId: id,
+                                loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
+                              ),
+                            ),
+                          );
 
-                      if (result == true && context.mounted) {
-                        await context.read<PaymentProvider>().load();
-                      }
-                    },
-                  ),
+                          if (result == true && context.mounted) {
+                            await context.read<PaymentProvider>().load();
+                          }
+                        },
+                      ),
+                    );
+                  },
                 );
               },
             ),

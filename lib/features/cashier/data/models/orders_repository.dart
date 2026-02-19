@@ -29,6 +29,13 @@ class OrdersRepository {
     return api.orderDetail(token: token, id: id);
   }
 
+  Future<Map<String, dynamic>> fetchPrintDetail(int id) async {
+    final token = await storage.getToken(); // sesuaikan method kamu
+    if (token == null || token.isEmpty) throw Exception('Token kosong');
+
+    return api.printDetail(token: token, id: id);
+  }
+
   Future<Map<String, dynamic>> softDeleteOrder(int id) async {
     final token = await storage.getToken();
     if (token == null || token.isEmpty) {
@@ -62,5 +69,24 @@ class OrdersRepository {
       email: email,
     );
   }
+
+    Future<Map<String, dynamic>> processOrder(int id) async {
+      final token = await storage.getToken();
+      if (token == null || token.trim().isEmpty) throw Exception('Token kosong');
+      return api.processOrder(token: token, id: id);
+    }
+
+    Future<Map<String, dynamic>> cancelProcessOrder(int id) async {
+      final token = await storage.getToken();
+      if (token == null || token.trim().isEmpty) throw Exception('Token kosong');
+      return api.cancelProcessOrder(token: token, id: id);
+    }
+
+    Future<Map<String, dynamic>> finishOrder(int id, {String? note}) async {
+      final token = await storage.getToken();
+      if (token == null || token.trim().isEmpty) throw Exception('Token kosong');
+      return api.finishOrder(token: token, id: id, note: note);
+    }
+
 }
 

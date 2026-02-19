@@ -18,6 +18,7 @@ import 'features/auth/presentation/pages/splash_page.dart';
 import 'core/navigation/app_navigator.dart';
 import 'features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/preference/printer_prefs.dart';
+import '/features/cashier/presentation/providers/notifications_provider.dart';
 
 class CavaaApp extends StatefulWidget {
   const CavaaApp({super.key});
@@ -90,6 +91,7 @@ class _CavaaAppState extends State<CavaaApp> {
 
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => NotificationsProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider(authRepo)),
 
         // ✅ INI YANG PALING PENTING: PurchaseProvider harus di ROOT

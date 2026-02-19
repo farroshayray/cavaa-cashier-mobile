@@ -79,23 +79,75 @@ class ReceiptPrinter {
     final total = _num(order['total_order_value']);
 
     bytes.addAll(gen.reset());
-    final storeName  = (order['store_name'] ?? 'CAVAA').toString();
-    final cashierName = (order['employee_name'] ?? '-').toString();
+    // final storeName = (order['store_name'] ?? 'CAVAA').toString().trim();
+    final storeName = 'Farro Coffee2 Kusumanegara Yogyakarta';
+    final cashierName  = (order['employee_name'] ?? '-').toString();
+    final storeAddress = (order['store_address'] ?? '').toString().trim();
+
+    final wifiShown = _num(order['store_is_wifi_shown']).toInt() == 1;
+    final wifiUser  = (order['store_wifi_user'] ?? '').toString().trim();
+    final wifiPass  = (order['store_wifi_password'] ?? '').toString().trim();
+
+    final maxChars = (paperSize == PaperSize.mm58) ? 32 : 48;
+
+    final len = storeName.length;
+
+    // default (pendek) tetap besar
+    var w = PosTextSize.size2;
+    var h = PosTextSize.size2;
+    var font = PosFontType.fontA;
+
+    // kalau mulai panjang -> normal
+    if (len > 16) {
+      w = PosTextSize.size1;
+      h = PosTextSize.size1;
+      font = PosFontType.fontA;
+    }
+
+    // kalau sangat panjang -> lebih kecil lagi (fontB)
+    if (len > 24) {
+      w = PosTextSize.size1;
+      h = PosTextSize.size1;
+      font = PosFontType.fontA; // ✅ lebih kecil/rapat
+    }
 
     bytes.addAll(gen.reset());
+    
     bytes.addAll(gen.text(
       storeName,
-      styles: const PosStyles(
+      styles: PosStyles(
         align: PosAlign.center,
         bold: true,
-        height: PosTextSize.size2,
-        width: PosTextSize.size2,
+        width: w,
+        height: h,
+        fontType: font,
       ),
+      maxCharsPerLine: maxChars,
     ));
+    bytes.addAll(gen.hr(ch: '=', linesAfter: 1));
+
+    if (storeAddress.isNotEmpty) {
+      bytes.addAll(gen.text(storeAddress, styles: const PosStyles(align: PosAlign.center)));
+    }
     bytes.addAll(gen.text('Struk Pembayaran', styles: const PosStyles(align: PosAlign.center)));
     bytes.addAll(gen.hr());
 
     bytes.addAll(gen.text('Order  : $code'));
+    // ✅ ambil waktu dari payment.updated_at (fallback latest_payment.updated_at)
+    final paidAtRaw = (order['payment'] is Map)
+        ? (order['payment']['updated_at'])
+        : null;
+
+    final latestPaidAtRaw = (order['latest_payment'] is Map)
+        ? (order['latest_payment']['updated_at'])
+        : null;
+
+    final paidAtStr = _formatReceiptTime(paidAtRaw ?? latestPaidAtRaw);
+
+    if (paidAtStr.isNotEmpty) {
+      bytes.addAll(gen.text('Waktu  : $paidAtStr'));
+    }
+
     bytes.addAll(gen.text('Nama   : $customer'));
     bytes.addAll(gen.text('Kasir  : $cashierName'));
     bytes.addAll(gen.hr());
@@ -145,10 +197,23 @@ class ReceiptPrinter {
       PosColumn(text: _rupiah(changeAmount), width: 4, styles: const PosStyles(align: PosAlign.right)),
     ]));
 
+    if (wifiShown && (wifiUser.isNotEmpty || wifiPass.isNotEmpty)) {
+      bytes.addAll(gen.text('WiFi', styles: const PosStyles(bold: true)));
+      if (wifiUser.isNotEmpty) bytes.addAll(gen.text('User : $wifiUser'));
+      if (wifiPass.isNotEmpty) bytes.addAll(gen.text('Pass : $wifiPass'));
+      bytes.addAll(gen.hr());
+    }
+
     bytes.addAll(gen.hr());
     bytes.addAll(gen.text('Terima kasih', styles: const PosStyles(align: PosAlign.center)));
-    bytes.addAll(gen.feed(2));
-    // bytes.addAll(gen.cut());
+
+    // Tambah ruang kosong lebih banyak
+    bytes.addAll(gen.feed(5));
+
+    // Optional (lebih bagus untuk sobek manual)
+    bytes.addAll(gen.text('-----------------------------', styles: const PosStyles(align: PosAlign.center)));
+    bytes.addAll(gen.feed(3));
+
 
     return bytes;
   }
@@ -167,4 +232,22 @@ String _rupiah(num n) {
     if (idxFromEnd > 1 && idxFromEnd % 3 == 1) buf.write('.');
   }
   return buf.toString();
+}
+
+
+String _formatReceiptTime(dynamic v) {
+  if (v == null) return '';
+  final s = v.toString().trim();
+  if (s.isEmpty) return '';
+
+  // biasanya dari Laravel: "2026-02-18T07:30:12.000000Z" atau "2026-02-18 14:30:12"
+  final dt = DateTime.tryParse(s);
+  if (dt == null) return s; // fallback: tampilkan apa adanya
+
+  // kalau string ada "Z" atau offset, dt sudah UTC/offset-aware.
+  // tampilkan local time device biar jamnya sesuai kasir
+  final local = dt.toLocal();
+
+  String two(int x) => x.toString().padLeft(2, '0');
+  return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}:${two(local.minute)}';
 }

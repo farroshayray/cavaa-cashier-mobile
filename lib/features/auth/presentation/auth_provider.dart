@@ -15,30 +15,52 @@ class AuthProvider extends ChangeNotifier {
    UserModel? user;
 
   Future<void> bootstrap() async {
-    isLoggedIn = await repo.hasToken();
+    final hasToken = await repo.hasToken();
+
+    if (hasToken) {
+      try {
+        await fetchMe(); // 🔥 WAJIB
+        isLoggedIn = true;
+      } catch (e) {
+        isLoggedIn = false;
+      }
+    } else {
+      isLoggedIn = false;
+    }
+
     notifyListeners();
   }
 
   Future<bool> login(String username, String password, {required bool rememberMe}) async {
-  try {
-    isLoading = true;
-    errorMessage = null;
-    notifyListeners();
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
 
-    final resp = await repo.login(username, password, rememberMe: rememberMe);
-    user = resp.user;
+      final resp = await repo.login(username, password, rememberMe: rememberMe);
+      user = resp.user;
 
-    isLoading = false;
-    notifyListeners();
-    return true;
-  } catch (e) {
-    isLoading = false;
-    errorMessage = 'Login gagal';
-    notifyListeners();
-    return false;
+      isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      isLoading = false;
+      errorMessage = 'Login gagal';
+      notifyListeners();
+      return false;
+    }
   }
-}
 
+  Future<void> fetchMe() async {
+    try {
+      final u = await repo.me(); // kamu harus punya endpoint /me
+      user = u;
+      isLoggedIn = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('fetchMe error: $e');
+    }
+  }
 
   Future<void> logout() async {
     await repo.logout();

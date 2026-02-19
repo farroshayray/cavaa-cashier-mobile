@@ -118,14 +118,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                           : _Body(order: _order!, paidCtrl: _paidCtrl, change: _change),
                 ),
                 _Footer2(
-                  printing: _printing,
-                  paying: _paying, // kalau mau, atau bikin bool _paying sendiri
-                  onPrint: () async {
-                    await _printReceipt();
-                  },
-                  onConfirm: () async {
-                    await _confirmAndPay();
-                  },
+                  paying: _paying,
+                  onBack: () => Navigator.of(context).pop(false),
+                  onConfirm: () async => _confirmAndPay(),
                 ),
               ],
             ),
@@ -197,14 +192,20 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       }
 
       final api = OrdersApi();
-      final resp = await api.paymentOrder(
+      await api.paymentOrder(
         token: token,
         id: widget.orderId,
         paidAmount: paid,
         changeAmount: change,
       ).timeout(const Duration(seconds: 15));
 
-      _lastPaymentResp = resp;
+      // ✅ setelah sukses bayar: ambil data print detail terbaru
+      final printOrder = await api.printDetail(token: token, id: widget.orderId)
+          .timeout(const Duration(seconds: 15));
+
+      // ✅ print otomatis
+      await _printReceiptWithOrder(printOrder, paid: paid, change: change);
+
       if (!mounted) return;
 
       await showDialog<void>(
@@ -212,14 +213,16 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         useRootNavigator: true,
         builder: (_) => AlertDialog(
           title: const Text('Pembayaran berhasil'),
-          content: const Text('Pembayaran berhasil disimpan. Anda bisa print struk lewat tombol Print.'),
+          content: const Text('Pembayaran berhasil disimpan dan struk sedang diprint.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
           ],
         ),
       );
+
       if (!mounted) return;
       Navigator.of(context).pop(true);
+
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -335,6 +338,26 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     return ok == true;
   }
 
+  Future<void> _printReceiptWithOrder(
+    Map<String, dynamic> order, {
+    required num paid,
+    required num change,
+  }) async {
+    final pm = context.read<PrinterManager>();
+    final p = pm.defaultPrinter;
+    if (p == null) throw Exception('Default printer belum dipilih');
+
+    if (p.type != PrinterType.bluetooth || p.address == null) {
+      throw Exception('Default printer bukan Bluetooth / address kosong');
+    }
+
+    await ReceiptPrinter().printOrder(
+      order: order,
+      paidAmount: paid,
+      changeAmount: change,
+      btMacAddress: p.address!,
+    );
+  }
 
 }
 
@@ -871,15 +894,13 @@ class _Footer extends StatelessWidget {
 
 class _Footer2 extends StatelessWidget {
   const _Footer2({
-    required this.onPrint,
+    required this.onBack,
     required this.onConfirm,
-    required this.printing,
     required this.paying,
   });
 
-  final Future<void> Function() onPrint;
+  final VoidCallback onBack;
   final Future<void> Function() onConfirm;
-  final bool printing;
   final bool paying;
 
   @override
@@ -896,19 +917,22 @@ class _Footer2 extends StatelessWidget {
         children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: (printing || paying) ? null : () async => onPrint(),
-              icon: printing
-                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.print_rounded),
-              label: const Text('Print'),
+              onPressed: paying ? null : onBack,
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Kembali'),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: brand, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brand,
+                foregroundColor: Colors.white,
+              ),
               onPressed: paying ? null : () async => onConfirm(),
-              child: const Text('Konfirmasi', style: TextStyle(fontWeight: FontWeight.w900)),
+              child: paying
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Konfirmasi', style: TextStyle(fontWeight: FontWeight.w900)),
             ),
           ),
         ],
@@ -916,6 +940,7 @@ class _Footer2 extends StatelessWidget {
     );
   }
 }
+
 
 
 class _ErrorView extends StatelessWidget {
@@ -986,5 +1011,6 @@ String _paymentMethodMessage(Map<String, dynamic> order) {
   // Default fallback
   return 'Order ini menggunakan metode $method. Modal ini menampilkan detail pembayaran (jika ada).';
 }
+
 
 
