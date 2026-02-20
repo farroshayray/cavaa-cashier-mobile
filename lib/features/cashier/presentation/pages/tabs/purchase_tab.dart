@@ -524,8 +524,8 @@ class _ProductGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
       itemCount: products.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 220, // ✅ card max lebar ~220px (atur sesuai selera)
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
         childAspectRatio: 0.74,
