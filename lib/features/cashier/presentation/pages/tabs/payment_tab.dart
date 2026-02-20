@@ -188,6 +188,7 @@ class _PaymentViewState extends State<_PaymentView> {
               builder: (_) {
                 if (vm.isLoading) {
                   return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     children: [
                       SizedBox(height: 200),
                       Center(child: CircularProgressIndicator()),
@@ -226,6 +227,7 @@ class _PaymentViewState extends State<_PaymentView> {
                 }
 
                 return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   controller: _listCtrl, // ✅ penting untuk scroll
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                   itemCount: vm.items.length,

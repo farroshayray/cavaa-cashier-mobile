@@ -11,13 +11,14 @@ import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
 import '/features/cashier/presentation/realtime/pusher_orders_service.dart';
+import '/core/services/sound_service.dart';
 import '/core/storage/secure_storage_service.dart';
 
 import '/features/cashier/data/orders_api.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
-// kalau kamu punya done_provider, import juga
+import '/features/cashier/data/preference/printer_manager.dart';
 
 import 'tabs/purchase_tab.dart' as purchase_tab;
 import 'tabs/payment_tab.dart' as payment_tab;
@@ -33,7 +34,7 @@ class CashierHomePage extends StatefulWidget {
   State<CashierHomePage> createState() => _CashierHomePageState();
 }
 
-class _CashierHomePageState extends State<CashierHomePage> {
+class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingObserver {
   // ===== Realtime =====
   final _pusherSvc = PusherOrdersService(SecureStorageService());
   bool _pusherStarted = false;
@@ -55,10 +56,25 @@ class _CashierHomePageState extends State<CashierHomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ordersRepo = OrdersRepository(api: OrdersApi(), storage: SecureStorageService());
 
     _payVm = PaymentProvider(_ordersRepo)..load();
     _procVm = ProcessProvider(_ordersRepo)..load();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // saat balik ke app, coba connect lagi ke default
+    if (state == AppLifecycleState.resumed) {
+      // silent biar ga ganggu user kalau gagal
+      context.read<PrinterManager>().connectDefault(silent: true);
+    }
+
+    // OPTIONAL: kalau kamu mau disconnect saat background
+    // if (state == AppLifecycleState.paused) {
+    //   context.read<PrinterManager>().disconnect();
+    // }
   }
 
 
@@ -84,14 +100,19 @@ class _CashierHomePageState extends State<CashierHomePage> {
     try {
       await _pusherSvc.start(
         partnerId: partnerId,
-        onOrderCreated: (data) {
-          debugPrint('✅ OrderCreated: $data');
+        onOrderCreated: (data) async {
+          // debugPrint('✅ OrderCreated: $data');
+
+          // 🔔 bunyi notif masuk
+          await SoundService.instance.playNotification();
+
+          // tetap simpan ke provider notif
           notif.pushFromPusher(data);
         },
       );
 
       _pusherStarted = true;
-      debugPrint('✅ PUSHER STARTED partner=$partnerId');
+      // debugPrint('✅ PUSHER STARTED partner=$partnerId');
     } catch (e, st) {
       debugPrint('❌ PUSHER start error: $e');
       debugPrint('$st');
@@ -104,6 +125,8 @@ class _CashierHomePageState extends State<CashierHomePage> {
     _pusherSvc.stop();
     _payVm.dispose();
     _procVm.dispose();
+
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -131,7 +154,7 @@ class _CashierHomePageState extends State<CashierHomePage> {
     // asumsi model notif kamu punya:
     // n.status (String), n.orderId (int?) atau n.id, n.code
     final st = (n.status ?? '').toString().toUpperCase();
-    debugPrint('NOTIF RAW = $n');
+    // debugPrint('NOTIF RAW = $n');
 
     int targetIndex = 0;
     if (st == 'UNPAID' || st == 'EXPIRED' || st == 'PAYMENT REQUEST') {
@@ -147,7 +170,7 @@ class _CashierHomePageState extends State<CashierHomePage> {
 
     // ambil orderId dari notif
     final int? orderId = _pickOrderId(n);
-    debugPrint('NOTIF TAP status=$st orderId=$orderId code=${n.code}');
+    // debugPrint('NOTIF TAP status=$st orderId=$orderId code=${n.code}');
 
     // 1) pindah tab
     if (mounted) setState(() => _index = targetIndex);
@@ -267,6 +290,7 @@ class _CashierHomePageState extends State<CashierHomePage> {
               ],
             ),
             actions: [
+              const PrinterStatusDot(),
               NotifBellButton(
                 onTapItem: _handleNotifTap, // ✅ pakai handler baru
               ),
@@ -335,6 +359,55 @@ class _CashierHomePageState extends State<CashierHomePage> {
   }
 }
 
+class PrinterStatusDot extends StatelessWidget {
+  const PrinterStatusDot({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<PrinterManager>(
+      builder: (_, pm, __) {
+        final hasDefault = pm.defaultId != null;
+
+        Color dot;
+        if (!hasDefault) {
+          dot = Colors.grey;
+        } else if (pm.connState == PrinterConnState.connecting) {
+          dot = Colors.orange;
+        } else if (pm.connState == PrinterConnState.connected) {
+          dot = Colors.green;
+        } else {
+          dot = Colors.red;
+        }
+
+        return IconButton(
+          tooltip: !hasDefault
+              ? 'Default printer belum dipilih'
+              : (pm.isReady ? 'Printer siap' : (pm.connMessage ?? 'Printer belum connect')),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
+            );
+          },
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.print_outlined),
+              Positioned(
+                right: -1,
+                top: -1,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,

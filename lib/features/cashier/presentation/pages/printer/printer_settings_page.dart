@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
 
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+
 class PrinterSettingsPage extends StatefulWidget {
   const PrinterSettingsPage({super.key});
 
@@ -296,27 +298,60 @@ class _DiscoverList extends StatelessWidget {
                   leading: Icon(p.type == PrinterType.bluetooth ? Icons.bluetooth : Icons.usb),
                   title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text(p.id, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: brand,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () async {
-                      try {
-                        await onPair(p);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Berhasil pairing & disimpan')),
-                        );
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Gagal pairing: $e')),
-                        );
-                      }
-                    },
-                    child: const Text('Pair'),
-                  ),
+                  trailing: (p.type != PrinterType.bluetooth)
+                    ? ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: brand,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () async {
+                          try {
+                            await onPair(p);
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Berhasil pairing & disimpan')),
+                            );
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Gagal pairing: $e')),
+                            );
+                          }
+                        },
+                        child: const Text('Pair'),
+                      )
+                    : FutureBuilder<List<BluetoothDevice>>(
+                        future: FlutterBluetoothSerial.instance.getBondedDevices(),
+                        builder: (context, snap) {
+                          final bonded = snap.data ?? const <BluetoothDevice>[];
+                          final addr = p.address;
+                          final isBonded = addr != null && bonded.any((d) => d.address == addr);
+
+                          final label = isBonded ? 'Simpan' : 'Pair';
+
+                          return ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: brand,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () async {
+                              try {
+                                await onPair(p); // pairAndSaveBluetooth() kamu yang sudah dibenerin
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('$label berhasil & disimpan')),
+                                );
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Gagal $label: $e')),
+                                );
+                              }
+                            },
+                            child: Text(label),
+                          );
+                        },
+                      ),
                 ),
               )),
       ],

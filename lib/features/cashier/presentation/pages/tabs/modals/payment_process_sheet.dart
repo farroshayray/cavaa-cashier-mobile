@@ -254,16 +254,15 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       final p = pm.defaultPrinter;
       if (p == null) throw Exception('Default printer belum dipilih');
 
-      if (p.type != PrinterType.bluetooth || p.address == null) {
-        throw Exception('Default printer bukan Bluetooth / address kosong');
-      }
-
-      await ReceiptPrinter().printOrder(
+      // 1) build bytes
+      final bytes = await ReceiptPrinter().buildReceiptBytes(
         order: _order!,
         paidAmount: paid,
         changeAmount: change,
-        btMacAddress: p.address!,
       );
+
+      // 2) kirim via printer manager (yang pegang koneksi)
+      await pm.write(bytes);
 
       if (!mounted) return;
       setState(() => _printed = true);
@@ -347,18 +346,14 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final p = pm.defaultPrinter;
     if (p == null) throw Exception('Default printer belum dipilih');
 
-    if (p.type != PrinterType.bluetooth || p.address == null) {
-      throw Exception('Default printer bukan Bluetooth / address kosong');
-    }
-
-    await ReceiptPrinter().printOrder(
+    final bytes = await ReceiptPrinter().buildReceiptBytes(
       order: order,
       paidAmount: paid,
       changeAmount: change,
-      btMacAddress: p.address!,
     );
-  }
 
+    await pm.write(bytes);
+  }
 }
 
 class _Header extends StatelessWidget {

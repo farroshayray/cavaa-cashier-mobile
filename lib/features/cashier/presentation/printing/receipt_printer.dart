@@ -1,33 +1,11 @@
 // lib/features/cashier/presentation/printing/receipt_printer.dart
 import 'dart:typed_data';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
 class ReceiptPrinter {
-  BluetoothConnection? _conn;
-
   /// Connect ke printer via MAC Address (contoh: "00:11:22:33:44:55")
-  Future<void> connectBt(String macAddress) async {
-    _conn = await BluetoothConnection.toAddress(macAddress)
-        .timeout(const Duration(seconds: 8));
-  }
 
-  Future<void> disconnect() async {
-    final c = _conn;
-    _conn = null;
-
-    if (c == null) return;
-
-    // Banyak device nge-hang di close(). Paksa cepat, sisanya diabaikan.
-    try {
-      await c.close().timeout(const Duration(milliseconds: 500));
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  Future<void> printOrder({
-    required String btMacAddress,
+  Future<Uint8List> buildReceiptBytes({
     required Map<String, dynamic> order,
     required num paidAmount,
     required num changeAmount,
@@ -39,28 +17,7 @@ class ReceiptPrinter {
       changeAmount: changeAmount,
       paperSize: paperSize,
     );
-
-    await connectBt(btMacAddress);
-
-    final c = _conn;
-    if (c == null || !c.isConnected) {
-      throw Exception('Bluetooth belum connect');
-    }
-
-    try {
-      c.output.add(Uint8List.fromList(bytes));
-
-      // optional: tunggu sebentar saja
-      try { await c.output.allSent.timeout(const Duration(milliseconds: 300)); } catch (_) {}
-
-      await Future.delayed(const Duration(milliseconds: 150));
-
-      // Penting: selesaikan output stream
-      try { c.finish(); } catch (_) {}
-    } finally {
-      await disconnect();
-    }
-
+    return Uint8List.fromList(bytes);
   }
 
   Future<List<int>> _buildReceiptBytes({
@@ -79,8 +36,8 @@ class ReceiptPrinter {
     final total = _num(order['total_order_value']);
 
     bytes.addAll(gen.reset());
-    // final storeName = (order['store_name'] ?? 'CAVAA').toString().trim();
-    final storeName = 'Farro Coffee2 Kusumanegara Yogyakarta';
+    final storeName = (order['store_name'] ?? 'CAVAA').toString().trim();
+    // final storeName = 'Farro Coffee2 Kusumanegara Yogyakarta';
     final cashierName  = (order['employee_name'] ?? '-').toString();
     final storeAddress = (order['store_address'] ?? '').toString().trim();
 

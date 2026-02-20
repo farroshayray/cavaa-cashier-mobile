@@ -307,12 +307,13 @@ class _ProcessViewState extends State<_ProcessView> {
       }
 
       // 4) print
-      await ReceiptPrinter().printOrder(
+      final bytes = await ReceiptPrinter().buildReceiptBytes(
         order: order,
         paidAmount: paid,
         changeAmount: change,
-        btMacAddress: p.address!,
       );
+
+      await pm.write(bytes);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

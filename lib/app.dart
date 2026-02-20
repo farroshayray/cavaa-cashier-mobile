@@ -98,7 +98,7 @@ class _CavaaAppState extends State<CavaaApp> {
         ChangeNotifierProvider(create: (_) => PurchaseProvider(purchaseRepo)),
         // ✅ root printer manager (WAJIB)
         ChangeNotifierProvider(
-          create: (_) => PrinterManager(PrinterPrefs())..init(),
+          create: (_) => PrinterManager(PrinterPrefs())..init(autoConnect: true),
         ),
       ],
       child: MaterialApp(

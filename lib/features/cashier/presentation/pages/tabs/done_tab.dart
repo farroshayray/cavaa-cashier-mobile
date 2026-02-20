@@ -104,14 +104,17 @@ class _DoneViewState extends State<_DoneView> {
             child: Builder(
               builder: (_) {
                 if (vm.isLoading) {
-                  return ListView(children: const [
-                    SizedBox(height: 200),
-                    Center(child: CircularProgressIndicator()),
-                  ]);
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      SizedBox(height: 200),
+                      Center(child: CircularProgressIndicator()),
+                    ]);
                 }
 
                 if (vm.error != null) {
                   return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
                     children: [
                       Text(vm.error!, textAlign: TextAlign.center),
@@ -126,6 +129,7 @@ class _DoneViewState extends State<_DoneView> {
 
                 if (vm.items.isEmpty) {
                   return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
@@ -141,6 +145,7 @@ class _DoneViewState extends State<_DoneView> {
                 }
 
                 return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   controller: _listCtrl,
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                   itemCount: vm.items.length,
@@ -205,12 +210,13 @@ class _DoneViewState extends State<_DoneView> {
         throw Exception('Default printer bukan Bluetooth / address kosong');
       }
 
-      await ReceiptPrinter().printOrder(
+      final bytes = await ReceiptPrinter().buildReceiptBytes(
         order: order,
         paidAmount: paid,
         changeAmount: change,
-        btMacAddress: p.address!,
       );
+
+      await pm.write(bytes);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
