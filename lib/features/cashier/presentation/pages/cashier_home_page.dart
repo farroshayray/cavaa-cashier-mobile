@@ -345,7 +345,6 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
                       icon: Icons.check_circle_outline_rounded,
                       label: 'Selesai',
                       active: _index == 3,
-                      badge: 2,
                       onTap: () => _onTap(3),
                     ),
                   ],

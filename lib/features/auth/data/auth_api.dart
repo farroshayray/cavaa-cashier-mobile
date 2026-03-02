@@ -13,7 +13,7 @@ class AuthApi {
     final Response res =
         await client.dio.get('/api/v1/mobile/cashier/me');
 
-    print('ME RAW RESPONSE: ${res.data}');
+    // print('ME RAW RESPONSE: ${res.data}');
 
     final data = res.data;
     final userJson =
@@ -23,7 +23,7 @@ class AuthApi {
       throw Exception('Invalid /me response: missing user');
     }
 
-    print('ME USER JSON: $userJson');
+    // print('ME USER JSON: $userJson');
 
     return UserModel.fromJson(
       Map<String, dynamic>.from(userJson),
