@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 import 'checkout_sheet.dart';
+import '/features/cashier/data/models/purchase_models.dart';
 import '/core/utils/open_url.dart';
 
 class CartSheet extends StatelessWidget {
@@ -191,36 +192,42 @@ class CartSheet extends StatelessWidget {
                               child: SizedBox(
                                 height: MediaQuery.of(rootCtx).size.height * 0.92,
                                 child: CheckoutSheet(
-                                  onSubmit: ({required customerName, required table, required method}) async {
-                                    final pm = (method == PayMethod.qris) ? "QRIS" : "CASH";
+                                  onSubmit: ({required customerName, required table, required payment}) async {
+                                    // 1) mapping ke string backend (sementara)
+                                    // - cashierCash => "CASH"
+                                    // - onlineQris  => "QRIS"
+                                    // - manual      => biasanya kirim manualId (string) ATAU "MANUAL" tergantung backend
+                                    final String paymentMethod = switch (payment.kind) {
+                                      PayKind.cashierCash => 'CASH',
+                                      PayKind.onlineQris  => 'QRIS',
+                                      PayKind.manual      => payment.value, // default: kirim manualId string
+                                    };
 
                                     final resp = await context.read<PurchaseProvider>().checkout(
                                       customerName: customerName,
                                       table: table,
-                                      paymentMethod: pm,
+                                      paymentMethod: paymentMethod,
+                                      payment: payment,
                                     );
 
-                                    if (pm == "QRIS") {
+                                    // 2) redirect hanya kalau ONLINE QRIS (xendit)
+                                    if (payment.kind == PayKind.onlineQris) {
                                       final redirect = resp["redirect"];
                                       if (redirect is String && redirect.isNotEmpty) {
-                                        // 1️⃣ tutup CheckoutSheet
                                         Navigator.of(context, rootNavigator: true).pop();
-
-                                        // 2️⃣ buka halaman Xendit
                                         await openInAppUrl(redirect);
                                       } else {
                                         throw Exception("URL pembayaran QRIS tidak ditemukan");
                                       }
                                     } else {
-                                      // CASH
+                                      // CASH atau MANUAL
                                       Navigator.of(context, rootNavigator: true).pop();
-
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Pembayaran CASH berhasil')),
+                                        SnackBar(content: Text('Checkout ${payment.label} dibuat')),
                                       );
                                     }
 
-                                    return resp; // ✅ WAJIB agar tidak return null
+                                    return resp;
                                   },
                                 ),
                               ),

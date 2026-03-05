@@ -4,11 +4,13 @@ class PurchasePayload {
   final List<Product> products;
   final List<Category> categories;
   final List<StoreTable> tables; // ✅ baru
+  final List<PaymentOption> paymentOptions;
 
   PurchasePayload({
     required this.products,
     required this.categories,
     required this.tables,
+    required this.paymentOptions,
   });
 
   factory PurchasePayload.fromJson(Map<String, dynamic> json) {
@@ -45,11 +47,30 @@ class PurchasePayload {
         .whereType<Map>()
         .map((e) => StoreTable.fromJson(Map<String, dynamic>.from(e)))
         .toList();
+    
+    final manualPayments = parseManualPaymentOptions(json);
+
+    final paymentOptions = <PaymentOption>[
+      const PaymentOption(
+        kind: PayKind.cashierCash,
+        value: 'CASH',
+        label: 'Cash',
+      ),
+
+      const PaymentOption(
+        kind: PayKind.onlineQris,
+        value: 'QRIS',
+        label: 'QRIS (Xendit)',
+      ),
+
+      ...manualPayments,
+    ];
 
     return PurchasePayload(
       products: products,
       categories: categories,
       tables: tables,
+      paymentOptions: paymentOptions,
     );
   }
 }
@@ -344,6 +365,54 @@ class StoreTable {
   }
 }
 
+enum PayKind { cashierCash, onlineQris, manual }
+
+class PaymentOption {
+  final PayKind kind;
+  final String value;
+  final String label;
+  final String? desc;
+
+  final String? manualType;
+  final int? manualId;
+
+  const PaymentOption({
+    required this.kind,
+    required this.value,
+    required this.label,
+    this.desc,
+    this.manualType,
+    this.manualId,
+  });
+}
+
+List<PaymentOption> parseManualPaymentOptions(Map<String, dynamic> data) {
+  final rows = (data['manualPaymentMethods'] as List? ?? []);
+
+  return rows
+      .whereType<Map>()
+      .map((row) => Map<String, dynamic>.from(row))
+      .map((row) {
+        final pm = row['owner_manual_payment'];
+        final pmMap = (pm is Map) ? Map<String, dynamic>.from(pm) : null;
+
+        final int? manualId = pmMap?['id'];
+        final String type = (pmMap?['payment_type'] ?? '').toString();
+        final String provider = (pmMap?['provider_name'] ?? '-').toString();
+        final String? desc = pmMap?['additional_info']?.toString();
+
+        return PaymentOption(
+          kind: PayKind.manual,
+          value: manualId?.toString() ?? '',
+          label: provider,
+          desc: desc,
+          manualType: type,
+          manualId: manualId,
+        );
+      })
+      .where((o) => o.value.isNotEmpty)
+      .toList();
+}
 
 
 class CartItem {

@@ -4,8 +4,6 @@ import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/data/models/purchase_models.dart';
 import '/core/utils/open_url.dart';
 
-enum PayMethod { cash, qris }
-
 class CheckoutSheet extends StatefulWidget {
   const CheckoutSheet({
     super.key,
@@ -15,7 +13,7 @@ class CheckoutSheet extends StatefulWidget {
   final Future<Map<String, dynamic>> Function({
     required String customerName,
     required StoreTable table,
-    required PayMethod method,
+    required PaymentOption payment,
   })? onSubmit;
 
 
@@ -26,7 +24,7 @@ class CheckoutSheet extends StatefulWidget {
 class _CheckoutSheetState extends State<CheckoutSheet> {
   final _nameCtrl = TextEditingController();
   StoreTable? _selectedTable;
-  PayMethod? _method;
+  PaymentOption? _selectedPay;
   bool _submitting = false;
 
   @override
@@ -38,7 +36,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
   bool get _isValid {
     final nameOk = _nameCtrl.text.trim().isNotEmpty;
     final tableOk = _selectedTable != null;
-    final methodOk = _method != null;
+    final methodOk = _selectedPay != null;
     return nameOk && tableOk && methodOk && !_submitting;
   }
 
@@ -48,6 +46,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     final vm = context.watch<PurchaseProvider>();
     final items = vm.cart;
     final availableTables = vm.tables.where((t) => t.isAvailable).toList();
+    final payOptions = vm.paymentOptions;
 
     return SafeArea(
       top: false,
@@ -162,29 +161,50 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                     // Metode Pembayaran
                     _SectionLabel(icon: Icons.credit_card_rounded, text: 'Metode Pembayaran'),
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
+
+                    if (payOptions.isEmpty)
+                      Text(
+                        'Metode pembayaran belum tersedia.',
+                        style: TextStyle(color: Colors.black.withOpacity(0.55)),
+                      )
+                    else
+                      ...payOptions.map((opt) {
+                        final active = (_selectedPay?.kind == opt.kind) && (_selectedPay?.value == opt.value);
+
+                        IconData icon;
+                        switch (opt.kind) {
+                          case PayKind.cashierCash:
+                            icon = Icons.payments_outlined;
+                            break;
+                          case PayKind.onlineQris:
+                            icon = Icons.qr_code_2_rounded;
+                            break;
+                          case PayKind.manual:
+                          default:
+                            // bisa dibedakan lagi dari manualType
+                            if (opt.manualType == 'manual_tf') {
+                              icon = Icons.account_balance_outlined;
+                            } else if (opt.manualType == 'manual_ewallet') {
+                              icon = Icons.account_balance_wallet_outlined;
+                            } else if (opt.manualType == 'manual_qris') {
+                              icon = Icons.qr_code_2_rounded;
+                            } else {
+                              icon = Icons.payments_outlined;
+                            }
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
                           child: _PayCard(
                             brand: brand,
-                            title: 'Cash',
-                            icon: Icons.payments_outlined,
-                            active: _method == PayMethod.cash,
-                            onTap: _submitting ? null : () => setState(() => _method = PayMethod.cash),
+                            title: opt.label,
+                            icon: icon,
+                            active: active,
+                            onTap: _submitting ? null : () => setState(() => _selectedPay = opt),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _PayCard(
-                            brand: brand,
-                            title: 'QRIS',
-                            icon: Icons.qr_code_2_rounded,
-                            active: _method == PayMethod.qris,
-                            onTap: _submitting ? null : () => setState(() => _method = PayMethod.qris),
-                          ),
-                        ),
-                      ],
-                    ),
+                        );
+                      }).toList(),
+
                     const SizedBox(height: 8),
                   ],
                 ),
@@ -222,11 +242,11 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                                 final resp = await widget.onSubmit!(
                                   customerName: _nameCtrl.text.trim(),
                                   table: _selectedTable!,
-                                  method: _method!,
+                                  payment: _selectedPay!,
                                 );
 
                                 final redirect = resp['redirect'];
-                                if (_method == PayMethod.qris && redirect is String && redirect.isNotEmpty) {
+                                if (_selectedPay?.kind == PayKind.onlineQris && redirect is String && redirect.isNotEmpty) {
                                   if (mounted) Navigator.pop(context);
                                   await openExternalUrl(redirect); // atau openInAppUrl (lihat opsi di bawah)
                                   return; // biasanya jangan auto pop dulu kalau mau user lihat web

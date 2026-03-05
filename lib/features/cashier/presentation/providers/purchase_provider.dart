@@ -14,6 +14,7 @@ class PurchaseProvider extends ChangeNotifier {
   List<Product> products = [];
   List<Category> categories = [];
   List<StoreTable> tables = [];
+  List<PaymentOption> paymentOptions = [];
 
 
   // UI state
@@ -41,6 +42,7 @@ class PurchaseProvider extends ChangeNotifier {
 
       products = payload.products;
       categories = payload.categories;
+      paymentOptions = payload.paymentOptions;
 
       tables = payload.tables;
 
@@ -57,6 +59,7 @@ class PurchaseProvider extends ChangeNotifier {
     required String customerName,
     required StoreTable table,
     required String paymentMethod, // "CASH" / "QRIS"
+    required PaymentOption payment,
   }) async {
     final itemsPayload = cart.map((it) {
       final optionIds = it.selected.values.expand((s) => s).toList();

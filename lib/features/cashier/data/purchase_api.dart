@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 
 class PurchaseApi {
   final Dio dio;
@@ -8,6 +9,7 @@ class PurchaseApi {
     final resp = await dio.get('/api/v1/mobile/cashier/products');
 
     final data = resp.data;
+    final list = (data['manualPaymentMethods'] as List? ?? []);
     if (data is Map<String, dynamic>) return data;
 
     throw Exception('Response JSON bukan object');
