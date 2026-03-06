@@ -114,7 +114,9 @@ class _Body extends StatelessWidget {
     final code = (order['booking_order_code'] ?? '-').toString();
     final name = (order['customer_name'] ?? '-').toString();
     final table = (order['table'] is Map ? (order['table']['table_no'] ?? '-') : '-').toString();
-    final total = _num(order['total_order_value']);
+    final isPpnActive = _toBool(order['is_ppn_active']);
+    final ppnPercent = _num(order['ppn']);
+    final total = _calcGrandTotalFromMap(order);
     final status = (order['order_status'] ?? '-').toString();
 
     // mirip web: ambil payment.note (jika ada)
@@ -131,6 +133,8 @@ class _Body extends StatelessWidget {
             table: table,
             status: status,
             total: total,
+            isPpnActive: isPpnActive,
+            ppnPercent: ppnPercent,
           ),
           const SizedBox(height: 12),
 
@@ -144,6 +148,16 @@ class _Body extends StatelessWidget {
       ),
     );
   }
+
+  num _calcGrandTotalFromMap(Map<String, dynamic> order) {
+    final subtotal = _num(order['total_order_value']);
+    final isPpnActive = _toBool(order['is_ppn_active']);
+    final ppnPercent = _num(order['ppn']);
+
+    return isPpnActive
+        ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+        : subtotal.ceil();
+  }
 }
 
 class _InfoCard extends StatelessWidget {
@@ -153,6 +167,8 @@ class _InfoCard extends StatelessWidget {
     required this.table,
     required this.status,
     required this.total,
+    required this.isPpnActive,
+    required this.ppnPercent,
   });
 
   final String code;
@@ -160,6 +176,8 @@ class _InfoCard extends StatelessWidget {
   final String table;
   final String status;
   final num total;
+  final bool isPpnActive;
+  final num ppnPercent;
 
   @override
   Widget build(BuildContext context) {
@@ -206,13 +224,37 @@ class _InfoCard extends StatelessWidget {
           const SizedBox(height: 10),
           Container(height: 1, color: Colors.black.withOpacity(0.06)),
           const SizedBox(height: 10),
+
+          if (isPpnActive) ...[
+            Row(
+              children: [
+                Text(
+                  'PPN',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                ),
+                const Spacer(),
+                Text(
+                  '${_formatPercent(ppnPercent)}%',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+
           Row(
             children: [
-              Text('Total', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+              Text(
+                'Total',
+                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+              ),
               const Spacer(),
-              Text('Rp ${_rupiah(total)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              Text(
+                'Rp ${_rupiah(total)}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -377,9 +419,19 @@ num _num(dynamic v) {
   return num.tryParse(v.toString()) ?? 0;
 }
 
+bool _toBool(dynamic v) {
+  if (v == null) return false;
+  if (v is bool) return v;
+  final s = v.toString().toLowerCase();
+  return s == '1' || s == 'true';
+}
+
+String _formatPercent(num n) {
+  return n % 1 == 0 ? n.toInt().toString() : n.toString();
+}
+
 String _rupiah(num n) {
-  final v = n.toDouble().round();
-  final s = v.toString();
+  final s = n.toInt().toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
     final idxFromEnd = s.length - i;

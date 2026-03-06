@@ -114,7 +114,7 @@ class _NotifSheet extends StatelessWidget {
 }
 
 String _rupiah(num n) {
-  final s = n.toDouble().round().toString();
+  final s = n.toInt().toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
     final idxFromEnd = s.length - i;

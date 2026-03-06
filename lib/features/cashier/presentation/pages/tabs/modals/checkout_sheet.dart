@@ -48,6 +48,28 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     final availableTables = vm.tables.where((t) => t.isAvailable).toList();
     final payOptions = vm.paymentOptions;
 
+    final subtotal = vm.cartSubtotal;
+    final ppnActive = vm.isPpnActive;
+    final ppnPercent = vm.ppnPercent;
+    final ppnAmount = vm.cartPpnAmount;
+    final grandTotal = vm.cartGrandTotalRounded;
+
+    final instantPayments = payOptions.where((o) {
+      return o.kind == PayKind.cashierCash || o.kind == PayKind.onlineQris;
+    }).toList();
+
+    final manualTfPayments = payOptions.where((o) {
+      return o.kind == PayKind.manual && o.manualType == 'manual_tf';
+    }).toList();
+
+    final manualEwalletPayments = payOptions.where((o) {
+      return o.kind == PayKind.manual && o.manualType == 'manual_ewallet';
+    }).toList();
+
+    final manualQrisPayments = payOptions.where((o) {
+      return o.kind == PayKind.manual && o.manualType == 'manual_qris';
+    }).toList();
+
     return SafeArea(
       top: false,
       child: Container(
@@ -101,7 +123,13 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                     const SizedBox(height: 12),
 
                     // Total card
-                    _TotalCard(total: vm.cartGrandTotal),
+                    _TotalCard(
+                      subtotal: subtotal,
+                      ppnActive: ppnActive,
+                      ppnPercent: ppnPercent,
+                      ppnAmount: ppnAmount,
+                      grandTotal: grandTotal,
+                    ),
                     const SizedBox(height: 14),
 
                     // Nama Pemesan
@@ -167,43 +195,46 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                         'Metode pembayaran belum tersedia.',
                         style: TextStyle(color: Colors.black.withOpacity(0.55)),
                       )
-                    else
-                      ...payOptions.map((opt) {
-                        final active = (_selectedPay?.kind == opt.kind) && (_selectedPay?.value == opt.value);
+                    else ...[
+                      if (instantPayments.isNotEmpty) ...[
+                        _PaymentGroupTitle(title: 'Pembayaran Instan'),
+                        const SizedBox(height: 8),
+                        ...instantPayments.map((opt) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _buildPaymentCard(opt, brand),
+                            )),
+                        const SizedBox(height: 8),
+                      ],
 
-                        IconData icon;
-                        switch (opt.kind) {
-                          case PayKind.cashierCash:
-                            icon = Icons.payments_outlined;
-                            break;
-                          case PayKind.onlineQris:
-                            icon = Icons.qr_code_2_rounded;
-                            break;
-                          case PayKind.manual:
-                          default:
-                            // bisa dibedakan lagi dari manualType
-                            if (opt.manualType == 'manual_tf') {
-                              icon = Icons.account_balance_outlined;
-                            } else if (opt.manualType == 'manual_ewallet') {
-                              icon = Icons.account_balance_wallet_outlined;
-                            } else if (opt.manualType == 'manual_qris') {
-                              icon = Icons.qr_code_2_rounded;
-                            } else {
-                              icon = Icons.payments_outlined;
-                            }
-                        }
+                      if (manualTfPayments.isNotEmpty) ...[
+                        _PaymentGroupTitle(title: 'Transfer Bank'),
+                        const SizedBox(height: 8),
+                        ...manualTfPayments.map((opt) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _buildPaymentCard(opt, brand),
+                            )),
+                        const SizedBox(height: 8),
+                      ],
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _PayCard(
-                            brand: brand,
-                            title: opt.label,
-                            icon: icon,
-                            active: active,
-                            onTap: _submitting ? null : () => setState(() => _selectedPay = opt),
-                          ),
-                        );
-                      }).toList(),
+                      if (manualEwalletPayments.isNotEmpty) ...[
+                        _PaymentGroupTitle(title: 'E-Wallet'),
+                        const SizedBox(height: 8),
+                        ...manualEwalletPayments.map((opt) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _buildPaymentCard(opt, brand),
+                            )),
+                        const SizedBox(height: 8),
+                      ],
+
+                      if (manualQrisPayments.isNotEmpty) ...[
+                        _PaymentGroupTitle(title: 'QRIS Manual'),
+                        const SizedBox(height: 8),
+                        ...manualQrisPayments.map((opt) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _buildPaymentCard(opt, brand),
+                            )),
+                      ],
+                    ],
 
                     const SizedBox(height: 8),
                   ],
@@ -283,6 +314,41 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPaymentCard(PaymentOption opt, Color brand) {
+    final active =
+        (_selectedPay?.kind == opt.kind) && (_selectedPay?.value == opt.value);
+
+    IconData icon;
+    switch (opt.kind) {
+      case PayKind.cashierCash:
+        icon = Icons.payments_outlined;
+        break;
+      case PayKind.onlineQris:
+        icon = Icons.qr_code_2_rounded;
+        break;
+      case PayKind.manual:
+      default:
+        if (opt.manualType == 'manual_tf') {
+          icon = Icons.account_balance_outlined;
+        } else if (opt.manualType == 'manual_ewallet') {
+          icon = Icons.account_balance_wallet_outlined;
+        } else if (opt.manualType == 'manual_qris') {
+          icon = Icons.qr_code_2_rounded;
+        } else {
+          icon = Icons.payments_outlined;
+        }
+    }
+
+    return _PayCard(
+      brand: brand,
+      title: opt.label,
+      // subtitle: opt.desc,
+      icon: icon,
+      active: active,
+      onTap: _submitting ? null : () => setState(() => _selectedPay = opt),
     );
   }
 }
@@ -487,12 +553,51 @@ List<String> _selectedOptionPriceLines(CartItem it) {
 
 
 class _TotalCard extends StatelessWidget {
-  const _TotalCard({required this.total});
-  final num total;
+  const _TotalCard({
+    required this.subtotal,
+    required this.ppnActive,
+    required this.ppnPercent,
+    required this.ppnAmount,
+    required this.grandTotal,
+  });
+
+  final num subtotal;
+  final bool ppnActive;
+  final num ppnPercent;
+  final num ppnAmount;
+  final num grandTotal;
 
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
+
+    Widget row(String label, String value, {bool highlight = false}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: highlight ? 16 : 14,
+                  fontWeight: highlight ? FontWeight.w900 : FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: highlight ? 18 : 14,
+                fontWeight: highlight ? FontWeight.w900 : FontWeight.w700,
+                color: highlight ? brand : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -501,15 +606,19 @@ class _TotalCard extends StatelessWidget {
         color: const Color(0xFFF7F8FA),
         border: Border.all(color: Colors.black.withOpacity(0.06)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          const Expanded(
-            child: Text('Total', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-          ),
-          Text(
-            'Rp ${_rupiah(total)}',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: brand),
-          ),
+          row('Total', 'Rp ${_rupiah(subtotal)}'),
+          if (ppnActive) ...[
+            row('PPN (${ppnPercent.toStringAsFixed(ppnPercent % 1 == 0 ? 0 : 2)}%)',
+                'Rp ${_rupiah(ppnAmount)}'),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Divider(height: 1),
+            ),
+            row('Grand Total', 'Rp ${_rupiah(grandTotal)}', highlight: true),
+          ] else
+            row('Grand Total', 'Rp ${_rupiah(grandTotal)}', highlight: true),
         ],
       ),
     );
@@ -541,6 +650,7 @@ class _PayCard extends StatelessWidget {
     required this.icon,
     required this.active,
     required this.onTap,
+    this.subtitle,
   });
 
   final Color brand;
@@ -548,6 +658,7 @@ class _PayCard extends StatelessWidget {
   final IconData icon;
   final bool active;
   final VoidCallback? onTap;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -558,21 +669,45 @@ class _PayCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: active ? brand : Colors.black.withOpacity(0.10), width: active ? 1.4 : 1.0),
+          border: Border.all(
+            color: active ? brand : Colors.black.withOpacity(0.10),
+            width: active ? 1.4 : 1.0,
+          ),
           color: active ? brand.withOpacity(0.06) : Colors.white,
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, color: active ? brand : Colors.black.withOpacity(0.55)),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                title,
-                style: TextStyle(fontWeight: FontWeight.w900, color: active ? brand : Colors.black87),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: active ? brand : Colors.black87,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.60),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             Icon(
-              active ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+              active
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
               color: active ? brand : Colors.black.withOpacity(0.40),
             ),
           ],
@@ -582,9 +717,26 @@ class _PayCard extends StatelessWidget {
   }
 }
 
+class _PaymentGroupTitle extends StatelessWidget {
+  const _PaymentGroupTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+        color: Colors.black.withOpacity(0.65),
+      ),
+    );
+  }
+}
+
 String _rupiah(num n) {
-  final v = n.toDouble().round();
-  final s = v.toString();
+  final s = n.toInt().toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
     final idxFromEnd = s.length - i;

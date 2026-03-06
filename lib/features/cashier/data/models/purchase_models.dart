@@ -3,17 +3,20 @@ import '/core/config/env.dart';
 class PurchasePayload {
   final List<Product> products;
   final List<Category> categories;
-  final List<StoreTable> tables; // ✅ baru
+  final List<StoreTable> tables;
   final List<PaymentOption> paymentOptions;
+  final PartnerData? partnerData; // ✅ baru
 
   PurchasePayload({
     required this.products,
     required this.categories,
     required this.tables,
     required this.paymentOptions,
+    required this.partnerData, // ✅ baru
   });
 
   factory PurchasePayload.fromJson(Map<String, dynamic> json) {
+
     final productsJson = (json['partner_products'] as List? ?? const []);
 
     final products = productsJson
@@ -21,7 +24,6 @@ class PurchasePayload {
         .map((e) => Product.fromJson(Map<String, dynamic>.from(e)))
         .toList();
 
-    // categories (punya kamu)
     final categoriesJson = (json['categories'] as List? ?? const []);
     var categories = categoriesJson
         .whereType<Map>()
@@ -41,40 +43,87 @@ class PurchasePayload {
         ..sort((a, b) => a.order.compareTo(b.order));
     }
 
-    // ✅ tables
     final tablesJson = (json['tables'] as List? ?? const []);
     final tables = tablesJson
         .whereType<Map>()
         .map((e) => StoreTable.fromJson(Map<String, dynamic>.from(e)))
         .toList();
-    
+
+    // ✅ parse partner_data
+    PartnerData? partnerData;
+    final partnerRaw = json['partner_data'];
+    if (partnerRaw is Map) {
+      partnerData = PartnerData.fromJson(Map<String, dynamic>.from(partnerRaw));
+    }
+
     final manualPayments = parseManualPaymentOptions(json);
 
-    final paymentOptions = <PaymentOption>[
-      const PaymentOption(
-        kind: PayKind.cashierCash,
-        value: 'CASH',
-        label: 'Cash',
-      ),
+    final paymentOptions = <PaymentOption>[];
 
-      const PaymentOption(
-        kind: PayKind.onlineQris,
-        value: 'QRIS',
-        label: 'QRIS (Xendit)',
-      ),
+    // ✅ tampilkan Cash hanya jika aktif
+    if (partnerData?.isCashierActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.cashierCash,
+          value: 'CASH',
+          label: 'Cash (Kasir)',
+        ),
+      );
+    }
 
-      ...manualPayments,
-    ];
+    // ✅ tampilkan QRIS hanya jika aktif
+    if (partnerData?.isQrisActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.onlineQris,
+          value: 'QRIS',
+          label: 'QRIS (Xendit)',
+        ),
+      );
+    }
+
+    // manual payments tetap ditambahkan
+    paymentOptions.addAll(manualPayments);
 
     return PurchasePayload(
       products: products,
       categories: categories,
       tables: tables,
       paymentOptions: paymentOptions,
+      partnerData: partnerData,
     );
   }
 }
 
+class PartnerData {
+  final int id;
+  final String name;
+  final bool isQrisActive;
+  final bool isCashierActive;
+
+  final num ppn;
+  final bool isPpnActive;
+
+  PartnerData({
+    required this.id,
+    required this.name,
+    required this.isQrisActive,
+    required this.isCashierActive,
+    required this.ppn,
+    required this.isPpnActive,
+  });
+
+  factory PartnerData.fromJson(Map<String, dynamic> json) {
+    return PartnerData(
+      id: parseInt(json['id']),
+      name: (json['name'] ?? '').toString(),
+      isQrisActive: parseBool(json['is_qr_active']),
+      isCashierActive: parseBool(json['is_cashier_active']),
+      ppn: parseNum(json['ppn']),
+      isPpnActive: parseBool(json['is_ppn_active']),
+    );
+  }
+}
 
 class Category {
   final int id;

@@ -139,27 +139,47 @@ class OrdersApi {
     required num changeAmount,
     String? note,
     String? email,
+    String? lastPaymentId,
+    String? cashierProofImagePath,
   }) async {
     final uri = Uri.parse('${Env.baseUrl}/api/v1/mobile/cashier/payment-order/$id');
 
-    final resp = await http.post(
-      uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'paid_amount': paidAmount,
-        'change_amount': changeAmount,
-        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
-        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
-      }),
-    );
+    final req = http.MultipartRequest('POST', uri)
+      ..headers['Accept'] = 'application/json'
+      ..headers['Authorization'] = 'Bearer $token'
+      ..fields['paid_amount'] = paidAmount.toString()
+      ..fields['change_amount'] = changeAmount.toString();
+
+    if (note != null && note.trim().isNotEmpty) {
+      req.fields['note'] = note.trim();
+    }
+
+    if (email != null && email.trim().isNotEmpty) {
+      req.fields['email'] = email.trim();
+    }
+
+    // samakan nama field dengan web
+    if (lastPaymentId != null && lastPaymentId.trim().isNotEmpty) {
+      req.fields['last_payment_id'] = lastPaymentId.trim();
+    }
+
+    if (cashierProofImagePath != null && cashierProofImagePath.trim().isNotEmpty) {
+      req.files.add(await http.MultipartFile.fromPath(
+        'cashier_proof_image',
+        cashierProofImagePath,
+      ));
+    }
+
+    final streamed = await req.send();
+    final resp = await http.Response.fromStream(streamed);
 
     dynamic body;
     if (resp.body.isNotEmpty) {
-      try { body = jsonDecode(resp.body); } catch (_) { body = resp.body; }
+      try {
+        body = jsonDecode(resp.body);
+      } catch (_) {
+        body = resp.body;
+      }
     }
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {

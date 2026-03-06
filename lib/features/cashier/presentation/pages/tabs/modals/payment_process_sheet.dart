@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/core/config/env.dart';
@@ -37,6 +39,12 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   final _paidCtrl = TextEditingController();
   num _change = 0;
 
+  final ImagePicker _picker = ImagePicker();
+
+  XFile? _cashierProofImage;
+  String? _cashierProofError;
+  String _lastPaymentId = '';
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +57,88 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     _paidCtrl.removeListener(_recalcChange);
     _paidCtrl.dispose();
     super.dispose();
+  }
+
+  bool get _isCaseA {
+    if (_order == null) return false;
+    return (_order!['order_status'] ?? '').toString() == 'PAYMENT REQUEST' &&
+        _order!['payment_request'] is Map;
+  }
+
+  bool get _isCaseB {
+    if (_order == null) return false;
+    final latestPayment = _order!['latest_payment'];
+    final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+
+    return (_order!['order_status'] ?? '').toString() == 'UNPAID' &&
+        cpi is Map;
+  }
+
+  bool get _isCaseC => !_isCaseA && !_isCaseB;
+
+  Future<void> _pickCashierProof({required ImageSource source}) async {
+    try {
+      final file = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+
+      if (file == null) return;
+
+      final size = await File(file.path).length();
+      const maxSize = 10 * 1024 * 1024; // 10MB
+
+      if (size > maxSize) {
+        setState(() {
+          _cashierProofError = 'Ukuran gambar maksimal 10MB.';
+          _cashierProofImage = null;
+        });
+        return;
+      }
+
+      setState(() {
+        _cashierProofImage = file;
+        _cashierProofError = null;
+      });
+    } catch (e) {
+      setState(() {
+        _cashierProofError = 'Gagal memilih gambar: $e';
+      });
+    }
+  }
+
+  Future<void> _showImageSourcePicker() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (_) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded),
+                title: const Text('Ambil dari Kamera'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded),
+                title: const Text('Pilih dari Galeri'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+    await _pickCashierProof(source: source);
+  }
+
+  void _removeCashierProof() {
+    setState(() {
+      _cashierProofImage = null;
+      _cashierProofError = null;
+    });
   }
 
   Future<void> _fetch() async {
@@ -64,10 +154,19 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       final o = await widget.loadDetail(widget.orderId);
       _order = o;
 
+      _cashierProofImage = null;
+      _cashierProofError = null;
+      _lastPaymentId = '';
+
+      final latestPayment = o['latest_payment'];
+      if (latestPayment is Map && latestPayment['id'] != null) {
+        _lastPaymentId = latestPayment['id'].toString();
+      }
+
       // mirip web: kalau PAYMENT REQUEST dan ada payment_request → auto isi paid = total
       final status = (o['order_status'] ?? '').toString();
       final pr = o['payment_request'];
-      final total = _num(o['total_order_value']);
+      final total = _grandTotalFromOrder(o);
       final method = (o['payment_method'] ?? '').toString();
 
       final hasManual = pr != null;
@@ -84,7 +183,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 
   void _recalcChange() {
-    final total = _num(_order?['total_order_value']);
+    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
     final paid = _num(_paidCtrl.text);
     final change = (paid - total);
     setState(() => _change = change > 0 ? change : 0);
@@ -115,7 +214,15 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                       ? const Center(child: CircularProgressIndicator())
                       : _error != null
                           ? _ErrorView(message: _error!, onRetry: _fetch)
-                          : _Body(order: _order!, paidCtrl: _paidCtrl, change: _change),
+                          : _Body(
+                              order: _order!,
+                              paidCtrl: _paidCtrl,
+                              change: _change,
+                              cashierProofImage: _cashierProofImage,
+                              cashierProofError: _cashierProofError,
+                              onPickImage: _showImageSourcePicker,
+                              onRemoveImage: _removeCashierProof,
+                            ),
                 ),
                 _Footer2(
                   paying: _paying,
@@ -133,7 +240,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   Future<void> _confirmAndPay() async {
     if (_paying) return;
 
-    final total = _num(_order?['total_order_value']);
+    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
     final paid  = _num(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
@@ -192,11 +299,20 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       }
 
       final api = OrdersApi();
+      // if (_isCaseB && _cashierProofImage == null) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     const SnackBar(content: Text('Bukti bayar wajib diupload untuk pembayaran manual.')),
+      //   );
+      //   return;
+      // }
+
       await api.paymentOrder(
         token: token,
         id: widget.orderId,
         paidAmount: paid,
         changeAmount: change,
+        lastPaymentId: _isCaseB ? _lastPaymentId : null,
+        cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
       ).timeout(const Duration(seconds: 15));
 
       // ✅ setelah sukses bayar: ambil data print detail terbaru
@@ -243,7 +359,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final ok = await _validateBeforePrint();
     if (!ok) return;
 
-    final total = _num(_order?['total_order_value']);
+    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
     final paid  = _num(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
@@ -282,7 +398,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
 
   Future<bool> _validateBeforePrint() async {
-    final total = _num(_order?['total_order_value']);
+    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
     final paid  = _num(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
@@ -390,11 +506,19 @@ class _Body extends StatelessWidget {
     required this.order,
     required this.paidCtrl,
     required this.change,
+    required this.cashierProofImage,
+    required this.cashierProofError,
+    required this.onPickImage,
+    required this.onRemoveImage,
   });
 
   final Map<String, dynamic> order;
   final TextEditingController paidCtrl;
   final num change;
+  final XFile? cashierProofImage;
+  final String? cashierProofError;
+  final Future<void> Function() onPickImage;
+  final VoidCallback onRemoveImage;
 
   @override
   Widget build(BuildContext context) {
@@ -402,11 +526,20 @@ class _Body extends StatelessWidget {
     final name = (order['customer_name'] ?? '-').toString();
     final status = (order['order_status'] ?? '-').toString();
     final method = (order['payment_method'] ?? '-').toString();
-    final total = _num(order['total_order_value']);
+    final total = _calcGrandTotalFromMap(order);
+    final isPpnActive = _toBool(order['is_ppn_active']);
+    final ppnPercent = _num(order['ppn']);
+    
 
     // ✅ TARUH DI SINI (bukan di dalam children)
-    final hasManual = order['payment_request'] != null;
-    final showCashInput = method == 'CASH' || hasManual;
+    final hasPaymentRequest = order['payment_request'] != null;
+
+    final latestPayment = order['latest_payment'];
+    final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+    final hasCashierPaymentInstruction =
+        (order['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
+
+    final showCashInput = method == 'CASH' || hasPaymentRequest || hasCashierPaymentInstruction;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
@@ -419,14 +552,26 @@ class _Body extends StatelessWidget {
             status: status,
             method: method,
             total: total,
+            isPpnActive: isPpnActive,
+            ppnPercent: ppnPercent,
           ),
           const SizedBox(height: 12),
 
-          if (hasManual)
+          if (hasPaymentRequest) ...[
             _PaymentRequestCard(
               paymentRequest: (order['payment_request'] as Map).cast<String, dynamic>(),
             ),
-          if (hasManual) const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ] else if (hasCashierPaymentInstruction) ...[
+            _CashierPaymentInstructionCard(
+              paymentInstruction: Map<String, dynamic>.from(cpi),
+              cashierProofImage: cashierProofImage,
+              cashierProofError: cashierProofError,
+              onPickImage: onPickImage,
+              onRemoveImage: onRemoveImage,
+            ),
+            const SizedBox(height: 12),
+          ],
 
           _ItemsCard(order: order),
           const SizedBox(height: 12),
@@ -448,6 +593,16 @@ class _Body extends StatelessWidget {
     );
   }
 
+  num _calcGrandTotalFromMap(Map<String, dynamic> order) {
+    final subtotal = _num(order['total_order_value']);
+    final isPpnActive = _toBool(order['is_ppn_active']);
+    final ppnPercent = _num(order['ppn']);
+
+    return isPpnActive
+        ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+        : subtotal.ceil();
+  }
+
 }
 
 class _OrderInfoCard extends StatelessWidget {
@@ -457,6 +612,8 @@ class _OrderInfoCard extends StatelessWidget {
     required this.status,
     required this.method,
     required this.total,
+    required this.isPpnActive,
+    required this.ppnPercent,
   });
 
   final String code;
@@ -464,6 +621,8 @@ class _OrderInfoCard extends StatelessWidget {
   final String status;
   final String method;
   final num total;
+  final bool isPpnActive;
+  final num ppnPercent;
 
   @override
   Widget build(BuildContext context) {
@@ -488,9 +647,30 @@ class _OrderInfoCard extends StatelessWidget {
           const SizedBox(height: 10),
           Container(height: 1, color: Colors.black.withOpacity(0.06)),
           const SizedBox(height: 10),
+
+          if (isPpnActive) ...[
+            Row(
+              children: [
+                Text(
+                  'PPN',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                ),
+                const Spacer(),
+                Text(
+                  '${_formatPercent(ppnPercent)}%',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+
           Row(
             children: [
-              Text('Total Tagihan', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+              Text(
+                'Total Tagihan',
+                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+              ),
               const Spacer(),
               Text(
                 'Rp ${_rupiah(total)}',
@@ -634,18 +814,154 @@ class _PaymentRequestCard extends StatelessWidget {
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
+}
 
-  static String _normalizeProofUrl(String proof) {
-    if (proof.isEmpty) return '';
-    if (proof.startsWith('http')) return proof;
+class _CashierPaymentInstructionCard extends StatelessWidget {
+  const _CashierPaymentInstructionCard({
+    required this.paymentInstruction,
+    required this.cashierProofImage,
+    required this.cashierProofError,
+    required this.onPickImage,
+    required this.onRemoveImage,
+  });
 
-    // proof bisa "storage/...." atau "/storage/...."
-    final cleaned = proof.replaceFirst(RegExp(r'^\/?storage\/?'), '');
+  final Map<String, dynamic> paymentInstruction;
+  final XFile? cashierProofImage;
+  final String? cashierProofError;
+  final Future<void> Function()? onPickImage;
+  final VoidCallback? onRemoveImage;
 
-    // ✅ jadi URL absolut
-    return '${Env.baseUrl}/storage/$cleaned';
+  @override
+  Widget build(BuildContext context) {
+    final type = (paymentInstruction['payment_type'] ?? '').toString();
+    final provider = (paymentInstruction['provider_name'] ?? '-').toString();
+    final accName = (paymentInstruction['provider_account_name'] ?? '-').toString();
+    final accNo = (paymentInstruction['provider_account_no'] ?? '').toString().trim();
+    final qris = (paymentInstruction['qris_image_url'] ?? '').toString().trim();
+
+    final qrisUrl = _normalizeProofUrl(qris);
+    final showAccNo = type == 'manual_tf' || type == 'manual_ewallet';
+    final showQris = type == 'manual_qris' && qrisUrl.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Instruksi Pembayaran Manual', style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          _row('Tipe', _manualTypeLabel(type)),
+          _row('Provider', provider),
+          _row('Nama Akun', accName),
+          if (showAccNo && accNo.isNotEmpty) _row('No Akun', accNo),
+
+          if (showQris) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('QRIS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                ),
+                TextButton.icon(
+                  onPressed: () => _openUrl(qrisUrl),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: const Text('Buka QRIS'),
+                ),
+              ],
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Image.network(
+                  qrisUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.white,
+                    child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+          const Divider(),
+          const SizedBox(height: 10),
+
+          const Text('Upload Bukti Bayar', style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+
+          Row(
+            children: [
+              ElevatedButton(
+                onPressed: onPickImage == null ? null : () => onPickImage!(),
+                child: const Text('Pilih / Foto'),
+              ),
+              const SizedBox(width: 8),
+              if (cashierProofImage != null)
+                OutlinedButton(
+                  onPressed: onRemoveImage,
+                  child: const Text('Hapus'),
+                ),
+            ],
+          ),
+
+          if (cashierProofError != null && cashierProofError!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              cashierProofError!,
+              style: const TextStyle(fontSize: 12, color: Colors.red),
+            ),
+          ],
+
+          if (cashierProofImage != null) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.file(
+                File(cashierProofImage!.path),
+                height: 220,
+                width: double.infinity,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
+  Widget _row(String k, String v) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              v,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 }
 
 class _ItemsCard extends StatelessWidget {
@@ -968,9 +1284,15 @@ num _num(dynamic v) {
   return num.tryParse(v.toString()) ?? 0;
 }
 
+bool _toBool(dynamic v) {
+  if (v == null) return false;
+  if (v is bool) return v;
+  final s = v.toString().toLowerCase();
+  return s == '1' || s == 'true';
+}
+
 String _rupiah(num n) {
-  final v = n.toDouble().round();
-  final s = v.toString();
+  final s = n.toInt().toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
     final idxFromEnd = s.length - i;
@@ -978,6 +1300,10 @@ String _rupiah(num n) {
     if (idxFromEnd > 1 && idxFromEnd % 3 == 1) buf.write('.');
   }
   return buf.toString();
+}
+
+String _formatPercent(num n) {
+  return n % 1 == 0 ? n.toInt().toString() : n.toString();
 }
 
 String _paymentMethodMessage(Map<String, dynamic> order) {
@@ -1007,5 +1333,27 @@ String _paymentMethodMessage(Map<String, dynamic> order) {
   return 'Order ini menggunakan metode $method. Modal ini menampilkan detail pembayaran (jika ada).';
 }
 
+num _grandTotalFromOrder(Map<String, dynamic> order) {
+  final subtotal = _num(order['total_order_value']);
+  final isPpnActive = _toBool(order['is_ppn_active']);
+  final ppnPercent = _num(order['ppn']);
 
+  return isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+      : subtotal.ceil();
+}
 
+String _manualTypeLabel(String type) {
+  if (type == 'manual_tf') return 'Transfer Manual';
+  if (type == 'manual_ewallet') return 'E-Wallet';
+  if (type == 'manual_qris') return 'QR Statis';
+  return type.isEmpty ? '-' : type;
+}
+
+String _normalizeProofUrl(String proof) {
+  if (proof.isEmpty) return '';
+  if (proof.startsWith('http')) return proof;
+
+  final cleaned = proof.replaceFirst(RegExp(r'^\/?storage\/?'), '');
+  return '${Env.baseUrl}/storage/$cleaned';
+}

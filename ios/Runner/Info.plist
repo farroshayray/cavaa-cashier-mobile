@@ -60,5 +60,7 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Butuh akses kamera untuk scan barcode.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Aplikasi membutuhkan akses galeri untuk memilih foto bukti bayar.</string>
 </dict>
 </plist>

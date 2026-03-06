@@ -15,6 +15,7 @@ class PurchaseProvider extends ChangeNotifier {
   List<Category> categories = [];
   List<StoreTable> tables = [];
   List<PaymentOption> paymentOptions = [];
+  PartnerData? partnerData;
 
 
   // UI state
@@ -31,6 +32,26 @@ class PurchaseProvider extends ChangeNotifier {
   num get cartGrandTotal =>
       cart.fold<num>(0, (sum, item) => sum + item.lineTotal);
 
+  num get cartSubtotal =>
+    cart.fold<num>(0, (sum, item) => sum + item.lineTotal);
+
+  bool get isPpnActive =>
+      partnerData?.isPpnActive == true;
+
+  num get ppnPercent =>
+      partnerData?.ppn ?? 0;
+
+  num get cartPpnAmount {
+    if (!isPpnActive) return 0;
+    return cartSubtotal * (ppnPercent / 100);
+  }
+
+  num get cartGrandTotalWithPpn =>
+      cartSubtotal + cartPpnAmount;
+
+  num get cartGrandTotalRounded =>
+    cartGrandTotalWithPpn.toDouble().ceil();
+
   // ===== LOAD =====
   Future<void> load() async {
     isLoading = true;
@@ -43,8 +64,8 @@ class PurchaseProvider extends ChangeNotifier {
       products = payload.products;
       categories = payload.categories;
       paymentOptions = payload.paymentOptions;
-
       tables = payload.tables;
+      partnerData = payload.partnerData;
 
       // ... logic lain (hot products, grouping, dst)
     } catch (e) {
@@ -78,11 +99,14 @@ class PurchaseProvider extends ChangeNotifier {
       orderTable: table.id,
       orderName: customerName,
       paymentMethod: paymentMethod,
+      // totalAmount: cartGrandTotalRounded,
       totalAmount: cartGrandTotal,
       items: itemsPayload,
     );
 
-    if (paymentMethod == "CASH") {
+    if (paymentMethod == "QRIS") {
+
+    } else {
       cart.clear();
       notifyListeners();
     }

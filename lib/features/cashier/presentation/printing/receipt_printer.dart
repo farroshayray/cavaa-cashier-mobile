@@ -33,7 +33,13 @@ class ReceiptPrinter {
 
     final code = (order['booking_order_code'] ?? '-').toString();
     final customer = (order['customer_name'] ?? '-').toString();
-    final total = _num(order['total_order_value']);
+    final subtotal = _num(order['total_order_value']);
+    final isPpnActive = _toBool(order['is_ppn_active']);
+    final ppnPercent = _num(order['ppn']);
+    final ppnAmount = isPpnActive ? (subtotal * ppnPercent / 100) : 0;
+    final grandTotal = isPpnActive
+        ? (subtotal + ppnAmount).ceil()
+        : subtotal.ceil();
 
     bytes.addAll(gen.reset());
     final storeName = (order['store_name'] ?? 'CAVAA').toString().trim();
@@ -141,17 +147,52 @@ class ReceiptPrinter {
     }
 
     bytes.addAll(gen.hr());
+
     bytes.addAll(gen.row([
-      PosColumn(text: 'TOTAL', width: 8, styles: const PosStyles(bold: true)),
-      PosColumn(text: _rupiah(total), width: 4, styles: const PosStyles(align: PosAlign.right, bold: true)),
+      PosColumn(text: 'TOTAL', width: 8),
+      PosColumn(
+        text: _rupiah(subtotal.ceil()),
+        width: 4,
+        styles: const PosStyles(align: PosAlign.right),
+      ),
     ]));
+
+    if (isPpnActive) {
+      bytes.addAll(gen.row([
+        PosColumn(text: 'PPN (${_formatPercent(ppnPercent)}%)', width: 8),
+        PosColumn(
+          text: _rupiah(ppnAmount.ceil()),
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]));
+    }
+
+    bytes.addAll(gen.row([
+      PosColumn(text: 'GRAND TOTAL', width: 8, styles: const PosStyles(bold: true)),
+      PosColumn(
+        text: _rupiah(grandTotal),
+        width: 4,
+        styles: const PosStyles(align: PosAlign.right, bold: true),
+      ),
+    ]));
+
     bytes.addAll(gen.row([
       PosColumn(text: 'BAYAR', width: 8),
-      PosColumn(text: _rupiah(paidAmount), width: 4, styles: const PosStyles(align: PosAlign.right)),
+      PosColumn(
+        text: _rupiah(paidAmount),
+        width: 4,
+        styles: const PosStyles(align: PosAlign.right),
+      ),
     ]));
+
     bytes.addAll(gen.row([
       PosColumn(text: 'KEMBALI', width: 8),
-      PosColumn(text: _rupiah(changeAmount), width: 4, styles: const PosStyles(align: PosAlign.right)),
+      PosColumn(
+        text: _rupiah(changeAmount),
+        width: 4,
+        styles: const PosStyles(align: PosAlign.right),
+      ),
     ]));
 
     if (wifiShown && (wifiUser.isNotEmpty || wifiPass.isNotEmpty)) {
@@ -180,8 +221,7 @@ class ReceiptPrinter {
 num _num(dynamic v) => (v is num) ? v : num.tryParse(v?.toString() ?? '') ?? 0;
 
 String _rupiah(num n) {
-  final v = n.toDouble().round();
-  final s = v.toString();
+  final s = n.toInt().toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
     final idxFromEnd = s.length - i;
@@ -207,4 +247,15 @@ String _formatReceiptTime(dynamic v) {
 
   String two(int x) => x.toString().padLeft(2, '0');
   return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}:${two(local.minute)}';
+}
+
+bool _toBool(dynamic v) {
+  if (v == null) return false;
+  if (v is bool) return v;
+  final s = v.toString().toLowerCase();
+  return s == '1' || s == 'true';
+}
+
+String _formatPercent(num n) {
+  return n % 1 == 0 ? n.toInt().toString() : n.toString();
 }

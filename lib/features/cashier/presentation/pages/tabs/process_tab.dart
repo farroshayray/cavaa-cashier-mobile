@@ -291,7 +291,7 @@ class _ProcessViewState extends State<_ProcessView> {
       final paid = _pickNum(order, ['payment', 'paid_amount']) ??
           _pickNum(order, ['latest_payment', 'paid_amount']) ??
           _pickNum(order, ['paid_amount']) ??
-          _num(order['total_order_value']); // fallback: total
+          _orderGrandTotal(order); // fallback: total
 
       final change = _pickNum(order, ['payment', 'change_amount']) ??
           _pickNum(order, ['latest_payment', 'change_amount']) ??
@@ -515,7 +515,7 @@ class _ProcessOrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final code = (data['booking_order_code'] ?? '-').toString();
     final customer = (data['customer_name'] ?? '-').toString();
-    final total = (data['total_order_value'] ?? 0);
+    final total = _calcGrandTotalFromMap(data);
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
 
     return Container(
@@ -695,4 +695,39 @@ num _num(dynamic v) {
   if (v == null) return 0;
   if (v is num) return v;
   return num.tryParse(v.toString()) ?? 0;
+}
+
+num _toNum(dynamic v) {
+  if (v == null) return 0;
+  if (v is num) return v;
+  return num.tryParse(v.toString()) ?? 0;
+}
+
+bool _toBool(dynamic v) {
+  if (v == null) return false;
+  if (v is bool) return v;
+  final s = v.toString().toLowerCase();
+  return s == '1' || s == 'true';
+}
+
+num _calcGrandTotalFromMap(Map<String, dynamic> data) {
+  final subtotal = _toNum(data['total_order_value']);
+  final isPpnActive = _toBool(data['is_ppn_active']);
+  final ppnPercent = _toNum(data['ppn']);
+
+  return isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+      : subtotal.ceil();
+}
+
+num _orderGrandTotal(Map<String, dynamic> order) {
+  final subtotal = _toNum(order['total_order_value']);
+  final isPpnActive = _toBool(order['is_ppn_active']);
+  final ppnPercent = _toNum(order['ppn']);
+
+  final total = isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100))
+      : subtotal;
+
+  return total.ceil();
 }

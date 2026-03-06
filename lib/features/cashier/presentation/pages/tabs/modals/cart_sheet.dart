@@ -249,8 +249,7 @@ class CartSheet extends StatelessWidget {
 }
 
 String _rupiah(num n) {
-  final v = n.toDouble().round();
-  final s = v.toString();
+  final s = n.toInt().toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
     final idxFromEnd = s.length - i;

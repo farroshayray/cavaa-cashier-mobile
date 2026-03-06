@@ -54,8 +54,10 @@ class OrdersRepository {
     required num changeAmount,
     String? note,
     String? email,
+    String? lastPaymentId,
+    String? cashierProofImagePath,
   }) async {
-    final token = await storage.getToken(); // sesuaikan nama method kamu
+    final token = await storage.getToken();
     if (token == null || token.trim().isEmpty) {
       throw Exception('Token kosong, silakan login ulang');
     }
@@ -67,6 +69,8 @@ class OrdersRepository {
       changeAmount: changeAmount,
       note: note,
       email: email,
+      lastPaymentId: lastPaymentId,
+      cashierProofImagePath: cashierProofImagePath,
     );
   }
 

@@ -462,7 +462,7 @@ class _PaymentOrderCard extends StatelessWidget {
 
     final code = (data['booking_order_code'] ?? '-').toString();
     final customer = (data['customer_name'] ?? '-').toString();
-    final total = (data['total_order_value'] ?? 0);
+    final total = _calcGrandTotalFromMap(data);
     final status = (data['order_status'] ?? '').toString();
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
 
@@ -626,4 +626,27 @@ String _rupiah(dynamic n) {
     if (idxFromEnd > 1 && idxFromEnd % 3 == 1) buf.write('.');
   }
   return buf.toString();
+}
+
+num _toNum(dynamic v) {
+  if (v == null) return 0;
+  if (v is num) return v;
+  return num.tryParse(v.toString()) ?? 0;
+}
+
+bool _toBool(dynamic v) {
+  if (v == null) return false;
+  if (v is bool) return v;
+  final s = v.toString().toLowerCase();
+  return s == '1' || s == 'true';
+}
+
+num _calcGrandTotalFromMap(Map<String, dynamic> data) {
+  final subtotal = _toNum(data['total_order_value']);
+  final isPpnActive = _toBool(data['is_ppn_active']);
+  final ppnPercent = _toNum(data['ppn']);
+
+  return isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+      : subtotal.ceil();
 }
