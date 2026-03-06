@@ -5,10 +5,7 @@ import 'package:provider/provider.dart';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
-
-import '../../../data/orders_api.dart';
-import '../../../data/models/orders_repository.dart';
-import '../../../../../core/storage/secure_storage_service.dart';
+import '/features/cashier/presentation/providers/done_provider.dart';
 
 // ✅ bikin provider khusus proses (contoh)
 import '../../providers/process_provider.dart';
@@ -16,14 +13,30 @@ import '../../providers/process_provider.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
 // kalau nanti ada modal khusus proses/selesai, import juga
 
-class ProcessTab extends StatelessWidget {
+class ProcessTab extends StatefulWidget {
   const ProcessTab({super.key, this.focusOrderId});
 
   final int? focusOrderId;
 
   @override
+  State<ProcessTab> createState() => _ProcessTabState();
+}
+
+class _ProcessTabState extends State<ProcessTab> {
+  bool _loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loaded) return;
+    _loaded = true;
+
+    Future.microtask(() => context.read<ProcessProvider>().load());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return _ProcessView(focusOrderId: focusOrderId);
+    return _ProcessView(focusOrderId: widget.focusOrderId);
   }
 }
 
@@ -253,16 +266,22 @@ class _ProcessViewState extends State<_ProcessView> {
                           if (id <= 0) return;
                           try {
                             await context.read<ProcessProvider>().actionFinish(id);
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Order selesai')));
-                            // refresh tapi tetap di posisi scroll saat ini
-                            await _refreshKeepScroll();
 
-                            // optional: refresh
-                            // await context.read<ProcessProvider>().load();
+                            // refresh tab selesai di balik layar
+                            await context.read<DoneProvider>().load();
+
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Order selesai')),
+                            );
+
+                            // refresh tab proses agar item hilang / status sinkron
+                            await _refreshKeepScroll();
                           } catch (e) {
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal selesai: $e')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Gagal selesai: $e')),
+                            );
                           }
                         },
                       ),

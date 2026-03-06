@@ -13,17 +13,28 @@ import '../../../../../core/storage/secure_storage_service.dart';
 import '../../providers/done_provider.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
 
-class DoneTab extends StatelessWidget {
+class DoneTab extends StatefulWidget {
   const DoneTab({super.key});
 
   @override
+  State<DoneTab> createState() => _DoneTabState();
+}
+
+class _DoneTabState extends State<DoneTab> {
+  bool _loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loaded) return;
+    _loaded = true;
+
+    Future.microtask(() => context.read<DoneProvider>().load());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => DoneProvider(
-        OrdersRepository(api: OrdersApi(), storage: SecureStorageService()),
-      )..load(),
-      child: const _DoneView(),
-    );
+    return const _DoneView();
   }
 }
 

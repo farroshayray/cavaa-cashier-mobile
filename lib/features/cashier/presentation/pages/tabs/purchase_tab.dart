@@ -6,8 +6,7 @@ import '../../../data/models/purchase_models.dart';
 import '/features/cashier/presentation/pages/tabs/modals/product_option_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/cart_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/checkout_sheet.dart';
-
-
+import '../../../presentation/providers/payment_provider.dart';
 
 class PurchaseTab extends StatefulWidget {
   const PurchaseTab({super.key});
@@ -284,7 +283,7 @@ class _MiniCartBar extends StatelessWidget {
                   final purchaseVm = context.read<PurchaseProvider>();
                   final rootCtx = Navigator.of(context, rootNavigator: true).context;
 
-                  await showModalBottomSheet(
+                  final result = await showModalBottomSheet<Map<String, dynamic>>(
                     context: rootCtx,
                     useRootNavigator: true,
                     isScrollControlled: true,
@@ -296,8 +295,8 @@ class _MiniCartBar extends StatelessWidget {
                         child: CheckoutSheet(
                           onSubmit: ({required customerName, required table, required payment}) async {
                             final paymentMethod = payment.kind == PayKind.manual
-                              ? payment.value // manualId string
-                              : payment.value; // "CASH" / "QRIS"
+                                ? payment.value
+                                : payment.value;
 
                             final resp = await context.read<PurchaseProvider>().checkout(
                               customerName: customerName,
@@ -306,12 +305,20 @@ class _MiniCartBar extends StatelessWidget {
                               payment: payment,
                             );
 
-                            return resp; // ✅ PENTING: balikin ke CheckoutSheet
+                            return resp;
                           },
                         ),
                       ),
                     ),
                   );
+
+                  if (result != null && context.mounted) {
+                    final refreshTarget = (result['refresh_target'] ?? '').toString();
+
+                    if (refreshTarget == 'payment') {
+                      context.read<PaymentProvider>().load();
+                    }
+                  }
                 },
                 child: const Text(
                   'Checkout',

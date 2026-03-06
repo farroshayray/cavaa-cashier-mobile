@@ -266,33 +266,52 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                     flex: 2,
                     child: ElevatedButton(
                       onPressed: (!_isValid || items.isEmpty)
-                          ? null
-                          : () async {
-                              setState(() => _submitting = true);
-                              try {
-                                final resp = await widget.onSubmit!(
-                                  customerName: _nameCtrl.text.trim(),
-                                  table: _selectedTable!,
-                                  payment: _selectedPay!,
-                                );
+                        ? null
+                        : () async {
+                            setState(() => _submitting = true);
+                            try {
+                              final selectedPay = _selectedPay!;
 
-                                final redirect = resp['redirect'];
-                                if (_selectedPay?.kind == PayKind.onlineQris && redirect is String && redirect.isNotEmpty) {
-                                  if (mounted) Navigator.pop(context);
-                                  await openExternalUrl(redirect); // atau openInAppUrl (lihat opsi di bawah)
-                                  return; // biasanya jangan auto pop dulu kalau mau user lihat web
+                              final resp = await widget.onSubmit!(
+                                customerName: _nameCtrl.text.trim(),
+                                table: _selectedTable!,
+                                payment: selectedPay,
+                              );
+
+                              final redirect = resp['redirect'];
+                              final isXenditQris = selectedPay.kind == PayKind.onlineQris;
+
+                              // patokan refresh baru:
+                              // - QRIS Xendit -> jangan refresh dari sini
+                              // - selain itu  -> refresh payment
+                              final refreshTarget = isXenditQris ? '' : 'payment';
+
+                              if (isXenditQris && redirect is String && redirect.isNotEmpty) {
+                                if (mounted) {
+                                  Navigator.pop(context, {
+                                    'success': true,
+                                    'refresh_target': refreshTarget,
+                                  });
                                 }
-
-                                if (mounted) Navigator.pop(context);
-                              } catch (_) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Gagal memproses pembayaran. Coba lagi.')),
-                                );
-                              } finally {
-                                if (mounted) setState(() => _submitting = false);
+                                await openExternalUrl(redirect);
+                                return;
                               }
-                            },
+
+                              if (mounted) {
+                                Navigator.pop(context, {
+                                  'success': true,
+                                  'refresh_target': refreshTarget,
+                                });
+                              }
+                            } catch (_) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Gagal memproses pembayaran. Coba lagi.')),
+                              );
+                            } finally {
+                              if (mounted) setState(() => _submitting = false);
+                            }
+                          },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: brand,
                         foregroundColor: Colors.white,

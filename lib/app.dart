@@ -20,6 +20,12 @@ import 'features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/preference/printer_prefs.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
+import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/providers/process_provider.dart';
+import '/features/cashier/presentation/providers/done_provider.dart';
+import '/features/cashier/data/orders_api.dart';
+import '/features/cashier/data/models/orders_repository.dart';
+
 class CavaaApp extends StatefulWidget {
   const CavaaApp({super.key});
 
@@ -47,29 +53,37 @@ class _CavaaAppState extends State<CavaaApp> {
     });
   }
 
-  void _handleUri(Uri uri) {
+  Future<void> _refreshAfterPayment(BuildContext ctx) async {
+    try {
+      await ctx.read<PaymentProvider>().load();
 
+      // coba langsung
+      await ctx.read<ProcessProvider>().load();
+
+    } catch (e) {
+      debugPrint('❌ refresh after payment failed: $e');
+    }
+  }
+
+  void _handleUri(Uri uri) {
     if (uri.scheme == 'cavapos' && uri.host == 'payment') {
       final status = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
 
       if (status == 'success') {
-        // tutup route
         appNavigatorKey.currentState?.popUntil((r) => r.isFirst);
 
-        // clear cart
         final ctx = appNavigatorKey.currentContext;
         if (ctx != null) {
           try {
-            final p = ctx.read<PurchaseProvider>();
-            p.clearCartAndReset();
+            ctx.read<PurchaseProvider>().clearCartAndReset();
+            _refreshAfterPayment(ctx);
           } catch (e) {
-            debugPrint('❌ read<PurchaseProvider>() failed: $e');
+            debugPrint('❌ post-payment refresh failed: $e');
           }
         }
       }
     }
   }
-
 
   @override
   void dispose() {
@@ -87,6 +101,9 @@ class _CavaaAppState extends State<CavaaApp> {
 
     final purchaseApi = PurchaseApi(dioClient.dio);
     final purchaseRepo = PurchaseRepository(api: purchaseApi);
+
+    final ordersApi = OrdersApi();
+    final ordersRepo = OrdersRepository(api: ordersApi, storage: storage);
     // ⚠️ sesuaikan: kalau PurchaseRepository constructor kamu beda, tinggal sesuaikan di sini
 
     return MultiProvider(
@@ -96,6 +113,9 @@ class _CavaaAppState extends State<CavaaApp> {
 
         // ✅ INI YANG PALING PENTING: PurchaseProvider harus di ROOT
         ChangeNotifierProvider(create: (_) => PurchaseProvider(purchaseRepo)),
+        ChangeNotifierProvider(create: (_) => PaymentProvider(ordersRepo)),
+        ChangeNotifierProvider(create: (_) => ProcessProvider(ordersRepo)),
+        ChangeNotifierProvider(create: (_) => DoneProvider(ordersRepo)),
         // ✅ root printer manager (WAJIB)
         ChangeNotifierProvider(
           create: (_) => PrinterManager(PrinterPrefs())..init(autoConnect: true),

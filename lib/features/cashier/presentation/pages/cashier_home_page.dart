@@ -47,20 +47,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   int? _focusOrderId;
   Timer? _focusTimer;
 
-  // ===== Repos (biar ga bikin berkali2) =====
-  late final OrdersRepository _ordersRepo;
-  late final PaymentProvider _payVm;
-  late final ProcessProvider _procVm;
-
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _ordersRepo = OrdersRepository(api: OrdersApi(), storage: SecureStorageService());
-
-    _payVm = PaymentProvider(_ordersRepo)..load();
-    _procVm = ProcessProvider(_ordersRepo)..load();
   }
 
   @override
@@ -123,8 +114,6 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   void dispose() {
     _focusTimer?.cancel();
     _pusherSvc.stop();
-    _payVm.dispose();
-    _procVm.dispose();
 
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -176,12 +165,15 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     if (mounted) setState(() => _index = targetIndex);
 
     // 2) refresh tab tujuan (tunggu selesai)
+    final payVm = context.read<PaymentProvider>();
+    final procVm = context.read<ProcessProvider>();
+
     if (targetIndex == 1) {
-      _payVm.setQuery('');
-      await _payVm.load();
+      payVm.setQuery('');
+      await payVm.load();
     } else if (targetIndex == 2) {
-      _procVm.setQuery('');
-      await _procVm.load();
+      procVm.setQuery('');
+      await procVm.load();
     }
 
     // 3) set focus setelah load + setelah frame (biar list sudah kebangun)
@@ -251,104 +243,91 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
-    // ✅ INI yang kamu ubah: build milik _CashierHomePageState
-    const brand = Color(0xFFAE1504);
-
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<PaymentProvider>.value(value: _payVm),
-        ChangeNotifierProvider<ProcessProvider>.value(value: _procVm),
-      ],
-      child: PopScope(
-        canPop: false,
-        onPopInvoked: (didPop) async {
-          if (didPop) return;
-          await _handleBack();
-        },
-        child: Scaffold(
-          drawer: _AppDrawer(
-            onOpenPrinterSettings: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
-              );
-            },
-            onLogout: _logout,
-          ),
-          appBar: AppBar(
-            titleSpacing: 12,
-            title: Row(
-              children: [
-                Image.asset(
-                  'assets/images/cavaa_logo.png',
-                  height: 28,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Text(
-                    'Cavaa',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        await _handleBack();
+      },
+      child: Scaffold(
+        drawer: _AppDrawer(
+          onOpenPrinterSettings: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
+            );
+          },
+          onLogout: _logout,
+        ),
+        appBar: AppBar(
+          titleSpacing: 12,
+          title: Row(
+            children: [
+              Image.asset(
+                'assets/images/cavaa_logo.png',
+                height: 28,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Text(
+                  'Cavaa',
+                  style: TextStyle(fontWeight: FontWeight.w800),
                 ),
-              ],
-            ),
-            actions: [
-              const PrinterStatusDot(),
-              NotifBellButton(
-                onTapItem: _handleNotifTap, // ✅ pakai handler baru
               ),
             ],
           ),
-          body: IndexedStack(
-            index: _index,
-            children: [
-              const purchase_tab.PurchaseTab(),
-
-              // ✅ kirim focusOrderId ke tab supaya bisa blink + scroll
-              payment_tab.PaymentTab(focusOrderId: _focusOrderId),
-
-              process_tab.ProcessTab(focusOrderId: _focusOrderId),
-
-              const done_tab.DoneTab(),
-            ],
-          ),
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-          bottomNavigationBar: BottomAppBar(
-            shape: const CircularNotchedRectangle(),
-            notchMargin: 8,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Row(
-                  children: [
-                    _NavItem(
-                      icon: Icons.shopping_cart_outlined,
-                      label: 'Pembelian',
-                      active: _index == 0,
-                      onTap: () => _onTap(0),
-                    ),
-                    _NavItem(
-                      icon: Icons.payments_outlined,
-                      label: 'Pembayaran',
-                      active: _index == 1,
-                      onTap: () => _onTap(1),
-                    ),
-                    _BarcodeNavItem(
-                      active: false,
-                      onTap: _openBarcode,
-                    ),
-                    _NavItem(
-                      icon: Icons.sync_rounded,
-                      label: 'Proses',
-                      active: _index == 2,
-                      onTap: () => _onTap(2),
-                    ),
-                    _NavItem(
-                      icon: Icons.check_circle_outline_rounded,
-                      label: 'Selesai',
-                      active: _index == 3,
-                      onTap: () => _onTap(3),
-                    ),
-                  ],
-                ),
+          actions: [
+            const PrinterStatusDot(),
+            NotifBellButton(
+              onTapItem: _handleNotifTap,
+            ),
+          ],
+        ),
+        body: IndexedStack(
+          index: _index,
+          children: [
+            const purchase_tab.PurchaseTab(),
+            payment_tab.PaymentTab(focusOrderId: _focusOrderId),
+            process_tab.ProcessTab(focusOrderId: _focusOrderId),
+            const done_tab.DoneTab(),
+          ],
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        bottomNavigationBar: BottomAppBar(
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(
+                children: [
+                  _NavItem(
+                    icon: Icons.shopping_cart_outlined,
+                    label: 'Pembelian',
+                    active: _index == 0,
+                    onTap: () => _onTap(0),
+                  ),
+                  _NavItem(
+                    icon: Icons.payments_outlined,
+                    label: 'Pembayaran',
+                    active: _index == 1,
+                    onTap: () => _onTap(1),
+                  ),
+                  _BarcodeNavItem(
+                    active: false,
+                    onTap: _openBarcode,
+                  ),
+                  _NavItem(
+                    icon: Icons.sync_rounded,
+                    label: 'Proses',
+                    active: _index == 2,
+                    onTap: () => _onTap(2),
+                  ),
+                  _NavItem(
+                    icon: Icons.check_circle_outline_rounded,
+                    label: 'Selesai',
+                    active: _index == 3,
+                    onTap: () => _onTap(3),
+                  ),
+                ],
               ),
             ),
           ),
