@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '/features/cashier/data/preference/printer_manager.dart';
+import '/features/cashier/data/models/printer_device.dart';
+import '/features/cashier/presentation/printing/order_list_printer.dart';
 
 class DetailOrderSheet extends StatefulWidget {
   const DetailOrderSheet({
@@ -16,6 +20,7 @@ class DetailOrderSheet extends StatefulWidget {
 
 class _DetailOrderSheetState extends State<DetailOrderSheet> {
   bool _loading = true;
+  bool _printing = false;
   String? _error;
   Map<String, dynamic>? _order;
 
@@ -42,6 +47,43 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
     }
   }
 
+  Future<void> _printOrderList() async {
+    if (_printing) return;
+    final order = _order;
+    if (order == null) return;
+
+    setState(() => _printing = true);
+
+    try {
+      final pm = context.read<PrinterManager>();
+      final p = pm.defaultPrinter;
+
+      if (p == null) {
+        throw Exception('Default printer belum dipilih');
+      }
+
+      if (p.type != PrinterType.bluetooth || p.address == null || p.address!.trim().isEmpty) {
+        throw Exception('Default printer bukan Bluetooth / address kosong');
+      }
+
+      final bytes = await OrderListPrinter().buildOrderListBytes(order: order);
+
+      await pm.write(bytes);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('List order berhasil diprint')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal print: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
@@ -58,6 +100,8 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
               children: [
                 _Header(
                   title: 'Detail Order',
+                  isPrinting: _printing,
+                  onPrint: (_loading || _order == null) ? null : _printOrderList,
                   onClose: () => Navigator.of(context).pop(),
                 ),
                 Expanded(
@@ -77,9 +121,17 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.title, required this.onClose});
+  const _Header({
+    required this.title,
+    required this.onClose,
+    required this.onPrint,
+    required this.isPrinting,
+  });
+
   final String title;
   final VoidCallback onClose;
+  final VoidCallback? onPrint;
+  final bool isPrinting;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +144,28 @@ class _Header extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onPrint,
+            icon: isPrinting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.print_rounded, size: 18),
+            label: const Text(
+              'Print Order',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.black87,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            ),
           ),
           IconButton(
             onPressed: onClose,

@@ -10,14 +10,34 @@ import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart
 
 
 
-class PaymentTab extends StatelessWidget {
+class PaymentTab extends StatefulWidget {
   const PaymentTab({super.key, this.focusOrderId});
 
   final int? focusOrderId;
 
   @override
+  State<PaymentTab> createState() => _PaymentTabState();
+}
+
+class _PaymentTabState extends State<PaymentTab> {
+  bool _loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loaded) return;
+    _loaded = true;
+
+    Future.microtask(() {
+      final vm = context.read<PaymentProvider>();
+      vm.setQuery('');
+      vm.load();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return _PaymentView(focusOrderId: focusOrderId);
+    return _PaymentView(focusOrderId: widget.focusOrderId);
   }
 }
 
@@ -142,12 +162,22 @@ class _PaymentViewState extends State<_PaymentView> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<PaymentProvider>();
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final shortestSide = media.size.shortestSide;
+    final isMobileLandscape = isLandscape && shortestSide < 600;
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+          padding: EdgeInsets.fromLTRB(
+            12,
+            isMobileLandscape ? 8 : 12,
+            12,
+            isMobileLandscape ? 6 : 10,
+          ),
           child: _SearchBar(
+            compact: isMobileLandscape,
             controller: _searchCtrl,
             onScan: _scanAndSearch,
             onSubmit: () {
@@ -164,7 +194,12 @@ class _PaymentViewState extends State<_PaymentView> {
         ),
 
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            isMobileLandscape ? 8 : 10,
+            16,
+            isMobileLandscape ? 8 : 10,
+          ),
           decoration: BoxDecoration(
             color: const Color(0xFFF7F8FA),
             border: Border(
@@ -174,10 +209,19 @@ class _PaymentViewState extends State<_PaymentView> {
           ),
           child: Row(
             children: [
-              const Expanded(
-                child: Text('Pembayaran', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              Expanded(
+                child: Text(
+                  'Pembayaran',
+                  style: TextStyle(
+                    fontSize: isMobileLandscape ? 14 : 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
-              _Badge(text: '${vm.items.length} order'),
+              _Badge(
+                text: '${vm.items.length} order',
+                compact: isMobileLandscape,
+              ),
             ],
           ),
         ),
@@ -351,68 +395,95 @@ class _SearchBar extends StatelessWidget {
     required this.onScan,
     required this.onSubmit,
     required this.onClear,
+    this.compact = false,
   });
 
   final TextEditingController controller;
   final VoidCallback onScan;
   final VoidCallback onSubmit;
   final VoidCallback onClear;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
 
+    final horizontalPadding = compact ? 10.0 : 12.0;
+    final verticalPadding = compact ? 8.0 : 10.0;
+    final iconSize = compact ? 20.0 : 24.0;
+    final actionIconSize = compact ? 20.0 : 24.0;
+    final buttonPadding = compact
+        ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+        : const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(compact ? 14 : 18),
         border: Border.all(color: Colors.black.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            blurRadius: 16,
-            offset: const Offset(0, 10),
+            blurRadius: compact ? 10 : 16,
+            offset: Offset(0, compact ? 6 : 10),
             color: Colors.black.withOpacity(0.04),
           )
         ],
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded),
-          const SizedBox(width: 10),
+          Icon(Icons.search_rounded, size: iconSize),
+          SizedBox(width: compact ? 8 : 10),
           Expanded(
             child: TextField(
               controller: controller,
               textInputAction: TextInputAction.search,
+              style: TextStyle(fontSize: compact ? 13 : 14),
               onSubmitted: (_) => onSubmit(),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
                 hintText: 'Cari order (kode/meja/nama)…',
+                hintStyle: TextStyle(fontSize: compact ? 13 : 14),
               ),
             ),
           ),
           if (controller.text.isNotEmpty)
             IconButton(
+              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+              constraints: compact
+                  ? const BoxConstraints(minWidth: 32, minHeight: 32)
+                  : null,
               onPressed: onClear,
-              icon: const Icon(Icons.close_rounded),
+              icon: Icon(Icons.close_rounded, size: actionIconSize),
               tooltip: 'Reset',
             ),
           IconButton(
+            visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+            constraints: compact
+                ? const BoxConstraints(minWidth: 32, minHeight: 32)
+                : null,
             onPressed: onScan,
-            icon: const Icon(Icons.qr_code_scanner_rounded),
+            icon: Icon(Icons.qr_code_scanner_rounded, size: actionIconSize),
             tooltip: 'Scan barcode',
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: compact ? 4 : 6),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: brand,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(compact ? 10 : 12),
+              ),
+              padding: buttonPadding,
+              minimumSize: compact ? const Size(0, 36) : null,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: onSubmit,
-            child: const Icon(Icons.search_rounded, size: 18),
+            child: Icon(Icons.search_rounded, size: compact ? 16 : 18),
           ),
         ],
       ),
@@ -421,13 +492,21 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.text});
+  const _Badge({
+    required this.text,
+    this.compact = false,
+  });
+
   final String text;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 4 : 6,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(999),
@@ -435,10 +514,10 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          fontSize: 12,
+        style: TextStyle(
+          fontSize: compact ? 11 : 12,
           fontWeight: FontWeight.w800,
-          color: Color(0xFF1D4ED8),
+          color: const Color(0xFF1D4ED8),
         ),
       ),
     );
@@ -470,6 +549,13 @@ class _PaymentOrderCard extends StatelessWidget {
 
     final badge = _statusBadge(status, (data['payment_method'] ?? '').toString());
 
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final shortestSide = media.size.shortestSide;
+
+    // khusus mobile landscape
+    final isMobileLandscape = isLandscape && shortestSide < 600;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -484,90 +570,232 @@ class _PaymentOrderCard extends StatelessWidget {
           )
         ],
       ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // code + customer + meja/time
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        code,
-                        style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w800, fontSize: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      customer,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Meja: $table',
-                      style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              badge,
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(height: 1, color: Colors.black.withOpacity(0.06)),
-          const SizedBox(height: 10),
+      child: isMobileLandscape
+          ? _buildMobileLandscapeLayout(
+              code: code,
+              customer: customer,
+              table: table,
+              total: total,
+              badge: badge,
+            )
+          : _buildDefaultLayout(
+              code: code,
+              customer: customer,
+              table: table,
+              total: total,
+              badge: badge,
+            ),
+    );
+  }
 
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Total', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Rp ${_rupiah(total)}',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+  Widget _buildDefaultLayout({
+    required String code,
+    required String customer,
+    required String table,
+    required num total,
+    required Widget badge,
+  }) {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                  ],
-                ),
+                    child: Text(
+                      code,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    customer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Meja: $table',
+                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  ),
+                ],
               ),
-              IconButton(
-                onPressed: onDetail,
-                icon: const Icon(Icons.visibility_outlined),
-                tooltip: 'Detail',
+            ),
+            const SizedBox(width: 10),
+            badge,
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(height: 1, color: Colors.black.withOpacity(0.06)),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Total', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Rp ${_rupiah(total)}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                  ),
+                ],
               ),
-              IconButton(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline_rounded),
-                tooltip: 'Hapus',
+            ),
+            IconButton(
+              onPressed: onDetail,
+              icon: const Icon(Icons.visibility_outlined),
+              tooltip: 'Detail',
+            ),
+            IconButton(
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline_rounded),
+              tooltip: 'Hapus',
+            ),
+            const SizedBox(width: 6),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               ),
-              const SizedBox(width: 6),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-                onPressed: onProcess,
-                child: const Text('Process', style: TextStyle(fontWeight: FontWeight.w900)),
+              onPressed: onProcess,
+              child: const Text('Process', style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLandscapeLayout({
+    required String code,
+    required String customer,
+    required String table,
+    required num total,
+    required Widget badge,
+  }) {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            code,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      badge,
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    customer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Meja: $table',
+                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
-      ),
+            ),
+            const SizedBox(width: 12),
+
+            // kanan: total + action sebaris
+            Flexible(
+              flex: 0,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Total',
+                        style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Rp ${_rupiah(total)}',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    onPressed: onDetail,
+                    icon: const Icon(Icons.visibility_outlined),
+                    tooltip: 'Detail',
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    tooltip: 'Hapus',
+                  ),
+                  const SizedBox(width: 4),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      minimumSize: const Size(0, 40),
+                    ),
+                    onPressed: onProcess,
+                    child: const Text(
+                      'Process',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

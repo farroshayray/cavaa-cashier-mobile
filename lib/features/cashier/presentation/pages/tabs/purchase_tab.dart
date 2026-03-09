@@ -529,16 +529,42 @@ class _ProductGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Grid di dalam SliverList -> pakai GridView shrinkWrap
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final shortestSide = media.size.shortestSide;
+    final isLandscape = media.orientation == Orientation.landscape;
+
+    final isTablet = shortestSide >= 600;
+
+    int crossAxisCount;
+    double childAspectRatio;
+
+    if (isTablet) {
+      // tablet
+      if (width >= 900) {
+        // tablet / layar besar
+        crossAxisCount = isLandscape ? 6 : 4;
+        childAspectRatio = isLandscape ? 0.95 : 0.82;
+      } else {
+        // tablet kecil
+        crossAxisCount = isLandscape ? 5 : 4;
+        childAspectRatio = isLandscape ? 0.90 : 0.78;
+      }
+    } else {
+      // mobile
+      crossAxisCount = isLandscape ? 4 : 2;
+      childAspectRatio = isLandscape ? 0.88 : 0.74;
+    }
+
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
       itemCount: products.length,
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 220, // ✅ card max lebar ~220px (atur sesuai selera)
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 0.74,
+        childAspectRatio: childAspectRatio,
       ),
       itemBuilder: (_, i) => _ProductCard(product: products[i]),
     );
@@ -554,6 +580,9 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.watch<PurchaseProvider>();
     const brand = Color(0xFFAE1504);
+
+    final shortestSide = MediaQuery.of(context).size.shortestSide;
+    final isTablet = shortestSide >= 600;
 
     final qty = vm.qtyOf(product.id);
 
@@ -711,14 +740,20 @@ class _ProductCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      product.description ?? '',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
-                    ),
-                    const SizedBox(height: 8),
+                    if (isTablet && (product.description?.trim().isNotEmpty ?? false)) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        product.description!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ] else
+                      const SizedBox(height: 8),
 
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,

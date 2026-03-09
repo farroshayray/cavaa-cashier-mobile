@@ -31,16 +31,16 @@ class PusherOrdersService {
 
       // 🔎 CONNECTION DEBUG
       onConnectionStateChange: (current, previous) {
-        print('PUSHER STATE: $previous -> $current');
+        // print('PUSHER STATE: $previous -> $current');
       },
 
       onError: (message, code, error) {
-        print('PUSHER ERROR: $code $message $error');
+        // print('PUSHER ERROR: $code $message $error');
       },
 
       // 🔐 AUTH DEBUG
       onAuthorizer: (channelName, socketId, options) async {
-        print('AUTH REQUEST: $channelName socket=$socketId');
+        // print('AUTH REQUEST: $channelName socket=$socketId');
 
         final url = Uri.parse('${Env.baseUrl}/api/v1/mobile/cashier/broadcasting/auth');
 
@@ -57,7 +57,7 @@ class PusherOrdersService {
           },
         );
 
-        print('AUTH RESPONSE ${resp.statusCode}: ${resp.body}');
+        // print('AUTH RESPONSE ${resp.statusCode}: ${resp.body}');
 
         if (resp.statusCode < 200 || resp.statusCode >= 300) {
           throw Exception('Auth failed ${resp.statusCode}: ${resp.body}');
@@ -68,17 +68,17 @@ class PusherOrdersService {
 
       // 📡 SUBSCRIBE DEBUG
       onSubscriptionSucceeded: (channelName, data) {
-        print('SUBSCRIBED OK: $channelName');
+        // print('SUBSCRIBED OK: $channelName');
       },
 
       onSubscriptionError: (message, e) {
-        print('SUBSCRIBE ERROR: $message $e');
+        // print('SUBSCRIBE ERROR: $message $e');
       },
 
       // 📩 EVENT DEBUG
       onEvent: (event) {
-        print('EVENT RECEIVED: ${event.eventName}');
-        print('DATA: ${event.data}');
+        // print('EVENT RECEIVED: ${event.eventName}');
+        // print('DATA: ${event.data}');
 
         if (event.eventName == '.OrderCreated' ||
             event.eventName == 'OrderCreated') {

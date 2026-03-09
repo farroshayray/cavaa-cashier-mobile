@@ -100,12 +100,22 @@ class _ProcessViewState extends State<_ProcessView> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<ProcessProvider>();
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final shortestSide = media.size.shortestSide;
+    final isMobileLandscape = isLandscape && shortestSide < 600;
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+          padding: EdgeInsets.fromLTRB(
+            12,
+            isMobileLandscape ? 8 : 12,
+            12,
+            isMobileLandscape ? 6 : 10,
+          ),
           child: _SearchBar(
+            compact: isMobileLandscape,
             controller: _searchCtrl,
             onSubmit: () {
               context.read<ProcessProvider>().setQuery(_searchCtrl.text);
@@ -121,7 +131,12 @@ class _ProcessViewState extends State<_ProcessView> {
         ),
 
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            isMobileLandscape ? 8 : 10,
+            16,
+            isMobileLandscape ? 8 : 10,
+          ),
           decoration: BoxDecoration(
             color: const Color(0xFFF7F8FA),
             border: Border(
@@ -131,10 +146,19 @@ class _ProcessViewState extends State<_ProcessView> {
           ),
           child: Row(
             children: [
-              const Expanded(
-                child: Text('Proses', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              Expanded(
+                child: Text(
+                  'Proses',
+                  style: TextStyle(
+                    fontSize: isMobileLandscape ? 14 : 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
-              _Badge(text: '${vm.items.length} order'),
+              _Badge(
+                text: '${vm.items.length} order',
+                compact: isMobileLandscape,
+              ),
             ],
           ),
         ),
@@ -145,14 +169,18 @@ class _ProcessViewState extends State<_ProcessView> {
             child: Builder(
               builder: (_) {
                 if (vm.isLoading) {
-                  return ListView(children: const [
-                    SizedBox(height: 200),
-                    Center(child: CircularProgressIndicator()),
-                  ]);
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      SizedBox(height: 200),
+                      Center(child: CircularProgressIndicator()),
+                    ],
+                  );
                 }
 
                 if (vm.error != null) {
                   return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
                     children: [
                       Text(vm.error!, textAlign: TextAlign.center),
@@ -167,6 +195,7 @@ class _ProcessViewState extends State<_ProcessView> {
 
                 if (vm.items.isEmpty) {
                   return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
@@ -182,6 +211,7 @@ class _ProcessViewState extends State<_ProcessView> {
                 }
 
                 return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   controller: _listCtrl,
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                   itemCount: vm.items.length,
@@ -241,7 +271,9 @@ class _ProcessViewState extends State<_ProcessView> {
                             if (st == 'warning') await context.read<ProcessProvider>().load();
                           } catch (e) {
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal proses: $e')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Gagal proses: $e')),
+                            );
                           }
                         },
                         onCancelProcess: () async {
@@ -266,8 +298,6 @@ class _ProcessViewState extends State<_ProcessView> {
                           if (id <= 0) return;
                           try {
                             await context.read<ProcessProvider>().actionFinish(id);
-
-                            // refresh tab selesai di balik layar
                             await context.read<DoneProvider>().load();
 
                             if (!mounted) return;
@@ -275,7 +305,6 @@ class _ProcessViewState extends State<_ProcessView> {
                               const SnackBar(content: Text('Order selesai')),
                             );
 
-                            // refresh tab proses agar item hilang / status sinkron
                             await _refreshKeepScroll();
                           } catch (e) {
                             if (!mounted) return;
@@ -392,7 +421,7 @@ class _ProcessViewState extends State<_ProcessView> {
 
     final idx = vm.items.indexWhere((e) => _toId(e['id']) == orderId);
     if (idx < 0) {
-      debugPrint('FOCUS PROCESS: id=$orderId NOT FOUND in process list');
+      // debugPrint('FOCUS PROCESS: id=$orderId NOT FOUND in process list');
       return;
     }
 
@@ -426,58 +455,85 @@ class _SearchBar extends StatelessWidget {
     required this.controller,
     required this.onSubmit,
     required this.onClear,
+    this.compact = false,
   });
 
   final TextEditingController controller;
   final VoidCallback onSubmit;
   final VoidCallback onClear;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
 
+    final horizontalPadding = compact ? 10.0 : 12.0;
+    final verticalPadding = compact ? 8.0 : 10.0;
+    final iconSize = compact ? 20.0 : 24.0;
+    final actionIconSize = compact ? 20.0 : 24.0;
+    final buttonPadding = compact
+        ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+        : const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(compact ? 14 : 18),
         border: Border.all(color: Colors.black.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            blurRadius: 16,
-            offset: const Offset(0, 10),
+            blurRadius: compact ? 10 : 16,
+            offset: Offset(0, compact ? 6 : 10),
             color: Colors.black.withOpacity(0.04),
           )
         ],
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded),
-          const SizedBox(width: 10),
+          Icon(Icons.search_rounded, size: iconSize),
+          SizedBox(width: compact ? 8 : 10),
           Expanded(
             child: TextField(
               controller: controller,
               textInputAction: TextInputAction.search,
+              style: TextStyle(fontSize: compact ? 13 : 14),
               onSubmitted: (_) => onSubmit(),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
                 hintText: 'Cari order (kode/meja/nama)…',
+                hintStyle: TextStyle(fontSize: compact ? 13 : 14),
               ),
             ),
           ),
           if (controller.text.isNotEmpty)
-            IconButton(onPressed: onClear, icon: const Icon(Icons.close_rounded)),
-          const SizedBox(width: 6),
+            IconButton(
+              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+              constraints: compact
+                  ? const BoxConstraints(minWidth: 32, minHeight: 32)
+                  : null,
+              onPressed: onClear,
+              icon: Icon(Icons.close_rounded, size: actionIconSize),
+              tooltip: 'Reset',
+            ),
+          SizedBox(width: compact ? 4 : 6),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: brand,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(compact ? 10 : 12),
+              ),
+              padding: buttonPadding,
+              minimumSize: compact ? const Size(0, 36) : null,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: onSubmit,
-            child: const Icon(Icons.search_rounded, size: 18),
+            child: Icon(Icons.search_rounded, size: compact ? 16 : 18),
           ),
         ],
       ),
@@ -486,13 +542,21 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.text});
+  const _Badge({
+    required this.text,
+    this.compact = false,
+  });
+
   final String text;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 4 : 6,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(999),
@@ -500,7 +564,11 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
+        style: TextStyle(
+          fontSize: compact ? 11 : 12,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF1D4ED8),
+        ),
       ),
     );
   }
@@ -528,14 +596,19 @@ class _ProcessOrderCard extends StatelessWidget {
   final VoidCallback onFinish;
   final bool isActing;
 
-
-
   @override
   Widget build(BuildContext context) {
     final code = (data['booking_order_code'] ?? '-').toString();
     final customer = (data['customer_name'] ?? '-').toString();
     final total = _calcGrandTotalFromMap(data);
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
+
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final shortestSide = media.size.shortestSide;
+
+    // khusus mobile landscape
+    final isMobileLandscape = isLandscape && shortestSide < 600;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -544,81 +617,240 @@ class _ProcessOrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.black.withOpacity(0.08)),
         boxShadow: [
-          BoxShadow(blurRadius: 14, offset: const Offset(0, 8), color: Colors.black.withOpacity(0.04)),
+          BoxShadow(
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.04),
+          ),
         ],
       ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(999)),
-                      child: Text(
-                        code,
-                        style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w800, fontSize: 12),
+      child: isMobileLandscape
+          ? _buildMobileLandscapeLayout(
+              code: code,
+              customer: customer,
+              table: table,
+              total: total,
+            )
+          : _buildDefaultLayout(
+              code: code,
+              customer: customer,
+              table: table,
+              total: total,
+            ),
+    );
+  }
+
+  Widget _buildDefaultLayout({
+    required String code,
+    required String customer,
+    required String table,
+    required num total,
+  }) {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      code,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(customer, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 4),
-                    Text('Meja: $table', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
-                  ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    customer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Meja: $table',
+                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            _statusChip(),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(height: 1, color: Colors.black.withOpacity(0.06)),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Total', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Rp ${_rupiah(total)}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+            ),
+            if (isActing)
+              const Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
-              const SizedBox(width: 10),
-              _statusChip(),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(height: 1, color: Colors.black.withOpacity(0.06)),
-          const SizedBox(height: 10),
-          Row(
+            IconButton(
+              onPressed: (isPrinting || isActing) ? null : onPrint,
+              icon: isPrinting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.print_rounded),
+              tooltip: 'Print',
+            ),
+            IconButton(
+              onPressed: isActing ? null : onDetail,
+              icon: const Icon(Icons.visibility_outlined),
+              tooltip: 'Detail',
+            ),
+            _buildStatusActions(),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLandscapeLayout({
+    required String code,
+    required String customer,
+    required String table,
+    required num total,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Total', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
-                    const SizedBox(height: 2),
-                    Text('Rp ${_rupiah(total)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-                  ],
-                ),
+              Row(
+                children: [
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        code,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _statusChip(),
+                ],
               ),
-
-              // ===== ACTIONS =====
-              if (isActing)
-                const Padding(
-                  padding: EdgeInsets.only(right: 6),
-                  child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                ),
-
-              // ✅ tombol status-based
-              _buildStatusActions(),
-
-              // tombol print
-              IconButton(
-                onPressed: (isPrinting || isActing) ? null : onPrint,
-                icon: isPrinting
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.print_rounded),
-                tooltip: 'Print',
+              const SizedBox(height: 8),
+              Text(
+                customer,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w900),
               ),
-
-              IconButton(
-                onPressed: isActing ? null : onDetail,
-                icon: const Icon(Icons.visibility_outlined),
-                tooltip: 'Detail',
+              const SizedBox(height: 4),
+              Text(
+                'Meja: $table',
+                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 12),
+
+        Flexible(
+          flex: 0,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Total',
+                      style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Rp ${_rupiah(total)}',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+
+                if (isActing)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 6),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: (isPrinting || isActing) ? null : onPrint,
+                  icon: isPrinting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.print_rounded),
+                  tooltip: 'Print',
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: isActing ? null : onDetail,
+                  icon: const Icon(Icons.visibility_outlined),
+                  tooltip: 'Detail',
+                ),
+                _buildLandscapeStatusActions(),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -629,7 +861,11 @@ class _ProcessOrderCard extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999), border: Border.all(color: border)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -648,14 +884,13 @@ class _ProcessOrderCard extends StatelessWidget {
   Widget _buildStatusActions() {
     final st = (data['order_status'] ?? '').toString();
 
-    // PAID -> tampil tombol Proses
     if (st == 'PAID') {
       return Padding(
         padding: const EdgeInsets.only(right: 6),
         child: ElevatedButton(
           onPressed: isActing ? null : onProcess,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFEA580C), // orange-ish
+            backgroundColor: const Color(0xFFEA580C),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -665,7 +900,6 @@ class _ProcessOrderCard extends StatelessWidget {
       );
     }
 
-    // PROCESSED -> tampil Cancel + Finish
     if (st == 'PROCESSED') {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -679,7 +913,7 @@ class _ProcessOrderCard extends StatelessWidget {
           ElevatedButton(
             onPressed: isActing ? null : onFinish,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7C3AED), // purple
+              backgroundColor: const Color(0xFF7C3AED),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -691,10 +925,59 @@ class _ProcessOrderCard extends StatelessWidget {
       );
     }
 
-    // status lain -> tidak tampil tombol proses
     return const SizedBox.shrink();
   }
 
+  Widget _buildLandscapeStatusActions() {
+    final st = (data['order_status'] ?? '').toString();
+
+    if (st == 'PAID') {
+      return Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: ElevatedButton(
+          onPressed: isActing ? null : onProcess,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFEA580C),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            minimumSize: const Size(0, 40),
+          ),
+          child: const Text('Proses', style: TextStyle(fontWeight: FontWeight.w900)),
+        ),
+      );
+    }
+
+    if (st == 'PROCESSED') {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            onPressed: isActing ? null : onCancelProcess,
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Cancel process',
+          ),
+          const SizedBox(width: 2),
+          ElevatedButton(
+            onPressed: isActing ? null : onFinish,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              minimumSize: const Size(0, 40),
+            ),
+            child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(width: 4),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
 }
 
 String _rupiah(dynamic n) {

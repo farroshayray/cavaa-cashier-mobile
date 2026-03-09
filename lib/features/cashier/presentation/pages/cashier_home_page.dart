@@ -18,6 +18,7 @@ import '/features/cashier/data/orders_api.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
+import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 
 import 'tabs/purchase_tab.dart' as purchase_tab;
@@ -46,6 +47,9 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   // ===== Focus/highlight order =====
   int? _focusOrderId;
   Timer? _focusTimer;
+  Timer? _paymentReloadDebounce;
+  Timer? _processReloadDebounce;
+  Timer? _doneReloadDebounce;
 
 
   @override
@@ -92,13 +96,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       await _pusherSvc.start(
         partnerId: partnerId,
         onOrderCreated: (data) async {
-          // debugPrint('✅ OrderCreated: $data');
-
-          // 🔔 bunyi notif masuk
           await SoundService.instance.playNotification();
 
-          // tetap simpan ke provider notif
           notif.pushFromPusher(data);
+
+          _refreshTabByRealtimeData(data);
         },
       );
 
@@ -113,6 +115,9 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   @override
   void dispose() {
     _focusTimer?.cancel();
+    _paymentReloadDebounce?.cancel();
+    _processReloadDebounce?.cancel();
+    _doneReloadDebounce?.cancel();
     _pusherSvc.stop();
 
     WidgetsBinding.instance.removeObserver(this);
@@ -134,15 +139,81 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
   void _openBarcode() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Open barcode scanner...')),
+      const SnackBar(content: Text('Sementara anda belum dapat menggunakan fitur ini...')),
     );
+  }
+
+    void _debouncedReloadPayment() {
+    _paymentReloadDebounce?.cancel();
+    _paymentReloadDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      final vm = context.read<PaymentProvider>();
+      vm.setQuery('');
+      unawaited(vm.load());
+    });
+  }
+
+  void _debouncedReloadProcess() {
+    _processReloadDebounce?.cancel();
+    _processReloadDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      final vm = context.read<ProcessProvider>();
+      vm.setQuery('');
+      unawaited(vm.load());
+    });
+  }
+
+  void _debouncedReloadDone() {
+    _doneReloadDebounce?.cancel();
+    _doneReloadDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      final vm = context.read<DoneProvider>();
+      unawaited(vm.load());
+    });
+  }
+
+  void _refreshTabByRealtimeData(Map<String, dynamic> data) {
+    final status = (data['status'] ?? data['order_status'] ?? '')
+        .toString()
+        .toUpperCase();
+
+    final source = (data['source'] ??
+            data['from'] ??
+            data['payment_method'] ??
+            data['order_source'] ??
+            '')
+        .toString()
+        .toUpperCase();
+
+    // debugPrint('REALTIME status=$status source=$source');
+
+    if (status == 'UNPAID' ||
+        status == 'EXPIRED' ||
+        status == 'PAYMENT REQUEST') {
+      _debouncedReloadPayment();
+      return;
+    }
+
+    if (status == 'PAID' || status == 'PROCESSED') {
+      _debouncedReloadProcess();
+      return;
+    }
+
+    if (status == 'SERVED' || status == 'DONE' || status == 'FINISHED') {
+      _debouncedReloadDone();
+      return;
+    }
+
+    // fallback kalau source mau ikut dipakai
+    if (source == 'QRIS' || source == 'CASH' || source == 'MANUAL') {
+      _debouncedReloadPayment();
+    }
   }
 
   // ======= INI KUNCI: notif click -> pindah tab + refresh + fokus & blink =======
   Future<void> _handleNotifTap(dynamic n) async {
-    // asumsi model notif kamu punya:
-    // n.status (String), n.orderId (int?) atau n.id, n.code
     final st = (n.status ?? '').toString().toUpperCase();
+    final doneVm = context.read<DoneProvider>();
     // debugPrint('NOTIF RAW = $n');
 
     int targetIndex = 0;
@@ -174,6 +245,8 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     } else if (targetIndex == 2) {
       procVm.setQuery('');
       await procVm.load();
+    } else if (targetIndex == 3) {
+      await doneVm.load();
     }
 
     // 3) set focus setelah load + setelah frame (biar list sudah kebangun)
@@ -243,6 +316,28 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final shortestSide = media.size.shortestSide;
+
+    final isTablet = shortestSide >= 600;
+    // final useSideNav = isLandscape && isTablet;
+    final useSideNav = isLandscape;
+
+    final paymentCount = context.watch<PaymentProvider>().items.length;
+    final processCount = context.watch<ProcessProvider>().items.length;
+    final doneCount = context.watch<DoneProvider>().items.length;
+
+    final content = IndexedStack(
+      index: _index,
+      children: [
+        const purchase_tab.PurchaseTab(),
+        payment_tab.PaymentTab(focusOrderId: _focusOrderId),
+        process_tab.ProcessTab(focusOrderId: _focusOrderId),
+        const done_tab.DoneTab(),
+      ],
+    );
+
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
@@ -280,56 +375,288 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
             ),
           ],
         ),
-        body: IndexedStack(
-          index: _index,
-          children: [
-            const purchase_tab.PurchaseTab(),
-            payment_tab.PaymentTab(focusOrderId: _focusOrderId),
-            process_tab.ProcessTab(focusOrderId: _focusOrderId),
-            const done_tab.DoneTab(),
-          ],
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        bottomNavigationBar: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 8,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Row(
-                children: [
-                  _NavItem(
-                    icon: Icons.shopping_cart_outlined,
-                    label: 'Pembelian',
-                    active: _index == 0,
-                    onTap: () => _onTap(0),
+        body: useSideNav
+          ? Row(
+              children: [
+                _SideNav(
+                  currentIndex: _index,
+                  onTap: _onTap,
+                  onBarcodeTap: _openBarcode,
+                  iconOnly: true,
+                  paymentCount: paymentCount,
+                  processCount: processCount,
+                  doneCount: doneCount,
+                ),
+                Expanded(child: content),
+              ],
+            )
+          : content,
+        bottomNavigationBar: useSideNav
+          ? null
+          : BottomAppBar(
+              shape: const CircularNotchedRectangle(),
+              notchMargin: 8,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    children: [
+                      _NavItem(
+                        icon: Icons.shopping_cart_outlined,
+                        label: 'Pembelian',
+                        active: _index == 0,
+                        onTap: () => _onTap(0),
+                      ),
+                      _NavItem(
+                        icon: Icons.payments_outlined,
+                        label: 'Pembayaran',
+                        active: _index == 1,
+                        onTap: () => _onTap(1),
+                        badge: paymentCount,
+                      ),
+                      _BarcodeNavItem(
+                        active: false,
+                        onTap: _openBarcode,
+                      ),
+                      _NavItem(
+                        icon: Icons.sync_rounded,
+                        label: 'Proses',
+                        active: _index == 2,
+                        onTap: () => _onTap(2),
+                        badge: processCount,
+                      ),
+                      _NavItem(
+                        icon: Icons.check_circle_outline_rounded,
+                        label: 'Selesai',
+                        active: _index == 3,
+                        onTap: () => _onTap(3),
+                        badge: doneCount,
+                      ),
+                    ],
                   ),
-                  _NavItem(
-                    icon: Icons.payments_outlined,
-                    label: 'Pembayaran',
-                    active: _index == 1,
-                    onTap: () => _onTap(1),
-                  ),
-                  _BarcodeNavItem(
-                    active: false,
-                    onTap: _openBarcode,
-                  ),
-                  _NavItem(
-                    icon: Icons.sync_rounded,
-                    label: 'Proses',
-                    active: _index == 2,
-                    onTap: () => _onTap(2),
-                  ),
-                  _NavItem(
-                    icon: Icons.check_circle_outline_rounded,
-                    label: 'Selesai',
-                    active: _index == 3,
-                    onTap: () => _onTap(3),
-                  ),
-                ],
+                ),
               ),
             ),
+      ),
+    );
+  }
+}
+
+class _SideNav extends StatelessWidget {
+  const _SideNav({
+    required this.currentIndex,
+    required this.onTap,
+    required this.onBarcodeTap,
+    this.iconOnly = false,
+    this.paymentCount = 0,
+    this.processCount = 0,
+    this.doneCount = 0,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final VoidCallback onBarcodeTap;
+  final bool iconOnly;
+  final int paymentCount;
+  final int processCount;
+  final int doneCount;
+
+  @override
+  Widget build(BuildContext context) {
+    const brand = Color(0xFFAE1504);
+
+    final media = MediaQuery.of(context);
+    final leftInset = media.padding.left;
+
+    final shortestSide = media.size.shortestSide;
+    final isTablet = shortestSide >= 600;
+
+    final baseWidth = iconOnly
+        ? (isTablet ? 72.0 : 90.0)
+        : 96.0;
+
+    final navWidth = baseWidth + leftInset.clamp(0.0, 24.0);
+
+    final appBarBg =
+        Theme.of(context).appBarTheme.backgroundColor ??
+        Theme.of(context).colorScheme.surface;
+
+    return Container(
+      width: navWidth,
+      decoration: BoxDecoration(
+        color: appBarBg,
+        border: const Border(
+          right: BorderSide(color: Color(0x1A000000), width: 1),
+        ),
+      ),
+      child: SafeArea(
+        right: false,
+        bottom: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                _SideNavItem(
+                  icon: Icons.shopping_cart_outlined,
+                  label: 'Pembelian',
+                  active: currentIndex == 0,
+                  onTap: () => onTap(0),
+                  iconOnly: iconOnly,
+                ),
+                _SideNavItem(
+                  icon: Icons.payments_outlined,
+                  label: 'Pembayaran',
+                  active: currentIndex == 1,
+                  onTap: () => onTap(1),
+                  iconOnly: iconOnly,
+                  badge: paymentCount,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: InkWell(
+                      onTap: onBarcodeTap,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: iconOnly ? 44 : 56,
+                        height: iconOnly ? 44 : 56,
+                        decoration: BoxDecoration(
+                          color: brand,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: brand.withOpacity(0.25),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.qr_code_scanner_rounded,
+                          color: Colors.white,
+                          size: iconOnly ? 22 : 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _SideNavItem(
+                  icon: Icons.sync_rounded,
+                  label: 'Proses',
+                  active: currentIndex == 2,
+                  onTap: () => onTap(2),
+                  iconOnly: iconOnly,
+                  badge: processCount,
+                ),
+                _SideNavItem(
+                  icon: Icons.check_circle_outline_rounded,
+                  label: 'Selesai',
+                  active: currentIndex == 3,
+                  onTap: () => onTap(3),
+                  iconOnly: iconOnly,
+                  badge: doneCount,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SideNavItem extends StatelessWidget {
+  const _SideNavItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.iconOnly = false,
+    this.badge,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final bool iconOnly;
+  final int? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    const brand = Color(0xFFAE1504);
+    final color = active ? brand : Colors.black54;
+    final bg = active ? brand.withOpacity(0.10) : Colors.transparent;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: iconOnly ? 8 : 8,
+        vertical: 4,
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(
+            vertical: iconOnly ? 12 : 12,
+            horizontal: iconOnly ? 0 : 8,
+          ),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    icon,
+                    color: color,
+                    size: iconOnly ? 22 : 24,
+                  ),
+                  if (badge != null && badge! > 0)
+                    Positioned(
+                      right: -8,
+                      top: -6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: brand,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$badge',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (!iconOnly) ...[
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),

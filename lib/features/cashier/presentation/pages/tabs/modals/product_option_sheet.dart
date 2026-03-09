@@ -72,19 +72,73 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        color: const Color(0xFFF3F4F6),
+                        child: widget.product.imagePath == null ||
+                                widget.product.imagePath!.trim().isEmpty
+                            ? const Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 32,
+                                color: Colors.black45,
+                              )
+                            : Image.network(
+                                widget.product.imagePath!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.broken_image_outlined,
+                                  size: 32,
+                                  color: Colors.black45,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        widget.product.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.product.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          if (promoUnitPrice(widget.product) < widget.product.price) ...[
+                            Text(
+                              'Rp ${_rupiah(widget.product.price)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.black.withOpacity(0.5),
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                          ],
+                          Text(
+                            'Harga: Rp ${_rupiah(promoUnitPrice(widget.product))}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.close_rounded),
-                    )
+                    ),
                   ],
                 ),
               ),
@@ -260,7 +314,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                               }
                             : null,
                         child: Text(
-                          'Simpan • Rp $total',
+                          'Simpan • Rp ${_rupiah(total)}',
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                       ),
