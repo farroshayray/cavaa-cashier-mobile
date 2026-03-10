@@ -14,12 +14,12 @@ import '/features/cashier/presentation/realtime/pusher_orders_service.dart';
 import '/core/services/sound_service.dart';
 import '/core/storage/secure_storage_service.dart';
 
-import '/features/cashier/data/orders_api.dart';
-import '/features/cashier/data/models/orders_repository.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
+
+import '/core/services/push_notification_service.dart';
 
 import 'tabs/purchase_tab.dart' as purchase_tab;
 import 'tabs/payment_tab.dart' as payment_tab;
@@ -50,26 +50,55 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   Timer? _paymentReloadDebounce;
   Timer? _processReloadDebounce;
   Timer? _doneReloadDebounce;
+  Timer? _resumeReloadDebounce;
+
+  StreamSubscription<Map<String, dynamic>>? _fcmMessageSub;
+  StreamSubscription<Map<String, dynamic>>? _fcmTapSub;
 
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    Future.microtask(() async {
+      await context.read<NotificationsProvider>().loadFromStorage();
+    });
+
+    _listenFcmEvents();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // saat balik ke app, coba connect lagi ke default
     if (state == AppLifecycleState.resumed) {
-      // silent biar ga ganggu user kalau gagal
       context.read<PrinterManager>().connectDefault(silent: true);
-    }
 
-    // OPTIONAL: kalau kamu mau disconnect saat background
-    // if (state == AppLifecycleState.paused) {
-    //   context.read<PrinterManager>().disconnect();
-    // }
+      _refreshAfterResume();
+    }
+  }
+
+  void _refreshAfterResume() {
+    _resumeReloadDebounce?.cancel();
+    _resumeReloadDebounce = Timer(const Duration(milliseconds: 500), () async {
+      if (!mounted) return;
+
+      try {
+        final payVm = context.read<PaymentProvider>();
+        final procVm = context.read<ProcessProvider>();
+        final doneVm = context.read<DoneProvider>();
+
+        payVm.setQuery('');
+        procVm.setQuery('');
+
+        await Future.wait([
+          payVm.load(),
+          procVm.load(),
+          doneVm.load(),
+        ]);
+      } catch (e) {
+        debugPrint('❌ refresh after resume failed: $e');
+      }
+    });
   }
 
 
@@ -96,9 +125,9 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       await _pusherSvc.start(
         partnerId: partnerId,
         onOrderCreated: (data) async {
-          await SoundService.instance.playNotification();
+          // await SoundService.instance.playNotification();
 
-          notif.pushFromPusher(data);
+          await notif.pushFromPusher(data);
 
           _refreshTabByRealtimeData(data);
         },
@@ -118,6 +147,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     _paymentReloadDebounce?.cancel();
     _processReloadDebounce?.cancel();
     _doneReloadDebounce?.cancel();
+    _resumeReloadDebounce?.cancel();
+
+    _fcmMessageSub?.cancel();
+    _fcmTapSub?.cancel();
+
     _pusherSvc.stop();
 
     WidgetsBinding.instance.removeObserver(this);
@@ -134,6 +168,84 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
+    );
+  }
+
+  Future<void> _handleFcmTap(Map<String, dynamic> data) async {
+    final st = (data['status'] ?? data['order_status'] ?? '')
+        .toString()
+        .toUpperCase();
+
+    int targetIndex = 1;
+
+    if (st == 'UNPAID' || st == 'EXPIRED' || st == 'PAYMENT REQUEST') {
+      targetIndex = 1;
+    } else if (st == 'PAID' || st == 'PROCESSED') {
+      targetIndex = 2;
+    } else if (st == 'SERVED' || st == 'DONE' || st == 'FINISHED') {
+      targetIndex = 3;
+    }
+
+    final int? orderId = _pickOrderId(data);
+
+    if (mounted) setState(() => _index = targetIndex);
+
+    final payVm = context.read<PaymentProvider>();
+    final procVm = context.read<ProcessProvider>();
+    final doneVm = context.read<DoneProvider>();
+
+    if (targetIndex == 1) {
+      payVm.setQuery('');
+      await payVm.load();
+    } else if (targetIndex == 2) {
+      procVm.setQuery('');
+      await procVm.load();
+    } else if (targetIndex == 3) {
+      await doneVm.load();
+    }
+
+    if (orderId != null && orderId > 0 && mounted) {
+      _focusTimer?.cancel();
+
+      setState(() => _focusOrderId = null);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _focusOrderId = orderId);
+
+        _focusTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) setState(() => _focusOrderId = null);
+        });
+      });
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Buka order ${(data['code'] ?? data['booking_order_code'] ?? '').toString()}'),
+      ),
+    );
+  }
+
+  void _listenFcmEvents() {
+    _fcmMessageSub = PushNotificationService.instance.onMessageReceived.listen(
+      (data) async {
+        debugPrint('🔔 FCM received event: $data');
+
+        await context.read<NotificationsProvider>().pushFromFcm(data);
+
+        _refreshTabByRealtimeData(data);
+      },
+    );
+
+    _fcmTapSub = PushNotificationService.instance.onMessageTapped.listen(
+      (data) async {
+        debugPrint('👉 FCM tapped event: $data');
+
+        await context.read<NotificationsProvider>().pushFromFcm(data);
+
+        await _handleFcmTap(data);
+      },
     );
   }
 

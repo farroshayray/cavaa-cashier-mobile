@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class IncomingOrderNotif {
   final int id;
@@ -8,7 +10,7 @@ class IncomingOrderNotif {
   final String status;
   final String createdAt;
 
-  IncomingOrderNotif({
+  const IncomingOrderNotif({
     required this.id,
     required this.code,
     required this.customer,
@@ -18,48 +20,105 @@ class IncomingOrderNotif {
   });
 
   factory IncomingOrderNotif.fromMap(Map<String, dynamic> m) {
-    num parseNum(dynamic v) => (v is num) ? v : num.tryParse(v?.toString() ?? '') ?? 0;
+    num parseNum(dynamic v) =>
+        (v is num) ? v : num.tryParse(v?.toString() ?? '') ?? 0;
 
     return IncomingOrderNotif(
-      id: (m['id'] is int) ? m['id'] as int : int.tryParse(m['id']?.toString() ?? '') ?? 0,
-      code: (m['code'] ?? '').toString(),
-      customer: (m['customer'] ?? '').toString(),
-      total: parseNum(m['total']),
-      status: (m['order_status'] ?? '').toString(),
-      createdAt: (m['created_at'] ?? '').toString(),
+      id: (m['id'] is int)
+          ? m['id'] as int
+          : int.tryParse(
+                (m['id'] ?? m['order_id'] ?? m['booking_order_id'] ?? '')
+                    .toString(),
+              ) ??
+              0,
+      code: (m['code'] ?? m['booking_order_code'] ?? '').toString(),
+      customer: (m['customer'] ?? m['customer_name'] ?? '').toString(),
+      total: parseNum(m['total'] ?? m['total_order_value']),
+      status: (m['order_status'] ?? m['status'] ?? '').toString(),
+      createdAt: (m['created_at'] ?? m['received_at'] ?? '').toString(),
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'code': code,
+      'customer': customer,
+      'total': total,
+      'order_status': status,
+      'created_at': createdAt,
+    };
+  }
+
+  String get uniqueKey => '${id}_${code}_${status}';
 }
 
 class NotificationsProvider extends ChangeNotifier {
+  static const String _storageKey = 'cashier_notifications';
+
   final List<IncomingOrderNotif> _items = [];
   int _unread = 0;
 
   List<IncomingOrderNotif> get items => List.unmodifiable(_items);
   int get unread => _unread;
 
-  void push(IncomingOrderNotif n) {
-    // prepend
-    _items.insert(0, n);
-    _unread += 1;
+  Future<void> loadFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawList = prefs.getStringList(_storageKey) ?? [];
+
+    final loaded = rawList
+        .map((e) => IncomingOrderNotif.fromMap(jsonDecode(e)))
+        .toList();
+
+    _items
+      ..clear()
+      ..addAll(loaded);
+
+    _unread = _items.length;
     notifyListeners();
   }
 
-  void markAllRead() {
+  Future<void> _saveToStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawList = _items.map((e) => jsonEncode(e.toMap())).toList();
+    await prefs.setStringList(_storageKey, rawList);
+  }
+
+  Future<void> push(IncomingOrderNotif n) async {
+    final exists = _items.any((e) => e.uniqueKey == n.uniqueKey);
+    if (exists) return;
+
+    _items.insert(0, n);
+
+    if (_items.length > 200) {
+      _items.removeRange(200, _items.length);
+    }
+
+    _unread += 1;
+    await _saveToStorage();
+    notifyListeners();
+  }
+
+  Future<void> markAllRead() async {
     _unread = 0;
     notifyListeners();
   }
 
-  void clear() {
+  Future<void> clear() async {
     _items.clear();
     _unread = 0;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_storageKey);
+
     notifyListeners();
   }
 
-  void pushFromPusher(Map<String, dynamic> data) {
-    // sesuaikan dengan model notif kamu
-    push(
-      IncomingOrderNotif.fromMap(data),
-    );
+  Future<void> pushFromPusher(Map<String, dynamic> data) async {
+    await push(IncomingOrderNotif.fromMap(data));
+  }
+
+  Future<void> pushFromFcm(Map<String, dynamic> data) async {
+    await push(IncomingOrderNotif.fromMap(data));
   }
 }

@@ -238,116 +238,141 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 
   Future<void> _confirmAndPay() async {
-    if (_paying) return;
+  if (_paying) return;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid  = _num(_paidCtrl.text);
-    final change = (paid - total) > 0 ? (paid - total) : 0;
+  final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+  final paid  = _num(_paidCtrl.text);
+  final change = (paid - total) > 0 ? (paid - total) : 0;
 
-    // Validasi cepat (JANGAN set _paying dulu)
-    if (paid <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Uang diterima belum diisi')),
-      );
-      return;
-    }
+  if (paid <= 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Uang diterima belum diisi')),
+    );
+    return;
+  }
 
-    if (paid < total) {
-      await showDialog<void>(
-        context: context,
-        useRootNavigator: true,
-        builder: (_) => AlertDialog(
-          title: const Text('Uang tidak cukup'),
-          content: Text(
-            'Uang diterima Rp ${_rupiah(paid)}\n'
-            'Total tagihan Rp ${_rupiah(total)}\n\n'
-            'Silakan periksa kembali nominal pembayaran.',
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-          ],
-        ),
-      );
-      return;
-    }
-
-    final ok = await showDialog<bool>(
+  if (paid < total) {
+    await showDialog<void>(
       context: context,
       useRootNavigator: true,
       builder: (_) => AlertDialog(
-        title: const Text('Konfirmasi Pembayaran'),
+        title: const Text('Uang tidak cukup'),
         content: Text(
           'Uang diterima Rp ${_rupiah(paid)}\n'
-          'Total tagihan Rp ${_rupiah(total)}\n'
-          'Kembalian Rp ${_rupiah(change)}\n\n'
-          'Lanjutkan proses pembayaran?',
+          'Total tagihan Rp ${_rupiah(total)}\n\n'
+          'Silakan periksa kembali nominal pembayaran.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ya, lanjutkan')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
         ],
       ),
     );
-    if (ok != true) return;
+    return;
+  }
 
-    setState(() => _paying = true);
+  final ok = await showDialog<bool>(
+    context: context,
+    useRootNavigator: true,
+    builder: (_) => AlertDialog(
+      title: const Text('Konfirmasi Pembayaran'),
+      content: Text(
+        'Uang diterima Rp ${_rupiah(paid)}\n'
+        'Total tagihan Rp ${_rupiah(total)}\n'
+        'Kembalian Rp ${_rupiah(change)}\n\n'
+        'Lanjutkan proses pembayaran?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Ya, lanjutkan'),
+        ),
+      ],
+    ),
+  );
+
+  if (ok != true) return;
+
+  setState(() => _paying = true);
+
+  try {
+    final storage = SecureStorageService();
+    final token = await storage.getToken();
+    if (token == null || token.trim().isEmpty) {
+      throw Exception('Token kosong. Silakan login ulang.');
+    }
+
+    final api = OrdersApi();
+
+    // 1. Simpan pembayaran dulu
+    await api.paymentOrder(
+      token: token,
+      id: widget.orderId,
+      paidAmount: paid,
+      changeAmount: change,
+      lastPaymentId: _isCaseB ? _lastPaymentId : null,
+      cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
+    ).timeout(const Duration(seconds: 15));
+
+    // 2. Setelah pembayaran sukses, coba print
+    String? printError;
     try {
-      final storage = SecureStorageService();
-      final token = await storage.getToken();
-      if (token == null || token.trim().isEmpty) {
-        throw Exception('Token kosong. Silakan login ulang.');
-      }
-
-      final api = OrdersApi();
-      // if (_isCaseB && _cashierProofImage == null) {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     const SnackBar(content: Text('Bukti bayar wajib diupload untuk pembayaran manual.')),
-      //   );
-      //   return;
-      // }
-
-      await api.paymentOrder(
-        token: token,
-        id: widget.orderId,
-        paidAmount: paid,
-        changeAmount: change,
-        lastPaymentId: _isCaseB ? _lastPaymentId : null,
-        cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
-      ).timeout(const Duration(seconds: 15));
-
-      // ✅ setelah sukses bayar: ambil data print detail terbaru
-      final printOrder = await api.printDetail(token: token, id: widget.orderId)
+      final printOrder = await api
+          .printDetail(token: token, id: widget.orderId)
           .timeout(const Duration(seconds: 15));
 
-      // ✅ print otomatis
-      await _printReceiptWithOrder(printOrder, paid: paid, change: change);
-
-      if (!mounted) return;
-
-      await showDialog<void>(
-        context: context,
-        useRootNavigator: true,
-        builder: (_) => AlertDialog(
-          title: const Text('Pembayaran berhasil'),
-          content: const Text('Pembayaran berhasil disimpan dan struk sedang diprint.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-          ],
-        ),
+      await _printReceiptWithOrder(
+        printOrder,
+        paid: paid,
+        change: change,
       );
-
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _paying = false);
+      printError = e.toString();
     }
+
+    if (!mounted) return;
+
+    // 3. Tampilkan hasil
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (_) => AlertDialog(
+        title: Text(
+          printError == null
+              ? 'Pembayaran berhasil'
+              : 'Pembayaran berhasil, print gagal',
+        ),
+        content: Text(
+          printError == null
+              ? 'Pembayaran berhasil disimpan dan struk sedang diprint.'
+              : 'Pembayaran berhasil disimpan, tetapi struk gagal diprint.\n\nError: $printError',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gagal menyimpan pembayaran: $e')),
+    );
+  } finally {
+    if (mounted) setState(() => _paying = false);
   }
+}
 
 
 
