@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '/core/services/push_notification_service.dart';
 import 'auth_api.dart';
@@ -16,16 +17,18 @@ class AuthRepository {
     String password, {
     required bool rememberMe,
   }) async {
+    debugPrint('REPO LOGIN START');
+
     final resp = await api.login(
       LoginRequest(userName: username, password: password),
     );
 
-    // Untuk app cashier, token backend harus tetap disimpan
-    // supaya request API berikutnya, termasuk sync FCM token, bisa jalan.
+    debugPrint('REPO LOGIN SUCCESS, SAVE TOKEN');
     await storage.saveToken(resp.token);
 
-    // Sync FCM token asli ke backend setelah login sukses
+    debugPrint('SYNC FCM START');
     await PushNotificationService.instance.syncCurrentTokenToBackend();
+    debugPrint('SYNC FCM DONE');
 
     return resp;
   }

@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -22,11 +24,21 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('📩 Background message: ${message.messageId}');
   debugPrint('📦 Background data: ${jsonEncode(message.data)}');
 
+  final data = Map<String, dynamic>.from(message.data);
+  final type = (data['type'] ?? '').toString();
+
+  if (type == 'force_logout') {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('force_logout_pending', true);
+    await prefs.setString('force_logout_payload', jsonEncode(data));
+    debugPrint('🚪 force_logout saved in background');
+    return;
+  }
+
   final prefs = await SharedPreferences.getInstance();
   const key = 'cashier_notifications';
 
   final rawList = prefs.getStringList(key) ?? [];
-  final data = Map<String, dynamic>.from(message.data);
 
   final notif = IncomingOrderNotif.fromMap(data);
   final encoded = jsonEncode(notif.toMap());
@@ -192,19 +204,50 @@ class PushNotificationService {
     }
   }
 
+  Future<Map<String, dynamic>?> consumePendingForceLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pending = prefs.getBool('force_logout_pending') ?? false;
+
+    if (!pending) return null;
+
+    final raw = prefs.getString('force_logout_payload');
+
+    await prefs.remove('force_logout_pending');
+    await prefs.remove('force_logout_payload');
+
+    if (raw == null || raw.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   void _setupForegroundHandler() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       debugPrint('📲 Foreground message: ${message.messageId}');
       debugPrint('📦 Foreground data: ${jsonEncode(message.data)}');
 
-      if (message.data.isNotEmpty) {
-        _messageReceivedController.add(Map<String, dynamic>.from(message.data));
+      final data = Map<String, dynamic>.from(message.data);
+      final type = (data['type'] ?? '').toString();
+
+      if (data.isNotEmpty) {
+        _messageReceivedController.add(data);
+      }
+
+      if (type == 'force_logout') {
+        debugPrint('🚪 force_logout received in foreground');
+        return;
       }
 
       final notification = message.notification;
       if (notification == null) return;
 
-      final channel = _channelFromData(message.data);
+      final channel = _channelFromData(data);
 
       await _localNotifications.show(
         notification.hashCode,
@@ -223,7 +266,7 @@ class PushNotificationService {
             visibility: NotificationVisibility.public,
           ),
         ),
-        payload: jsonEncode(message.data),
+        payload: jsonEncode(data),
       );
     });
   }
@@ -319,12 +362,14 @@ class PushNotificationService {
         ),
       );
 
+      final deviceName = await getDeviceName();
+
       final response = await dio.post(
         '/api/v1/mobile/cashier/device-token',
         data: {
           'token': token,
-          'platform': 'android',
-          'device_name': 'Android Device',
+          'platform': 'Android',
+          'device_name': deviceName,
         },
       );
 
@@ -333,4 +378,15 @@ class PushNotificationService {
       debugPrint('❌ Failed sync FCM token: $e');
     }
   }
+}
+
+Future<String> getDeviceName() async {
+  DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+
+  if (Platform.isAndroid) {
+    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+    return "${androidInfo.brand} ${androidInfo.model}"; // contoh: "Poco F7"
+  }
+
+  return "Unknown device";
 }

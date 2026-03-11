@@ -23,30 +23,37 @@ class DioClient {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final token = await storage.getToken();
-          if (token != null && token.isNotEmpty) {
+
+          final isLogin = options.path.contains('/api/v1/mobile/cashier/login');
+
+          if (!isLogin && token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
-          return handler.next(options);
+
+          debugPrint('➡️ [REQ] ${options.method} ${options.path}');
+          debugPrint('➡️ [REQ DATA] ${options.data}');
+          handler.next(options);
         },
+        onResponse: (response, handler) {
+          debugPrint('✅ [RES] ${response.requestOptions.path}');
+          debugPrint('✅ [RES DATA] ${response.data}');
+          handler.next(response);
+        },
+        onError: (e, handler) async {
+          debugPrint('❌ [ERR] ${e.requestOptions.path}');
+          debugPrint('❌ [ERR STATUS] ${e.response?.statusCode}');
+          debugPrint('❌ [ERR DATA] ${e.response?.data}');
 
-        // =====================
-        // HANDLE 401
-        // =====================
-        onError: (DioException e, handler) async {
-          if (e.response?.statusCode == 401) {
-            await storage.clearToken();
+          final path = e.requestOptions.path;
+          final isLogin = path.contains('/api/v1/mobile/cashier/login');
 
-            final nav = appNavigatorKey.currentState;
-            if (nav != null) {
-              nav.pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-                (_) => false,
-              );
-            }
-
-            return; 
+          // penting: login jangan di-refresh / retry
+          if (isLogin) {
+            return handler.next(e);
           }
-          return handler.next(e);
+
+          // kalau ada logic refresh token, letakkan di sini hanya untuk endpoint selain login
+          handler.next(e);
         },
       ),
     );

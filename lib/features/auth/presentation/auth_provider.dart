@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/auth_repository.dart';
 import '../data/models/login_response.dart';
 import '../data/models/user_model.dart';
+import 'package:dio/dio.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository repo;
@@ -39,15 +40,26 @@ class AuthProvider extends ChangeNotifier {
 
       final resp = await repo.login(username, password, rememberMe: rememberMe);
       user = resp.user;
-
-      isLoading = false;
-      notifyListeners();
+      isLoggedIn = true;
       return true;
-    } catch (e) {
-      isLoading = false;
-      errorMessage = 'Login gagal';
-      notifyListeners();
+    } on DioException catch (e) {
+      debugPrint('LOGIN DIO ERROR: $e');
+      debugPrint('LOGIN DIO RESPONSE: ${e.response?.data}');
+
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        errorMessage = data['message'].toString();
+      } else {
+        errorMessage = 'Login gagal';
+      }
       return false;
+    } catch (e) {
+      debugPrint('LOGIN ERROR: $e');
+      errorMessage = 'Login gagal';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
     }
   }
 

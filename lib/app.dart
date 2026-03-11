@@ -102,8 +102,8 @@ class _CavaaAppState extends State<CavaaApp> {
     final purchaseApi = PurchaseApi(dioClient.dio);
     final purchaseRepo = PurchaseRepository(api: purchaseApi);
 
-    final ordersApi = OrdersApi();
-    final ordersRepo = OrdersRepository(api: ordersApi, storage: storage);
+    final ordersApi = OrdersApi(dioClient.dio);
+    final ordersRepo = OrdersRepository(api: ordersApi);
     // ⚠️ sesuaikan: kalau PurchaseRepository constructor kamu beda, tinggal sesuaikan di sini
 
     return MultiProvider(

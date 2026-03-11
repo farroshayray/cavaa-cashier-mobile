@@ -17,18 +17,17 @@ class PaymentProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final token = await repo.storage.getToken();
-      if (token == null || token.isEmpty) throw Exception('Token tidak ditemukan');
-
-      final res = await repo.api.getOrdersData(
-        token: token,
+      final res = await repo.fetchOrdersData(
         tab: 'pembayaran',
         q: query.isEmpty ? null : query,
       );
 
       final raw = res['items'];
       if (raw is List) {
-        items = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        items = raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       } else {
         items = [];
       }
@@ -54,10 +53,8 @@ class PaymentProvider extends ChangeNotifier {
   }
 
   Future<void> deleteOrder(int id) async {
-    // opsional: set loading khusus delete, tapi minimal gini dulu
     try {
-      await repo.softDeleteOrder(id); // kita buat di repository
-      // setelah delete sukses, refresh list
+      await repo.softDeleteOrder(id);
       await load();
     } catch (e) {
       rethrow;
@@ -70,6 +67,8 @@ class PaymentProvider extends ChangeNotifier {
     required num changeAmount,
     String? note,
     String? email,
+    String? lastPaymentId,
+    String? cashierProofImagePath,
   }) async {
     return repo.paymentOrder(
       id: id,
@@ -77,6 +76,8 @@ class PaymentProvider extends ChangeNotifier {
       changeAmount: changeAmount,
       note: note,
       email: email,
+      lastPaymentId: lastPaymentId,
+      cashierProofImagePath: cashierProofImagePath,
     );
   }
 }

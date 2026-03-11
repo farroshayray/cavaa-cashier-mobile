@@ -1,4 +1,3 @@
-// lib/features/cashier/presentation/providers/done_provider.dart
 import 'package:flutter/foundation.dart';
 import '../../data/models/orders_repository.dart';
 
@@ -18,18 +17,17 @@ class DoneProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final token = await repo.storage.getToken();
-      if (token == null || token.isEmpty) throw Exception('Token tidak ditemukan');
-
-      final res = await repo.api.getOrdersData(
-        token: token,
-        tab: 'selesai', // ✅ ganti ini
+      final res = await repo.fetchOrdersData(
+        tab: 'selesai',
         q: query.isEmpty ? null : query,
       );
 
       final raw = res['items'];
       if (raw is List) {
-        items = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        items = raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       } else {
         items = [];
       }

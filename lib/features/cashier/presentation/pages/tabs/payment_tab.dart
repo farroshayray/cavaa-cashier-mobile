@@ -367,6 +367,7 @@ class _PaymentViewState extends State<_PaymentView> {
                               child: PaymentProcessSheet(
                                 orderId: id,
                                 loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
+                                ordersRepo: context.read<PaymentProvider>().repo,
                               ),
                             ),
                           );

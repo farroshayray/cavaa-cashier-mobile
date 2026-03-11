@@ -17,18 +17,17 @@ class ProcessProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final token = await repo.storage.getToken();
-      if (token == null || token.isEmpty) throw Exception('Token tidak ditemukan');
-
-      final res = await repo.api.getOrdersData(
-        token: token,
+      final res = await repo.fetchOrdersData(
         tab: 'proses',
         q: query.isEmpty ? null : query,
       );
 
       final raw = res['items'];
       if (raw is List) {
-        items = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        items = raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       } else {
         items = [];
       }
@@ -53,14 +52,16 @@ class ProcessProvider extends ChangeNotifier {
     return repo.fetchPrintDetail(id);
   }
 
-
   final Set<int> actionLoadingIds = <int>{};
 
   bool isActionLoading(int id) => actionLoadingIds.contains(id);
 
   void _setActionLoading(int id, bool v) {
-    if (v) actionLoadingIds.add(id);
-    else actionLoadingIds.remove(id);
+    if (v) {
+      actionLoadingIds.add(id);
+    } else {
+      actionLoadingIds.remove(id);
+    }
     notifyListeners();
   }
 
@@ -76,20 +77,18 @@ class ProcessProvider extends ChangeNotifier {
     items[idx] = {...items[idx], 'order_status': status};
     notifyListeners();
   }
+
   Future<Map<String, dynamic>> actionProcess(int id) async {
     _setActionLoading(id, true);
     try {
       final res = await repo.processOrder(id);
 
-      // backend kamu ada kemungkinan return: status=warning + already_processed=true
       final status = (res['status'] ?? '').toString();
       if (status == 'warning' || res['already_processed'] == true) {
-        // kalau sudah diproses tim lain, refresh list biar sinkron
         await load();
         return res;
       }
 
-      // sukses: ubah lokal jadi PROCESSED
       _setStatusLocal(id, 'PROCESSED');
       return res;
     } finally {
@@ -101,10 +100,7 @@ class ProcessProvider extends ChangeNotifier {
     _setActionLoading(id, true);
     try {
       final res = await repo.cancelProcessOrder(id);
-
-      // ❗ HANYA update status lokal
       _setStatusLocal(id, 'PAID');
-
       return res;
     } finally {
       _setActionLoading(id, false);
@@ -115,16 +111,10 @@ class ProcessProvider extends ChangeNotifier {
     _setActionLoading(id, true);
     try {
       final res = await repo.finishOrder(id, note: note);
-
-      // sukses: bisa remove dari list proses, atau set SERVED lalu refresh
-      // items.removeWhere((e) => _toId(e['id']) == id);
-      // notifyListeners();
       _setStatusLocal(id, 'SERVED');
       return res;
     } finally {
       _setActionLoading(id, false);
     }
   }
-
-
 }

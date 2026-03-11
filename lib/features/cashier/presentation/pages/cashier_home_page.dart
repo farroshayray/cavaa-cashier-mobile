@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
+import '/core/navigation/app_navigator.dart';
 
 import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
@@ -60,20 +61,30 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _listenFcmEvents();
 
     Future.microtask(() async {
-      await context.read<NotificationsProvider>().loadFromStorage();
+      final pending =
+          await PushNotificationService.instance.consumePendingForceLogout();
+      if (pending != null && mounted) {
+        await _handleForceLogout(pending);
+      }
     });
-
-    _listenFcmEvents();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       context.read<PrinterManager>().connectDefault(silent: true);
-
       _refreshAfterResume();
+
+      Future.microtask(() async {
+        final pending =
+            await PushNotificationService.instance.consumePendingForceLogout();
+        if (pending != null && mounted) {
+          await _handleForceLogout(pending);
+        }
+      });
     }
   }
 
@@ -232,8 +243,14 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       (data) async {
         debugPrint('🔔 FCM received event: $data');
 
-        await context.read<NotificationsProvider>().pushFromFcm(data);
+        final type = (data['type'] ?? '').toString();
 
+        if (type == 'force_logout') {
+          await _handleForceLogout(data);
+          return;
+        }
+
+        await context.read<NotificationsProvider>().pushFromFcm(data);
         _refreshTabByRealtimeData(data);
       },
     );
@@ -242,8 +259,14 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       (data) async {
         debugPrint('👉 FCM tapped event: $data');
 
-        await context.read<NotificationsProvider>().pushFromFcm(data);
+        final type = (data['type'] ?? '').toString();
 
+        if (type == 'force_logout') {
+          await _handleForceLogout(data);
+          return;
+        }
+
+        await context.read<NotificationsProvider>().pushFromFcm(data);
         await _handleFcmTap(data);
       },
     );
@@ -320,6 +343,44 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     if (source == 'QRIS' || source == 'CASH' || source == 'MANUAL') {
       _debouncedReloadPayment();
     }
+  }
+
+  Future<void> _handleForceLogout(Map<String, dynamic> data) async {
+    final newDeviceName = (data['new_device_name'] ?? '-').toString();
+    final newDevicePlatform = (data['new_device_platform'] ?? '-').toString();
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Sesi Berakhir'),
+        content: Text(
+          'Akun ini login di perangkat lain.\n\n'
+          'Device: $newDeviceName\n'
+          'Platform: $newDevicePlatform',
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    await context.read<NotificationsProvider>().clear();
+    await context.read<AuthProvider>().logout();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false,
+    );
   }
 
   // ======= INI KUNCI: notif click -> pindah tab + refresh + fokus & blink =======

@@ -9,6 +9,7 @@ import '/features/cashier/presentation/printing/receipt_printer.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
+import '/features/cashier/data/models/orders_repository.dart';
 
 
 class PaymentProcessSheet extends StatefulWidget {
@@ -16,10 +17,12 @@ class PaymentProcessSheet extends StatefulWidget {
     super.key,
     required this.orderId,
     required this.loadDetail,
+    required this.ordersRepo,
   });
 
   final int orderId;
   final Future<Map<String, dynamic>> Function(int id) loadDetail;
+  final OrdersRepository ordersRepo;
 
   @override
   State<PaymentProcessSheet> createState() => _PaymentProcessSheetState();
@@ -302,17 +305,10 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   setState(() => _paying = true);
 
   try {
-    final storage = SecureStorageService();
-    final token = await storage.getToken();
-    if (token == null || token.trim().isEmpty) {
-      throw Exception('Token kosong. Silakan login ulang.');
-    }
-
-    final api = OrdersApi();
+    final repo = widget.ordersRepo;
 
     // 1. Simpan pembayaran dulu
-    await api.paymentOrder(
-      token: token,
+    await repo.paymentOrder(
       id: widget.orderId,
       paidAmount: paid,
       changeAmount: change,
@@ -323,9 +319,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     // 2. Setelah pembayaran sukses, coba print
     String? printError;
     try {
-      final printOrder = await api
-          .printDetail(token: token, id: widget.orderId)
-          .timeout(const Duration(seconds: 15));
+      final printOrder = await repo
+        .fetchPrintDetail(widget.orderId)
+        .timeout(const Duration(seconds: 15));
 
       await _printReceiptWithOrder(
         printOrder,
