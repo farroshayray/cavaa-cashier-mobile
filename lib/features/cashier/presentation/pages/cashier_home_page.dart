@@ -1,4 +1,5 @@
 import 'dart:async';
+import '/core/config/env.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1030,15 +1031,71 @@ class _AppDrawer extends StatelessWidget {
   final VoidCallback onOpenPrinterSettings;
   final VoidCallback onLogout;
 
+  String? _buildUserImageUrl(String? imagePath) {
+    if (imagePath == null || imagePath.trim().isEmpty) return null;
+
+    final raw = imagePath.trim();
+
+    // kalau backend suatu saat sudah kirim full URL
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return raw;
+    }
+
+    final base = Env.baseUrl.replaceAll(RegExp(r'/$'), '');
+    final cleanPath = raw.replaceFirst(RegExp(r'^/'), '');
+
+    // pola umum file upload Laravel/public storage
+    return '$base/storage/$cleanPath';
+  }
+
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
 
+    final auth = context.watch<AuthProvider>();
+    final fullName = auth.user?.name ?? 'User';
+    final userName = auth.user?.userName ?? 'UserName';
+    final imageUrl = _buildUserImageUrl(auth.user?.image);
+
     return Drawer(
       child: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _UserAvatar(imageUrl: imageUrl),
+                  const SizedBox(height: 12),
+                  Text(
+                    fullName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    userName,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  const Text(
+                    'Cashier Account',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
             ListTile(
               leading: const Icon(Icons.print_outlined, color: brand),
               title: const Text('Pairing Printer'),
@@ -1058,6 +1115,68 @@ class _AppDrawer extends StatelessWidget {
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UserAvatar extends StatelessWidget {
+  const _UserAvatar({this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    const brand = Color(0xFFAE1504);
+
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return const CircleAvatar(
+        radius: 24,
+        backgroundColor: brand,
+        child: Icon(
+          Icons.person,
+          color: Colors.white,
+          size: 28,
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: 24,
+      backgroundColor: brand.withOpacity(0.12),
+      child: ClipOval(
+        child: Image.network(
+          imageUrl!,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) {
+            return Container(
+              width: 48,
+              height: 48,
+              color: brand,
+              child: const Icon(
+                Icons.person,
+                color: Colors.white,
+                size: 28,
+              ),
+            );
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              width: 48,
+              height: 48,
+              color: brand.withOpacity(0.10),
+              alignment: Alignment.center,
+              child: const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            );
+          },
         ),
       ),
     );

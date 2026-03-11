@@ -85,4 +85,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'cavaa-e0406.firebasestorage.app',
     measurementId: 'G-PCRJVHYZX6',
   );
+
 }
