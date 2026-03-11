@@ -14,9 +14,14 @@ import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart
 // kalau nanti ada modal khusus proses/selesai, import juga
 
 class ProcessTab extends StatefulWidget {
-  const ProcessTab({super.key, this.focusOrderId});
+  const ProcessTab({
+    super.key,
+    this.focusOrderId,
+    this.focusRequestKey = 0,
+  });
 
   final int? focusOrderId;
+  final int focusRequestKey;
 
   @override
   State<ProcessTab> createState() => _ProcessTabState();
@@ -36,13 +41,21 @@ class _ProcessTabState extends State<ProcessTab> {
 
   @override
   Widget build(BuildContext context) {
-    return _ProcessView(focusOrderId: widget.focusOrderId);
+    return _ProcessView(
+      focusOrderId: widget.focusOrderId,
+      focusRequestKey: widget.focusRequestKey,
+    );
   }
 }
 
 class _ProcessView extends StatefulWidget {
-  const _ProcessView({this.focusOrderId});
+  const _ProcessView({
+    this.focusOrderId,
+    this.focusRequestKey = 0,
+  });
+
   final int? focusOrderId;
+  final int focusRequestKey;
 
   @override
   State<_ProcessView> createState() => _ProcessViewState();
@@ -78,9 +91,13 @@ class _ProcessViewState extends State<_ProcessView> {
     super.didUpdateWidget(oldWidget);
 
     final id = widget.focusOrderId;
-    if (id != null && id > 0 && id != _lastHandledFocus) {
-      _lastHandledFocus = id;
-      _goToAndBlink(id);
+    final focusChanged = widget.focusRequestKey != oldWidget.focusRequestKey;
+
+    if (focusChanged && id != null && id > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _goToAndBlink(id);
+      });
     }
   }
 

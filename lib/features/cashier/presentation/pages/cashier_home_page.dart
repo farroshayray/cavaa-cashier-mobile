@@ -47,6 +47,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
   // ===== Focus/highlight order =====
   int? _focusOrderId;
+  int _focusRequestKey = 0;
   Timer? _focusTimer;
   Timer? _paymentReloadDebounce;
   Timer? _processReloadDebounce;
@@ -152,6 +153,35 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     }
   }
 
+  int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
+
+  Future<int?> _resolveTabIndexByOrderId(int orderId) async {
+    final payVm = context.read<PaymentProvider>();
+    final procVm = context.read<ProcessProvider>();
+    final doneVm = context.read<DoneProvider>();
+
+    payVm.setQuery('');
+    procVm.setQuery('');
+    doneVm.setQuery('');
+
+    await Future.wait([
+      payVm.load(),
+      procVm.load(),
+      doneVm.load(),
+    ]);
+
+    final inPayment = payVm.items.any((e) => _toId(e['id']) == orderId);
+    if (inPayment) return 1;
+
+    final inProcess = procVm.items.any((e) => _toId(e['id']) == orderId);
+    if (inProcess) return 2;
+
+    final inDone = doneVm.items.any((e) => _toId(e['id']) == orderId);
+    if (inDone) return 3;
+
+    return null;
+  }
+
   @override
   void dispose() {
     _focusTimer?.cancel();
@@ -183,57 +213,47 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   }
 
   Future<void> _handleFcmTap(Map<String, dynamic> data) async {
-    final st = (data['status'] ?? data['order_status'] ?? '')
-        .toString()
-        .toUpperCase();
-
-    int targetIndex = 1;
-
-    if (st == 'UNPAID' || st == 'EXPIRED' || st == 'PAYMENT REQUEST') {
-      targetIndex = 1;
-    } else if (st == 'PAID' || st == 'PROCESSED') {
-      targetIndex = 2;
-    } else if (st == 'SERVED' || st == 'DONE' || st == 'FINISHED') {
-      targetIndex = 3;
-    }
-
     final int? orderId = _pickOrderId(data);
 
-    if (mounted) setState(() => _index = targetIndex);
-
-    final payVm = context.read<PaymentProvider>();
-    final procVm = context.read<ProcessProvider>();
-    final doneVm = context.read<DoneProvider>();
-
-    if (targetIndex == 1) {
-      payVm.setQuery('');
-      await payVm.load();
-    } else if (targetIndex == 2) {
-      procVm.setQuery('');
-      await procVm.load();
-    } else if (targetIndex == 3) {
-      await doneVm.load();
+    if (orderId == null || orderId <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ID order tidak valid')),
+      );
+      return;
     }
 
-    if (orderId != null && orderId > 0 && mounted) {
-      _focusTimer?.cancel();
-
-      setState(() => _focusOrderId = null);
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() => _focusOrderId = orderId);
-
-        _focusTimer = Timer(const Duration(seconds: 4), () {
-          if (mounted) setState(() => _focusOrderId = null);
-        });
-      });
-    }
+    final targetIndex = await _resolveTabIndexByOrderId(orderId);
 
     if (!mounted) return;
+
+    if (targetIndex == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Order #$orderId tidak ditemukan di tab mana pun')),
+      );
+      return;
+    }
+
+    setState(() => _index = targetIndex);
+
+    _focusTimer?.cancel();
+
+    setState(() {
+      _focusOrderId = orderId;
+      _focusRequestKey++;
+    });
+
+    _focusTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() => _focusOrderId = null);
+      }
+    });
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Buka order ${(data['code'] ?? data['booking_order_code'] ?? '').toString()}'),
+        content: Text(
+          'Buka order ${(data['code'] ?? data['booking_order_code'] ?? '').toString()}',
+        ),
       ),
     );
   }
@@ -385,61 +405,45 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
   // ======= INI KUNCI: notif click -> pindah tab + refresh + fokus & blink =======
   Future<void> _handleNotifTap(dynamic n) async {
-    final st = (n.status ?? '').toString().toUpperCase();
-    final doneVm = context.read<DoneProvider>();
-    // debugPrint('NOTIF RAW = $n');
-
-    int targetIndex = 0;
-    if (st == 'UNPAID' || st == 'EXPIRED' || st == 'PAYMENT REQUEST') {
-      targetIndex = 1; // pembayaran
-    } else if (st == 'PAID' || st == 'PROCESSED') {
-      targetIndex = 2; // proses
-    } else if (st == 'SERVED' || st == 'DONE' || st == 'FINISHED') {
-      targetIndex = 3; // selesai
-    } else {
-      // fallback, kalau status tidak dikenal
-      targetIndex = 1;
-    }
-
-    // ambil orderId dari notif
     final int? orderId = _pickOrderId(n);
-    // debugPrint('NOTIF TAP status=$st orderId=$orderId code=${n.code}');
+    final doneVm = context.read<DoneProvider>();
 
-    // 1) pindah tab
-    if (mounted) setState(() => _index = targetIndex);
-
-    // 2) refresh tab tujuan (tunggu selesai)
-    final payVm = context.read<PaymentProvider>();
-    final procVm = context.read<ProcessProvider>();
-
-    if (targetIndex == 1) {
-      payVm.setQuery('');
-      await payVm.load();
-    } else if (targetIndex == 2) {
-      procVm.setQuery('');
-      await procVm.load();
-    } else if (targetIndex == 3) {
-      await doneVm.load();
+    if (orderId == null || orderId <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ID order tidak valid')),
+      );
+      return;
     }
 
-    // 3) set focus setelah load + setelah frame (biar list sudah kebangun)
-    if (orderId != null && orderId > 0 && mounted) {
+    final targetIndex = await _resolveTabIndexByOrderId(orderId);
+
+    if (!mounted) return;
+
+    if (targetIndex == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Order #$orderId tidak ditemukan di tab mana pun')),
+      );
+      return;
+    }
+
+    setState(() => _index = targetIndex);
+
+    if (orderId > 0) {
       _focusTimer?.cancel();
 
-      // trik: reset dulu supaya walau orderId sama, tetap dianggap "berubah"
-      setState(() => _focusOrderId = null);
+      setState(() {
+        _focusOrderId = orderId;
+        _focusRequestKey++;
+      });
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() => _focusOrderId = orderId);
-
-        _focusTimer = Timer(const Duration(seconds: 4), () {
-          if (mounted) setState(() => _focusOrderId = null);
-        });
+      _focusTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) {
+          setState(() => _focusOrderId = null);
+        }
       });
     }
 
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Buka order ${n.code ?? ''}'.trim())),
     );
@@ -505,9 +509,18 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       index: _index,
       children: [
         const purchase_tab.PurchaseTab(),
-        payment_tab.PaymentTab(focusOrderId: _focusOrderId),
-        process_tab.ProcessTab(focusOrderId: _focusOrderId),
-        const done_tab.DoneTab(),
+        payment_tab.PaymentTab(
+          focusOrderId: _focusOrderId,
+          focusRequestKey: _focusRequestKey,
+        ),
+        process_tab.ProcessTab(
+          focusOrderId: _focusOrderId,
+          focusRequestKey: _focusRequestKey,
+        ),
+        done_tab.DoneTab(
+          focusOrderId: _focusOrderId,
+          focusRequestKey: _focusRequestKey,
+        ),
       ],
     );
 

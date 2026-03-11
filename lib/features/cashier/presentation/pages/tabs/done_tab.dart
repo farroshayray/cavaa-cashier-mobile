@@ -1,6 +1,7 @@
 // lib/features/cashier/presentation/pages/tabs/done_tab.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
@@ -10,7 +11,14 @@ import '../../providers/done_provider.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
 
 class DoneTab extends StatefulWidget {
-  const DoneTab({super.key});
+  const DoneTab({
+    super.key,
+    this.focusOrderId,
+    this.focusRequestKey = 0,
+  });
+
+  final int? focusOrderId;
+  final int focusRequestKey;
 
   @override
   State<DoneTab> createState() => _DoneTabState();
@@ -30,12 +38,21 @@ class _DoneTabState extends State<DoneTab> {
 
   @override
   Widget build(BuildContext context) {
-    return const _DoneView();
+    return _DoneView(
+      focusOrderId: widget.focusOrderId,
+      focusRequestKey: widget.focusRequestKey,
+    );
   }
 }
 
 class _DoneView extends StatefulWidget {
-  const _DoneView();
+  const _DoneView({
+    this.focusOrderId,
+    this.focusRequestKey = 0,
+  });
+
+  final int? focusOrderId;
+  final int focusRequestKey;
 
   @override
   State<_DoneView> createState() => _DoneViewState();
@@ -45,6 +62,8 @@ class _DoneViewState extends State<_DoneView> {
   final _searchCtrl = TextEditingController();
   final ScrollController _listCtrl = ScrollController();
   double _lastOffset = 0;
+  int? _blinkOrderId;
+  Timer? _blinkTimer;
 
   final Set<int> _printingIds = <int>{};
 
@@ -60,6 +79,7 @@ class _DoneViewState extends State<_DoneView> {
   void dispose() {
     _searchCtrl.dispose();
     _listCtrl.dispose();
+    _blinkTimer?.cancel();
     super.dispose();
   }
 
@@ -182,30 +202,44 @@ class _DoneViewState extends State<_DoneView> {
                   itemCount: vm.items.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, i) {
-                    final id = _toId(vm.items[i]['id']);
-                    return _DoneOrderCard(
-                      data: vm.items[i],
-                      isPrinting: _printingIds.contains(id),
-                      onDetail: () async {
-                        if (id <= 0) return;
-                        await showModalBottomSheet(
-                          context: context,
-                          useRootNavigator: true,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.92,
-                            child: DetailOrderSheet(
-                              orderId: id,
-                              loadDetail: (orderId) => context.read<DoneProvider>().getOrderDetail(orderId),
+                    final data = vm.items[i];
+                    final id = _toId(data['id']);
+                    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
+
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: blinking ? Colors.red : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: _DoneOrderCard(
+                        data: data,
+                        isPrinting: _printingIds.contains(id),
+                        onDetail: () async {
+                          if (id <= 0) return;
+                          await showModalBottomSheet(
+                            context: context,
+                            useRootNavigator: true,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.92,
+                              child: DetailOrderSheet(
+                                orderId: id,
+                                loadDetail: (orderId) => context.read<DoneProvider>().getOrderDetail(orderId),
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                      onPrint: () async {
-                        if (id <= 0) return;
-                        await _printOrder(id);
-                      },
+                          );
+                        },
+                        onPrint: () async {
+                          if (id <= 0) return;
+                          await _printOrder(id);
+                        },
+                      ),
                     );
                   },
                 );
@@ -261,6 +295,53 @@ class _DoneViewState extends State<_DoneView> {
     } finally {
       if (mounted) setState(() => _printingIds.remove(id));
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant _DoneView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final id = widget.focusOrderId;
+    final focusChanged = widget.focusRequestKey != oldWidget.focusRequestKey;
+
+    if (focusChanged && id != null && id > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _goToAndBlink(id);
+      });
+    }
+  }
+
+  Future<void> _goToAndBlink(int orderId) async {
+    final vm = context.read<DoneProvider>();
+
+    if (vm.items.isEmpty) {
+      await vm.load();
+    }
+    if (!mounted) return;
+
+    final idx = vm.items.indexWhere((e) => _toId(e['id']) == orderId);
+    if (idx < 0) return;
+
+    const approxItemHeight = 160.0;
+    final targetOffset = (idx * (approxItemHeight + 10)).toDouble();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_listCtrl.hasClients) return;
+      final max = _listCtrl.position.maxScrollExtent;
+      _listCtrl.animateTo(
+        targetOffset.clamp(0.0, max),
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOut,
+      );
+    });
+
+    _blinkTimer?.cancel();
+    setState(() => _blinkOrderId = orderId);
+
+    _blinkTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _blinkOrderId = null);
+    });
   }
 
   num? _pickNum(Map<String, dynamic> root, List<String> path) {

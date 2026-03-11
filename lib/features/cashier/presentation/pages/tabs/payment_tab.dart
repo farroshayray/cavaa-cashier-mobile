@@ -11,9 +11,14 @@ import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart
 
 
 class PaymentTab extends StatefulWidget {
-  const PaymentTab({super.key, this.focusOrderId});
+  const PaymentTab({
+    super.key,
+    this.focusOrderId,
+    this.focusRequestKey = 0,
+  });
 
   final int? focusOrderId;
+  final int focusRequestKey;
 
   @override
   State<PaymentTab> createState() => _PaymentTabState();
@@ -37,13 +42,21 @@ class _PaymentTabState extends State<PaymentTab> {
 
   @override
   Widget build(BuildContext context) {
-    return _PaymentView(focusOrderId: widget.focusOrderId);
+    return _PaymentView(
+      focusOrderId: widget.focusOrderId,
+      focusRequestKey: widget.focusRequestKey,
+    );
   }
 }
 
 class _PaymentView extends StatefulWidget {
-  const _PaymentView({this.focusOrderId});
+  const _PaymentView({
+    this.focusOrderId,
+    this.focusRequestKey = 0,
+  });
+
   final int? focusOrderId;
+  final int focusRequestKey;
 
   @override
   State<_PaymentView> createState() => _PaymentViewState();
@@ -72,9 +85,13 @@ class _PaymentViewState extends State<_PaymentView> {
     super.didUpdateWidget(oldWidget);
 
     final id = widget.focusOrderId;
-    if (id != null && id > 0 && id != _lastHandledFocus) {
-      _lastHandledFocus = id;
-      _goToAndBlink(id);
+    final focusChanged = widget.focusRequestKey != oldWidget.focusRequestKey;
+
+    if (focusChanged && id != null && id > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _goToAndBlink(id);
+      });
     }
   }
 
