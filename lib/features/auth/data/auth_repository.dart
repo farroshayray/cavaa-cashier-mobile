@@ -34,14 +34,21 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
-    await storage.clearToken();
-    // optional:
-    // await api.logout();
+    await storage.deleteToken();
+    await storage.deleteCachedUser();
   }
 
   Future<bool> hasToken() async {
-    final t = await storage.getToken();
-    return t != null && t.isNotEmpty;
+    final token = await storage.getToken();
+    return token != null && token.isNotEmpty;
+  }
+
+  Future<void> saveCachedUser(UserModel user) async {
+    await storage.saveCachedUser(user);
+  }
+
+  Future<UserModel?> getCachedUser() async {
+    return storage.getCachedUser();
   }
 
   Future<UserModel> me() async {

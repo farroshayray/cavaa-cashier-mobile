@@ -4,7 +4,7 @@ import '/core/config/env.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-
+import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 import '/core/navigation/app_navigator.dart';
@@ -29,6 +29,7 @@ import 'tabs/process_tab.dart' as process_tab;
 import 'tabs/done_tab.dart' as done_tab;
 
 import '/features/cashier/presentation/pages/printer/printer_settings_page.dart';
+import '/core/services/connectivity_status_provider.dart';
 
 class CashierHomePage extends StatefulWidget {
   const CashierHomePage({super.key});
@@ -55,6 +56,8 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   Timer? _doneReloadDebounce;
   Timer? _resumeReloadDebounce;
 
+  bool? _lastOnlineState;
+
   StreamSubscription<Map<String, dynamic>>? _fcmMessageSub;
   StreamSubscription<Map<String, dynamic>>? _fcmTapSub;
 
@@ -64,6 +67,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _listenFcmEvents();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _setupConnectivitySyncHook();
+    });
 
     Future.microtask(() async {
       final pending =
@@ -79,6 +87,24 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     if (state == AppLifecycleState.resumed) {
       context.read<PrinterManager>().connectDefault(silent: true);
       _refreshAfterResume();
+
+      Future.microtask(() async {
+        try {
+          final conn = context.read<ConnectivityStatusProvider>();
+          if (conn.isOnline && !conn.isChecking) {
+            await context.read<SyncService>().syncPendingOrders();
+
+            if (!mounted) return;
+            await Future.wait([
+              context.read<PaymentProvider>().load(),
+              context.read<ProcessProvider>().load(),
+              context.read<DoneProvider>().load(),
+            ]);
+          }
+        } catch (e) {
+          debugPrint('❌ sync after resume failed: $e');
+        }
+      });
 
       Future.microtask(() async {
         final pending =
@@ -114,11 +140,58 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     });
   }
 
+  void _setupConnectivitySyncHook() {
+    final connectivityProvider = context.read<ConnectivityStatusProvider>();
+    final syncService = context.read<SyncService>();
+
+    connectivityProvider.onBackOnline = () async {
+      debugPrint('🌐 koneksi kembali online, mulai sync pending orders...');
+      await syncService.syncPendingOrders();
+
+      if (!mounted) return;
+
+      await Future.wait([
+        context.read<PaymentProvider>().load(),
+        context.read<ProcessProvider>().load(),
+        context.read<DoneProvider>().load(),
+      ]);
+    };
+  }
+
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _startRealtimeIfReady();
+  }
+
+  void _handleConnectivitySync() {
+    final conn = context.read<ConnectivityStatusProvider>();
+
+    if (conn.isChecking) return;
+
+    final isOnlineNow = conn.isOnline;
+
+    if (_lastOnlineState == isOnlineNow) return;
+
+    _lastOnlineState = isOnlineNow;
+
+    if (isOnlineNow) {
+      Future.microtask(() async {
+        try {
+          await context.read<SyncService>().syncPendingOrders();
+          if (!mounted) return;
+
+          await Future.wait([
+            context.read<PaymentProvider>().load(),
+            context.read<ProcessProvider>().load(),
+            context.read<DoneProvider>().load(),
+          ]);
+        } catch (e) {
+          debugPrint('❌ auto sync on reconnect failed: $e');
+        }
+      });
+    }
   }
 
   Future<void> _startRealtimeIfReady() async {
@@ -185,6 +258,10 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
   @override
   void dispose() {
+    try {
+      context.read<ConnectivityStatusProvider>().onBackOnline = null;
+    } catch (_) {}
+
     _focusTimer?.cancel();
     _paymentReloadDebounce?.cancel();
     _processReloadDebounce?.cancel();
@@ -525,6 +602,8 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       ],
     );
 
+    _handleConnectivitySync();
+
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
@@ -556,6 +635,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
             ],
           ),
           actions: [
+            const OnlineStatusChip(),
             const PrinterStatusDot(),
             NotifBellButton(
               onTapItem: _handleNotifTap,
@@ -900,6 +980,67 @@ class PrinterStatusDot extends StatelessWidget {
     );
   }
 }
+
+class OnlineStatusChip extends StatelessWidget {
+  const OnlineStatusChip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ConnectivityStatusProvider>(
+      builder: (_, conn, __) {
+        Color dotColor;
+        String label;
+
+        if (conn.isChecking) {
+          dotColor = Colors.orange;
+          label = 'Checking';
+        } else if (conn.isOnline) {
+          dotColor = Colors.green;
+          label = 'Online';
+        } else {
+          dotColor = Colors.red;
+          label = 'Offline';
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.black.withOpacity(0.08)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,

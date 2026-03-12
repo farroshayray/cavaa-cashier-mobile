@@ -5,6 +5,7 @@ import 'package:app_links/app_links.dart';
 
 import 'core/storage/secure_storage_service.dart';
 import 'core/network/dio_client.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
 
 import 'features/auth/data/auth_api.dart';
 import 'features/auth/data/auth_repository.dart';
@@ -26,6 +27,11 @@ import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/data/orders_api.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 
+import 'features/cashier/data/local/db/cashier_db.dart';
+import 'core/services/connectivity_status_provider.dart';
+import 'features/cashier/data/local/db/daos/local_orders_dao.dart';
+import 'features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
+
 class CavaaApp extends StatefulWidget {
   const CavaaApp({super.key});
 
@@ -37,9 +43,42 @@ class _CavaaAppState extends State<CavaaApp> {
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _sub;
 
+  late final SecureStorageService storage;
+  late final DioClient dioClient;
+  late final CashierDb cashierDb;
+
+  late final AuthApi authApi;
+  late final AuthRepository authRepo;
+
+  late final PurchaseApi purchaseApi;
+  late final PurchaseRepository purchaseRepo;
+
+  late final OrdersApi ordersApi;
+  late final OrdersRepository ordersRepo;
+  late final LocalOrdersDao localOrdersDao;
+  late final CachedPaymentOrdersDao cachedPaymentOrdersDao;
+
   @override
   void initState() {
     super.initState();
+
+    storage = SecureStorageService();
+    dioClient = DioClient(storage);
+    cashierDb = CashierDb();
+    localOrdersDao = LocalOrdersDao(cashierDb);
+    cachedPaymentOrdersDao = CachedPaymentOrdersDao(cashierDb);
+
+    authApi = AuthApi(dioClient);
+    authRepo = AuthRepository(api: authApi, storage: storage);
+
+    purchaseApi = PurchaseApi(dioClient.dio);
+    purchaseRepo = PurchaseRepository(
+      api: purchaseApi,
+      db: cashierDb,
+    );
+
+    ordersApi = OrdersApi(dioClient.dio);
+    ordersRepo = OrdersRepository(api: ordersApi);
 
     () async {
       final initial = await _appLinks.getInitialLink();
@@ -47,10 +86,12 @@ class _CavaaAppState extends State<CavaaApp> {
       if (initial != null) _handleUri(initial);
     }();
 
-    _sub = _appLinks.uriLinkStream.listen((uri) {
-      if (uri != null) _handleUri(uri);
-    }, onError: (e) {
-    });
+    _sub = _appLinks.uriLinkStream.listen(
+      (uri) {
+        if (uri != null) _handleUri(uri);
+      },
+      onError: (e) {},
+    );
   }
 
   Future<void> _refreshAfterPayment(BuildContext ctx) async {
@@ -88,35 +129,46 @@ class _CavaaAppState extends State<CavaaApp> {
   @override
   void dispose() {
     _sub?.cancel();
+    cashierDb.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final storage = SecureStorageService();
-    final dioClient = DioClient(storage);
-
-    final authApi = AuthApi(dioClient);
-    final authRepo = AuthRepository(api: authApi, storage: storage);
-
-    final purchaseApi = PurchaseApi(dioClient.dio);
-    final purchaseRepo = PurchaseRepository(api: purchaseApi);
-
-    final ordersApi = OrdersApi(dioClient.dio);
-    final ordersRepo = OrdersRepository(api: ordersApi);
-    // ⚠️ sesuaikan: kalau PurchaseRepository constructor kamu beda, tinggal sesuaikan di sini
 
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(
+          create: (_) => ConnectivityStatusProvider()..init(),
+        ),
+
+        Provider(
+          create: (_) => SyncService(
+            localOrdersDao: localOrdersDao,
+            purchaseApi: purchaseApi,
+            ordersRepo: ordersRepo,
+            cachedPaymentOrdersDao: cachedPaymentOrdersDao,
+          ),
+        ),
+
         ChangeNotifierProvider(create: (_) => NotificationsProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider(authRepo)),
 
-        // ✅ INI YANG PALING PENTING: PurchaseProvider harus di ROOT
-        ChangeNotifierProvider(create: (_) => PurchaseProvider(purchaseRepo)),
-        ChangeNotifierProvider(create: (_) => PaymentProvider(ordersRepo)),
+        ChangeNotifierProvider(
+          create: (_) => PurchaseProvider(
+            repo: purchaseRepo,
+            localOrdersDao: localOrdersDao,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => PaymentProvider(
+            repo: ordersRepo,
+            localOrdersDao: localOrdersDao,
+            cachedPaymentOrdersDao: cachedPaymentOrdersDao,
+          ),
+        ),
         ChangeNotifierProvider(create: (_) => ProcessProvider(ordersRepo)),
         ChangeNotifierProvider(create: (_) => DoneProvider(ordersRepo)),
-        // ✅ root printer manager (WAJIB)
         ChangeNotifierProvider(
           create: (_) => PrinterManager(PrinterPrefs())..init(autoConnect: true),
         ),
@@ -124,7 +176,10 @@ class _CavaaAppState extends State<CavaaApp> {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Cavaa Cashier',
-        theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFFAE1504)),
+        theme: ThemeData(
+          useMaterial3: true,
+          colorSchemeSeed: const Color(0xFFAE1504),
+        ),
         home: const SplashPage(),
         navigatorKey: appNavigatorKey,
       ),
