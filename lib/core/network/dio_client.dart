@@ -30,19 +30,19 @@ class DioClient {
             options.headers['Authorization'] = 'Bearer $token';
           }
 
-          debugPrint('➡️ [REQ] ${options.method} ${options.path}');
-          debugPrint('➡️ [REQ DATA] ${options.data}');
+          // debugPrint('➡️ [REQ] ${options.method} ${options.path}');
+          // debugPrint('➡️ [REQ DATA] ${options.data}');
           handler.next(options);
         },
         onResponse: (response, handler) {
-          debugPrint('✅ [RES] ${response.requestOptions.path}');
-          debugPrint('✅ [RES DATA] ${response.data}');
+          // debugPrint('✅ [RES] ${response.requestOptions.path}');
+          // debugPrint('✅ [RES DATA] ${response.data}');
           handler.next(response);
         },
         onError: (e, handler) async {
-          debugPrint('❌ [ERR] ${e.requestOptions.path}');
-          debugPrint('❌ [ERR STATUS] ${e.response?.statusCode}');
-          debugPrint('❌ [ERR DATA] ${e.response?.data}');
+          // debugPrint('❌ [ERR] ${e.requestOptions.path}');
+          // debugPrint('❌ [ERR STATUS] ${e.response?.statusCode}');
+          // debugPrint('❌ [ERR DATA] ${e.response?.data}');
 
           final path = e.requestOptions.path;
           final isLogin = path.contains('/api/v1/mobile/cashier/login');

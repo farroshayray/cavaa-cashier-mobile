@@ -21,8 +21,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  debugPrint('📩 Background message: ${message.messageId}');
-  debugPrint('📦 Background data: ${jsonEncode(message.data)}');
+  // debugPrint('📩 Background message: ${message.messageId}');
+  // debugPrint('📦 Background data: ${jsonEncode(message.data)}');
 
   final data = Map<String, dynamic>.from(message.data);
   final type = (data['type'] ?? '').toString();
@@ -31,7 +31,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('force_logout_pending', true);
     await prefs.setString('force_logout_payload', jsonEncode(data));
-    debugPrint('🚪 force_logout saved in background');
+    // debugPrint('🚪 force_logout saved in background');
     return;
   }
 
@@ -152,7 +152,7 @@ class PushNotificationService {
       criticalAlert: false,
     );
 
-    debugPrint('🔐 Notification permission: ${settings.authorizationStatus}');
+    // debugPrint('🔐 Notification permission: ${settings.authorizationStatus}');
   }
 
   Future<void> _initLocalNotifications() async {
@@ -162,7 +162,7 @@ class PushNotificationService {
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (details) {
-        debugPrint('🔔 Local notification clicked. payload=${details.payload}');
+        // debugPrint('🔔 Local notification clicked. payload=${details.payload}');
       },
     );
 
@@ -181,9 +181,9 @@ class PushNotificationService {
         await _localNotifications.getNotificationAppLaunchDetails();
 
     if (details?.didNotificationLaunchApp ?? false) {
-      debugPrint(
-        '🚀 App launched from local notification. payload=${details?.notificationResponse?.payload}',
-      );
+      // debugPrint(
+      //   '🚀 App launched from local notification. payload=${details?.notificationResponse?.payload}',
+      // );
 
       final payload = details?.notificationResponse?.payload;
       if (payload != null && payload.isNotEmpty) {
@@ -196,7 +196,7 @@ class PushNotificationService {
 
     final remoteMessage = await _messaging.getInitialMessage();
     if (remoteMessage != null) {
-      debugPrint('🚀 App launched from FCM notification: ${remoteMessage.data}');
+      // debugPrint('🚀 App launched from FCM notification: ${remoteMessage.data}');
 
       if (remoteMessage.data.isNotEmpty) {
         _messageTapController.add(Map<String, dynamic>.from(remoteMessage.data));
@@ -229,8 +229,8 @@ class PushNotificationService {
 
   void _setupForegroundHandler() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      debugPrint('📲 Foreground message: ${message.messageId}');
-      debugPrint('📦 Foreground data: ${jsonEncode(message.data)}');
+      // debugPrint('📲 Foreground message: ${message.messageId}');
+      // debugPrint('📦 Foreground data: ${jsonEncode(message.data)}');
 
       final data = Map<String, dynamic>.from(message.data);
       final type = (data['type'] ?? '').toString();
@@ -240,7 +240,7 @@ class PushNotificationService {
       }
 
       if (type == 'force_logout') {
-        debugPrint('🚪 force_logout received in foreground');
+        // debugPrint('🚪 force_logout received in foreground');
         return;
       }
 
@@ -278,7 +278,7 @@ class PushNotificationService {
 
   void _setupOpenedAppHandler() {
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('📬 App opened from remote notification: ${message.data}');
+      // debugPrint('📬 App opened from remote notification: ${message.data}');
 
       if (message.data.isNotEmpty) {
         _messageTapController.add(Map<String, dynamic>.from(message.data));
@@ -319,12 +319,12 @@ class PushNotificationService {
 
   Future<void> _printInitialToken() async {
     final token = await _messaging.getToken();
-    debugPrint('✅ FCM TOKEN ASLI: $token');
+    // debugPrint('✅ FCM TOKEN ASLI: $token');
   }
 
   void _listenTokenRefresh() {
     _messaging.onTokenRefresh.listen((token) async {
-      debugPrint('🔄 FCM token refreshed: $token');
+      // debugPrint('🔄 FCM token refreshed: $token');
       await sendTokenToBackend(token);
     });
   }
@@ -336,7 +336,7 @@ class PushNotificationService {
   Future<void> syncCurrentTokenToBackend() async {
     final token = await _messaging.getToken();
     if (token == null || token.isEmpty) {
-      debugPrint('⚠️ FCM token kosong.');
+      // debugPrint('⚠️ FCM token kosong.');
       return;
     }
 
@@ -348,7 +348,7 @@ class PushNotificationService {
       final authToken = await SecureStorageService().getToken();
 
       if (authToken == null || authToken.isEmpty) {
-        debugPrint('⚠️ Auth token kosong. Skip sync FCM token.');
+        // debugPrint('⚠️ Auth token kosong. Skip sync FCM token.');
         return;
       }
 

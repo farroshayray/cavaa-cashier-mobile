@@ -17,18 +17,18 @@ class AuthRepository {
     String password, {
     required bool rememberMe,
   }) async {
-    debugPrint('REPO LOGIN START');
+    // debugPrint('REPO LOGIN START');
 
     final resp = await api.login(
       LoginRequest(userName: username, password: password),
     );
 
-    debugPrint('REPO LOGIN SUCCESS, SAVE TOKEN');
+    // debugPrint('REPO LOGIN SUCCESS, SAVE TOKEN');
     await storage.saveToken(resp.token);
 
-    debugPrint('SYNC FCM START');
+    // debugPrint('SYNC FCM START');
     await PushNotificationService.instance.syncCurrentTokenToBackend();
-    debugPrint('SYNC FCM DONE');
+    // debugPrint('SYNC FCM DONE');
 
     return resp;
   }

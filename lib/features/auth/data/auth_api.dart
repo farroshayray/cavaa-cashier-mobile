@@ -34,16 +34,16 @@ class AuthApi {
 
   Future<LoginResponse> login(LoginRequest req) async {
     try {
-      debugPrint('LOGIN REQUEST START');
-      debugPrint('LOGIN REQUEST BODY: ${req.toJson()}');
+      // debugPrint('LOGIN REQUEST START');
+      // debugPrint('LOGIN REQUEST BODY: ${req.toJson()}');
 
       final Response res = await client.dio.post(
         '/api/v1/mobile/cashier/login',
         data: req.toJson(),
       );
 
-      debugPrint('LOGIN RESPONSE STATUS: ${res.statusCode}');
-      debugPrint('LOGIN RESPONSE DATA: ${res.data}');
+      // debugPrint('LOGIN RESPONSE STATUS: ${res.statusCode}');
+      // debugPrint('LOGIN RESPONSE DATA: ${res.data}');
 
       final data = (res.data is Map && res.data['data'] != null)
           ? res.data['data']

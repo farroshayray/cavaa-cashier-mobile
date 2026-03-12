@@ -83,6 +83,8 @@ class OrdersApi {
       data: formData,
     );
 
+    print('response payment-order: $resp');
+
     final data = resp.data;
     if (data is Map<String, dynamic>) return data;
     throw Exception('Response JSON bukan object');
@@ -92,6 +94,7 @@ class OrdersApi {
     required int id,
   }) async {
     final resp = await dio.post('/api/v1/mobile/cashier/process-order/$id');
+    print('response process-order: $resp');
 
     final data = resp.data;
     if (data is Map<String, dynamic>) return data;
@@ -118,6 +121,8 @@ class OrdersApi {
         if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
       },
     );
+
+    print('response finish-order: $resp');
 
     final data = resp.data;
     if (data is Map<String, dynamic>) return data;

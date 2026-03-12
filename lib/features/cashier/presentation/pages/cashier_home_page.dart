@@ -262,7 +262,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   void _listenFcmEvents() {
     _fcmMessageSub = PushNotificationService.instance.onMessageReceived.listen(
       (data) async {
-        debugPrint('🔔 FCM received event: $data');
+        // debugPrint('🔔 FCM received event: $data');
 
         final type = (data['type'] ?? '').toString();
 
@@ -278,7 +278,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
     _fcmTapSub = PushNotificationService.instance.onMessageTapped.listen(
       (data) async {
-        debugPrint('👉 FCM tapped event: $data');
+        // debugPrint('👉 FCM tapped event: $data');
 
         final type = (data['type'] ?? '').toString();
 

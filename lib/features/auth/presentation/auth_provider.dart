@@ -38,9 +38,13 @@ class AuthProvider extends ChangeNotifier {
       errorMessage = null;
       notifyListeners();
 
-      final resp = await repo.login(username, password, rememberMe: rememberMe);
-      user = resp.user;
+      await repo.login(username, password, rememberMe: rememberMe);
+
+      // Ambil user lengkap dari endpoint /me
+      final u = await repo.me();
+      user = u;
       isLoggedIn = true;
+
       return true;
     } on DioException catch (e) {
       debugPrint('LOGIN DIO ERROR: $e');
@@ -65,12 +69,13 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> fetchMe() async {
     try {
-      final u = await repo.me(); // kamu harus punya endpoint /me
+      final u = await repo.me();
       user = u;
       isLoggedIn = true;
       notifyListeners();
     } catch (e) {
       debugPrint('fetchMe error: $e');
+      rethrow;
     }
   }
 

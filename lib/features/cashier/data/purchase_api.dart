@@ -30,7 +30,7 @@ class PurchaseApi {
       'items': items,
     };
 
-    // print(payload);
+    print('payload checkout: $payload');
 
     final resp = await dio.post('/api/v1/mobile/cashier/checkout', data: payload);
 
