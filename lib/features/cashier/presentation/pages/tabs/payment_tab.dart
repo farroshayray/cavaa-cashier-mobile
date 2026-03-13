@@ -70,6 +70,8 @@ class _PaymentViewState extends State<_PaymentView> {
   int? _blinkOrderId;
   Timer? _blinkTimer;
   int? _lastHandledFocus;
+  bool? _lastOnline;
+  ConnectivityStatusProvider? _connectivity;
 
 
   @override
@@ -99,6 +101,7 @@ class _PaymentViewState extends State<_PaymentView> {
 
   @override
   void dispose() {
+    _connectivity?.removeListener(_onConnectivityChanged);
     _blinkTimer?.cancel();
     _searchCtrl.dispose();
     _listCtrl.dispose();
@@ -109,6 +112,14 @@ class _PaymentViewState extends State<_PaymentView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    final newConnectivity = context.read<ConnectivityStatusProvider>();
+    if (_connectivity != newConnectivity) {
+      _connectivity?.removeListener(_onConnectivityChanged);
+      _connectivity = newConnectivity;
+      _connectivity?.addListener(_onConnectivityChanged);
+      _lastOnline = _connectivity?.isOnline;
+    }
+
     final id = widget.focusOrderId;
     if (id != null && id > 0 && id != _lastHandledFocus) {
       _lastHandledFocus = id;
@@ -116,6 +127,31 @@ class _PaymentViewState extends State<_PaymentView> {
         if (mounted) _goToAndBlink(id);
       });
     }
+  }
+
+  void _onConnectivityChanged() {
+    final current = _connectivity?.isOnline;
+    if (current == null) return;
+
+    if (_lastOnline == null) {
+      _lastOnline = current;
+      return;
+    }
+
+    // transisi offline -> online
+    if (_lastOnline == false && current == true) {
+      if (!mounted) return;
+
+      Future.microtask(() async {
+        try {
+          await context.read<PaymentProvider>().load();
+        } catch (e) {
+          debugPrint('❌ payment reload after reconnect failed: $e');
+        }
+      });
+    }
+
+    _lastOnline = current;
   }
 
 
@@ -322,7 +358,7 @@ class _PaymentViewState extends State<_PaymentView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: DetailOrderSheet(
                                 orderId: id,
-                                loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
+                                loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
                               ),
                             ),
                           );
@@ -389,13 +425,12 @@ class _PaymentViewState extends State<_PaymentView> {
                           }
                         },
                         onProcess: () async {
-                          final isLocalOnly = data['is_local_only'] == true;
                           final syncStatus = (data['sync_status'] ?? '').toString();
-
-                          if (isLocalOnly || syncStatus == 'PENDING' || id <= 0) {
+                          // 🚫 kalau order sedang pending delete
+                          if (syncStatus == 'PENDING_DELETE') {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Order ini masih offline dan menunggu sinkronisasi.'),
+                                content: Text('Order ini sedang menunggu penghapusan.'),
                               ),
                             );
                             return;
@@ -410,7 +445,8 @@ class _PaymentViewState extends State<_PaymentView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: PaymentProcessSheet(
                                 orderId: id,
-                                loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
+                                // 🔑 ini yang membuat modal bisa offline
+                                loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
                                 ordersRepo: context.read<PaymentProvider>().repo,
                               ),
                             ),

@@ -10,6 +10,8 @@ import 'package:provider/provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/models/orders_repository.dart';
+import '/core/services/connectivity_status_provider.dart';
+import '/features/cashier/presentation/providers/payment_provider.dart';
 
 
 class PaymentProcessSheet extends StatefulWidget {
@@ -308,13 +310,25 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final repo = widget.ordersRepo;
 
     // 1. Simpan pembayaran dulu
-    await repo.paymentOrder(
-      id: widget.orderId,
-      paidAmount: paid,
-      changeAmount: change,
-      lastPaymentId: _isCaseB ? _lastPaymentId : null,
-      cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
-    ).timeout(const Duration(seconds: 15));
+
+    final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
+    if (isOnline) {
+      await widget.ordersRepo.paymentOrder(
+        id: widget.orderId,
+        paidAmount: paid,
+        changeAmount: change,
+        lastPaymentId: _isCaseB ? _lastPaymentId : null,
+        cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
+      ).timeout(const Duration(seconds: 15));
+    } else {
+      await context.read<PaymentProvider>().confirmPaymentOffline(
+        order: _order!,
+        paidAmount: paid,
+        changeAmount: change,
+        cashierProofImagePath: _cashierProofImage?.path,
+        lastPaymentId: _isCaseB ? _lastPaymentId : null,
+      );
+    }
 
     // 2. Setelah pembayaran sukses, coba print
     String? printError;
@@ -553,10 +567,14 @@ class _Body extends StatelessWidget {
     
 
     // ✅ TARUH DI SINI (bukan di dalam children)
-    final hasPaymentRequest = order['payment_request'] != null;
+    final paymentRequest = order['payment_request'];
+    final hasPaymentRequest =
+        (order['order_status'] ?? '').toString() == 'PAYMENT REQUEST' &&
+        paymentRequest is Map;
 
     final latestPayment = order['latest_payment'];
     final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+
     final hasCashierPaymentInstruction =
         (order['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
 
@@ -858,11 +876,17 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
     final provider = (paymentInstruction['provider_name'] ?? '-').toString();
     final accName = (paymentInstruction['provider_account_name'] ?? '-').toString();
     final accNo = (paymentInstruction['provider_account_no'] ?? '').toString().trim();
+
     final qris = (paymentInstruction['qris_image_url'] ?? '').toString().trim();
+    final qrisLocalPath =
+        (paymentInstruction['qris_image_local_path'] ?? '').toString().trim();
 
     final qrisUrl = _normalizeProofUrl(qris);
     final showAccNo = type == 'manual_tf' || type == 'manual_ewallet';
-    final showQris = type == 'manual_qris' && qrisUrl.isNotEmpty;
+    final showQris = type == 'manual_qris' &&
+        (qrisLocalPath.isNotEmpty || qrisUrl.isNotEmpty);
+
+    final localFile = qrisLocalPath.isNotEmpty ? File(qrisLocalPath) : null;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -889,7 +913,7 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
                   child: Text('QRIS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                 ),
                 TextButton.icon(
-                  onPressed: () => _openUrl(qrisUrl),
+                  onPressed: qrisUrl.isEmpty ? null : () => _openUrl(qrisUrl),
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
                   label: const Text('Buka QRIS'),
                 ),
@@ -899,14 +923,7 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               child: AspectRatio(
                 aspectRatio: 1,
-                child: Image.network(
-                  qrisUrl,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.white,
-                    child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
-                  ),
-                ),
+                child: _buildQrisImage(localFile, qrisUrl),
               ),
             ),
           ],
@@ -955,6 +972,33 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildQrisImage(File? localFile, String qrisUrl) {
+    if (localFile != null && localFile.existsSync()) {
+      return Image.file(
+        localFile,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _brokenImage(),
+      );
+    }
+
+    if (qrisUrl.isNotEmpty) {
+      return Image.network(
+        qrisUrl,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _brokenImage(),
+      );
+    }
+
+    return _brokenImage();
+  }
+
+  Widget _brokenImage() {
+    return Container(
+      color: Colors.white,
+      child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
     );
   }
 

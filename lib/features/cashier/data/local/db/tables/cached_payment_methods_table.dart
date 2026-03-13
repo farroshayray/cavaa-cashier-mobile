@@ -13,6 +13,9 @@ class CachedPaymentMethods extends Table {
   TextColumn get providerAccountNo => text().nullable()();
   TextColumn get qrisImageUrl => text().nullable()();
 
+  // ✅ tambahkan ini
+  TextColumn get qrisImageLocalPath => text().nullable()();
+
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
 
   TextColumn get rawJson => text()();

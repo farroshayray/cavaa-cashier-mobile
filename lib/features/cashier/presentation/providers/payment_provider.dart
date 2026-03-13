@@ -1,19 +1,33 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:drift/drift.dart';
 import '../../data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/core/services/connectivity_status_provider.dart';
+import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
+
+import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
+import '/core/config/env.dart';
 
 class PaymentProvider extends ChangeNotifier {
   final OrdersRepository repo;
   final LocalOrdersDao localOrdersDao;
   final CachedPaymentOrdersDao cachedPaymentOrdersDao;
+  final CachedPaymentMethodsDao cachedPaymentMethodsDao;
+  final ConnectivityStatusProvider connectivity;
+  
 
   PaymentProvider({
     required this.repo,
     required this.localOrdersDao,
     required this.cachedPaymentOrdersDao,
+    required this.cachedPaymentMethodsDao,
+    required this.connectivity,
   });
 
   bool isLoading = false;
@@ -54,6 +68,7 @@ class PaymentProvider extends ChangeNotifier {
           await cachedPaymentOrdersDao.replaceAllOrders(
             orders: cachedRows,
           );
+          unawaited(_prefetchAndCacheDetails(serverItems));
         }
       } catch (e) {
         debugPrint('PaymentProvider server load failed: $e');
@@ -240,6 +255,93 @@ class PaymentProvider extends ChangeNotifier {
     return repo.fetchOrderDetail(id);
   }
 
+  Future<void> confirmPaymentFromRow({
+    required Map<String, dynamic> row,
+    required num paidAmount,
+    required num changeAmount,
+    String? cashierProofImagePath,
+    String? lastPaymentId,
+  }) async {
+    final isOnline = connectivity.isOnline;
+
+    if (isOnline) {
+      final serverId = _toInt(row['server_id'] ?? row['id']);
+      if (serverId == null || serverId <= 0) {
+        throw Exception('ID order tidak valid untuk pembayaran online');
+      }
+
+      await repo.paymentOrder(
+        id: serverId,
+        paidAmount: paidAmount,
+        changeAmount: changeAmount,
+        lastPaymentId: lastPaymentId,
+        cashierProofImagePath: cashierProofImagePath,
+      );
+
+      await load();
+      return;
+    }
+
+    await confirmPaymentOffline(
+      order: row,
+      paidAmount: paidAmount,
+      changeAmount: changeAmount,
+      cashierProofImagePath: cashierProofImagePath,
+      lastPaymentId: lastPaymentId,
+    );
+
+    await load();
+  }
+
+  Future<void> confirmPaymentOffline({
+    required Map<String, dynamic> order,
+    required num paidAmount,
+    required num changeAmount,
+    String? cashierProofImagePath,
+    String? lastPaymentId,
+  }) async {
+    final localId = (order['local_id'] ?? '').toString();
+    final serverId = _toInt(order['server_id'] ?? order['id']);
+
+    // 1) kalau ini order lokal yang memang sudah ada di local_orders
+    if (localId.isNotEmpty) {
+      await localOrdersDao.markOrderPaidOffline(
+        localId: localId,
+        paidAmount: paidAmount,
+        changeAmount: changeAmount,
+        cashierProofImagePath: cashierProofImagePath,
+        lastPaymentId: lastPaymentId,
+      );
+      return;
+    }
+
+    // 2) kalau ini order server/cached yang sedang offline
+    // untuk tahap awal, wajib sudah punya serverId agar nanti bisa disinkronkan
+    if (serverId == null || serverId <= 0) {
+      throw Exception('Order offline tidak punya localId maupun serverId');
+    }
+
+    await localOrdersDao.createShadowOrderFromServerPayment(
+      serverId: serverId,
+      bookingOrderCode: (order['booking_order_code'] ?? '-').toString(),
+      customerName: (order['customer_name'] ?? '-').toString(),
+      tableNoSnapshot: (order['table'] is Map
+              ? (order['table']['table_no'] ?? '-')
+              : (order['table_no'] ?? '-'))
+          .toString(),
+      paymentMethodEffective: (order['payment_method'] ?? 'CASH').toString(),
+      subtotal: _toNum(order['subtotal'] ?? order['total_order_value']).toDouble(),
+      grandTotal: _toNum(order['grand_total']).toDouble(),
+      isPpnActive: _toBool(order['is_ppn_active']),
+      ppnPercent: _toNum(order['ppn']).toDouble(),
+      paidAmount: paidAmount.toDouble(),
+      changeAmount: changeAmount.toDouble(),
+      cashierProofImagePath: cashierProofImagePath,
+      lastPaymentId: lastPaymentId,
+    );
+  }
+  
+
   Future<Map<String, dynamic>> getPrintDetail(int id) async {
     return repo.fetchPrintDetail(id);
   }
@@ -329,6 +431,249 @@ class PaymentProvider extends ChangeNotifier {
       lastPaymentId: lastPaymentId,
       cashierProofImagePath: cashierProofImagePath,
     );
+  }
+
+  Future<Map<String, dynamic>> getOrderDetailFromListItem(
+    Map<String, dynamic> row,
+  ) async {
+    final isLocalOnly = row['is_local_only'] == true;
+    final isOnline = connectivity.isOnline;
+
+    if (isLocalOnly) {
+      final localId = (row['local_id'] ?? '').toString();
+      if (localId.isEmpty) {
+        throw Exception('Local ID order tidak valid');
+      }
+
+      final localDetail = await localOrdersDao.getOrderDetailMapByLocalId(localId);
+
+      // ✅ TARUH DI SINI
+      if (localDetail != null) {
+        return _enrichOfflinePaymentMethod(localDetail);
+      }
+
+      throw Exception('Detail order lokal tidak ditemukan');
+    }
+
+    final serverId = _toInt(row['server_id'] ?? row['id']);
+    if (serverId == null || serverId <= 0) {
+      throw Exception('Order ID tidak valid');
+    }
+
+    if (isOnline) {
+      try {
+        final detail = await repo.fetchOrderDetail(serverId);
+
+        debugPrint('method detail = ${detail['payment_method']}');
+        debugPrint('payment_request = ${detail['payment_request']}');
+        debugPrint('latest_payment = ${detail['latest_payment']}');
+
+        await cachedPaymentOrdersDao.upsertDetailFromApi(detail);
+        await _cacheManualPaymentMethodFromDetail(detail);
+
+        return detail;
+      } catch (_) {
+        final cached = await cachedPaymentOrdersDao.getCachedOrderDetailMap(serverId);
+        if (cached != null) {
+          return _enrichOfflinePaymentMethod(cached);
+        }
+        rethrow;
+      }
+    }
+
+    final cached = await cachedPaymentOrdersDao.getCachedOrderDetailMap(serverId);
+
+    // ✅ TARUH DI SINI
+    if (cached != null) {
+      return _enrichOfflinePaymentMethod(cached);
+    }
+
+    throw Exception('Detail order offline tidak tersedia');
+  }
+
+  Future<Map<String, dynamic>> _enrichOfflinePaymentMethod(
+    Map<String, dynamic> detail,
+  ) async {
+    final method = (detail['payment_method'] ?? '').toString();
+
+    if (method != 'manual_qris' &&
+        method != 'manual_tf' &&
+        method != 'manual_ewallet') {
+      return detail;
+    }
+
+    int? serverManualPaymentId;
+
+    final latestRaw = detail['latest_payment'];
+    if (latestRaw is Map) {
+      serverManualPaymentId = _toInt(
+        latestRaw['owner_manual_payment_id'] ??
+        (latestRaw['owner_manual_payment'] is Map
+            ? latestRaw['owner_manual_payment']['id']
+            : null),
+      );
+    }
+
+    final manual = await cachedPaymentMethodsDao.buildManualPaymentMap(
+      serverManualPaymentId: serverManualPaymentId,
+      paymentMethod: method,
+    );
+
+    if (manual == null) return detail;
+
+    final cloned = Map<String, dynamic>.from(detail);
+
+    final latest = latestRaw is Map
+        ? Map<String, dynamic>.from(latestRaw)
+        : <String, dynamic>{};
+
+    final ownerManualRaw = latest['owner_manual_payment'];
+    final ownerManual = ownerManualRaw is Map
+        ? Map<String, dynamic>.from(ownerManualRaw)
+        : <String, dynamic>{};
+
+    ownerManual['id'] ??= manual['server_manual_payment_id'];
+    ownerManual['payment_type'] ??= manual['payment_type'];
+    ownerManual['provider_name'] ??= manual['provider_name'];
+    ownerManual['provider_account_name'] ??= manual['provider_account_name'];
+    ownerManual['provider_account_no'] ??= manual['provider_account_no'];
+    ownerManual['qris_image_url'] ??= manual['qris_image_url'];
+    ownerManual['qris_image_local_path'] ??= manual['qris_image_local_path'];
+
+    latest['owner_manual_payment'] = ownerManual;
+    cloned['latest_payment'] = latest;
+
+    return cloned;
+  }
+
+  String _manualTypeLabelForCache(String method) {
+    if (method == 'manual_tf') return 'Transfer Manual';
+    if (method == 'manual_ewallet') return 'E-Wallet';
+    if (method == 'manual_qris') return 'QR Statis';
+    return method;
+  }
+
+  Future<void> _prefetchAndCacheDetails(List<Map<String, dynamic>> serverItems) async {
+    for (final item in serverItems) {
+      try {
+        final id = _toInt(item['id']);
+        if (id == null || id <= 0) continue;
+
+        final detail = await repo.fetchOrderDetail(id);
+
+        debugPrint('==== PREFETCH DETAIL $id ====');
+        debugPrint('method detail = ${detail['payment_method']}');
+        debugPrint('payment_request = ${detail['payment_request']}');
+        debugPrint('latest_payment = ${detail['latest_payment']}');
+
+        await cachedPaymentOrdersDao.upsertDetailFromApi(detail);
+        await _cacheManualPaymentMethodFromDetail(detail);
+
+        debugPrint('✅ cached payment detail: $id');
+      } catch (e) {
+        debugPrint('⚠️ prefetch detail failed for payment order: $e');
+      }
+    }
+  }
+
+  Future<void> _cacheManualPaymentMethodFromDetail(Map<String, dynamic> detail) async {
+    final method = (detail['payment_method'] ?? '').toString();
+
+    if (method != 'manual_qris' &&
+        method != 'manual_tf' &&
+        method != 'manual_ewallet') {
+      return;
+    }
+
+    Map<String, dynamic>? source;
+    int? serverManualPaymentId;
+
+    if (detail['latest_payment'] is Map &&
+        detail['latest_payment']['owner_manual_payment'] is Map) {
+      final op = Map<String, dynamic>.from(detail['latest_payment']['owner_manual_payment']);
+
+      serverManualPaymentId = _toInt(op['id']);
+
+      source = {
+        'provider_name': op['provider_name'],
+        'provider_account_name': op['provider_account_name'],
+        'provider_account_no': op['provider_account_no'],
+        'qris_image_url': op['qris_image_url'],
+      };
+    } else if (detail['payment_request'] is Map) {
+      final pr = Map<String, dynamic>.from(detail['payment_request']);
+
+      source = {
+        'provider_name': pr['manual_provider_name'],
+        'provider_account_name': pr['manual_provider_account_name'],
+        'provider_account_no': pr['manual_provider_account_no'],
+        'qris_image_url': pr['manual_payment_image'],
+      };
+    }
+
+    if (source == null) return;
+
+    final rawImagePath = source['qris_image_url']?.toString();
+    String? localImagePath;
+
+    if (rawImagePath != null && rawImagePath.trim().isNotEmpty) {
+      localImagePath = await _downloadManualPaymentImageToLocal(rawImagePath);
+    }
+
+    final cacheKey = serverManualPaymentId != null
+        ? 'manual_method_$serverManualPaymentId'
+        : '${method}_${source['provider_name']}_${source['provider_account_name']}';
+
+    await cachedPaymentMethodsDao.upsertManualPaymentMethod(
+      localKey: cacheKey,
+      kind: method,
+      label: _manualTypeLabelForCache(method),
+      providerName: source['provider_name']?.toString(),
+      providerAccountName: source['provider_account_name']?.toString(),
+      providerAccountNo: source['provider_account_no']?.toString(),
+      qrisImageUrl: source['qris_image_url']?.toString(),
+      qrisImageLocalPath: localImagePath,
+      serverManualPaymentId: serverManualPaymentId,
+      raw: source,
+    );
+
+    debugPrint('✅ manual payment method cached: $cacheKey');
+  }
+
+  Future<String?> _downloadManualPaymentImageToLocal(String rawPath) async {
+    try {
+      if (rawPath.trim().isEmpty) return null;
+
+      final imageUrl = rawPath.startsWith('http')
+          ? rawPath
+          : '${Env.baseUrl}/storage/${rawPath.replaceFirst(RegExp(r'^\/?storage\/?'), '')}';
+
+      final dir = await getApplicationDocumentsDirectory();
+      final folder = Directory(p.join(dir.path, 'manual_payment_images'));
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+
+      final ext = p.extension(Uri.parse(imageUrl).path);
+      final safeExt = ext.isEmpty ? '.jpg' : ext;
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${rawPath.hashCode}$safeExt';
+
+      final filePath = p.join(folder.path, fileName);
+
+      final dio = Dio();
+      await dio.download(imageUrl, filePath);
+
+      final file = File(filePath);
+      if (await file.exists()) {
+        return file.path;
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('❌ download manual payment image failed: $e');
+      return null;
+    }
   }
 
   int? _toInt(dynamic v) {

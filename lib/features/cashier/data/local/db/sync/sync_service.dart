@@ -33,6 +33,10 @@ class SyncService {
       final pendingDeletes = await localOrdersDao.getPendingDeleteOrders();
       final cachedPendingDeletes = await cachedPaymentOrdersDao.getPendingDeleteOrders();
 
+      final pendingPayments = await localOrdersDao.getOrdersBySyncStatus('PENDING_PAYMENT');
+      final pendingProcesses = await localOrdersDao.getOrdersBySyncStatus('PENDING_PROCESS');
+      final pendingFinishes = await localOrdersDao.getOrdersBySyncStatus('PENDING_FINISH');
+
       debugPrint('🔄 pending orders to sync: ${pendingOrders.length}');
       debugPrint('🗑️ local pending deletes to sync: ${pendingDeletes.length}');
       debugPrint('🗑️ cached pending deletes to sync: ${cachedPendingDeletes.length}');
@@ -48,8 +52,98 @@ class SyncService {
       for (final order in cachedPendingDeletes) {
         await _syncSingleCachedDelete(order.serverId);
       }
+      for (final order in pendingPayments) {
+        await _syncSinglePayment(order.localId);
+      }
+
+      for (final order in pendingProcesses) {
+        await _syncSingleProcess(order.localId);
+      }
+
+      for (final order in pendingFinishes) {
+        await _syncSingleFinish(order.localId);
+      }
     } finally {
       _isRunning = false;
+    }
+  }
+
+  Future<void> _syncSinglePayment(String localOrderId) async {
+    final order = await localOrdersDao.getOrderByLocalId(localOrderId);
+    if (order == null) return;
+
+    final serverId = order.serverId;
+    if (serverId == null || serverId <= 0) {
+      debugPrint('⚠️ skip payment sync: serverId kosong for $localOrderId');
+      return;
+    }
+
+    try {
+      await ordersRepo.paymentOrder(
+        id: serverId,
+        paidAmount: order.grandTotal,
+        changeAmount: 0,
+      );
+
+      await localOrdersDao.markOrderSynced(
+        localId: localOrderId,
+        serverId: serverId,
+        serverOrderCode: order.serverOrderCode,
+      );
+
+      debugPrint('✅ pending payment synced: $localOrderId');
+    } catch (e) {
+      debugPrint('❌ pending payment sync failed for $localOrderId: $e');
+    }
+  }
+
+  Future<void> _syncSingleProcess(String localOrderId) async {
+    final order = await localOrdersDao.getOrderByLocalId(localOrderId);
+    if (order == null) return;
+
+    final serverId = order.serverId;
+    if (serverId == null || serverId <= 0) {
+      debugPrint('⚠️ skip process sync: serverId kosong for $localOrderId');
+      return;
+    }
+
+    try {
+      await ordersRepo.processOrder(serverId);
+
+      await localOrdersDao.markOrderSynced(
+        localId: localOrderId,
+        serverId: serverId,
+        serverOrderCode: order.serverOrderCode,
+      );
+
+      debugPrint('✅ pending process synced: $localOrderId');
+    } catch (e) {
+      debugPrint('❌ pending process sync failed for $localOrderId: $e');
+    }
+  }
+
+  Future<void> _syncSingleFinish(String localOrderId) async {
+    final order = await localOrdersDao.getOrderByLocalId(localOrderId);
+    if (order == null) return;
+
+    final serverId = order.serverId;
+    if (serverId == null || serverId <= 0) {
+      debugPrint('⚠️ skip finish sync: serverId kosong for $localOrderId');
+      return;
+    }
+
+    try {
+      await ordersRepo.finishOrder(serverId);
+
+      await localOrdersDao.markOrderSynced(
+        localId: localOrderId,
+        serverId: serverId,
+        serverOrderCode: order.serverOrderCode,
+      );
+
+      debugPrint('✅ pending finish synced: $localOrderId');
+    } catch (e) {
+      debugPrint('❌ pending finish sync failed for $localOrderId: $e');
     }
   }
 
@@ -132,7 +226,8 @@ class SyncService {
       final resp = await purchaseApi.checkout(
         orderTable: order.tableServerId!,
         orderName: order.customerName,
-        paymentMethod: order.paymentMethodEffective ?? order.paymentMethodSelected ?? 'CASH',
+        paymentMethod:
+            order.paymentMethodEffective ?? order.paymentMethodSelected ?? 'CASH',
         totalAmount: order.subtotal,
         items: itemsPayload,
       );
@@ -142,11 +237,15 @@ class SyncService {
 
       debugPrint('✅ sync success localId=${order.localId} serverId=$serverId');
 
+      // opsional: simpan dulu kalau memang dibutuhkan untuk log
       await localOrdersDao.markOrderSynced(
         localId: order.localId,
         serverId: serverId,
         serverOrderCode: serverOrderCode,
       );
+
+      // penting: hapus local draft/order agar tidak dobel dengan data server
+      await localOrdersDao.deleteOrderByLocalId(order.localId);
     } catch (e) {
       debugPrint('❌ sync failed for ${order.localId}: $e');
       await localOrdersDao.markOrderPending(

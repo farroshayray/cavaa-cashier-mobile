@@ -31,6 +31,7 @@ import 'features/cashier/data/local/db/cashier_db.dart';
 import 'core/services/connectivity_status_provider.dart';
 import 'features/cashier/data/local/db/daos/local_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
+import 'features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 
 class CavaaApp extends StatefulWidget {
   const CavaaApp({super.key});
@@ -57,6 +58,7 @@ class _CavaaAppState extends State<CavaaApp> {
   late final OrdersRepository ordersRepo;
   late final LocalOrdersDao localOrdersDao;
   late final CachedPaymentOrdersDao cachedPaymentOrdersDao;
+  late final CachedPaymentMethodsDao cachedPaymentMethodsDao;
 
   @override
   void initState() {
@@ -67,6 +69,7 @@ class _CavaaAppState extends State<CavaaApp> {
     cashierDb = CashierDb();
     localOrdersDao = LocalOrdersDao(cashierDb);
     cachedPaymentOrdersDao = CachedPaymentOrdersDao(cashierDb);
+    cachedPaymentMethodsDao = CachedPaymentMethodsDao(cashierDb);
 
     authApi = AuthApi(dioClient);
     authRepo = AuthRepository(api: authApi, storage: storage);
@@ -161,10 +164,12 @@ class _CavaaAppState extends State<CavaaApp> {
           ),
         ),
         ChangeNotifierProvider(
-          create: (_) => PaymentProvider(
+          create: (ctx) => PaymentProvider(
             repo: ordersRepo,
             localOrdersDao: localOrdersDao,
             cachedPaymentOrdersDao: cachedPaymentOrdersDao,
+            cachedPaymentMethodsDao: cachedPaymentMethodsDao,
+            connectivity: ctx.read<ConnectivityStatusProvider>(),
           ),
         ),
         ChangeNotifierProvider(create: (_) => ProcessProvider(ordersRepo)),
