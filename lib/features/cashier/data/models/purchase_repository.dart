@@ -6,6 +6,13 @@ import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/daos/cache_dao.dart';
 import '/features/cashier/data/local/db/mappers/purchase_cache_mapper.dart';
 
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import '/core/config/env.dart';
+
+
 class PurchaseRepository {
   final PurchaseApi api;
   final CashierDb db;
@@ -19,6 +26,46 @@ class PurchaseRepository {
     try {
       final json = await api.getProducts();
       final payload = PurchasePayload.fromJson(json);
+      for (final p in payload.paymentOptions) {
+        debugPrint(
+          'PAYLOAD PAYMENT => '
+          'kind=${p.kind}, '
+          'value=${p.value}, '
+          'manualType=${p.manualType}, '
+          'manualId=${p.manualId}, '
+          'label=${p.label}, '
+          'providerName=${p.providerName}, '
+          'providerAccountName=${p.providerAccountName}, '
+          'providerAccountNo=${p.providerAccountNo}, '
+          'qrisImageUrl=${p.qrisImageUrl}, '
+          'qrisImageLocalPath=${p.qrisImageLocalPath}',
+        );
+      }
+
+      final enrichedPayments = <PaymentOption>[];
+
+      for (final pmt in payload.paymentOptions) {
+        String? localPath;
+        if (pmt.qrisImageUrl != null && pmt.qrisImageUrl!.trim().isNotEmpty) {
+          localPath = await _downloadManualPaymentImageToLocal(pmt.qrisImageUrl!);
+        }
+
+        enrichedPayments.add(
+          PaymentOption(
+            kind: pmt.kind,
+            value: pmt.value,
+            label: pmt.label,
+            desc: pmt.desc,
+            manualType: pmt.manualType,
+            manualId: pmt.manualId,
+            providerName: pmt.providerName,
+            providerAccountName: pmt.providerAccountName,
+            providerAccountNo: pmt.providerAccountNo,
+            qrisImageUrl: pmt.qrisImageUrl,
+            qrisImageLocalPath: localPath,
+          ),
+        );
+      }
 
       final productRows = payload.products
           .map(PurchaseCacheMapper.toCachedProduct)
@@ -36,9 +83,24 @@ class PurchaseRepository {
           .map(PurchaseCacheMapper.toCachedTable)
           .toList();
 
-      final paymentRows = payload.paymentOptions
+      final paymentRows = enrichedPayments
           .map(PurchaseCacheMapper.toCachedPayment)
           .toList();
+
+      for (final row in paymentRows) {
+        debugPrint(
+          'PAYMENT ROW => '
+          'localKey=${row.localKey.value}, '
+          'kind=${row.kind.value}, '
+          'serverManualPaymentId=${row.serverManualPaymentId.value}, '
+          'label=${row.label.value}, '
+          'providerName=${row.providerName.value}, '
+          'providerAccountName=${row.providerAccountName.value}, '
+          'providerAccountNo=${row.providerAccountNo.value}, '
+          'qrisImageUrl=${row.qrisImageUrl.value}, '
+          'qrisImageLocalPath=${row.qrisImageLocalPath.value}',
+        );
+      }
 
       final categoryRows = payload.categories
         .map(PurchaseCacheMapper.toCachedCategory)
@@ -68,6 +130,21 @@ class PurchaseRepository {
       final savedTables = await cacheDao.getTables();
       final savedPayments = await cacheDao.getPayments();
       final savedCategories = await cacheDao.getCategories();
+
+      for (final sp in savedPayments) {
+        debugPrint(
+          'DB PAYMENT => '
+          'key=${sp.localKey}, '
+          'kind=${sp.kind}, '
+          'serverManualPaymentId=${sp.serverManualPaymentId}, '
+          'label=${sp.label}, '
+          'providerName=${sp.providerName}, '
+          'providerAccountName=${sp.providerAccountName}, '
+          'providerAccountNo=${sp.providerAccountNo}, '
+          'qrisImageUrl=${sp.qrisImageUrl}, '
+          'qrisImageLocalPath=${sp.qrisImageLocalPath}',
+        );
+      }
       
       debugPrint('db categories: ${savedCategories.length}');
       debugPrint('✅ read-back from local DB');
@@ -138,6 +215,38 @@ class PurchaseRepository {
         tables: tables,
         payments: payments,
       );
+    }
+  }
+
+  Future<String?> _downloadManualPaymentImageToLocal(String rawPath) async {
+    try {
+      if (rawPath.trim().isEmpty) return null;
+
+      final imageUrl = rawPath.startsWith('http')
+          ? rawPath
+          : '${Env.baseUrl}/storage/${rawPath.replaceFirst(RegExp(r'^\/?storage\/?'), '')}';
+
+      final dir = await getApplicationDocumentsDirectory();
+      final folder = Directory(p.join(dir.path, 'manual_payment_images'));
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+
+      final ext = p.extension(Uri.parse(imageUrl).path);
+      final safeExt = ext.isEmpty ? '.jpg' : ext;
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${rawPath.hashCode}$safeExt';
+
+      final filePath = p.join(folder.path, fileName);
+
+      final dio = Dio();
+      await dio.download(imageUrl, filePath);
+
+      final file = File(filePath);
+      if (await file.exists()) return file.path;
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 }

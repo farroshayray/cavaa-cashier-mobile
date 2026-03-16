@@ -1,4 +1,11 @@
 import 'package:drift/drift.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import '/core/config/env.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 
 class CachedPaymentOrdersDao {
@@ -135,7 +142,30 @@ class CachedPaymentOrdersDao {
     final createdAt = DateTime.tryParse((detail['created_at'] ?? '').toString());
     final updatedAt = DateTime.tryParse((detail['updated_at'] ?? '').toString());
 
+    final rawPaymentRequest = detail['payment_request'];
+    final rawLatestPayment = detail['latest_payment'];
+
     final rawDetails = (detail['order_details'] as List?) ?? [];
+
+    Map<String, dynamic>? paymentRequestForCache;
+    if (rawPaymentRequest is Map) {
+      paymentRequestForCache = Map<String, dynamic>.from(rawPaymentRequest);
+
+      final proofRaw =
+          (paymentRequestForCache['manual_payment_image'] ?? '').toString().trim();
+
+      if (proofRaw.isNotEmpty) {
+        final localPath = await _downloadProofImageToLocal(proofRaw);
+        if (localPath != null && localPath.isNotEmpty) {
+          paymentRequestForCache['manual_payment_image_local_path'] = localPath;
+        }
+      }
+    }
+
+    Map<String, dynamic>? latestPaymentForCache;
+    if (rawLatestPayment is Map) {
+      latestPaymentForCache = Map<String, dynamic>.from(rawLatestPayment);
+    }
 
     await db.transaction(() async {
       await db.into(db.cachedPaymentOrders).insertOnConflictUpdate(
@@ -150,6 +180,12 @@ class CachedPaymentOrdersDao {
               ppnPercent: Value(ppnPercent),
               isPpnActive: Value(isPpnActive),
               grandTotal: Value(grandTotal),
+              paymentRequestJson: Value(
+                paymentRequestForCache == null ? null : jsonEncode(paymentRequestForCache),
+              ),
+              latestPaymentJson: Value(
+                latestPaymentForCache == null ? null : jsonEncode(latestPaymentForCache),
+              ),
               createdAt: Value(createdAt),
               updatedAt: Value(updatedAt),
               cachedAt: Value(DateTime.now()),
@@ -255,6 +291,24 @@ class CachedPaymentOrdersDao {
       optionsByDetailId.putIfAbsent(opt.orderDetailServerId, () => []).add(opt);
     }
 
+    Map<String, dynamic>? paymentRequest;
+    if (order.paymentRequestJson != null &&
+        order.paymentRequestJson!.trim().isNotEmpty) {
+      final decoded = jsonDecode(order.paymentRequestJson!);
+      if (decoded is Map) {
+        paymentRequest = Map<String, dynamic>.from(decoded);
+      }
+    }
+
+    Map<String, dynamic>? latestPayment;
+    if (order.latestPaymentJson != null &&
+        order.latestPaymentJson!.trim().isNotEmpty) {
+      final decoded = jsonDecode(order.latestPaymentJson!);
+      if (decoded is Map) {
+        latestPayment = Map<String, dynamic>.from(decoded);
+      }
+    }
+
     return <String, dynamic>{
       'id': order.serverId,
       'server_id': order.serverId,
@@ -268,6 +322,8 @@ class CachedPaymentOrdersDao {
       'grand_total': order.grandTotal,
       'is_local_only': false,
       'is_cached_server': true,
+      'payment_request': paymentRequest,
+      'latest_payment': latestPayment,
       'table': {
         'table_no': order.tableNo ?? '-',
       },
@@ -300,6 +356,42 @@ class CachedPaymentOrdersDao {
         };
       }).toList(),
     };
+  }
+
+  Future<String?> _downloadProofImageToLocal(String rawPath) async {
+    try {
+      if (rawPath.trim().isEmpty) return null;
+
+      final imageUrl = rawPath.startsWith('http')
+          ? rawPath
+          : '${Env.baseUrl}/storage/${rawPath.replaceFirst(RegExp(r'^\/?storage\/?'), '')}';
+
+      final dir = await getApplicationDocumentsDirectory();
+      final folder = Directory(p.join(dir.path, 'payment_request_proofs'));
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+
+      final ext = p.extension(Uri.parse(imageUrl).path);
+      final safeExt = ext.isEmpty ? '.jpg' : ext;
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${rawPath.hashCode}$safeExt';
+
+      final filePath = p.join(folder.path, fileName);
+
+      final dio = Dio();
+      await dio.download(imageUrl, filePath);
+
+      final file = File(filePath);
+      if (await file.exists()) {
+        return file.path;
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('❌ download payment proof failed: $e');
+      return null;
+    }
   }
 
   int? _toInt(dynamic v) {

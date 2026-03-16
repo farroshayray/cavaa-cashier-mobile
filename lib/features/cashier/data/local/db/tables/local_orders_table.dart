@@ -24,9 +24,28 @@ class LocalOrders extends Table {
   BoolColumn get isPpnActive => boolean().withDefault(const Constant(false))();
   RealColumn get grandTotal => real().withDefault(const Constant(0))();
 
+  RealColumn get paidAmountLocal => real().nullable()();
+  RealColumn get changeAmountLocal => real().nullable()();
+  TextColumn get cashierProofImageLocalPath => text().nullable()();
+  DateTimeColumn get paymentConfirmedAtLocal => dateTime().nullable()();
+  IntColumn get latestPaymentServerId => integer().nullable()();
+  // snapshot detail order untuk print dan render tab proses saat offline
+  TextColumn get orderSnapshotJson => text().nullable()();
+
   TextColumn get orderStatusLocal => text().withDefault(const Constant('DRAFT'))();
   TextColumn get syncStatus => text().withDefault(const Constant('PENDING'))();
   TextColumn get lastError => text().nullable()();
+
+  IntColumn get manualPaymentServerId => integer().nullable()();
+  TextColumn get manualPaymentType => text().nullable()();
+  TextColumn get manualProviderName => text().nullable()();
+  TextColumn get manualProviderAccountName => text().nullable()();
+  TextColumn get manualProviderAccountNo => text().nullable()();
+  TextColumn get manualQrisImageUrl => text().nullable()();
+  TextColumn get manualQrisImageLocalPath => text().nullable()();
+  TextColumn get manualPaymentLabel => text().nullable()();
+  TextColumn get manualPaymentRawJson => text().nullable()();
+  TextColumn get backendSyncStage => text().withDefault(const Constant('NONE'))();
 
   DateTimeColumn get createdAtLocal => dateTime()();
   DateTimeColumn get updatedAtLocal => dateTime()();

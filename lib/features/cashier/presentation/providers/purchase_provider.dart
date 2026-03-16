@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/models/purchase_models.dart';
 import '/features/cashier/data/models/purchase_repository.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import 'dart:convert';
 
 import 'package:uuid/uuid.dart';
 import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
@@ -120,6 +121,7 @@ class PurchaseProvider extends ChangeNotifier {
       customerName: normalizedCustomerName,
       table: table,
       paymentMethod: paymentMethod,
+      payment: payment,
     );
 
     // 2. siapkan payload API seperti sebelumnya
@@ -176,6 +178,7 @@ class PurchaseProvider extends ChangeNotifier {
     required String customerName,
     required StoreTable table,
     required String paymentMethod,
+    required PaymentOption payment,
   }) async {
     final localOrderId = _uuid.v4();
     final clientOrderCode = _buildClientOrderCode();
@@ -183,6 +186,28 @@ class PurchaseProvider extends ChangeNotifier {
     final subtotal = cartSubtotal.toDouble();
     final ppn = ppnPercent.toDouble();
     final grandTotal = cartGrandTotalWithPpn.toDouble();
+
+    final selectedPaymentMethod = paymentMethod;
+    final effectivePaymentMethod =
+      payment.kind == PayKind.manual
+          ? (payment.manualType ?? paymentMethod)
+          : paymentMethod;
+
+    String? manualPaymentRawJson;
+
+    if (payment.kind == PayKind.manual) {
+      manualPaymentRawJson = jsonEncode({
+        'id': payment.manualId,
+        'payment_type': payment.manualType,
+        'provider_name': payment.providerName ?? payment.label,
+        'provider_account_name': payment.providerAccountName,
+        'provider_account_no': payment.providerAccountNo,
+        'qris_image_url': payment.qrisImageUrl,
+        'qris_image_local_path': payment.qrisImageLocalPath,
+        'label': payment.label,
+        'desc': payment.desc,
+      });
+    }
 
     final order = LocalOrderMapper.toLocalOrder(
       localId: localOrderId,
@@ -192,8 +217,11 @@ class PurchaseProvider extends ChangeNotifier {
       partnerName: partnerData?.name,
       tableServerId: table.id,
       tableNoSnapshot: table.tableNo,
-      paymentMethodSelected: paymentMethod,
-      paymentMethodEffective: paymentMethod,
+
+      paymentMethodSelected: selectedPaymentMethod,   // untuk backend, contoh "3"
+      paymentMethodEffective: effectivePaymentMethod, // untuk UI, contoh "manual_qris"
+
+      manualPaymentRawJson: manualPaymentRawJson,
       subtotal: subtotal,
       discountValue: 0,
       ppnPercent: ppn,
@@ -372,6 +400,13 @@ class PurchaseProvider extends ChangeNotifier {
       if (!sa.containsAll(sb)) return false;
     }
     return true;
+  }
+
+  String _manualTypeLabelFromMethod(String method) {
+    if (method == 'manual_tf') return 'Transfer Manual';
+    if (method == 'manual_ewallet') return 'E-Wallet';
+    if (method == 'manual_qris') return 'QR Statis';
+    return method;
   }
 
   // ===== FILTERING =====

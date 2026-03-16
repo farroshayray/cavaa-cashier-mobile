@@ -32,6 +32,7 @@ import 'core/services/connectivity_status_provider.dart';
 import 'features/cashier/data/local/db/daos/local_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
+import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 
 class CavaaApp extends StatefulWidget {
   const CavaaApp({super.key});
@@ -59,6 +60,7 @@ class _CavaaAppState extends State<CavaaApp> {
   late final LocalOrdersDao localOrdersDao;
   late final CachedPaymentOrdersDao cachedPaymentOrdersDao;
   late final CachedPaymentMethodsDao cachedPaymentMethodsDao;
+  late final CachedProcessOrdersDao cachedProcessOrdersDao;
 
   @override
   void initState() {
@@ -70,6 +72,7 @@ class _CavaaAppState extends State<CavaaApp> {
     localOrdersDao = LocalOrdersDao(cashierDb);
     cachedPaymentOrdersDao = CachedPaymentOrdersDao(cashierDb);
     cachedPaymentMethodsDao = CachedPaymentMethodsDao(cashierDb);
+    cachedProcessOrdersDao = CachedProcessOrdersDao(cashierDb);
 
     authApi = AuthApi(dioClient);
     authRepo = AuthRepository(api: authApi, storage: storage);
@@ -151,6 +154,7 @@ class _CavaaAppState extends State<CavaaApp> {
             purchaseApi: purchaseApi,
             ordersRepo: ordersRepo,
             cachedPaymentOrdersDao: cachedPaymentOrdersDao,
+            cachedProcessOrdersDao: cachedProcessOrdersDao,
           ),
         ),
 
@@ -172,7 +176,14 @@ class _CavaaAppState extends State<CavaaApp> {
             connectivity: ctx.read<ConnectivityStatusProvider>(),
           ),
         ),
-        ChangeNotifierProvider(create: (_) => ProcessProvider(ordersRepo)),
+        ChangeNotifierProvider(
+          create: (ctx) => ProcessProvider(
+            ordersRepo,
+            localOrdersDao,
+            cachedProcessOrdersDao,
+            ctx.read<ConnectivityStatusProvider>(),
+          ),
+        ),
         ChangeNotifierProvider(create: (_) => DoneProvider(ordersRepo)),
         ChangeNotifierProvider(
           create: (_) => PrinterManager(PrinterPrefs())..init(autoConnect: true),

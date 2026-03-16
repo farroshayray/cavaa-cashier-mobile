@@ -1,5 +1,8 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/material.dart';
+import 'dart:convert';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 
 class LocalOrderBundle {
   final LocalOrder order;
@@ -58,11 +61,35 @@ class LocalOrdersDao {
         .get();
   }
 
-  Future<List<LocalOrder>> getUnsyncedOrders() {
-    return (db.select(db.localOrders)
-          ..where((tbl) => tbl.syncStatus.equals('PENDING'))
-          ..orderBy([(tbl) => OrderingTerm.asc(tbl.createdAtLocal)]))
+  Future<List<LocalOrder>> getUnsyncedOrders() async {
+    final rows = await (db.select(db.localOrders)
+          ..where((tbl) => tbl.syncStatus.isIn([
+                'PENDING',
+                'PENDING_PAYMENT',
+                'PENDING_PROCESS',
+                'PENDING_FINISH',
+                'FAILED',
+                'SYNCING',
+              ]))
+          ..orderBy([
+            (tbl) => OrderingTerm.asc(tbl.createdAtLocal),
+          ]))
         .get();
+
+    debugPrint('📚 getUnsyncedOrders result count=${rows.length}');
+    for (final row in rows) {
+      debugPrint(
+        '   -> localId=${row.localId} '
+        'serverId=${row.serverId} '
+        'orderStatus=${row.orderStatusLocal} '
+        'syncStatus=${row.syncStatus} '
+        'backendStage=${row.backendSyncStage} '
+        'serverCode=${row.serverOrderCode} '
+        'clientCode=${row.clientOrderCode}',
+      );
+    }
+
+    return rows;
   }
 
   Future<List<LocalOrder>> getUnpaidOrders({
@@ -130,11 +157,16 @@ class LocalOrdersDao {
   }
 
   Future<void> markOrderPending(String localId, {String? error}) async {
+    final current = await getOrderByLocalId(localId);
+    if (current == null) return;
+
     await (db.update(db.localOrders)
           ..where((tbl) => tbl.localId.equals(localId)))
         .write(
       LocalOrdersCompanion(
-        syncStatus: const Value('PENDING'),
+        syncStatus: Value(
+          current.syncStatus == 'SYNCING' ? 'FAILED' : current.syncStatus,
+        ),
         lastError: Value(error),
         updatedAtLocal: Value(DateTime.now()),
       ),
@@ -146,6 +178,12 @@ class LocalOrdersDao {
     int? serverId,
     String? serverOrderCode,
   }) async {
+    debugPrint(
+      '📝 markOrderSynced localId=$localId '
+      'serverId=$serverId '
+      'serverOrderCode=$serverOrderCode',
+    );
+
     await (db.update(db.localOrders)
           ..where((tbl) => tbl.localId.equals(localId)))
         .write(
@@ -211,10 +249,80 @@ class LocalOrdersDao {
   }
 
   Future<Map<String, dynamic>?> getOrderDetailMapByLocalId(String localId) async {
+    
     final bundle = await getOrderBundle(localId);
     if (bundle == null) return null;
 
     final order = bundle.order;
+
+    if (order.orderSnapshotJson != null && order.orderSnapshotJson!.trim().isNotEmpty) {
+      final decoded = jsonDecode(order.orderSnapshotJson!);
+      if (decoded is Map) {
+        final snap = Map<String, dynamic>.from(decoded);
+
+        snap['id'] = order.serverId ?? snap['id'] ?? -1;
+        snap['local_id'] = order.localId;
+        snap['booking_order_code'] =
+            order.serverOrderCode ?? order.clientOrderCode ?? snap['booking_order_code'];
+        snap['customer_name'] = order.customerName;
+        snap['order_status'] = order.orderStatusLocal;
+        snap['payment_method'] =
+            order.paymentMethodEffective ?? order.paymentMethodSelected ?? 'CASH';
+        snap['total_order_value'] = order.subtotal;
+        snap['ppn'] = order.ppnPercent;
+        snap['is_ppn_active'] = order.isPpnActive;
+        snap['grand_total'] = order.grandTotal;
+        snap['is_local_only'] = true;
+        snap['sync_status'] = order.syncStatus;
+
+        final payment = snap['payment'] is Map
+            ? Map<String, dynamic>.from(snap['payment'])
+            : <String, dynamic>{};
+
+        payment['updated_at'] ??= order.paymentConfirmedAtLocal?.toIso8601String();
+        payment['paid_amount'] ??= order.paidAmountLocal;
+        payment['change_amount'] ??= order.changeAmountLocal;
+        snap['payment'] = payment;
+
+        return snap;
+      }
+    }
+
+    Map<String, dynamic>? latestPayment;
+    if (order.manualPaymentRawJson != null &&
+        order.manualPaymentRawJson!.trim().isNotEmpty) {
+      final decoded = jsonDecode(order.manualPaymentRawJson!);
+      if (decoded is Map) {
+        final raw = Map<String, dynamic>.from(decoded);
+
+        final paymentMethod =
+            order.paymentMethodEffective ?? order.paymentMethodSelected ?? 'CASH';
+
+        final cachedManual = await CachedPaymentMethodsDao(db).buildManualPaymentMap(
+          serverManualPaymentId: _toInt(raw['id']),
+          paymentMethod: paymentMethod,
+        );
+        debugPrint('manual raw = $raw');
+        debugPrint('cachedManual = $cachedManual');
+        debugPrint('qris_image_url = ${cachedManual?['qris_image_url']}');
+        debugPrint('qris_image_local_path = ${cachedManual?['qris_image_local_path']}');
+
+        latestPayment = {
+          'owner_manual_payment': {
+            'id': raw['id'] ?? cachedManual?['server_manual_payment_id'],
+            'payment_type': raw['payment_type'] ?? cachedManual?['payment_type'],
+            'provider_name': raw['provider_name'] ?? cachedManual?['provider_name'],
+            'provider_account_name':
+                raw['provider_account_name'] ?? cachedManual?['provider_account_name'],
+            'provider_account_no':
+                raw['provider_account_no'] ?? cachedManual?['provider_account_no'],
+            'qris_image_url': raw['qris_image_url'] ?? cachedManual?['qris_image_url'],
+            'qris_image_local_path':
+                raw['qris_image_local_path'] ?? cachedManual?['qris_image_local_path'],
+          }
+        };
+      }
+    }
 
     final orderDetails = bundle.items.map((item) {
       final opts = bundle.optionsByItemId[item.localId] ?? const <LocalOrderItemOption>[];
@@ -223,18 +331,18 @@ class LocalOrdersDao {
         'id': null,
         'product_id': item.productServerId,
         'quantity': item.qty,
-        'base_price': 0,
-        'promo_amount': 0,
-        'product_name': 'Produk',
+        'base_price': item.basePrice,
+        'promo_amount': item.promoAmount ?? 0,
+        'product_name': item.productNameSnapshot,
         'customer_note': item.customerNote,
         'order_detail_options': opts.map((o) {
           return <String, dynamic>{
-            'price': 0,
+            'price': o.price,
             'option': {
               'id': o.optionServerId,
-              'name': 'Opsi',
+              'name': o.optionNameSnapshot,
               'parent': {
-                'name': 'Opsi',
+                'name': o.parentNameSnapshot ?? 'Opsi',
               },
             },
           };
@@ -256,11 +364,16 @@ class LocalOrdersDao {
       'grand_total': order.grandTotal,
       'is_local_only': true,
       'sync_status': order.syncStatus,
+      'payment_request': null,
+      'latest_payment': latestPayment,
       'table': {
         'table_no': order.tableNoSnapshot ?? '-',
       },
       'payment': {
         'note': '',
+        'updated_at': order.paymentConfirmedAtLocal?.toIso8601String(),
+        'paid_amount': order.paidAmountLocal,
+        'change_amount': order.changeAmountLocal,
       },
       'order_details': orderDetails,
     };
@@ -279,6 +392,7 @@ class LocalOrdersDao {
       LocalOrdersCompanion(
         orderStatusLocal: const Value('PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
+        backendSyncStage: const Value('PURCHASED'),
         updatedAtLocal: Value(DateTime.now()),
       ),
     );
@@ -312,6 +426,24 @@ class LocalOrdersDao {
     return (db.select(db.localOrders)
           ..where((tbl) => tbl.syncStatus.equals(syncStatus))
           ..orderBy([(tbl) => OrderingTerm.asc(tbl.updatedAtLocal)]))
+        .get();
+  }
+
+  Future<List<LocalOrder>> getLocalProcessOrders() {
+    return (db.select(db.localOrders)
+          ..where((t) =>
+              t.orderStatusLocal.isIn(['PAID', 'PROCESSED']) &
+              t.syncStatus.isIn([
+                'PENDING',
+                'PENDING_PAYMENT',
+                'PENDING_PROCESS',
+                'FAILED',
+                'SYNCING',
+                'SYNCED',
+              ]))
+          ..orderBy([
+            (t) => OrderingTerm.asc(t.createdAtLocal),
+          ]))
         .get();
   }
 
@@ -360,6 +492,7 @@ class LocalOrdersDao {
         ppnPercent: Value(ppnPercent),
         orderStatusLocal: const Value('PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
+        backendSyncStage: const Value('PURCHASED'),
         createdAtLocal: Value(DateTime.now()),
         updatedAtLocal: Value(DateTime.now()),
         serverId: Value(serverId),
@@ -367,4 +500,71 @@ class LocalOrdersDao {
       ),
     );
   }
+
+  Future<void> markPaymentConfirmedOffline({
+    required String localId,
+    required double paidAmount,
+    required double changeAmount,
+    String? cashierProofImageLocalPath,
+    DateTime? paymentConfirmedAtLocal,
+    int? latestPaymentServerId,
+    String? orderSnapshotJson,
+  }) async {
+    await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
+      LocalOrdersCompanion(
+        paidAmountLocal: Value(paidAmount),
+        changeAmountLocal: Value(changeAmount),
+        cashierProofImageLocalPath: Value(cashierProofImageLocalPath),
+        paymentConfirmedAtLocal: Value(paymentConfirmedAtLocal ?? DateTime.now()),
+        latestPaymentServerId: Value(latestPaymentServerId),
+        orderSnapshotJson: Value(orderSnapshotJson),
+        orderStatusLocal: const Value('PAID'),
+        syncStatus: const Value('PENDING_PAYMENT'),
+        updatedAtLocal: Value(DateTime.now()),
+        lastError: const Value(null),
+      ),
+    );
+  }
+
+  Future<List<LocalOrder>> getLocallyAdvancedServerOrders() {
+    return (db.select(db.localOrders)
+          ..where((t) =>
+              t.serverId.isNotNull() &
+              t.orderStatusLocal.isIn(['PAID', 'PROCESSED', 'SERVED'])))
+        .get();
+  }
+
+  Future<void> attachServerIdentity({
+    required String localId,
+    required int serverId,
+    String? serverOrderCode,
+  }) async {
+    await (db.update(db.localOrders)
+          ..where((tbl) => tbl.localId.equals(localId)))
+        .write(
+      LocalOrdersCompanion(
+        serverId: Value(serverId),
+        serverOrderCode: Value(serverOrderCode),
+        updatedAtLocal: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> updateBackendSyncStage(String localId, String stage) async {
+    await (db.update(db.localOrders)
+          ..where((t) => t.localId.equals(localId)))
+        .write(
+      LocalOrdersCompanion(
+        backendSyncStage: Value(stage),
+        updatedAtLocal: Value(DateTime.now()),
+      ),
+    );
+  }
+}
+
+
+int? _toInt(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  return int.tryParse(v.toString());
 }

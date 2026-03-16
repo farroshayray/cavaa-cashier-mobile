@@ -64,6 +64,35 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     super.dispose();
   }
 
+  Map<String, dynamic> _buildOfflinePrintableOrder(
+    Map<String, dynamic> source, {
+    required num paid,
+    required num change,
+  }) {
+    final cloned = Map<String, dynamic>.from(source);
+
+    cloned['payment'] = {
+      'updated_at': DateTime.now().toIso8601String(),
+      'paid_amount': paid,
+      'change_amount': change,
+    };
+
+    cloned['latest_payment'] ??= cloned['payment'];
+
+    cloned['booking_order_code'] ??= cloned['client_order_code'] ?? '-';
+    cloned['customer_name'] ??= 'Guest';
+    cloned['employee_name'] ??= '-';
+    cloned['store_name'] ??= 'CAVAA';
+    cloned['store_address'] ??= '';
+    cloned['store_is_wifi_shown'] ??= 0;
+    cloned['store_wifi_user'] ??= '';
+    cloned['store_wifi_password'] ??= '';
+
+    cloned['order_details'] ??= <dynamic>[];
+
+    return cloned;
+  }
+
   bool get _isCaseA {
     if (_order == null) return false;
     return (_order!['order_status'] ?? '').toString() == 'PAYMENT REQUEST' &&
@@ -333,9 +362,19 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     // 2. Setelah pembayaran sukses, coba print
     String? printError;
     try {
-      final printOrder = await repo
-        .fetchPrintDetail(widget.orderId)
-        .timeout(const Duration(seconds: 15));
+      Map<String, dynamic> printOrder;
+
+      if (isOnline) {
+        printOrder = await repo
+            .fetchPrintDetail(widget.orderId)
+            .timeout(const Duration(seconds: 15));
+      } else {
+        printOrder = _buildOfflinePrintableOrder(
+          _order!,
+          paid: paid,
+          change: change,
+        );
+      }
 
       await _printReceiptWithOrder(
         printOrder,
@@ -755,11 +794,17 @@ class _PaymentRequestCard extends StatelessWidget {
     final provider = (paymentRequest['manual_provider_name'] ?? '-').toString();
     final accName = (paymentRequest['manual_provider_account_name'] ?? '-').toString();
     final accNo = (paymentRequest['manual_provider_account_no'] ?? '').toString().trim();
+
     final proof = (paymentRequest['manual_payment_image'] ?? '').toString().trim();
+    final proofLocalPath =
+        (paymentRequest['manual_payment_image_local_path'] ?? '').toString().trim();
 
     final proofUrl = _normalizeProofUrl(proof);
+    final localFile = proofLocalPath.isNotEmpty ? File(proofLocalPath) : null;
+    final hasLocalFile = localFile != null && localFile.existsSync();
 
-    final isPdf = proofUrl.toLowerCase().endsWith('.pdf');
+    final effectiveProofPath = hasLocalFile ? proofLocalPath : proofUrl;
+    final isPdf = effectiveProofPath.toLowerCase().endsWith('.pdf');
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -780,17 +825,18 @@ class _PaymentRequestCard extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          if (proofUrl.isNotEmpty) ...[
+          if (effectiveProofPath.isNotEmpty) ...[
             Row(
               children: [
                 const Expanded(
                   child: Text('Bukti bayar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                 ),
-                TextButton.icon(
-                  onPressed: () => _openUrl(proofUrl),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text('Lihat Bukti'),
-                )
+                if (proofUrl.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => _openUrl(proofUrl),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: const Text('Lihat Bukti'),
+                  )
               ],
             ),
 
@@ -799,21 +845,16 @@ class _PaymentRequestCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 child: AspectRatio(
                   aspectRatio: 4 / 3,
-                  child: Image.network(
-                    proofUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.white,
-                      child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
-                    ),
-                  ),
+                  child: _buildProofImage(localFile, proofUrl),
                 ),
               )
             else
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  'Bukti berbentuk PDF. Klik “Lihat Bukti” untuk membuka.',
+                  hasLocalFile
+                      ? 'Bukti bayar tersimpan sebagai file PDF lokal.'
+                      : 'Bukti berbentuk PDF. Klik “Lihat Bukti” untuk membuka.',
                   style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.6)),
                 ),
               ),
@@ -852,6 +893,35 @@ class _PaymentRequestCard extends StatelessWidget {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Widget _buildProofImage(File? localFile, String proofUrl) {
+    if (localFile != null && localFile.existsSync()) {
+      return Image.file(
+        localFile,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.white,
+          child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+        ),
+      );
+    }
+
+    if (proofUrl.isNotEmpty) {
+      return Image.network(
+        proofUrl,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.white,
+          child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.white,
+      child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+    );
   }
 }
 

@@ -425,6 +425,12 @@ class PaymentOption {
   final String? manualType;
   final int? manualId;
 
+  final String? providerName;
+  final String? providerAccountName;
+  final String? providerAccountNo;
+  final String? qrisImageUrl;
+  final String? qrisImageLocalPath;
+
   const PaymentOption({
     required this.kind,
     required this.value,
@@ -432,6 +438,11 @@ class PaymentOption {
     this.desc,
     this.manualType,
     this.manualId,
+    this.providerName,
+    this.providerAccountName,
+    this.providerAccountNo,
+    this.qrisImageUrl,
+    this.qrisImageLocalPath,
   });
 }
 
@@ -457,6 +468,11 @@ List<PaymentOption> parseManualPaymentOptions(Map<String, dynamic> data) {
           desc: desc,
           manualType: type,
           manualId: manualId,
+          providerName: provider,
+          providerAccountName: pmMap?['provider_account_name']?.toString(),
+          providerAccountNo: pmMap?['provider_account_no']?.toString(),
+          qrisImageUrl: pmMap?['qris_image_url']?.toString(),
+          qrisImageLocalPath: null,
         );
       })
       .where((o) => o.value.isNotEmpty)

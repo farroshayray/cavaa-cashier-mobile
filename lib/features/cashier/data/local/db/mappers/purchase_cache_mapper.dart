@@ -89,20 +89,32 @@ class PurchaseCacheMapper {
   }
 
   static CachedPaymentMethodsCompanion toCachedPayment(PaymentOption p) {
+    final resolvedKind =
+        p.kind == PayKind.manual ? (p.manualType ?? 'manual') : p.kind.name;
+
     return CachedPaymentMethodsCompanion.insert(
-      localKey: '${p.kind.name}-${p.value}',
-      kind: p.kind.name,
+      localKey: '${resolvedKind}-${p.value}',
+      kind: resolvedKind,
       serverManualPaymentId: Value(p.manualId),
       label: p.label,
-      providerName: Value(p.label),
-      providerAccountName: const Value(null),
-      providerAccountNo: const Value(null),
-      qrisImageUrl: const Value(null),
+      providerName: Value(p.providerName ?? p.label),
+      providerAccountName: Value(p.providerAccountName),
+      providerAccountNo: Value(p.providerAccountNo),
+      qrisImageUrl: Value(p.qrisImageUrl),
+      qrisImageLocalPath: Value(p.qrisImageLocalPath),
       isActive: const Value(true),
       rawJson: jsonEncode({
-        'kind': p.kind.name,
+        'kind': resolvedKind,
         'value': p.value,
         'label': p.label,
+        'manual_type': p.manualType,
+        'manual_id': p.manualId,
+        'provider_name': p.providerName,
+        'provider_account_name': p.providerAccountName,
+        'provider_account_no': p.providerAccountNo,
+        'qris_image_url': p.qrisImageUrl,
+        'qris_image_local_path': p.qrisImageLocalPath,
+        'desc': p.desc,
       }),
       cachedAt: DateTime.now(),
     );
@@ -186,6 +198,9 @@ class PurchaseCacheMapper {
       case 'onlineQris':
         kind = PayKind.onlineQris;
         break;
+      case 'manual_tf':
+      case 'manual_ewallet':
+      case 'manual_qris':
       case 'manual':
       default:
         kind = PayKind.manual;
@@ -196,9 +211,14 @@ class PurchaseCacheMapper {
       kind: kind,
       value: row.serverManualPaymentId?.toString() ?? row.localKey,
       label: row.label,
-      desc: row.providerName,
+      desc: null,
       manualType: row.kind,
       manualId: row.serverManualPaymentId,
+      providerName: row.providerName,
+      providerAccountName: row.providerAccountName,
+      providerAccountNo: row.providerAccountNo,
+      qrisImageUrl: row.qrisImageUrl,
+      qrisImageLocalPath: row.qrisImageLocalPath,
     );
   }
 

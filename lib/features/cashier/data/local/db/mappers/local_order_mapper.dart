@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'dart:convert';
 import '/features/cashier/data/local/db/cashier_db.dart';
 
 class LocalOrderMapper {
@@ -19,6 +20,7 @@ class LocalOrderMapper {
     required double grandTotal,
     String orderStatusLocal = 'UNPAID',
     String syncStatus = 'PENDING',
+    String? manualPaymentRawJson,
   }) {
     final now = DateTime.now();
 
@@ -45,6 +47,8 @@ class LocalOrderMapper {
 
       orderStatusLocal: Value(orderStatusLocal),
       syncStatus: Value(syncStatus),
+
+      manualPaymentRawJson: Value(manualPaymentRawJson),
     );
   }
 
@@ -99,4 +103,36 @@ class LocalOrderMapper {
       parentNameSnapshot: Value(parentNameSnapshot),
     );
   }
+}
+
+Map<String, dynamic> mapLocalOrderToProcessItem(LocalOrder row) {
+  final snapshot =
+      row.orderSnapshotJson != null && row.orderSnapshotJson!.isNotEmpty
+          ? Map<String, dynamic>.from(jsonDecode(row.orderSnapshotJson!))
+          : <String, dynamic>{};
+
+  final merged = <String, dynamic>{
+    ...snapshot,
+    'id': row.serverId ?? snapshot['id'] ?? -DateTime.now().millisecondsSinceEpoch,
+    'local_id': row.localId,
+    'is_local_only': true,
+    'has_backend_record': row.serverId != null,
+    'booking_order_code':
+        row.serverOrderCode ?? row.clientOrderCode ?? snapshot['booking_order_code'],
+    'customer_name': row.customerName,
+    'payment_method': row.paymentMethodEffective ?? row.paymentMethodSelected,
+    'order_status': row.orderStatusLocal,
+    'total_order_value': row.subtotal,
+    'ppn': row.ppnPercent,
+    'is_ppn_active': row.isPpnActive,
+    'grand_total_local': row.grandTotal,
+    'payment_confirmed_at_local':
+        row.paymentConfirmedAtLocal?.toIso8601String(),
+    'created_at': snapshot['created_at'] ?? row.createdAtLocal.toIso8601String(),
+    'updated_at_local': row.updatedAtLocal.toIso8601String(),
+    'sync_status': row.syncStatus,
+    'pending_sync': row.syncStatus != 'SYNCED',
+  };
+
+  return merged;
 }

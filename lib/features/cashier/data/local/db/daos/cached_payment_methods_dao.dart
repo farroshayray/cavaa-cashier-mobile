@@ -6,12 +6,15 @@ class CachedPaymentMethodsDao {
   final CashierDb db;
   CachedPaymentMethodsDao(this.db);
 
-  Future<CachedPaymentMethod?> getByKind(String kind) {
-    return (db.select(db.cachedPaymentMethods)
+  Future<CachedPaymentMethod?> getByKind(String kind) async {
+    final rows = await (db.select(db.cachedPaymentMethods)
           ..where((t) => t.kind.equals(kind))
           ..where((t) => t.isActive.equals(true))
-          ..orderBy([(t) => OrderingTerm.desc(t.cachedAt)]))
-        .getSingleOrNull();
+          ..orderBy([(t) => OrderingTerm.desc(t.cachedAt)])
+          ..limit(1))
+        .get();
+
+    return rows.isEmpty ? null : rows.first;
   }
 
   Future<Map<String, dynamic>?> buildManualPaymentMap({
@@ -56,6 +59,12 @@ class CachedPaymentMethodsDao {
             ..where((t) => t.localKey.equals(localKey)))
           .go();
 
+      if (serverManualPaymentId != null) {
+        await (db.delete(db.cachedPaymentMethods)
+              ..where((t) => t.serverManualPaymentId.equals(serverManualPaymentId)))
+            .go();
+      }
+
       await db.into(db.cachedPaymentMethods).insert(
         CachedPaymentMethodsCompanion.insert(
           localKey: localKey,
@@ -75,11 +84,14 @@ class CachedPaymentMethodsDao {
     });
   }
 
-  Future<CachedPaymentMethod?> getByServerManualPaymentId(int id) {
-    return (db.select(db.cachedPaymentMethods)
+  Future<CachedPaymentMethod?> getByServerManualPaymentId(int id) async {
+    final rows = await (db.select(db.cachedPaymentMethods)
           ..where((t) => t.serverManualPaymentId.equals(id))
           ..where((t) => t.isActive.equals(true))
-          ..orderBy([(t) => OrderingTerm.desc(t.cachedAt)]))
-        .getSingleOrNull();
+          ..orderBy([(t) => OrderingTerm.desc(t.cachedAt)])
+          ..limit(1))
+        .get();
+
+    return rows.isEmpty ? null : rows.first;
   }
 }

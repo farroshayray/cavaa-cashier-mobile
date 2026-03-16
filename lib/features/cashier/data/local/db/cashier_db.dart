@@ -20,6 +20,8 @@ import 'tables/local_order_items_table.dart';
 import 'tables/local_order_item_options_table.dart';
 import 'tables/local_payments_table.dart';
 import 'tables/sync_queue_table.dart';
+import 'tables/cached_process_orders_table.dart';
+import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 
 part 'cashier_db.g.dart';
 
@@ -45,15 +47,19 @@ LazyDatabase _openConnection() {
     LocalPayments,
     SyncQueue,
     CachedPaymentOrders,
+    CachedProcessOrders,
     CachedPaymentOrderItems,
     CachedPaymentOrderItemOptions,
+  ],
+  daos: [
+    CachedProcessOrdersDao,
   ],
 )
 class CashierDb extends _$CashierDb {
   CashierDb() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -61,7 +67,6 @@ class CashierDb extends _$CashierDb {
           await m.createAll();
         },
         onUpgrade: (m, from, to) async {
-          // sementara untuk development, reset total lebih mudah
           await m.deleteTable('cached_payment_methods');
           await m.deleteTable('cached_tables');
           await m.deleteTable('cached_option_items');
@@ -73,6 +78,10 @@ class CashierDb extends _$CashierDb {
           await m.deleteTable('local_order_item_options');
           await m.deleteTable('local_payments');
           await m.deleteTable('sync_queue');
+          await m.deleteTable('cached_payment_orders');
+          await m.deleteTable('cached_payment_order_items');
+          await m.deleteTable('cached_payment_order_item_options');
+          await m.deleteTable('cached_process_orders');
           await m.createAll();
         },
       );

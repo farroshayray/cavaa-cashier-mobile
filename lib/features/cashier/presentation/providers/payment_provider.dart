@@ -7,6 +7,7 @@ import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
+import 'dart:convert';
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -44,6 +45,19 @@ class PaymentProvider extends ChangeNotifier {
     try {
       final mergedItems = <Map<String, dynamic>>[];
       bool gotServer = false;
+
+      final advancedLocalOrders =
+          await localOrdersDao.getLocallyAdvancedServerOrders();
+
+      final hiddenServerIds = advancedLocalOrders
+          .map((e) => e.serverId)
+          .whereType<int>()
+          .toSet();
+
+      final hiddenOrderCodes = advancedLocalOrders
+          .map((e) => e.serverOrderCode ?? e.clientOrderCode)
+          .where((e) => e.trim().isNotEmpty)
+          .toSet();
 
       try {
         final res = await repo.fetchOrdersData(
@@ -96,27 +110,21 @@ class PaymentProvider extends ChangeNotifier {
           'local_id': o.localId,
           'client_order_code': o.clientOrderCode,
           'booking_order_code': o.clientOrderCode,
-
           'customer_name': o.customerName,
           'customer': o.customerName,
           'order_name': o.customerName,
-
           'table': {
             'table_no': tableNo,
           },
           'table_no': tableNo,
           'table_name': tableNo,
-
           'partner_name': o.partnerName,
-
           'total_order_value': o.subtotal,
           'subtotal': o.subtotal,
           'grand_total': o.grandTotal,
           'total_amount': o.grandTotal,
-
           'is_ppn_active': o.isPpnActive,
           'ppn': o.ppnPercent,
-
           'payment_method': o.paymentMethodEffective,
           'order_status': o.orderStatusLocal,
           'sync_status': o.syncStatus,
@@ -124,13 +132,24 @@ class PaymentProvider extends ChangeNotifier {
           'server_order_code': o.serverOrderCode,
           'is_local_only': true,
           'is_cached_server': false,
-
           'created_at': o.createdAtLocal.toIso8601String(),
         };
       }).toList();
 
+      final filteredMergedItems = mergedItems.where((e) {
+        final sid = _toInt(e['server_id'] ?? e['id']);
+        final code = (e['booking_order_code'] ?? e['client_order_code'] ?? '')
+            .toString()
+            .trim();
+
+        final hiddenById = sid != null && sid > 0 && hiddenServerIds.contains(sid);
+        final hiddenByCode = code.isNotEmpty && hiddenOrderCodes.contains(code);
+
+        return !(hiddenById || hiddenByCode);
+      }).toList();
+
       items = [
-        ...mergedItems,
+        ...filteredMergedItems,
         ...localItems,
       ];
 
@@ -300,45 +319,89 @@ class PaymentProvider extends ChangeNotifier {
     String? cashierProofImagePath,
     String? lastPaymentId,
   }) async {
-    final localId = (order['local_id'] ?? '').toString();
-    final serverId = _toInt(order['server_id'] ?? order['id']);
+    final now = DateTime.now();
 
-    // 1) kalau ini order lokal yang memang sudah ada di local_orders
-    if (localId.isNotEmpty) {
-      await localOrdersDao.markOrderPaidOffline(
-        localId: localId,
-        paidAmount: paidAmount,
-        changeAmount: changeAmount,
+    String localId = (order['local_id'] ?? '').toString();
+    final isLocalOnly = order['is_local_only'] == true;
+
+    // =========================
+    // A. Kalau order berasal dari server/cache
+    // buat shadow local order dulu
+    // =========================
+    if (!isLocalOnly || localId.isEmpty) {
+      final serverId = _toInt(order['server_id'] ?? order['id']);
+      if (serverId == null || serverId <= 0) {
+        throw Exception('ID server order tidak valid untuk offline payment');
+      }
+
+      final bookingOrderCode =
+          (order['booking_order_code'] ?? order['client_order_code'] ?? '-')
+              .toString();
+
+      final customerName = (order['customer_name'] ?? '-').toString();
+
+      final tableNoSnapshot = (order['table'] is Map)
+          ? ((order['table']['table_no'] ?? '-').toString())
+          : ((order['table_no'] ?? '-').toString());
+
+      final paymentMethodEffective =
+          (order['payment_method'] ?? 'CASH').toString();
+
+      final subtotal = _toNum(order['total_order_value']).toDouble();
+      final ppnPercent = _toNum(order['ppn']).toDouble();
+      final isPpnActive = _toBool(order['is_ppn_active']);
+      final grandTotal = isPpnActive
+          ? (subtotal + (subtotal * ppnPercent / 100)).ceilToDouble()
+          : subtotal;
+
+      await localOrdersDao.createShadowOrderFromServerPayment(
+        serverId: serverId,
+        bookingOrderCode: bookingOrderCode,
+        customerName: customerName,
+        tableNoSnapshot: tableNoSnapshot,
+        paymentMethodEffective: paymentMethodEffective,
+        subtotal: subtotal,
+        grandTotal: grandTotal,
+        isPpnActive: isPpnActive,
+        ppnPercent: ppnPercent,
+        paidAmount: paidAmount.toDouble(),
+        changeAmount: changeAmount.toDouble(),
         cashierProofImagePath: cashierProofImagePath,
         lastPaymentId: lastPaymentId,
       );
-      return;
+
+      localId = 'shadow_pay_$serverId';
     }
 
-    // 2) kalau ini order server/cached yang sedang offline
-    // untuk tahap awal, wajib sudah punya serverId agar nanti bisa disinkronkan
-    if (serverId == null || serverId <= 0) {
-      throw Exception('Order offline tidak punya localId maupun serverId');
-    }
+    // =========================
+    // B. Simpan snapshot payment offline
+    // =========================
+    final snapshot = Map<String, dynamic>.from(order);
+    snapshot['is_local_only'] = true;
+    snapshot['local_id'] = localId;
+    snapshot['payment'] = {
+      'updated_at': now.toIso8601String(),
+      'paid_amount': paidAmount,
+      'change_amount': changeAmount,
+    };
+    snapshot.remove('sync_status');
+    snapshot.remove('pending_sync');
 
-    await localOrdersDao.createShadowOrderFromServerPayment(
-      serverId: serverId,
-      bookingOrderCode: (order['booking_order_code'] ?? '-').toString(),
-      customerName: (order['customer_name'] ?? '-').toString(),
-      tableNoSnapshot: (order['table'] is Map
-              ? (order['table']['table_no'] ?? '-')
-              : (order['table_no'] ?? '-'))
-          .toString(),
-      paymentMethodEffective: (order['payment_method'] ?? 'CASH').toString(),
-      subtotal: _toNum(order['subtotal'] ?? order['total_order_value']).toDouble(),
-      grandTotal: _toNum(order['grand_total']).toDouble(),
-      isPpnActive: _toBool(order['is_ppn_active']),
-      ppnPercent: _toNum(order['ppn']).toDouble(),
+    await localOrdersDao.markPaymentConfirmedOffline(
+      localId: localId,
       paidAmount: paidAmount.toDouble(),
       changeAmount: changeAmount.toDouble(),
-      cashierProofImagePath: cashierProofImagePath,
-      lastPaymentId: lastPaymentId,
+      cashierProofImageLocalPath: cashierProofImagePath,
+      paymentConfirmedAtLocal: now,
+      latestPaymentServerId: int.tryParse(lastPaymentId ?? ''),
+      orderSnapshotJson: jsonEncode(snapshot),
     );
+
+    // kalau source-nya cached server, tandai agar tidak tampil lagi di tab pembayaran
+    final serverId = _toInt(order['server_id'] ?? order['id']);
+    if (serverId != null && serverId > 0) {
+      await cachedPaymentOrdersDao.markPendingDelete(serverId);
+    }
   }
   
 
