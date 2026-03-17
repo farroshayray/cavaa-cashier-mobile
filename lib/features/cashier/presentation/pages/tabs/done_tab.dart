@@ -204,6 +204,7 @@ class _DoneViewState extends State<_DoneView> {
                   itemBuilder: (_, i) {
                     final data = vm.items[i];
                     final id = _toId(data['id']);
+                    final printKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
                     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
                     return AnimatedContainer(
@@ -218,9 +219,11 @@ class _DoneViewState extends State<_DoneView> {
                       ),
                       child: _DoneOrderCard(
                         data: data,
-                        isPrinting: _printingIds.contains(id),
+                        isPrinting: _printingIds.contains(printKey),
                         onDetail: () async {
-                          if (id <= 0) return;
+                          final row = vm.items[i];
+                          final id = _toId(row['id']);
+
                           await showModalBottomSheet(
                             context: context,
                             useRootNavigator: true,
@@ -229,15 +232,16 @@ class _DoneViewState extends State<_DoneView> {
                             builder: (_) => SizedBox(
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: DetailOrderSheet(
-                                orderId: id,
-                                loadDetail: (orderId) => context.read<DoneProvider>().getOrderDetail(orderId),
+                                orderId: id > 0 ? id : -1,
+                                loadDetail: (_) =>
+                                    context.read<DoneProvider>().getOrderDetailFromListItem(row),
                               ),
                             ),
                           );
                         },
                         onPrint: () async {
-                          if (id <= 0) return;
-                          await _printOrder(id);
+                          final row = vm.items[i];
+                          await _printOrder(row);
                         },
                       ),
                     );
@@ -251,12 +255,16 @@ class _DoneViewState extends State<_DoneView> {
     );
   }
 
-  Future<void> _printOrder(int id) async {
-    if (_printingIds.contains(id)) return;
+  Future<void> _printOrder(Map<String, dynamic> row) async {
+    final id = _toId(row['id']);
+    final printKey = id > 0 ? id : row['local_id'].hashCode;
 
-    setState(() => _printingIds.add(id));
+    if (_printingIds.contains(printKey)) return;
+
+    setState(() => _printingIds.add(printKey));
     try {
-      final order = await context.read<DoneProvider>().getPrintDetail(id);
+      final order =
+          await context.read<DoneProvider>().getPrintDetailFromListItem(row);
 
       final paid = _pickNum(order, ['payment', 'paid_amount']) ??
           _pickNum(order, ['latest_payment', 'paid_amount']) ??
@@ -271,7 +279,9 @@ class _DoneViewState extends State<_DoneView> {
       final pm = context.read<PrinterManager>();
       final p = pm.defaultPrinter;
       if (p == null) throw Exception('Default printer belum dipilih');
-      if (p.type != PrinterType.bluetooth || p.address == null || p.address!.trim().isEmpty) {
+      if (p.type != PrinterType.bluetooth ||
+          p.address == null ||
+          p.address!.trim().isEmpty) {
         throw Exception('Default printer bukan Bluetooth / address kosong');
       }
 
@@ -293,7 +303,7 @@ class _DoneViewState extends State<_DoneView> {
         SnackBar(content: Text('Gagal print: $e')),
       );
     } finally {
-      if (mounted) setState(() => _printingIds.remove(id));
+      if (mounted) setState(() => _printingIds.remove(printKey));
     }
   }
 
@@ -583,6 +593,17 @@ class _DoneOrderCard extends StatelessWidget {
                     'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
+                  if (data['is_local_only'] == true || data['is_synced'] == false) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Perubahan lokal belum tersinkron',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -682,6 +703,17 @@ class _DoneOrderCard extends StatelessWidget {
                 'Meja: $table',
                 style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
               ),
+              if (data['is_local_only'] == true || data['is_synced'] == false) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Perubahan lokal belum tersinkron',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.orange.shade800,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -738,9 +770,42 @@ class _DoneOrderCard extends StatelessWidget {
   }
 
   Widget _statusChipDone() {
-    final bg = const Color(0xFFEEF2FF);
-    final border = const Color(0xFFC7D2FE);
-    final dot = const Color(0xFF4F46E5);
+    final isLocalOnly = data['is_local_only'] == true;
+    final isSynced = data['is_synced'] == true;
+    final syncStatus = (data['sync_status'] ?? '').toString();
+
+    if (isLocalOnly || !isSynced || syncStatus == 'PENDING_FINISH') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFDE68A)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF59E0B),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Pending Sync',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
+
+    const bg = Color(0xFFEEF2FF);
+    const border = Color(0xFFC7D2FE);
+    const dot = Color(0xFF4F46E5);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -755,7 +820,10 @@ class _DoneOrderCard extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: dot,
+              shape: BoxShape.circle,
+            ),
           ),
           const SizedBox(width: 6),
           const Text(

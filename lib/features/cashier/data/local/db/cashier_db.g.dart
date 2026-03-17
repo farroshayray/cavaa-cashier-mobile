@@ -6349,6 +6349,28 @@ class $LocalOrderItemsTable extends LocalOrderItems
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _categoryServerIdMeta = const VerificationMeta(
+    'categoryServerId',
+  );
+  @override
+  late final GeneratedColumn<int> categoryServerId = GeneratedColumn<int>(
+    'category_server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _categoryNameSnapshotMeta =
+      const VerificationMeta('categoryNameSnapshot');
+  @override
+  late final GeneratedColumn<String> categoryNameSnapshot =
+      GeneratedColumn<String>(
+        'category_name_snapshot',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _optionsPriceMeta = const VerificationMeta(
     'optionsPrice',
   );
@@ -6416,6 +6438,8 @@ class $LocalOrderItemsTable extends LocalOrderItems
     promoId,
     promoType,
     promoAmount,
+    categoryServerId,
+    categoryNameSnapshot,
     optionsPrice,
     qty,
     customerNote,
@@ -6511,6 +6535,24 @@ class $LocalOrderItemsTable extends LocalOrderItems
         ),
       );
     }
+    if (data.containsKey('category_server_id')) {
+      context.handle(
+        _categoryServerIdMeta,
+        categoryServerId.isAcceptableOrUnknown(
+          data['category_server_id']!,
+          _categoryServerIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('category_name_snapshot')) {
+      context.handle(
+        _categoryNameSnapshotMeta,
+        categoryNameSnapshot.isAcceptableOrUnknown(
+          data['category_name_snapshot']!,
+          _categoryNameSnapshotMeta,
+        ),
+      );
+    }
     if (data.containsKey('options_price')) {
       context.handle(
         _optionsPriceMeta,
@@ -6599,6 +6641,14 @@ class $LocalOrderItemsTable extends LocalOrderItems
         DriftSqlType.double,
         data['${effectivePrefix}promo_amount'],
       ),
+      categoryServerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}category_server_id'],
+      ),
+      categoryNameSnapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category_name_snapshot'],
+      ),
       optionsPrice: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}options_price'],
@@ -6638,6 +6688,8 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
   final int? promoId;
   final String? promoType;
   final double? promoAmount;
+  final int? categoryServerId;
+  final String? categoryNameSnapshot;
   final double optionsPrice;
   final int qty;
   final String? customerNote;
@@ -6653,6 +6705,8 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
     this.promoId,
     this.promoType,
     this.promoAmount,
+    this.categoryServerId,
+    this.categoryNameSnapshot,
     required this.optionsPrice,
     required this.qty,
     this.customerNote,
@@ -6678,6 +6732,12 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
     }
     if (!nullToAbsent || promoAmount != null) {
       map['promo_amount'] = Variable<double>(promoAmount);
+    }
+    if (!nullToAbsent || categoryServerId != null) {
+      map['category_server_id'] = Variable<int>(categoryServerId);
+    }
+    if (!nullToAbsent || categoryNameSnapshot != null) {
+      map['category_name_snapshot'] = Variable<String>(categoryNameSnapshot);
     }
     map['options_price'] = Variable<double>(optionsPrice);
     map['qty'] = Variable<int>(qty);
@@ -6708,6 +6768,12 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
       promoAmount: promoAmount == null && nullToAbsent
           ? const Value.absent()
           : Value(promoAmount),
+      categoryServerId: categoryServerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(categoryServerId),
+      categoryNameSnapshot: categoryNameSnapshot == null && nullToAbsent
+          ? const Value.absent()
+          : Value(categoryNameSnapshot),
       optionsPrice: Value(optionsPrice),
       qty: Value(qty),
       customerNote: customerNote == null && nullToAbsent
@@ -6737,6 +6803,10 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
       promoId: serializer.fromJson<int?>(json['promoId']),
       promoType: serializer.fromJson<String?>(json['promoType']),
       promoAmount: serializer.fromJson<double?>(json['promoAmount']),
+      categoryServerId: serializer.fromJson<int?>(json['categoryServerId']),
+      categoryNameSnapshot: serializer.fromJson<String?>(
+        json['categoryNameSnapshot'],
+      ),
       optionsPrice: serializer.fromJson<double>(json['optionsPrice']),
       qty: serializer.fromJson<int>(json['qty']),
       customerNote: serializer.fromJson<String?>(json['customerNote']),
@@ -6757,6 +6827,8 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
       'promoId': serializer.toJson<int?>(promoId),
       'promoType': serializer.toJson<String?>(promoType),
       'promoAmount': serializer.toJson<double?>(promoAmount),
+      'categoryServerId': serializer.toJson<int?>(categoryServerId),
+      'categoryNameSnapshot': serializer.toJson<String?>(categoryNameSnapshot),
       'optionsPrice': serializer.toJson<double>(optionsPrice),
       'qty': serializer.toJson<int>(qty),
       'customerNote': serializer.toJson<String?>(customerNote),
@@ -6775,6 +6847,8 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
     Value<int?> promoId = const Value.absent(),
     Value<String?> promoType = const Value.absent(),
     Value<double?> promoAmount = const Value.absent(),
+    Value<int?> categoryServerId = const Value.absent(),
+    Value<String?> categoryNameSnapshot = const Value.absent(),
     double? optionsPrice,
     int? qty,
     Value<String?> customerNote = const Value.absent(),
@@ -6792,6 +6866,12 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
     promoId: promoId.present ? promoId.value : this.promoId,
     promoType: promoType.present ? promoType.value : this.promoType,
     promoAmount: promoAmount.present ? promoAmount.value : this.promoAmount,
+    categoryServerId: categoryServerId.present
+        ? categoryServerId.value
+        : this.categoryServerId,
+    categoryNameSnapshot: categoryNameSnapshot.present
+        ? categoryNameSnapshot.value
+        : this.categoryNameSnapshot,
     optionsPrice: optionsPrice ?? this.optionsPrice,
     qty: qty ?? this.qty,
     customerNote: customerNote.present ? customerNote.value : this.customerNote,
@@ -6819,6 +6899,12 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
       promoAmount: data.promoAmount.present
           ? data.promoAmount.value
           : this.promoAmount,
+      categoryServerId: data.categoryServerId.present
+          ? data.categoryServerId.value
+          : this.categoryServerId,
+      categoryNameSnapshot: data.categoryNameSnapshot.present
+          ? data.categoryNameSnapshot.value
+          : this.categoryNameSnapshot,
       optionsPrice: data.optionsPrice.present
           ? data.optionsPrice.value
           : this.optionsPrice,
@@ -6845,6 +6931,8 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
           ..write('promoId: $promoId, ')
           ..write('promoType: $promoType, ')
           ..write('promoAmount: $promoAmount, ')
+          ..write('categoryServerId: $categoryServerId, ')
+          ..write('categoryNameSnapshot: $categoryNameSnapshot, ')
           ..write('optionsPrice: $optionsPrice, ')
           ..write('qty: $qty, ')
           ..write('customerNote: $customerNote, ')
@@ -6865,6 +6953,8 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
     promoId,
     promoType,
     promoAmount,
+    categoryServerId,
+    categoryNameSnapshot,
     optionsPrice,
     qty,
     customerNote,
@@ -6884,6 +6974,8 @@ class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
           other.promoId == this.promoId &&
           other.promoType == this.promoType &&
           other.promoAmount == this.promoAmount &&
+          other.categoryServerId == this.categoryServerId &&
+          other.categoryNameSnapshot == this.categoryNameSnapshot &&
           other.optionsPrice == this.optionsPrice &&
           other.qty == this.qty &&
           other.customerNote == this.customerNote &&
@@ -6901,6 +6993,8 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
   final Value<int?> promoId;
   final Value<String?> promoType;
   final Value<double?> promoAmount;
+  final Value<int?> categoryServerId;
+  final Value<String?> categoryNameSnapshot;
   final Value<double> optionsPrice;
   final Value<int> qty;
   final Value<String?> customerNote;
@@ -6917,6 +7011,8 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
     this.promoId = const Value.absent(),
     this.promoType = const Value.absent(),
     this.promoAmount = const Value.absent(),
+    this.categoryServerId = const Value.absent(),
+    this.categoryNameSnapshot = const Value.absent(),
     this.optionsPrice = const Value.absent(),
     this.qty = const Value.absent(),
     this.customerNote = const Value.absent(),
@@ -6934,6 +7030,8 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
     this.promoId = const Value.absent(),
     this.promoType = const Value.absent(),
     this.promoAmount = const Value.absent(),
+    this.categoryServerId = const Value.absent(),
+    this.categoryNameSnapshot = const Value.absent(),
     this.optionsPrice = const Value.absent(),
     required int qty,
     this.customerNote = const Value.absent(),
@@ -6956,6 +7054,8 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
     Expression<int>? promoId,
     Expression<String>? promoType,
     Expression<double>? promoAmount,
+    Expression<int>? categoryServerId,
+    Expression<String>? categoryNameSnapshot,
     Expression<double>? optionsPrice,
     Expression<int>? qty,
     Expression<String>? customerNote,
@@ -6975,6 +7075,9 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
       if (promoId != null) 'promo_id': promoId,
       if (promoType != null) 'promo_type': promoType,
       if (promoAmount != null) 'promo_amount': promoAmount,
+      if (categoryServerId != null) 'category_server_id': categoryServerId,
+      if (categoryNameSnapshot != null)
+        'category_name_snapshot': categoryNameSnapshot,
       if (optionsPrice != null) 'options_price': optionsPrice,
       if (qty != null) 'qty': qty,
       if (customerNote != null) 'customer_note': customerNote,
@@ -6994,6 +7097,8 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
     Value<int?>? promoId,
     Value<String?>? promoType,
     Value<double?>? promoAmount,
+    Value<int?>? categoryServerId,
+    Value<String?>? categoryNameSnapshot,
     Value<double>? optionsPrice,
     Value<int>? qty,
     Value<String?>? customerNote,
@@ -7011,6 +7116,8 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
       promoId: promoId ?? this.promoId,
       promoType: promoType ?? this.promoType,
       promoAmount: promoAmount ?? this.promoAmount,
+      categoryServerId: categoryServerId ?? this.categoryServerId,
+      categoryNameSnapshot: categoryNameSnapshot ?? this.categoryNameSnapshot,
       optionsPrice: optionsPrice ?? this.optionsPrice,
       qty: qty ?? this.qty,
       customerNote: customerNote ?? this.customerNote,
@@ -7052,6 +7159,14 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
     if (promoAmount.present) {
       map['promo_amount'] = Variable<double>(promoAmount.value);
     }
+    if (categoryServerId.present) {
+      map['category_server_id'] = Variable<int>(categoryServerId.value);
+    }
+    if (categoryNameSnapshot.present) {
+      map['category_name_snapshot'] = Variable<String>(
+        categoryNameSnapshot.value,
+      );
+    }
     if (optionsPrice.present) {
       map['options_price'] = Variable<double>(optionsPrice.value);
     }
@@ -7085,6 +7200,8 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
           ..write('promoId: $promoId, ')
           ..write('promoType: $promoType, ')
           ..write('promoAmount: $promoAmount, ')
+          ..write('categoryServerId: $categoryServerId, ')
+          ..write('categoryNameSnapshot: $categoryNameSnapshot, ')
           ..write('optionsPrice: $optionsPrice, ')
           ..write('qty: $qty, ')
           ..write('customerNote: $customerNote, ')
@@ -9390,6 +9507,17 @@ class $CachedPaymentOrdersTable extends CachedPaymentOrders
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _detailJsonMeta = const VerificationMeta(
+    'detailJson',
+  );
+  @override
+  late final GeneratedColumn<String> detailJson = GeneratedColumn<String>(
+    'detail_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _subtotalMeta = const VerificationMeta(
     'subtotal',
   );
@@ -9499,6 +9627,7 @@ class $CachedPaymentOrdersTable extends CachedPaymentOrders
     latestPaymentJson,
     paymentMethod,
     orderStatus,
+    detailJson,
     subtotal,
     ppnPercent,
     isPpnActive,
@@ -9591,6 +9720,12 @@ class $CachedPaymentOrdersTable extends CachedPaymentOrders
       );
     } else if (isInserting) {
       context.missing(_orderStatusMeta);
+    }
+    if (data.containsKey('detail_json')) {
+      context.handle(
+        _detailJsonMeta,
+        detailJson.isAcceptableOrUnknown(data['detail_json']!, _detailJsonMeta),
+      );
     }
     if (data.containsKey('subtotal')) {
       context.handle(
@@ -9689,6 +9824,10 @@ class $CachedPaymentOrdersTable extends CachedPaymentOrders
         DriftSqlType.string,
         data['${effectivePrefix}order_status'],
       )!,
+      detailJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail_json'],
+      ),
       subtotal: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}subtotal'],
@@ -9740,6 +9879,7 @@ class CachedPaymentOrder extends DataClass
   final String? latestPaymentJson;
   final String? paymentMethod;
   final String orderStatus;
+  final String? detailJson;
   final double subtotal;
   final double ppnPercent;
   final bool isPpnActive;
@@ -9757,6 +9897,7 @@ class CachedPaymentOrder extends DataClass
     this.latestPaymentJson,
     this.paymentMethod,
     required this.orderStatus,
+    this.detailJson,
     required this.subtotal,
     required this.ppnPercent,
     required this.isPpnActive,
@@ -9785,6 +9926,9 @@ class CachedPaymentOrder extends DataClass
       map['payment_method'] = Variable<String>(paymentMethod);
     }
     map['order_status'] = Variable<String>(orderStatus);
+    if (!nullToAbsent || detailJson != null) {
+      map['detail_json'] = Variable<String>(detailJson);
+    }
     map['subtotal'] = Variable<double>(subtotal);
     map['ppn_percent'] = Variable<double>(ppnPercent);
     map['is_ppn_active'] = Variable<bool>(isPpnActive);
@@ -9818,6 +9962,9 @@ class CachedPaymentOrder extends DataClass
           ? const Value.absent()
           : Value(paymentMethod),
       orderStatus: Value(orderStatus),
+      detailJson: detailJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detailJson),
       subtotal: Value(subtotal),
       ppnPercent: Value(ppnPercent),
       isPpnActive: Value(isPpnActive),
@@ -9851,6 +9998,7 @@ class CachedPaymentOrder extends DataClass
       ),
       paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
       orderStatus: serializer.fromJson<String>(json['orderStatus']),
+      detailJson: serializer.fromJson<String?>(json['detailJson']),
       subtotal: serializer.fromJson<double>(json['subtotal']),
       ppnPercent: serializer.fromJson<double>(json['ppnPercent']),
       isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
@@ -9873,6 +10021,7 @@ class CachedPaymentOrder extends DataClass
       'latestPaymentJson': serializer.toJson<String?>(latestPaymentJson),
       'paymentMethod': serializer.toJson<String?>(paymentMethod),
       'orderStatus': serializer.toJson<String>(orderStatus),
+      'detailJson': serializer.toJson<String?>(detailJson),
       'subtotal': serializer.toJson<double>(subtotal),
       'ppnPercent': serializer.toJson<double>(ppnPercent),
       'isPpnActive': serializer.toJson<bool>(isPpnActive),
@@ -9893,6 +10042,7 @@ class CachedPaymentOrder extends DataClass
     Value<String?> latestPaymentJson = const Value.absent(),
     Value<String?> paymentMethod = const Value.absent(),
     String? orderStatus,
+    Value<String?> detailJson = const Value.absent(),
     double? subtotal,
     double? ppnPercent,
     bool? isPpnActive,
@@ -9916,6 +10066,7 @@ class CachedPaymentOrder extends DataClass
         ? paymentMethod.value
         : this.paymentMethod,
     orderStatus: orderStatus ?? this.orderStatus,
+    detailJson: detailJson.present ? detailJson.value : this.detailJson,
     subtotal: subtotal ?? this.subtotal,
     ppnPercent: ppnPercent ?? this.ppnPercent,
     isPpnActive: isPpnActive ?? this.isPpnActive,
@@ -9947,6 +10098,9 @@ class CachedPaymentOrder extends DataClass
       orderStatus: data.orderStatus.present
           ? data.orderStatus.value
           : this.orderStatus,
+      detailJson: data.detailJson.present
+          ? data.detailJson.value
+          : this.detailJson,
       subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
       ppnPercent: data.ppnPercent.present
           ? data.ppnPercent.value
@@ -9977,6 +10131,7 @@ class CachedPaymentOrder extends DataClass
           ..write('latestPaymentJson: $latestPaymentJson, ')
           ..write('paymentMethod: $paymentMethod, ')
           ..write('orderStatus: $orderStatus, ')
+          ..write('detailJson: $detailJson, ')
           ..write('subtotal: $subtotal, ')
           ..write('ppnPercent: $ppnPercent, ')
           ..write('isPpnActive: $isPpnActive, ')
@@ -9999,6 +10154,7 @@ class CachedPaymentOrder extends DataClass
     latestPaymentJson,
     paymentMethod,
     orderStatus,
+    detailJson,
     subtotal,
     ppnPercent,
     isPpnActive,
@@ -10020,6 +10176,7 @@ class CachedPaymentOrder extends DataClass
           other.latestPaymentJson == this.latestPaymentJson &&
           other.paymentMethod == this.paymentMethod &&
           other.orderStatus == this.orderStatus &&
+          other.detailJson == this.detailJson &&
           other.subtotal == this.subtotal &&
           other.ppnPercent == this.ppnPercent &&
           other.isPpnActive == this.isPpnActive &&
@@ -10039,6 +10196,7 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
   final Value<String?> latestPaymentJson;
   final Value<String?> paymentMethod;
   final Value<String> orderStatus;
+  final Value<String?> detailJson;
   final Value<double> subtotal;
   final Value<double> ppnPercent;
   final Value<bool> isPpnActive;
@@ -10056,6 +10214,7 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
     this.latestPaymentJson = const Value.absent(),
     this.paymentMethod = const Value.absent(),
     this.orderStatus = const Value.absent(),
+    this.detailJson = const Value.absent(),
     this.subtotal = const Value.absent(),
     this.ppnPercent = const Value.absent(),
     this.isPpnActive = const Value.absent(),
@@ -10074,6 +10233,7 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
     this.latestPaymentJson = const Value.absent(),
     this.paymentMethod = const Value.absent(),
     required String orderStatus,
+    this.detailJson = const Value.absent(),
     this.subtotal = const Value.absent(),
     this.ppnPercent = const Value.absent(),
     this.isPpnActive = const Value.absent(),
@@ -10095,6 +10255,7 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
     Expression<String>? latestPaymentJson,
     Expression<String>? paymentMethod,
     Expression<String>? orderStatus,
+    Expression<String>? detailJson,
     Expression<double>? subtotal,
     Expression<double>? ppnPercent,
     Expression<bool>? isPpnActive,
@@ -10114,6 +10275,7 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
       if (latestPaymentJson != null) 'latest_payment_json': latestPaymentJson,
       if (paymentMethod != null) 'payment_method': paymentMethod,
       if (orderStatus != null) 'order_status': orderStatus,
+      if (detailJson != null) 'detail_json': detailJson,
       if (subtotal != null) 'subtotal': subtotal,
       if (ppnPercent != null) 'ppn_percent': ppnPercent,
       if (isPpnActive != null) 'is_ppn_active': isPpnActive,
@@ -10134,6 +10296,7 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
     Value<String?>? latestPaymentJson,
     Value<String?>? paymentMethod,
     Value<String>? orderStatus,
+    Value<String?>? detailJson,
     Value<double>? subtotal,
     Value<double>? ppnPercent,
     Value<bool>? isPpnActive,
@@ -10152,6 +10315,7 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
       latestPaymentJson: latestPaymentJson ?? this.latestPaymentJson,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       orderStatus: orderStatus ?? this.orderStatus,
+      detailJson: detailJson ?? this.detailJson,
       subtotal: subtotal ?? this.subtotal,
       ppnPercent: ppnPercent ?? this.ppnPercent,
       isPpnActive: isPpnActive ?? this.isPpnActive,
@@ -10189,6 +10353,9 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
     }
     if (orderStatus.present) {
       map['order_status'] = Variable<String>(orderStatus.value);
+    }
+    if (detailJson.present) {
+      map['detail_json'] = Variable<String>(detailJson.value);
     }
     if (subtotal.present) {
       map['subtotal'] = Variable<double>(subtotal.value);
@@ -10228,6 +10395,7 @@ class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
           ..write('latestPaymentJson: $latestPaymentJson, ')
           ..write('paymentMethod: $paymentMethod, ')
           ..write('orderStatus: $orderStatus, ')
+          ..write('detailJson: $detailJson, ')
           ..write('subtotal: $subtotal, ')
           ..write('ppnPercent: $ppnPercent, ')
           ..write('isPpnActive: $isPpnActive, ')
@@ -10314,6 +10482,17 @@ class $CachedProcessOrdersTable extends CachedProcessOrders
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _detailJsonMeta = const VerificationMeta(
+    'detailJson',
+  );
+  @override
+  late final GeneratedColumn<String> detailJson = GeneratedColumn<String>(
+    'detail_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _paymentMethodMeta = const VerificationMeta(
     'paymentMethod',
   );
@@ -10435,6 +10614,7 @@ class $CachedProcessOrdersTable extends CachedProcessOrders
     tableNo,
     processRequestJson,
     latestProcessJson,
+    detailJson,
     paymentMethod,
     orderStatus,
     subtotal,
@@ -10507,6 +10687,12 @@ class $CachedProcessOrdersTable extends CachedProcessOrders
           data['latest_process_json']!,
           _latestProcessJsonMeta,
         ),
+      );
+    }
+    if (data.containsKey('detail_json')) {
+      context.handle(
+        _detailJsonMeta,
+        detailJson.isAcceptableOrUnknown(data['detail_json']!, _detailJsonMeta),
       );
     }
     if (data.containsKey('payment_method')) {
@@ -10613,6 +10799,10 @@ class $CachedProcessOrdersTable extends CachedProcessOrders
         DriftSqlType.string,
         data['${effectivePrefix}latest_process_json'],
       ),
+      detailJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail_json'],
+      ),
       paymentMethod: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}payment_method'],
@@ -10666,6 +10856,7 @@ class CachedProcessOrder extends DataClass
   final String? tableNo;
   final String? processRequestJson;
   final String? latestProcessJson;
+  final String? detailJson;
   final String? paymentMethod;
   final String orderStatus;
   final double subtotal;
@@ -10682,6 +10873,7 @@ class CachedProcessOrder extends DataClass
     this.tableNo,
     this.processRequestJson,
     this.latestProcessJson,
+    this.detailJson,
     this.paymentMethod,
     required this.orderStatus,
     required this.subtotal,
@@ -10706,6 +10898,9 @@ class CachedProcessOrder extends DataClass
     }
     if (!nullToAbsent || latestProcessJson != null) {
       map['latest_process_json'] = Variable<String>(latestProcessJson);
+    }
+    if (!nullToAbsent || detailJson != null) {
+      map['detail_json'] = Variable<String>(detailJson);
     }
     if (!nullToAbsent || paymentMethod != null) {
       map['payment_method'] = Variable<String>(paymentMethod);
@@ -10739,6 +10934,9 @@ class CachedProcessOrder extends DataClass
       latestProcessJson: latestProcessJson == null && nullToAbsent
           ? const Value.absent()
           : Value(latestProcessJson),
+      detailJson: detailJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detailJson),
       paymentMethod: paymentMethod == null && nullToAbsent
           ? const Value.absent()
           : Value(paymentMethod),
@@ -10773,6 +10971,7 @@ class CachedProcessOrder extends DataClass
       latestProcessJson: serializer.fromJson<String?>(
         json['latestProcessJson'],
       ),
+      detailJson: serializer.fromJson<String?>(json['detailJson']),
       paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
       orderStatus: serializer.fromJson<String>(json['orderStatus']),
       subtotal: serializer.fromJson<double>(json['subtotal']),
@@ -10794,6 +10993,7 @@ class CachedProcessOrder extends DataClass
       'tableNo': serializer.toJson<String?>(tableNo),
       'processRequestJson': serializer.toJson<String?>(processRequestJson),
       'latestProcessJson': serializer.toJson<String?>(latestProcessJson),
+      'detailJson': serializer.toJson<String?>(detailJson),
       'paymentMethod': serializer.toJson<String?>(paymentMethod),
       'orderStatus': serializer.toJson<String>(orderStatus),
       'subtotal': serializer.toJson<double>(subtotal),
@@ -10813,6 +11013,7 @@ class CachedProcessOrder extends DataClass
     Value<String?> tableNo = const Value.absent(),
     Value<String?> processRequestJson = const Value.absent(),
     Value<String?> latestProcessJson = const Value.absent(),
+    Value<String?> detailJson = const Value.absent(),
     Value<String?> paymentMethod = const Value.absent(),
     String? orderStatus,
     double? subtotal,
@@ -10833,6 +11034,7 @@ class CachedProcessOrder extends DataClass
     latestProcessJson: latestProcessJson.present
         ? latestProcessJson.value
         : this.latestProcessJson,
+    detailJson: detailJson.present ? detailJson.value : this.detailJson,
     paymentMethod: paymentMethod.present
         ? paymentMethod.value
         : this.paymentMethod,
@@ -10863,6 +11065,9 @@ class CachedProcessOrder extends DataClass
       latestProcessJson: data.latestProcessJson.present
           ? data.latestProcessJson.value
           : this.latestProcessJson,
+      detailJson: data.detailJson.present
+          ? data.detailJson.value
+          : this.detailJson,
       paymentMethod: data.paymentMethod.present
           ? data.paymentMethod.value
           : this.paymentMethod,
@@ -10896,6 +11101,7 @@ class CachedProcessOrder extends DataClass
           ..write('tableNo: $tableNo, ')
           ..write('processRequestJson: $processRequestJson, ')
           ..write('latestProcessJson: $latestProcessJson, ')
+          ..write('detailJson: $detailJson, ')
           ..write('paymentMethod: $paymentMethod, ')
           ..write('orderStatus: $orderStatus, ')
           ..write('subtotal: $subtotal, ')
@@ -10917,6 +11123,7 @@ class CachedProcessOrder extends DataClass
     tableNo,
     processRequestJson,
     latestProcessJson,
+    detailJson,
     paymentMethod,
     orderStatus,
     subtotal,
@@ -10937,6 +11144,7 @@ class CachedProcessOrder extends DataClass
           other.tableNo == this.tableNo &&
           other.processRequestJson == this.processRequestJson &&
           other.latestProcessJson == this.latestProcessJson &&
+          other.detailJson == this.detailJson &&
           other.paymentMethod == this.paymentMethod &&
           other.orderStatus == this.orderStatus &&
           other.subtotal == this.subtotal &&
@@ -10955,6 +11163,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
   final Value<String?> tableNo;
   final Value<String?> processRequestJson;
   final Value<String?> latestProcessJson;
+  final Value<String?> detailJson;
   final Value<String?> paymentMethod;
   final Value<String> orderStatus;
   final Value<double> subtotal;
@@ -10971,6 +11180,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     this.tableNo = const Value.absent(),
     this.processRequestJson = const Value.absent(),
     this.latestProcessJson = const Value.absent(),
+    this.detailJson = const Value.absent(),
     this.paymentMethod = const Value.absent(),
     this.orderStatus = const Value.absent(),
     this.subtotal = const Value.absent(),
@@ -10988,6 +11198,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     this.tableNo = const Value.absent(),
     this.processRequestJson = const Value.absent(),
     this.latestProcessJson = const Value.absent(),
+    this.detailJson = const Value.absent(),
     this.paymentMethod = const Value.absent(),
     required String orderStatus,
     this.subtotal = const Value.absent(),
@@ -11007,6 +11218,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     Expression<String>? tableNo,
     Expression<String>? processRequestJson,
     Expression<String>? latestProcessJson,
+    Expression<String>? detailJson,
     Expression<String>? paymentMethod,
     Expression<String>? orderStatus,
     Expression<double>? subtotal,
@@ -11025,6 +11237,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
       if (processRequestJson != null)
         'process_request_json': processRequestJson,
       if (latestProcessJson != null) 'latest_process_json': latestProcessJson,
+      if (detailJson != null) 'detail_json': detailJson,
       if (paymentMethod != null) 'payment_method': paymentMethod,
       if (orderStatus != null) 'order_status': orderStatus,
       if (subtotal != null) 'subtotal': subtotal,
@@ -11044,6 +11257,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     Value<String?>? tableNo,
     Value<String?>? processRequestJson,
     Value<String?>? latestProcessJson,
+    Value<String?>? detailJson,
     Value<String?>? paymentMethod,
     Value<String>? orderStatus,
     Value<double>? subtotal,
@@ -11061,6 +11275,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
       tableNo: tableNo ?? this.tableNo,
       processRequestJson: processRequestJson ?? this.processRequestJson,
       latestProcessJson: latestProcessJson ?? this.latestProcessJson,
+      detailJson: detailJson ?? this.detailJson,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       orderStatus: orderStatus ?? this.orderStatus,
       subtotal: subtotal ?? this.subtotal,
@@ -11093,6 +11308,9 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     }
     if (latestProcessJson.present) {
       map['latest_process_json'] = Variable<String>(latestProcessJson.value);
+    }
+    if (detailJson.present) {
+      map['detail_json'] = Variable<String>(detailJson.value);
     }
     if (paymentMethod.present) {
       map['payment_method'] = Variable<String>(paymentMethod.value);
@@ -11133,6 +11351,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
           ..write('tableNo: $tableNo, ')
           ..write('processRequestJson: $processRequestJson, ')
           ..write('latestProcessJson: $latestProcessJson, ')
+          ..write('detailJson: $detailJson, ')
           ..write('paymentMethod: $paymentMethod, ')
           ..write('orderStatus: $orderStatus, ')
           ..write('subtotal: $subtotal, ')
@@ -12067,6 +12286,900 @@ class CachedPaymentOrderItemOptionsCompanion
   }
 }
 
+class $CachedDoneOrdersTable extends CachedDoneOrders
+    with TableInfo<$CachedDoneOrdersTable, CachedDoneOrder> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CachedDoneOrdersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bookingOrderCodeMeta = const VerificationMeta(
+    'bookingOrderCode',
+  );
+  @override
+  late final GeneratedColumn<String> bookingOrderCode = GeneratedColumn<String>(
+    'booking_order_code',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _customerNameMeta = const VerificationMeta(
+    'customerName',
+  );
+  @override
+  late final GeneratedColumn<String> customerName = GeneratedColumn<String>(
+    'customer_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tableNoMeta = const VerificationMeta(
+    'tableNo',
+  );
+  @override
+  late final GeneratedColumn<String> tableNo = GeneratedColumn<String>(
+    'table_no',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _doneRequestJsonMeta = const VerificationMeta(
+    'doneRequestJson',
+  );
+  @override
+  late final GeneratedColumn<String> doneRequestJson = GeneratedColumn<String>(
+    'done_request_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _latestDoneJsonMeta = const VerificationMeta(
+    'latestDoneJson',
+  );
+  @override
+  late final GeneratedColumn<String> latestDoneJson = GeneratedColumn<String>(
+    'latest_done_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _paymentMethodMeta = const VerificationMeta(
+    'paymentMethod',
+  );
+  @override
+  late final GeneratedColumn<String> paymentMethod = GeneratedColumn<String>(
+    'payment_method',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _orderStatusMeta = const VerificationMeta(
+    'orderStatus',
+  );
+  @override
+  late final GeneratedColumn<String> orderStatus = GeneratedColumn<String>(
+    'order_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailJsonMeta = const VerificationMeta(
+    'detailJson',
+  );
+  @override
+  late final GeneratedColumn<String> detailJson = GeneratedColumn<String>(
+    'detail_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _subtotalMeta = const VerificationMeta(
+    'subtotal',
+  );
+  @override
+  late final GeneratedColumn<double> subtotal = GeneratedColumn<double>(
+    'subtotal',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _ppnPercentMeta = const VerificationMeta(
+    'ppnPercent',
+  );
+  @override
+  late final GeneratedColumn<double> ppnPercent = GeneratedColumn<double>(
+    'ppn_percent',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isPpnActiveMeta = const VerificationMeta(
+    'isPpnActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isPpnActive = GeneratedColumn<bool>(
+    'is_ppn_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_ppn_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isSyncedMeta = const VerificationMeta(
+    'isSynced',
+  );
+  @override
+  late final GeneratedColumn<bool> isSynced = GeneratedColumn<bool>(
+    'is_synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _deletedLocallyMeta = const VerificationMeta(
+    'deletedLocally',
+  );
+  @override
+  late final GeneratedColumn<bool> deletedLocally = GeneratedColumn<bool>(
+    'deleted_locally',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted_locally" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _syncedAtMeta = const VerificationMeta(
+    'syncedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
+    'synced_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    serverId,
+    bookingOrderCode,
+    customerName,
+    tableNo,
+    doneRequestJson,
+    latestDoneJson,
+    paymentMethod,
+    orderStatus,
+    detailJson,
+    subtotal,
+    ppnPercent,
+    isPpnActive,
+    isSynced,
+    deletedLocally,
+    syncedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cached_done_orders';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedDoneOrder> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('booking_order_code')) {
+      context.handle(
+        _bookingOrderCodeMeta,
+        bookingOrderCode.isAcceptableOrUnknown(
+          data['booking_order_code']!,
+          _bookingOrderCodeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_bookingOrderCodeMeta);
+    }
+    if (data.containsKey('customer_name')) {
+      context.handle(
+        _customerNameMeta,
+        customerName.isAcceptableOrUnknown(
+          data['customer_name']!,
+          _customerNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_customerNameMeta);
+    }
+    if (data.containsKey('table_no')) {
+      context.handle(
+        _tableNoMeta,
+        tableNo.isAcceptableOrUnknown(data['table_no']!, _tableNoMeta),
+      );
+    }
+    if (data.containsKey('done_request_json')) {
+      context.handle(
+        _doneRequestJsonMeta,
+        doneRequestJson.isAcceptableOrUnknown(
+          data['done_request_json']!,
+          _doneRequestJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('latest_done_json')) {
+      context.handle(
+        _latestDoneJsonMeta,
+        latestDoneJson.isAcceptableOrUnknown(
+          data['latest_done_json']!,
+          _latestDoneJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('payment_method')) {
+      context.handle(
+        _paymentMethodMeta,
+        paymentMethod.isAcceptableOrUnknown(
+          data['payment_method']!,
+          _paymentMethodMeta,
+        ),
+      );
+    }
+    if (data.containsKey('order_status')) {
+      context.handle(
+        _orderStatusMeta,
+        orderStatus.isAcceptableOrUnknown(
+          data['order_status']!,
+          _orderStatusMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_orderStatusMeta);
+    }
+    if (data.containsKey('detail_json')) {
+      context.handle(
+        _detailJsonMeta,
+        detailJson.isAcceptableOrUnknown(data['detail_json']!, _detailJsonMeta),
+      );
+    }
+    if (data.containsKey('subtotal')) {
+      context.handle(
+        _subtotalMeta,
+        subtotal.isAcceptableOrUnknown(data['subtotal']!, _subtotalMeta),
+      );
+    }
+    if (data.containsKey('ppn_percent')) {
+      context.handle(
+        _ppnPercentMeta,
+        ppnPercent.isAcceptableOrUnknown(data['ppn_percent']!, _ppnPercentMeta),
+      );
+    }
+    if (data.containsKey('is_ppn_active')) {
+      context.handle(
+        _isPpnActiveMeta,
+        isPpnActive.isAcceptableOrUnknown(
+          data['is_ppn_active']!,
+          _isPpnActiveMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_synced')) {
+      context.handle(
+        _isSyncedMeta,
+        isSynced.isAcceptableOrUnknown(data['is_synced']!, _isSyncedMeta),
+      );
+    }
+    if (data.containsKey('deleted_locally')) {
+      context.handle(
+        _deletedLocallyMeta,
+        deletedLocally.isAcceptableOrUnknown(
+          data['deleted_locally']!,
+          _deletedLocallyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('synced_at')) {
+      context.handle(
+        _syncedAtMeta,
+        syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {serverId};
+  @override
+  CachedDoneOrder map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedDoneOrder(
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      )!,
+      bookingOrderCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}booking_order_code'],
+      )!,
+      customerName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}customer_name'],
+      )!,
+      tableNo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}table_no'],
+      ),
+      doneRequestJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}done_request_json'],
+      ),
+      latestDoneJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}latest_done_json'],
+      ),
+      paymentMethod: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payment_method'],
+      ),
+      orderStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}order_status'],
+      )!,
+      detailJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail_json'],
+      ),
+      subtotal: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}subtotal'],
+      )!,
+      ppnPercent: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}ppn_percent'],
+      )!,
+      isPpnActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_ppn_active'],
+      )!,
+      isSynced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_synced'],
+      )!,
+      deletedLocally: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted_locally'],
+      )!,
+      syncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}synced_at'],
+      ),
+    );
+  }
+
+  @override
+  $CachedDoneOrdersTable createAlias(String alias) {
+    return $CachedDoneOrdersTable(attachedDatabase, alias);
+  }
+}
+
+class CachedDoneOrder extends DataClass implements Insertable<CachedDoneOrder> {
+  final int serverId;
+  final String bookingOrderCode;
+  final String customerName;
+  final String? tableNo;
+  final String? doneRequestJson;
+  final String? latestDoneJson;
+  final String? paymentMethod;
+  final String orderStatus;
+  final String? detailJson;
+  final double subtotal;
+  final double ppnPercent;
+  final bool isPpnActive;
+  final bool isSynced;
+  final bool deletedLocally;
+  final DateTime? syncedAt;
+  const CachedDoneOrder({
+    required this.serverId,
+    required this.bookingOrderCode,
+    required this.customerName,
+    this.tableNo,
+    this.doneRequestJson,
+    this.latestDoneJson,
+    this.paymentMethod,
+    required this.orderStatus,
+    this.detailJson,
+    required this.subtotal,
+    required this.ppnPercent,
+    required this.isPpnActive,
+    required this.isSynced,
+    required this.deletedLocally,
+    this.syncedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['server_id'] = Variable<int>(serverId);
+    map['booking_order_code'] = Variable<String>(bookingOrderCode);
+    map['customer_name'] = Variable<String>(customerName);
+    if (!nullToAbsent || tableNo != null) {
+      map['table_no'] = Variable<String>(tableNo);
+    }
+    if (!nullToAbsent || doneRequestJson != null) {
+      map['done_request_json'] = Variable<String>(doneRequestJson);
+    }
+    if (!nullToAbsent || latestDoneJson != null) {
+      map['latest_done_json'] = Variable<String>(latestDoneJson);
+    }
+    if (!nullToAbsent || paymentMethod != null) {
+      map['payment_method'] = Variable<String>(paymentMethod);
+    }
+    map['order_status'] = Variable<String>(orderStatus);
+    if (!nullToAbsent || detailJson != null) {
+      map['detail_json'] = Variable<String>(detailJson);
+    }
+    map['subtotal'] = Variable<double>(subtotal);
+    map['ppn_percent'] = Variable<double>(ppnPercent);
+    map['is_ppn_active'] = Variable<bool>(isPpnActive);
+    map['is_synced'] = Variable<bool>(isSynced);
+    map['deleted_locally'] = Variable<bool>(deletedLocally);
+    if (!nullToAbsent || syncedAt != null) {
+      map['synced_at'] = Variable<DateTime>(syncedAt);
+    }
+    return map;
+  }
+
+  CachedDoneOrdersCompanion toCompanion(bool nullToAbsent) {
+    return CachedDoneOrdersCompanion(
+      serverId: Value(serverId),
+      bookingOrderCode: Value(bookingOrderCode),
+      customerName: Value(customerName),
+      tableNo: tableNo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tableNo),
+      doneRequestJson: doneRequestJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(doneRequestJson),
+      latestDoneJson: latestDoneJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(latestDoneJson),
+      paymentMethod: paymentMethod == null && nullToAbsent
+          ? const Value.absent()
+          : Value(paymentMethod),
+      orderStatus: Value(orderStatus),
+      detailJson: detailJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detailJson),
+      subtotal: Value(subtotal),
+      ppnPercent: Value(ppnPercent),
+      isPpnActive: Value(isPpnActive),
+      isSynced: Value(isSynced),
+      deletedLocally: Value(deletedLocally),
+      syncedAt: syncedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncedAt),
+    );
+  }
+
+  factory CachedDoneOrder.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedDoneOrder(
+      serverId: serializer.fromJson<int>(json['serverId']),
+      bookingOrderCode: serializer.fromJson<String>(json['bookingOrderCode']),
+      customerName: serializer.fromJson<String>(json['customerName']),
+      tableNo: serializer.fromJson<String?>(json['tableNo']),
+      doneRequestJson: serializer.fromJson<String?>(json['doneRequestJson']),
+      latestDoneJson: serializer.fromJson<String?>(json['latestDoneJson']),
+      paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
+      orderStatus: serializer.fromJson<String>(json['orderStatus']),
+      detailJson: serializer.fromJson<String?>(json['detailJson']),
+      subtotal: serializer.fromJson<double>(json['subtotal']),
+      ppnPercent: serializer.fromJson<double>(json['ppnPercent']),
+      isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
+      isSynced: serializer.fromJson<bool>(json['isSynced']),
+      deletedLocally: serializer.fromJson<bool>(json['deletedLocally']),
+      syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'serverId': serializer.toJson<int>(serverId),
+      'bookingOrderCode': serializer.toJson<String>(bookingOrderCode),
+      'customerName': serializer.toJson<String>(customerName),
+      'tableNo': serializer.toJson<String?>(tableNo),
+      'doneRequestJson': serializer.toJson<String?>(doneRequestJson),
+      'latestDoneJson': serializer.toJson<String?>(latestDoneJson),
+      'paymentMethod': serializer.toJson<String?>(paymentMethod),
+      'orderStatus': serializer.toJson<String>(orderStatus),
+      'detailJson': serializer.toJson<String?>(detailJson),
+      'subtotal': serializer.toJson<double>(subtotal),
+      'ppnPercent': serializer.toJson<double>(ppnPercent),
+      'isPpnActive': serializer.toJson<bool>(isPpnActive),
+      'isSynced': serializer.toJson<bool>(isSynced),
+      'deletedLocally': serializer.toJson<bool>(deletedLocally),
+      'syncedAt': serializer.toJson<DateTime?>(syncedAt),
+    };
+  }
+
+  CachedDoneOrder copyWith({
+    int? serverId,
+    String? bookingOrderCode,
+    String? customerName,
+    Value<String?> tableNo = const Value.absent(),
+    Value<String?> doneRequestJson = const Value.absent(),
+    Value<String?> latestDoneJson = const Value.absent(),
+    Value<String?> paymentMethod = const Value.absent(),
+    String? orderStatus,
+    Value<String?> detailJson = const Value.absent(),
+    double? subtotal,
+    double? ppnPercent,
+    bool? isPpnActive,
+    bool? isSynced,
+    bool? deletedLocally,
+    Value<DateTime?> syncedAt = const Value.absent(),
+  }) => CachedDoneOrder(
+    serverId: serverId ?? this.serverId,
+    bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
+    customerName: customerName ?? this.customerName,
+    tableNo: tableNo.present ? tableNo.value : this.tableNo,
+    doneRequestJson: doneRequestJson.present
+        ? doneRequestJson.value
+        : this.doneRequestJson,
+    latestDoneJson: latestDoneJson.present
+        ? latestDoneJson.value
+        : this.latestDoneJson,
+    paymentMethod: paymentMethod.present
+        ? paymentMethod.value
+        : this.paymentMethod,
+    orderStatus: orderStatus ?? this.orderStatus,
+    detailJson: detailJson.present ? detailJson.value : this.detailJson,
+    subtotal: subtotal ?? this.subtotal,
+    ppnPercent: ppnPercent ?? this.ppnPercent,
+    isPpnActive: isPpnActive ?? this.isPpnActive,
+    isSynced: isSynced ?? this.isSynced,
+    deletedLocally: deletedLocally ?? this.deletedLocally,
+    syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
+  );
+  CachedDoneOrder copyWithCompanion(CachedDoneOrdersCompanion data) {
+    return CachedDoneOrder(
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      bookingOrderCode: data.bookingOrderCode.present
+          ? data.bookingOrderCode.value
+          : this.bookingOrderCode,
+      customerName: data.customerName.present
+          ? data.customerName.value
+          : this.customerName,
+      tableNo: data.tableNo.present ? data.tableNo.value : this.tableNo,
+      doneRequestJson: data.doneRequestJson.present
+          ? data.doneRequestJson.value
+          : this.doneRequestJson,
+      latestDoneJson: data.latestDoneJson.present
+          ? data.latestDoneJson.value
+          : this.latestDoneJson,
+      paymentMethod: data.paymentMethod.present
+          ? data.paymentMethod.value
+          : this.paymentMethod,
+      orderStatus: data.orderStatus.present
+          ? data.orderStatus.value
+          : this.orderStatus,
+      detailJson: data.detailJson.present
+          ? data.detailJson.value
+          : this.detailJson,
+      subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
+      ppnPercent: data.ppnPercent.present
+          ? data.ppnPercent.value
+          : this.ppnPercent,
+      isPpnActive: data.isPpnActive.present
+          ? data.isPpnActive.value
+          : this.isPpnActive,
+      isSynced: data.isSynced.present ? data.isSynced.value : this.isSynced,
+      deletedLocally: data.deletedLocally.present
+          ? data.deletedLocally.value
+          : this.deletedLocally,
+      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedDoneOrder(')
+          ..write('serverId: $serverId, ')
+          ..write('bookingOrderCode: $bookingOrderCode, ')
+          ..write('customerName: $customerName, ')
+          ..write('tableNo: $tableNo, ')
+          ..write('doneRequestJson: $doneRequestJson, ')
+          ..write('latestDoneJson: $latestDoneJson, ')
+          ..write('paymentMethod: $paymentMethod, ')
+          ..write('orderStatus: $orderStatus, ')
+          ..write('detailJson: $detailJson, ')
+          ..write('subtotal: $subtotal, ')
+          ..write('ppnPercent: $ppnPercent, ')
+          ..write('isPpnActive: $isPpnActive, ')
+          ..write('isSynced: $isSynced, ')
+          ..write('deletedLocally: $deletedLocally, ')
+          ..write('syncedAt: $syncedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    serverId,
+    bookingOrderCode,
+    customerName,
+    tableNo,
+    doneRequestJson,
+    latestDoneJson,
+    paymentMethod,
+    orderStatus,
+    detailJson,
+    subtotal,
+    ppnPercent,
+    isPpnActive,
+    isSynced,
+    deletedLocally,
+    syncedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedDoneOrder &&
+          other.serverId == this.serverId &&
+          other.bookingOrderCode == this.bookingOrderCode &&
+          other.customerName == this.customerName &&
+          other.tableNo == this.tableNo &&
+          other.doneRequestJson == this.doneRequestJson &&
+          other.latestDoneJson == this.latestDoneJson &&
+          other.paymentMethod == this.paymentMethod &&
+          other.orderStatus == this.orderStatus &&
+          other.detailJson == this.detailJson &&
+          other.subtotal == this.subtotal &&
+          other.ppnPercent == this.ppnPercent &&
+          other.isPpnActive == this.isPpnActive &&
+          other.isSynced == this.isSynced &&
+          other.deletedLocally == this.deletedLocally &&
+          other.syncedAt == this.syncedAt);
+}
+
+class CachedDoneOrdersCompanion extends UpdateCompanion<CachedDoneOrder> {
+  final Value<int> serverId;
+  final Value<String> bookingOrderCode;
+  final Value<String> customerName;
+  final Value<String?> tableNo;
+  final Value<String?> doneRequestJson;
+  final Value<String?> latestDoneJson;
+  final Value<String?> paymentMethod;
+  final Value<String> orderStatus;
+  final Value<String?> detailJson;
+  final Value<double> subtotal;
+  final Value<double> ppnPercent;
+  final Value<bool> isPpnActive;
+  final Value<bool> isSynced;
+  final Value<bool> deletedLocally;
+  final Value<DateTime?> syncedAt;
+  const CachedDoneOrdersCompanion({
+    this.serverId = const Value.absent(),
+    this.bookingOrderCode = const Value.absent(),
+    this.customerName = const Value.absent(),
+    this.tableNo = const Value.absent(),
+    this.doneRequestJson = const Value.absent(),
+    this.latestDoneJson = const Value.absent(),
+    this.paymentMethod = const Value.absent(),
+    this.orderStatus = const Value.absent(),
+    this.detailJson = const Value.absent(),
+    this.subtotal = const Value.absent(),
+    this.ppnPercent = const Value.absent(),
+    this.isPpnActive = const Value.absent(),
+    this.isSynced = const Value.absent(),
+    this.deletedLocally = const Value.absent(),
+    this.syncedAt = const Value.absent(),
+  });
+  CachedDoneOrdersCompanion.insert({
+    this.serverId = const Value.absent(),
+    required String bookingOrderCode,
+    required String customerName,
+    this.tableNo = const Value.absent(),
+    this.doneRequestJson = const Value.absent(),
+    this.latestDoneJson = const Value.absent(),
+    this.paymentMethod = const Value.absent(),
+    required String orderStatus,
+    this.detailJson = const Value.absent(),
+    this.subtotal = const Value.absent(),
+    this.ppnPercent = const Value.absent(),
+    this.isPpnActive = const Value.absent(),
+    this.isSynced = const Value.absent(),
+    this.deletedLocally = const Value.absent(),
+    this.syncedAt = const Value.absent(),
+  }) : bookingOrderCode = Value(bookingOrderCode),
+       customerName = Value(customerName),
+       orderStatus = Value(orderStatus);
+  static Insertable<CachedDoneOrder> custom({
+    Expression<int>? serverId,
+    Expression<String>? bookingOrderCode,
+    Expression<String>? customerName,
+    Expression<String>? tableNo,
+    Expression<String>? doneRequestJson,
+    Expression<String>? latestDoneJson,
+    Expression<String>? paymentMethod,
+    Expression<String>? orderStatus,
+    Expression<String>? detailJson,
+    Expression<double>? subtotal,
+    Expression<double>? ppnPercent,
+    Expression<bool>? isPpnActive,
+    Expression<bool>? isSynced,
+    Expression<bool>? deletedLocally,
+    Expression<DateTime>? syncedAt,
+  }) {
+    return RawValuesInsertable({
+      if (serverId != null) 'server_id': serverId,
+      if (bookingOrderCode != null) 'booking_order_code': bookingOrderCode,
+      if (customerName != null) 'customer_name': customerName,
+      if (tableNo != null) 'table_no': tableNo,
+      if (doneRequestJson != null) 'done_request_json': doneRequestJson,
+      if (latestDoneJson != null) 'latest_done_json': latestDoneJson,
+      if (paymentMethod != null) 'payment_method': paymentMethod,
+      if (orderStatus != null) 'order_status': orderStatus,
+      if (detailJson != null) 'detail_json': detailJson,
+      if (subtotal != null) 'subtotal': subtotal,
+      if (ppnPercent != null) 'ppn_percent': ppnPercent,
+      if (isPpnActive != null) 'is_ppn_active': isPpnActive,
+      if (isSynced != null) 'is_synced': isSynced,
+      if (deletedLocally != null) 'deleted_locally': deletedLocally,
+      if (syncedAt != null) 'synced_at': syncedAt,
+    });
+  }
+
+  CachedDoneOrdersCompanion copyWith({
+    Value<int>? serverId,
+    Value<String>? bookingOrderCode,
+    Value<String>? customerName,
+    Value<String?>? tableNo,
+    Value<String?>? doneRequestJson,
+    Value<String?>? latestDoneJson,
+    Value<String?>? paymentMethod,
+    Value<String>? orderStatus,
+    Value<String?>? detailJson,
+    Value<double>? subtotal,
+    Value<double>? ppnPercent,
+    Value<bool>? isPpnActive,
+    Value<bool>? isSynced,
+    Value<bool>? deletedLocally,
+    Value<DateTime?>? syncedAt,
+  }) {
+    return CachedDoneOrdersCompanion(
+      serverId: serverId ?? this.serverId,
+      bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
+      customerName: customerName ?? this.customerName,
+      tableNo: tableNo ?? this.tableNo,
+      doneRequestJson: doneRequestJson ?? this.doneRequestJson,
+      latestDoneJson: latestDoneJson ?? this.latestDoneJson,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      orderStatus: orderStatus ?? this.orderStatus,
+      detailJson: detailJson ?? this.detailJson,
+      subtotal: subtotal ?? this.subtotal,
+      ppnPercent: ppnPercent ?? this.ppnPercent,
+      isPpnActive: isPpnActive ?? this.isPpnActive,
+      isSynced: isSynced ?? this.isSynced,
+      deletedLocally: deletedLocally ?? this.deletedLocally,
+      syncedAt: syncedAt ?? this.syncedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (bookingOrderCode.present) {
+      map['booking_order_code'] = Variable<String>(bookingOrderCode.value);
+    }
+    if (customerName.present) {
+      map['customer_name'] = Variable<String>(customerName.value);
+    }
+    if (tableNo.present) {
+      map['table_no'] = Variable<String>(tableNo.value);
+    }
+    if (doneRequestJson.present) {
+      map['done_request_json'] = Variable<String>(doneRequestJson.value);
+    }
+    if (latestDoneJson.present) {
+      map['latest_done_json'] = Variable<String>(latestDoneJson.value);
+    }
+    if (paymentMethod.present) {
+      map['payment_method'] = Variable<String>(paymentMethod.value);
+    }
+    if (orderStatus.present) {
+      map['order_status'] = Variable<String>(orderStatus.value);
+    }
+    if (detailJson.present) {
+      map['detail_json'] = Variable<String>(detailJson.value);
+    }
+    if (subtotal.present) {
+      map['subtotal'] = Variable<double>(subtotal.value);
+    }
+    if (ppnPercent.present) {
+      map['ppn_percent'] = Variable<double>(ppnPercent.value);
+    }
+    if (isPpnActive.present) {
+      map['is_ppn_active'] = Variable<bool>(isPpnActive.value);
+    }
+    if (isSynced.present) {
+      map['is_synced'] = Variable<bool>(isSynced.value);
+    }
+    if (deletedLocally.present) {
+      map['deleted_locally'] = Variable<bool>(deletedLocally.value);
+    }
+    if (syncedAt.present) {
+      map['synced_at'] = Variable<DateTime>(syncedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedDoneOrdersCompanion(')
+          ..write('serverId: $serverId, ')
+          ..write('bookingOrderCode: $bookingOrderCode, ')
+          ..write('customerName: $customerName, ')
+          ..write('tableNo: $tableNo, ')
+          ..write('doneRequestJson: $doneRequestJson, ')
+          ..write('latestDoneJson: $latestDoneJson, ')
+          ..write('paymentMethod: $paymentMethod, ')
+          ..write('orderStatus: $orderStatus, ')
+          ..write('detailJson: $detailJson, ')
+          ..write('subtotal: $subtotal, ')
+          ..write('ppnPercent: $ppnPercent, ')
+          ..write('isPpnActive: $isPpnActive, ')
+          ..write('isSynced: $isSynced, ')
+          ..write('deletedLocally: $deletedLocally, ')
+          ..write('syncedAt: $syncedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$CashierDb extends GeneratedDatabase {
   _$CashierDb(QueryExecutor e) : super(e);
   $CashierDbManager get managers => $CashierDbManager(this);
@@ -12097,8 +13210,14 @@ abstract class _$CashierDb extends GeneratedDatabase {
       $CachedPaymentOrderItemsTable(this);
   late final $CachedPaymentOrderItemOptionsTable cachedPaymentOrderItemOptions =
       $CachedPaymentOrderItemOptionsTable(this);
+  late final $CachedDoneOrdersTable cachedDoneOrders = $CachedDoneOrdersTable(
+    this,
+  );
   late final CachedProcessOrdersDao cachedProcessOrdersDao =
       CachedProcessOrdersDao(this as CashierDb);
+  late final CachedDoneOrdersDao cachedDoneOrdersDao = CachedDoneOrdersDao(
+    this as CashierDb,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -12119,6 +13238,7 @@ abstract class _$CashierDb extends GeneratedDatabase {
     cachedProcessOrders,
     cachedPaymentOrderItems,
     cachedPaymentOrderItemOptions,
+    cachedDoneOrders,
   ];
 }
 
@@ -14949,6 +16069,8 @@ typedef $$LocalOrderItemsTableCreateCompanionBuilder =
       Value<int?> promoId,
       Value<String?> promoType,
       Value<double?> promoAmount,
+      Value<int?> categoryServerId,
+      Value<String?> categoryNameSnapshot,
       Value<double> optionsPrice,
       required int qty,
       Value<String?> customerNote,
@@ -14967,6 +16089,8 @@ typedef $$LocalOrderItemsTableUpdateCompanionBuilder =
       Value<int?> promoId,
       Value<String?> promoType,
       Value<double?> promoAmount,
+      Value<int?> categoryServerId,
+      Value<String?> categoryNameSnapshot,
       Value<double> optionsPrice,
       Value<int> qty,
       Value<String?> customerNote,
@@ -15026,6 +16150,16 @@ class $$LocalOrderItemsTableFilterComposer
 
   ColumnFilters<double> get promoAmount => $composableBuilder(
     column: $table.promoAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get categoryServerId => $composableBuilder(
+    column: $table.categoryServerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get categoryNameSnapshot => $composableBuilder(
+    column: $table.categoryNameSnapshot,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15109,6 +16243,16 @@ class $$LocalOrderItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get categoryServerId => $composableBuilder(
+    column: $table.categoryServerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get categoryNameSnapshot => $composableBuilder(
+    column: $table.categoryNameSnapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get optionsPrice => $composableBuilder(
     column: $table.optionsPrice,
     builder: (column) => ColumnOrderings(column),
@@ -15181,6 +16325,16 @@ class $$LocalOrderItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get categoryServerId => $composableBuilder(
+    column: $table.categoryServerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get categoryNameSnapshot => $composableBuilder(
+    column: $table.categoryNameSnapshot,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get optionsPrice => $composableBuilder(
     column: $table.optionsPrice,
     builder: (column) => column,
@@ -15245,6 +16399,8 @@ class $$LocalOrderItemsTableTableManager
                 Value<int?> promoId = const Value.absent(),
                 Value<String?> promoType = const Value.absent(),
                 Value<double?> promoAmount = const Value.absent(),
+                Value<int?> categoryServerId = const Value.absent(),
+                Value<String?> categoryNameSnapshot = const Value.absent(),
                 Value<double> optionsPrice = const Value.absent(),
                 Value<int> qty = const Value.absent(),
                 Value<String?> customerNote = const Value.absent(),
@@ -15261,6 +16417,8 @@ class $$LocalOrderItemsTableTableManager
                 promoId: promoId,
                 promoType: promoType,
                 promoAmount: promoAmount,
+                categoryServerId: categoryServerId,
+                categoryNameSnapshot: categoryNameSnapshot,
                 optionsPrice: optionsPrice,
                 qty: qty,
                 customerNote: customerNote,
@@ -15279,6 +16437,8 @@ class $$LocalOrderItemsTableTableManager
                 Value<int?> promoId = const Value.absent(),
                 Value<String?> promoType = const Value.absent(),
                 Value<double?> promoAmount = const Value.absent(),
+                Value<int?> categoryServerId = const Value.absent(),
+                Value<String?> categoryNameSnapshot = const Value.absent(),
                 Value<double> optionsPrice = const Value.absent(),
                 required int qty,
                 Value<String?> customerNote = const Value.absent(),
@@ -15295,6 +16455,8 @@ class $$LocalOrderItemsTableTableManager
                 promoId: promoId,
                 promoType: promoType,
                 promoAmount: promoAmount,
+                categoryServerId: categoryServerId,
+                categoryNameSnapshot: categoryNameSnapshot,
                 optionsPrice: optionsPrice,
                 qty: qty,
                 customerNote: customerNote,
@@ -16376,6 +17538,7 @@ typedef $$CachedPaymentOrdersTableCreateCompanionBuilder =
       Value<String?> latestPaymentJson,
       Value<String?> paymentMethod,
       required String orderStatus,
+      Value<String?> detailJson,
       Value<double> subtotal,
       Value<double> ppnPercent,
       Value<bool> isPpnActive,
@@ -16395,6 +17558,7 @@ typedef $$CachedPaymentOrdersTableUpdateCompanionBuilder =
       Value<String?> latestPaymentJson,
       Value<String?> paymentMethod,
       Value<String> orderStatus,
+      Value<String?> detailJson,
       Value<double> subtotal,
       Value<double> ppnPercent,
       Value<bool> isPpnActive,
@@ -16451,6 +17615,11 @@ class $$CachedPaymentOrdersTableFilterComposer
 
   ColumnFilters<String> get orderStatus => $composableBuilder(
     column: $table.orderStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16544,6 +17713,11 @@ class $$CachedPaymentOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get subtotal => $composableBuilder(
     column: $table.subtotal,
     builder: (column) => ColumnOrderings(column),
@@ -16627,6 +17801,11 @@ class $$CachedPaymentOrdersTableAnnotationComposer
 
   GeneratedColumn<String> get orderStatus => $composableBuilder(
     column: $table.orderStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
     builder: (column) => column,
   );
 
@@ -16714,6 +17893,7 @@ class $$CachedPaymentOrdersTableTableManager
                 Value<String?> latestPaymentJson = const Value.absent(),
                 Value<String?> paymentMethod = const Value.absent(),
                 Value<String> orderStatus = const Value.absent(),
+                Value<String?> detailJson = const Value.absent(),
                 Value<double> subtotal = const Value.absent(),
                 Value<double> ppnPercent = const Value.absent(),
                 Value<bool> isPpnActive = const Value.absent(),
@@ -16731,6 +17911,7 @@ class $$CachedPaymentOrdersTableTableManager
                 latestPaymentJson: latestPaymentJson,
                 paymentMethod: paymentMethod,
                 orderStatus: orderStatus,
+                detailJson: detailJson,
                 subtotal: subtotal,
                 ppnPercent: ppnPercent,
                 isPpnActive: isPpnActive,
@@ -16750,6 +17931,7 @@ class $$CachedPaymentOrdersTableTableManager
                 Value<String?> latestPaymentJson = const Value.absent(),
                 Value<String?> paymentMethod = const Value.absent(),
                 required String orderStatus,
+                Value<String?> detailJson = const Value.absent(),
                 Value<double> subtotal = const Value.absent(),
                 Value<double> ppnPercent = const Value.absent(),
                 Value<bool> isPpnActive = const Value.absent(),
@@ -16767,6 +17949,7 @@ class $$CachedPaymentOrdersTableTableManager
                 latestPaymentJson: latestPaymentJson,
                 paymentMethod: paymentMethod,
                 orderStatus: orderStatus,
+                detailJson: detailJson,
                 subtotal: subtotal,
                 ppnPercent: ppnPercent,
                 isPpnActive: isPpnActive,
@@ -16813,6 +17996,7 @@ typedef $$CachedProcessOrdersTableCreateCompanionBuilder =
       Value<String?> tableNo,
       Value<String?> processRequestJson,
       Value<String?> latestProcessJson,
+      Value<String?> detailJson,
       Value<String?> paymentMethod,
       required String orderStatus,
       Value<double> subtotal,
@@ -16831,6 +18015,7 @@ typedef $$CachedProcessOrdersTableUpdateCompanionBuilder =
       Value<String?> tableNo,
       Value<String?> processRequestJson,
       Value<String?> latestProcessJson,
+      Value<String?> detailJson,
       Value<String?> paymentMethod,
       Value<String> orderStatus,
       Value<double> subtotal,
@@ -16878,6 +18063,11 @@ class $$CachedProcessOrdersTableFilterComposer
 
   ColumnFilters<String> get latestProcessJson => $composableBuilder(
     column: $table.latestProcessJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16966,6 +18156,11 @@ class $$CachedProcessOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get paymentMethod => $composableBuilder(
     column: $table.paymentMethod,
     builder: (column) => ColumnOrderings(column),
@@ -17044,6 +18239,11 @@ class $$CachedProcessOrdersTableAnnotationComposer
 
   GeneratedColumn<String> get latestProcessJson => $composableBuilder(
     column: $table.latestProcessJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
     builder: (column) => column,
   );
 
@@ -17136,6 +18336,7 @@ class $$CachedProcessOrdersTableTableManager
                 Value<String?> tableNo = const Value.absent(),
                 Value<String?> processRequestJson = const Value.absent(),
                 Value<String?> latestProcessJson = const Value.absent(),
+                Value<String?> detailJson = const Value.absent(),
                 Value<String?> paymentMethod = const Value.absent(),
                 Value<String> orderStatus = const Value.absent(),
                 Value<double> subtotal = const Value.absent(),
@@ -17152,6 +18353,7 @@ class $$CachedProcessOrdersTableTableManager
                 tableNo: tableNo,
                 processRequestJson: processRequestJson,
                 latestProcessJson: latestProcessJson,
+                detailJson: detailJson,
                 paymentMethod: paymentMethod,
                 orderStatus: orderStatus,
                 subtotal: subtotal,
@@ -17170,6 +18372,7 @@ class $$CachedProcessOrdersTableTableManager
                 Value<String?> tableNo = const Value.absent(),
                 Value<String?> processRequestJson = const Value.absent(),
                 Value<String?> latestProcessJson = const Value.absent(),
+                Value<String?> detailJson = const Value.absent(),
                 Value<String?> paymentMethod = const Value.absent(),
                 required String orderStatus,
                 Value<double> subtotal = const Value.absent(),
@@ -17186,6 +18389,7 @@ class $$CachedProcessOrdersTableTableManager
                 tableNo: tableNo,
                 processRequestJson: processRequestJson,
                 latestProcessJson: latestProcessJson,
+                detailJson: detailJson,
                 paymentMethod: paymentMethod,
                 orderStatus: orderStatus,
                 subtotal: subtotal,
@@ -17728,6 +18932,416 @@ typedef $$CachedPaymentOrderItemOptionsTableProcessedTableManager =
       CachedPaymentOrderItemOption,
       PrefetchHooks Function()
     >;
+typedef $$CachedDoneOrdersTableCreateCompanionBuilder =
+    CachedDoneOrdersCompanion Function({
+      Value<int> serverId,
+      required String bookingOrderCode,
+      required String customerName,
+      Value<String?> tableNo,
+      Value<String?> doneRequestJson,
+      Value<String?> latestDoneJson,
+      Value<String?> paymentMethod,
+      required String orderStatus,
+      Value<String?> detailJson,
+      Value<double> subtotal,
+      Value<double> ppnPercent,
+      Value<bool> isPpnActive,
+      Value<bool> isSynced,
+      Value<bool> deletedLocally,
+      Value<DateTime?> syncedAt,
+    });
+typedef $$CachedDoneOrdersTableUpdateCompanionBuilder =
+    CachedDoneOrdersCompanion Function({
+      Value<int> serverId,
+      Value<String> bookingOrderCode,
+      Value<String> customerName,
+      Value<String?> tableNo,
+      Value<String?> doneRequestJson,
+      Value<String?> latestDoneJson,
+      Value<String?> paymentMethod,
+      Value<String> orderStatus,
+      Value<String?> detailJson,
+      Value<double> subtotal,
+      Value<double> ppnPercent,
+      Value<bool> isPpnActive,
+      Value<bool> isSynced,
+      Value<bool> deletedLocally,
+      Value<DateTime?> syncedAt,
+    });
+
+class $$CachedDoneOrdersTableFilterComposer
+    extends Composer<_$CashierDb, $CachedDoneOrdersTable> {
+  $$CachedDoneOrdersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookingOrderCode => $composableBuilder(
+    column: $table.bookingOrderCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customerName => $composableBuilder(
+    column: $table.customerName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tableNo => $composableBuilder(
+    column: $table.tableNo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get doneRequestJson => $composableBuilder(
+    column: $table.doneRequestJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get latestDoneJson => $composableBuilder(
+    column: $table.latestDoneJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get orderStatus => $composableBuilder(
+    column: $table.orderStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get subtotal => $composableBuilder(
+    column: $table.subtotal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get ppnPercent => $composableBuilder(
+    column: $table.ppnPercent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSynced => $composableBuilder(
+    column: $table.isSynced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deletedLocally => $composableBuilder(
+    column: $table.deletedLocally,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
+    column: $table.syncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CachedDoneOrdersTableOrderingComposer
+    extends Composer<_$CashierDb, $CachedDoneOrdersTable> {
+  $$CachedDoneOrdersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookingOrderCode => $composableBuilder(
+    column: $table.bookingOrderCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customerName => $composableBuilder(
+    column: $table.customerName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tableNo => $composableBuilder(
+    column: $table.tableNo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get doneRequestJson => $composableBuilder(
+    column: $table.doneRequestJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get latestDoneJson => $composableBuilder(
+    column: $table.latestDoneJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get orderStatus => $composableBuilder(
+    column: $table.orderStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get subtotal => $composableBuilder(
+    column: $table.subtotal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get ppnPercent => $composableBuilder(
+    column: $table.ppnPercent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isSynced => $composableBuilder(
+    column: $table.isSynced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deletedLocally => $composableBuilder(
+    column: $table.deletedLocally,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
+    column: $table.syncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CachedDoneOrdersTableAnnotationComposer
+    extends Composer<_$CashierDb, $CachedDoneOrdersTable> {
+  $$CachedDoneOrdersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get bookingOrderCode => $composableBuilder(
+    column: $table.bookingOrderCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get customerName => $composableBuilder(
+    column: $table.customerName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tableNo =>
+      $composableBuilder(column: $table.tableNo, builder: (column) => column);
+
+  GeneratedColumn<String> get doneRequestJson => $composableBuilder(
+    column: $table.doneRequestJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get latestDoneJson => $composableBuilder(
+    column: $table.latestDoneJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get orderStatus => $composableBuilder(
+    column: $table.orderStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get subtotal =>
+      $composableBuilder(column: $table.subtotal, builder: (column) => column);
+
+  GeneratedColumn<double> get ppnPercent => $composableBuilder(
+    column: $table.ppnPercent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isSynced =>
+      $composableBuilder(column: $table.isSynced, builder: (column) => column);
+
+  GeneratedColumn<bool> get deletedLocally => $composableBuilder(
+    column: $table.deletedLocally,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+}
+
+class $$CachedDoneOrdersTableTableManager
+    extends
+        RootTableManager<
+          _$CashierDb,
+          $CachedDoneOrdersTable,
+          CachedDoneOrder,
+          $$CachedDoneOrdersTableFilterComposer,
+          $$CachedDoneOrdersTableOrderingComposer,
+          $$CachedDoneOrdersTableAnnotationComposer,
+          $$CachedDoneOrdersTableCreateCompanionBuilder,
+          $$CachedDoneOrdersTableUpdateCompanionBuilder,
+          (
+            CachedDoneOrder,
+            BaseReferences<
+              _$CashierDb,
+              $CachedDoneOrdersTable,
+              CachedDoneOrder
+            >,
+          ),
+          CachedDoneOrder,
+          PrefetchHooks Function()
+        > {
+  $$CachedDoneOrdersTableTableManager(
+    _$CashierDb db,
+    $CachedDoneOrdersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CachedDoneOrdersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CachedDoneOrdersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CachedDoneOrdersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> serverId = const Value.absent(),
+                Value<String> bookingOrderCode = const Value.absent(),
+                Value<String> customerName = const Value.absent(),
+                Value<String?> tableNo = const Value.absent(),
+                Value<String?> doneRequestJson = const Value.absent(),
+                Value<String?> latestDoneJson = const Value.absent(),
+                Value<String?> paymentMethod = const Value.absent(),
+                Value<String> orderStatus = const Value.absent(),
+                Value<String?> detailJson = const Value.absent(),
+                Value<double> subtotal = const Value.absent(),
+                Value<double> ppnPercent = const Value.absent(),
+                Value<bool> isPpnActive = const Value.absent(),
+                Value<bool> isSynced = const Value.absent(),
+                Value<bool> deletedLocally = const Value.absent(),
+                Value<DateTime?> syncedAt = const Value.absent(),
+              }) => CachedDoneOrdersCompanion(
+                serverId: serverId,
+                bookingOrderCode: bookingOrderCode,
+                customerName: customerName,
+                tableNo: tableNo,
+                doneRequestJson: doneRequestJson,
+                latestDoneJson: latestDoneJson,
+                paymentMethod: paymentMethod,
+                orderStatus: orderStatus,
+                detailJson: detailJson,
+                subtotal: subtotal,
+                ppnPercent: ppnPercent,
+                isPpnActive: isPpnActive,
+                isSynced: isSynced,
+                deletedLocally: deletedLocally,
+                syncedAt: syncedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> serverId = const Value.absent(),
+                required String bookingOrderCode,
+                required String customerName,
+                Value<String?> tableNo = const Value.absent(),
+                Value<String?> doneRequestJson = const Value.absent(),
+                Value<String?> latestDoneJson = const Value.absent(),
+                Value<String?> paymentMethod = const Value.absent(),
+                required String orderStatus,
+                Value<String?> detailJson = const Value.absent(),
+                Value<double> subtotal = const Value.absent(),
+                Value<double> ppnPercent = const Value.absent(),
+                Value<bool> isPpnActive = const Value.absent(),
+                Value<bool> isSynced = const Value.absent(),
+                Value<bool> deletedLocally = const Value.absent(),
+                Value<DateTime?> syncedAt = const Value.absent(),
+              }) => CachedDoneOrdersCompanion.insert(
+                serverId: serverId,
+                bookingOrderCode: bookingOrderCode,
+                customerName: customerName,
+                tableNo: tableNo,
+                doneRequestJson: doneRequestJson,
+                latestDoneJson: latestDoneJson,
+                paymentMethod: paymentMethod,
+                orderStatus: orderStatus,
+                detailJson: detailJson,
+                subtotal: subtotal,
+                ppnPercent: ppnPercent,
+                isPpnActive: isPpnActive,
+                isSynced: isSynced,
+                deletedLocally: deletedLocally,
+                syncedAt: syncedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CachedDoneOrdersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$CashierDb,
+      $CachedDoneOrdersTable,
+      CachedDoneOrder,
+      $$CachedDoneOrdersTableFilterComposer,
+      $$CachedDoneOrdersTableOrderingComposer,
+      $$CachedDoneOrdersTableAnnotationComposer,
+      $$CachedDoneOrdersTableCreateCompanionBuilder,
+      $$CachedDoneOrdersTableUpdateCompanionBuilder,
+      (
+        CachedDoneOrder,
+        BaseReferences<_$CashierDb, $CachedDoneOrdersTable, CachedDoneOrder>,
+      ),
+      CachedDoneOrder,
+      PrefetchHooks Function()
+    >;
 
 class $CashierDbManager {
   final _$CashierDb _db;
@@ -17769,4 +19383,6 @@ class $CashierDbManager {
         _db,
         _db.cachedPaymentOrderItemOptions,
       );
+  $$CachedDoneOrdersTableTableManager get cachedDoneOrders =>
+      $$CachedDoneOrdersTableTableManager(_db, _db.cachedDoneOrders);
 }

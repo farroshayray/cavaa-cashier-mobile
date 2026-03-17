@@ -33,6 +33,8 @@ import 'features/cashier/data/local/db/daos/local_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
+import 'features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
+import '/features/cashier/data/local/db/sync/local_reconciliation_service.dart';
 
 class CavaaApp extends StatefulWidget {
   const CavaaApp({super.key});
@@ -61,6 +63,8 @@ class _CavaaAppState extends State<CavaaApp> {
   late final CachedPaymentOrdersDao cachedPaymentOrdersDao;
   late final CachedPaymentMethodsDao cachedPaymentMethodsDao;
   late final CachedProcessOrdersDao cachedProcessOrdersDao;
+  late final CachedDoneOrdersDao cachedDoneOrdersDao;
+  late final LocalReconciliationService reconciliationService;
 
   @override
   void initState() {
@@ -73,6 +77,13 @@ class _CavaaAppState extends State<CavaaApp> {
     cachedPaymentOrdersDao = CachedPaymentOrdersDao(cashierDb);
     cachedPaymentMethodsDao = CachedPaymentMethodsDao(cashierDb);
     cachedProcessOrdersDao = CachedProcessOrdersDao(cashierDb);
+    cachedDoneOrdersDao = CachedDoneOrdersDao(cashierDb);
+    reconciliationService = LocalReconciliationService(
+      localOrdersDao: localOrdersDao,
+      cachedPaymentOrdersDao: cachedPaymentOrdersDao,
+      cachedProcessOrdersDao: cachedProcessOrdersDao,
+      cachedDoneOrdersDao: cachedDoneOrdersDao,
+    );
 
     authApi = AuthApi(dioClient);
     authRepo = AuthRepository(api: authApi, storage: storage);
@@ -155,6 +166,8 @@ class _CavaaAppState extends State<CavaaApp> {
             ordersRepo: ordersRepo,
             cachedPaymentOrdersDao: cachedPaymentOrdersDao,
             cachedProcessOrdersDao: cachedProcessOrdersDao,
+            cachedDoneOrdersDao: cachedDoneOrdersDao,
+            reconciliationService: reconciliationService,
           ),
         ),
 
@@ -173,6 +186,8 @@ class _CavaaAppState extends State<CavaaApp> {
             localOrdersDao: localOrdersDao,
             cachedPaymentOrdersDao: cachedPaymentOrdersDao,
             cachedPaymentMethodsDao: cachedPaymentMethodsDao,
+            cachedProcessOrdersDao: cachedProcessOrdersDao,
+            cachedDoneOrdersDao: cachedDoneOrdersDao,
             connectivity: ctx.read<ConnectivityStatusProvider>(),
           ),
         ),
@@ -181,10 +196,18 @@ class _CavaaAppState extends State<CavaaApp> {
             ordersRepo,
             localOrdersDao,
             cachedProcessOrdersDao,
+            cachedDoneOrdersDao,
             ctx.read<ConnectivityStatusProvider>(),
           ),
         ),
-        ChangeNotifierProvider(create: (_) => DoneProvider(ordersRepo)),
+        ChangeNotifierProvider(
+          create: (ctx) => DoneProvider(
+            ordersRepo,
+            localOrdersDao,
+            cachedDoneOrdersDao,
+            ctx.read<ConnectivityStatusProvider>(),
+          ),
+        ),
         ChangeNotifierProvider(
           create: (_) => PrinterManager(PrinterPrefs())..init(autoConnect: true),
         ),

@@ -65,6 +65,8 @@ class LocalOrderMapper {
     int? promoId,
     String? promoType,
     double? promoAmount,
+    int? categoryServerId,
+    String? categoryNameSnapshot,
   }) {
     return LocalOrderItemsCompanion.insert(
       localId: localId,
@@ -74,14 +76,14 @@ class LocalOrderMapper {
       basePrice: Value(basePrice),
       qty: qty,
       createdAtLocal: DateTime.now(),
-
       customerNote: Value(customerNote),
       optionsPrice: Value(optionsPrice),
       lineTotal: Value(lineTotal),
-
       promoId: Value(promoId),
       promoType: Value(promoType),
       promoAmount: Value(promoAmount),
+      categoryServerId: Value(categoryServerId),
+      categoryNameSnapshot: Value(categoryNameSnapshot),
     );
   }
 

@@ -5,6 +5,8 @@ import '/features/cashier/data/purchase_api.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
+import '/features/cashier/data/local/db/sync/local_reconciliation_service.dart';
+import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 
 class SyncService {
   final LocalOrdersDao localOrdersDao;
@@ -12,6 +14,8 @@ class SyncService {
   final PurchaseApi purchaseApi;
   final OrdersRepository ordersRepo;
   final CachedProcessOrdersDao cachedProcessOrdersDao;
+  final LocalReconciliationService reconciliationService;
+  final CachedDoneOrdersDao cachedDoneOrdersDao;
 
   bool _isRunning = false;
 
@@ -21,6 +25,8 @@ class SyncService {
     required this.purchaseApi,
     required this.ordersRepo,
     required this.cachedProcessOrdersDao,
+    required this.cachedDoneOrdersDao,
+    required this.reconciliationService,
   });
 
   bool get isRunning => _isRunning;
@@ -66,6 +72,7 @@ class SyncService {
       }
 
       await syncPendingProcessOrders();
+      await reconciliationService.reconcileAll();
     } finally {
       _isRunning = false;
     }
@@ -327,6 +334,8 @@ class SyncService {
           serverOrderCode: serverOrderCode,
         );
 
+        await reconciliationService.reconcileAll();
+
         final after = await localOrdersDao.getOrderByLocalId(localOrderId);
         debugPrint(
           '🟢 markOrderSynced result '
@@ -369,16 +378,20 @@ class SyncService {
 
           case 'FINISH':
             await ordersRepo.finishOrder(row.serverId);
-            await cachedProcessOrdersDao.markFinishedOnline(
+
+            await cachedDoneOrdersDao.markSyncedByServerId(
               row.serverId,
-              latestJson: row.latestProcessJson,
+              latestDoneJson: row.latestProcessJson,
             );
+
+            await cachedProcessOrdersDao.deleteByServerId(row.serverId);
             break;
         }
       } catch (e) {
         debugPrint('syncPendingProcessOrders failed for ${row.serverId}: $e');
       }
     }
+    await reconciliationService.reconcileAll();
   }
 
   Future<Map<String, dynamic>> _createOrderOnBackend(LocalOrder order) async {

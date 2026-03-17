@@ -97,7 +97,26 @@ class CachedProcessOrdersDao extends DatabaseAccessor<CashierDb>
         }
 
         await into(cachedProcessOrders).insert(
-          row,
+          CachedProcessOrdersCompanion(
+            serverId: row.serverId,
+            bookingOrderCode: row.bookingOrderCode,
+            customerName: row.customerName,
+            tableNo: row.tableNo,
+            processRequestJson: row.processRequestJson,
+            latestProcessJson: row.latestProcessJson,
+            detailJson: existing != null
+                ? Value(existing.detailJson)
+                : const Value.absent(),
+            paymentMethod: row.paymentMethod,
+            orderStatus: row.orderStatus,
+            subtotal: row.subtotal,
+            ppnPercent: row.ppnPercent,
+            isPpnActive: row.isPpnActive,
+            pendingAction: row.pendingAction,
+            isSynced: row.isSynced,
+            deletedLocally: row.deletedLocally,
+            syncedAt: row.syncedAt,
+          ),
           mode: InsertMode.insertOrReplace,
         );
       }
@@ -172,6 +191,23 @@ class CachedProcessOrdersDao extends DatabaseAccessor<CashierDb>
         latestProcessJson: Value(latestJson),
         pendingAction: const Value('FINISH'),
         isSynced: const Value(false),
+        syncedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> deleteByServerId(int serverId) {
+    return (delete(cachedProcessOrders)
+          ..where((t) => t.serverId.equals(serverId)))
+        .go();
+  }
+
+  Future<void> saveDetailJson(int serverId, String detailJson) {
+    return (update(cachedProcessOrders)
+          ..where((t) => t.serverId.equals(serverId)))
+        .write(
+      CachedProcessOrdersCompanion(
+        detailJson: Value(detailJson),
         syncedAt: Value(DateTime.now()),
       ),
     );

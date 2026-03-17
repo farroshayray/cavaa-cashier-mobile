@@ -96,7 +96,16 @@ class LocalOrdersDao {
     String? query,
   }) async {
     final rows = await (db.select(db.localOrders)
-          ..where((tbl) => tbl.orderStatusLocal.equals('UNPAID'))
+          ..where((tbl) =>
+              tbl.orderStatusLocal.equals('UNPAID') &
+              (
+                tbl.syncStatus.equals('PENDING') |
+                tbl.syncStatus.equals('FAILED') |
+                tbl.syncStatus.equals('SYNCING') |
+                tbl.syncStatus.equals('PENDING_PAYMENT') |
+                tbl.syncStatus.equals('PENDING_PROCESS') |
+                tbl.syncStatus.equals('PENDING_FINISH')
+              ))
           ..orderBy([(tbl) => OrderingTerm.desc(tbl.createdAtLocal)]))
         .get();
 
@@ -260,6 +269,41 @@ class LocalOrdersDao {
       if (decoded is Map) {
         final snap = Map<String, dynamic>.from(decoded);
 
+        final rebuiltOrderDetails = bundle.items.map((item) {
+          final opts = bundle.optionsByItemId[item.localId] ?? const <LocalOrderItemOption>[];
+
+          return <String, dynamic>{
+            'id': null,
+            'product_id': item.productServerId,
+            'quantity': item.qty,
+            'base_price': item.basePrice,
+            'promo_amount': item.promoAmount ?? 0,
+            'product_name': item.productNameSnapshot,
+            'customer_note': item.customerNote,
+            'partner_product': {
+              'id': item.productServerId,
+              'name': item.productNameSnapshot,
+              'category': {
+                'id': item.categoryServerId,
+                'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
+              },
+            },
+            'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
+            'order_detail_options': opts.map((o) {
+              return <String, dynamic>{
+                'price': o.price,
+                'option': {
+                  'id': o.optionServerId,
+                  'name': o.optionNameSnapshot,
+                  'parent': {
+                    'name': o.parentNameSnapshot ?? 'Opsi',
+                  },
+                },
+              };
+            }).toList(),
+          };
+        }).toList();
+
         snap['id'] = order.serverId ?? snap['id'] ?? -1;
         snap['local_id'] = order.localId;
         snap['booking_order_code'] =
@@ -274,6 +318,9 @@ class LocalOrdersDao {
         snap['grand_total'] = order.grandTotal;
         snap['is_local_only'] = true;
         snap['sync_status'] = order.syncStatus;
+        snap['table'] ??= {
+          'table_no': order.tableNoSnapshot ?? '-',
+        };
 
         final payment = snap['payment'] is Map
             ? Map<String, dynamic>.from(snap['payment'])
@@ -283,6 +330,8 @@ class LocalOrdersDao {
         payment['paid_amount'] ??= order.paidAmountLocal;
         payment['change_amount'] ??= order.changeAmountLocal;
         snap['payment'] = payment;
+
+        snap['order_details'] = rebuiltOrderDetails;
 
         return snap;
       }
@@ -335,6 +384,21 @@ class LocalOrdersDao {
         'promo_amount': item.promoAmount ?? 0,
         'product_name': item.productNameSnapshot,
         'customer_note': item.customerNote,
+
+        // tambahkan struktur mirip API
+        'partner_product': {
+          'id': item.productServerId,
+          'name': item.productNameSnapshot,
+          'category': {
+            'id': item.categoryServerId,
+            'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
+          },
+        },
+        'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
+
+        // optional: cadangan kalau printer baca field datar
+        'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
+
         'order_detail_options': opts.map((o) {
           return <String, dynamic>{
             'price': o.price,
@@ -353,7 +417,7 @@ class LocalOrdersDao {
     return <String, dynamic>{
       'id': order.serverId ?? -1,
       'local_id': order.localId,
-      'booking_order_code': order.serverOrderCode ?? order.clientOrderCode,
+      'booking_order_code': order.serverOrderCode ?? order.clientOrderCode ?? '-',
       'customer_name': order.customerName,
       'order_status': order.orderStatusLocal,
       'payment_method':
@@ -439,7 +503,6 @@ class LocalOrdersDao {
                 'PENDING_PROCESS',
                 'FAILED',
                 'SYNCING',
-                'SYNCED',
               ]))
           ..orderBy([
             (t) => OrderingTerm.asc(t.createdAtLocal),
@@ -557,6 +620,120 @@ class LocalOrdersDao {
       LocalOrdersCompanion(
         backendSyncStage: Value(stage),
         updatedAtLocal: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> updateOrderStatusLocal({
+    required String localId,
+    required String status,
+  }) {
+    String syncStatus = 'PENDING';
+
+    if (status == 'PAID') {
+      syncStatus = 'PENDING_PAYMENT';
+    } else if (status == 'PROCESSED') {
+      syncStatus = 'PENDING_PROCESS';
+    } else if (status == 'SERVED') {
+      syncStatus = 'PENDING_FINISH';
+    }
+
+    return (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
+      LocalOrdersCompanion(
+        orderStatusLocal: Value(status),
+        syncStatus: Value(syncStatus),
+        updatedAtLocal: Value(DateTime.now()),
+        lastError: const Value(null),
+      ),
+    );
+  }
+
+  Future<List<LocalOrder>> getLocalDoneOrders() {
+    return (db.select(db.localOrders)
+          ..where((t) =>
+              t.orderStatusLocal.equals('SERVED') &
+              t.syncStatus.isIn([
+                'PENDING_FINISH',
+                'FAILED',
+                'SYNCING',
+              ]))
+          ..orderBy([
+            (t) => OrderingTerm.asc(t.createdAtLocal),
+          ]))
+        .get();
+  }
+
+  Future<LocalOrder?> getOrderByServerId(int serverId) {
+    return (db.select(db.localOrders)
+          ..where((t) => t.serverId.equals(serverId)))
+        .getSingleOrNull();
+  }
+
+  Future<void> updateOrderStatusByServerId({
+    required int serverId,
+    required String status,
+  }) async {
+    String syncStatus = 'SYNCED';
+    String backendStage = 'NONE';
+
+    if (status == 'UNPAID') {
+      backendStage = 'PURCHASED';
+    } else if (status == 'PAID') {
+      backendStage = 'PAID';
+    } else if (status == 'PROCESSED') {
+      backendStage = 'PROCESSED';
+    } else if (status == 'SERVED') {
+      backendStage = 'SERVED';
+    }
+
+    await (db.update(db.localOrders)
+          ..where((t) => t.serverId.equals(serverId)))
+        .write(
+      LocalOrdersCompanion(
+        orderStatusLocal: Value(status),
+        syncStatus: Value(syncStatus),
+        backendSyncStage: Value(backendStage),
+        updatedAtLocal: Value(DateTime.now()),
+        lastError: const Value(null),
+      ),
+    );
+  }
+
+  Future<void> deleteOrderByServerId(int serverId) async {
+    final row = await getOrderByServerId(serverId);
+    if (row == null) return;
+    await deleteOrderByLocalId(row.localId);
+  }
+
+  Future<List<LocalOrder>> getAllActiveOrders() {
+    return (db.select(db.localOrders)
+          ..where((t) => t.syncStatus.equals('PENDING_DELETE').not())
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAtLocal)]))
+        .get();
+  }
+
+  Future<LocalOrder?> findByServerOrderCode(String code) {
+    return (db.select(db.localOrders)
+          ..where((t) => t.serverOrderCode.equals(code)))
+        .getSingleOrNull();
+  }
+
+  Future<void> updateOrderStatusByLocalId({
+    required String localId,
+    required String status,
+    String? syncStatus,
+    String? backendStage,
+  }) async {
+    await (db.update(db.localOrders)
+          ..where((t) => t.localId.equals(localId)))
+        .write(
+      LocalOrdersCompanion(
+        orderStatusLocal: Value(status),
+        syncStatus: syncStatus != null ? Value(syncStatus) : const Value.absent(),
+        backendSyncStage:
+            backendStage != null ? Value(backendStage) : const Value.absent(),
+        updatedAtLocal: Value(DateTime.now()),
+        lastError: const Value(null),
       ),
     );
   }

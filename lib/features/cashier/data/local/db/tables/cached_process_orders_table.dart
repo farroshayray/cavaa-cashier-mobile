@@ -8,6 +8,7 @@ class CachedProcessOrders extends Table {
 
   TextColumn get processRequestJson => text().nullable()();
   TextColumn get latestProcessJson => text().nullable()();
+  TextColumn get detailJson => text().nullable()();
 
   TextColumn get paymentMethod => text().nullable()();
   TextColumn get orderStatus => text()();

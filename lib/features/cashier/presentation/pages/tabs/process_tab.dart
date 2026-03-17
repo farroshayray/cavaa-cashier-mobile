@@ -236,6 +236,11 @@ class _ProcessViewState extends State<_ProcessView> {
                   itemBuilder: (_, i) {
                     final data = vm.items[i];
                     final id = _toId(data['id']);
+                    final actionKey = id > 0
+                        ? id
+                        : ((data['local_id'] ?? '').toString().isNotEmpty
+                            ? data['local_id'].toString().hashCode
+                            : data.hashCode);
                     final printKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
                     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
@@ -252,7 +257,7 @@ class _ProcessViewState extends State<_ProcessView> {
                       child: _ProcessOrderCard(
                         data: data,
                         isPrinting: _printingIds.contains(printKey),
-                        isActing: vm.isActionLoading(id),
+                        isActing: vm.isActionLoading(actionKey),
                         onDetail: () async {
                           final row = vm.items[i];
                           final id = _toId(row['id']);
@@ -277,10 +282,9 @@ class _ProcessViewState extends State<_ProcessView> {
                           await _printOrder(row);
                         },
                         onProcess: () async {
-                          final id = _toId(vm.items[i]['id']);
-                          if (id <= 0) return;
+                          final row = vm.items[i];
                           try {
-                            final res = await context.read<ProcessProvider>().actionProcess(id);
+                            final res = await context.read<ProcessProvider>().actionProcess(row);
                             if (!mounted) return;
 
                             final status = (res['status'] ?? 'ok').toString();
@@ -301,10 +305,9 @@ class _ProcessViewState extends State<_ProcessView> {
                           }
                         },
                         onCancelProcess: () async {
-                          final id = _toId(vm.items[i]['id']);
-                          if (id <= 0) return;
+                          final row = vm.items[i];
                           try {
-                            final res = await context.read<ProcessProvider>().actionCancelProcess(id);
+                            final res = await context.read<ProcessProvider>().actionCancelProcess(row);
                             if (!mounted) return;
 
                             final message =
@@ -321,10 +324,10 @@ class _ProcessViewState extends State<_ProcessView> {
                           }
                         },
                         onFinish: () async {
-                          final id = _toId(vm.items[i]['id']);
-                          if (id <= 0) return;
+                          final row = vm.items[i];
                           try {
-                            final res = await context.read<ProcessProvider>().actionFinish(id);
+                            final res = await context.read<ProcessProvider>().actionFinish(row);
+
                             await _refreshKeepScroll();
                             await context.read<DoneProvider>().load();
 
@@ -336,7 +339,6 @@ class _ProcessViewState extends State<_ProcessView> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(message)),
                             );
-                            
                           } catch (e) {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -906,8 +908,38 @@ class _ProcessOrderCard extends StatelessWidget {
 
   Widget _statusChip() {
     final st = (data['order_status'] ?? '').toString();
-    final isSynced = data['is_synced'] != false;
+    final isLocalOnly = data['is_local_only'] == true;
+    final isSynced = data['is_synced'] == true;
     final pendingAction = (data['pending_action'] ?? '').toString();
+
+    if (isLocalOnly) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFDE68A)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF59E0B),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Pending Sync',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (!isSynced) {
       String label = 'Menunggu sync';

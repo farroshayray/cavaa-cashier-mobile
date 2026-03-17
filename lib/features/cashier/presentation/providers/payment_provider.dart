@@ -7,6 +7,8 @@ import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
+import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
+import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import 'dart:convert';
 
 import 'dart:io';
@@ -21,6 +23,8 @@ class PaymentProvider extends ChangeNotifier {
   final CachedPaymentOrdersDao cachedPaymentOrdersDao;
   final CachedPaymentMethodsDao cachedPaymentMethodsDao;
   final ConnectivityStatusProvider connectivity;
+  final CachedProcessOrdersDao cachedProcessOrdersDao;
+  final CachedDoneOrdersDao cachedDoneOrdersDao;
   
 
   PaymentProvider({
@@ -28,6 +32,8 @@ class PaymentProvider extends ChangeNotifier {
     required this.localOrdersDao,
     required this.cachedPaymentOrdersDao,
     required this.cachedPaymentMethodsDao,
+    required this.cachedProcessOrdersDao,
+    required this.cachedDoneOrdersDao,
     required this.connectivity,
   });
 
@@ -57,6 +63,22 @@ class PaymentProvider extends ChangeNotifier {
       final hiddenOrderCodes = advancedLocalOrders
           .map((e) => e.serverOrderCode ?? e.clientOrderCode)
           .where((e) => e.trim().isNotEmpty)
+          .toSet();
+
+      final processRows = await cachedProcessOrdersDao.getAllActive();
+      final doneRows = await cachedDoneOrdersDao.getAllActive();
+
+      final processServerIds = processRows
+          .map((e) => e.serverId)
+          .toSet();
+
+      final doneServerIds = doneRows
+          .map((e) => e.serverId)
+          .toSet();
+
+      final doneOrderCodes = doneRows
+          .map((e) => e.bookingOrderCode.trim())
+          .where((e) => e.isNotEmpty)
           .toSet();
 
       try {
@@ -102,14 +124,36 @@ class PaymentProvider extends ChangeNotifier {
         query: query.isEmpty ? null : query,
       );
 
-      final localItems = localOrders.map((o) {
+      final visibleLocalOrders = localOrders.where((o) {
+        final alreadyMirroredOnServer =
+            o.syncStatus == 'SYNCED' &&
+            o.serverId != null &&
+            o.serverId! > 0;
+
+        final hiddenByProcess =
+            o.serverId != null && processServerIds.contains(o.serverId);
+
+        final hiddenByDoneId =
+            o.serverId != null && doneServerIds.contains(o.serverId);
+
+        final code = (o.serverOrderCode ?? o.clientOrderCode).trim();
+        final hiddenByDoneCode =
+            code.isNotEmpty && doneOrderCodes.contains(code);
+
+        return !(alreadyMirroredOnServer ||
+            hiddenByProcess ||
+            hiddenByDoneId ||
+            hiddenByDoneCode);
+      }).toList();
+
+      final localItems = visibleLocalOrders.map((o) {
         final tableNo = o.tableNoSnapshot ?? '-';
 
         return <String, dynamic>{
           'id': -1,
           'local_id': o.localId,
           'client_order_code': o.clientOrderCode,
-          'booking_order_code': o.clientOrderCode,
+          'booking_order_code': o.serverOrderCode ?? o.clientOrderCode,
           'customer_name': o.customerName,
           'customer': o.customerName,
           'order_name': o.customerName,
@@ -141,11 +185,25 @@ class PaymentProvider extends ChangeNotifier {
         final code = (e['booking_order_code'] ?? e['client_order_code'] ?? '')
             .toString()
             .trim();
+        final syncStatus = (e['sync_status'] ?? '').toString();
 
         final hiddenById = sid != null && sid > 0 && hiddenServerIds.contains(sid);
         final hiddenByCode = code.isNotEmpty && hiddenOrderCodes.contains(code);
 
-        return !(hiddenById || hiddenByCode);
+        final hiddenBecauseAlreadyInProcess =
+            sid != null && sid > 0 && processServerIds.contains(sid);
+
+        final hiddenBecauseAlreadyInDone =
+            (sid != null && sid > 0 && doneServerIds.contains(sid)) ||
+            (code.isNotEmpty && doneOrderCodes.contains(code));
+
+        final hiddenBecausePendingDelete = syncStatus == 'PENDING_DELETE';
+
+        return !(hiddenById ||
+            hiddenByCode ||
+            hiddenBecauseAlreadyInProcess ||
+            hiddenBecauseAlreadyInDone ||
+            hiddenBecausePendingDelete);
       }).toList();
 
       items = [
@@ -193,6 +251,17 @@ class PaymentProvider extends ChangeNotifier {
         : subtotal.toDouble();
 
     final createdAt = DateTime.tryParse((item['created_at'] ?? '').toString());
+    final updatedAt = DateTime.tryParse((item['updated_at'] ?? '').toString());
+
+    Map<String, dynamic>? paymentRequestJson;
+    if (item['payment_request'] is Map) {
+      paymentRequestJson = Map<String, dynamic>.from(item['payment_request']);
+    }
+
+    Map<String, dynamic>? latestPaymentJson;
+    if (item['latest_payment'] is Map) {
+      latestPaymentJson = Map<String, dynamic>.from(item['latest_payment']);
+    }
 
     return CachedPaymentOrdersCompanion(
       serverId: Value(serverId),
@@ -207,6 +276,14 @@ class PaymentProvider extends ChangeNotifier {
       isPpnActive: Value(isPpnActive),
       grandTotal: Value(grandTotal),
       createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+
+      paymentRequestJson: Value(
+        paymentRequestJson == null ? null : jsonEncode(paymentRequestJson),
+      ),
+      latestPaymentJson: Value(
+        latestPaymentJson == null ? null : jsonEncode(latestPaymentJson),
+      ),
     );
   }
 

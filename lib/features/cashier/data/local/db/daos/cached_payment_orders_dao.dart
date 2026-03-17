@@ -17,15 +17,45 @@ class CachedPaymentOrdersDao {
     required List<CachedPaymentOrdersCompanion> orders,
   }) async {
     await db.transaction(() async {
-      // penting:
-      // jangan hapus item/options detail di sini
-      // supaya cache detail offline tetap ada
-      await db.delete(db.cachedPaymentOrders).go();
+      for (final row in orders) {
+        final serverId = row.serverId.value;
+        if (serverId == null) continue;
 
-      if (orders.isNotEmpty) {
-        await db.batch((batch) {
-          batch.insertAll(db.cachedPaymentOrders, orders);
-        });
+        final existing = await (db.select(db.cachedPaymentOrders)
+              ..where((t) => t.serverId.equals(serverId)))
+            .getSingleOrNull();
+
+        await db.into(db.cachedPaymentOrders).insert(
+          CachedPaymentOrdersCompanion(
+            serverId: row.serverId,
+            bookingOrderCode: row.bookingOrderCode,
+            customerName: row.customerName,
+            tableNo: row.tableNo,
+
+            // pertahankan data detail lama kalau row baru belum punya
+            paymentRequestJson: row.paymentRequestJson.present
+                ? row.paymentRequestJson
+                : Value(existing?.paymentRequestJson),
+
+            latestPaymentJson: row.latestPaymentJson.present
+                ? row.latestPaymentJson
+                : Value(existing?.latestPaymentJson),
+
+            detailJson: Value(existing?.detailJson),
+
+            paymentMethod: row.paymentMethod,
+            orderStatus: row.orderStatus,
+            subtotal: row.subtotal,
+            ppnPercent: row.ppnPercent,
+            isPpnActive: row.isPpnActive,
+            isPendingDelete: Value(existing?.isPendingDelete ?? false),
+            grandTotal: row.grandTotal,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+            cachedAt: row.cachedAt,
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
       }
     });
   }
@@ -169,29 +199,30 @@ class CachedPaymentOrdersDao {
 
     await db.transaction(() async {
       await db.into(db.cachedPaymentOrders).insertOnConflictUpdate(
-            CachedPaymentOrdersCompanion(
-              serverId: Value(serverId),
-              bookingOrderCode: Value(bookingOrderCode),
-              customerName: Value(customerName),
-              tableNo: Value(tableNo),
-              paymentMethod: Value(paymentMethod),
-              orderStatus: Value(orderStatus),
-              subtotal: Value(subtotal),
-              ppnPercent: Value(ppnPercent),
-              isPpnActive: Value(isPpnActive),
-              grandTotal: Value(grandTotal),
-              paymentRequestJson: Value(
-                paymentRequestForCache == null ? null : jsonEncode(paymentRequestForCache),
-              ),
-              latestPaymentJson: Value(
-                latestPaymentForCache == null ? null : jsonEncode(latestPaymentForCache),
-              ),
-              createdAt: Value(createdAt),
-              updatedAt: Value(updatedAt),
-              cachedAt: Value(DateTime.now()),
-              isPendingDelete: const Value(false),
-            ),
-          );
+        CachedPaymentOrdersCompanion(
+          serverId: Value(serverId),
+          bookingOrderCode: Value(bookingOrderCode),
+          customerName: Value(customerName),
+          tableNo: Value(tableNo),
+          paymentMethod: Value(paymentMethod),
+          orderStatus: Value(orderStatus),
+          subtotal: Value(subtotal),
+          ppnPercent: Value(ppnPercent),
+          isPpnActive: Value(isPpnActive),
+          grandTotal: Value(grandTotal),
+          paymentRequestJson: Value(
+            paymentRequestForCache == null ? null : jsonEncode(paymentRequestForCache),
+          ),
+          latestPaymentJson: Value(
+            latestPaymentForCache == null ? null : jsonEncode(latestPaymentForCache),
+          ),
+          detailJson: Value(jsonEncode(detail)),
+          createdAt: Value(createdAt),
+          updatedAt: Value(updatedAt),
+          cachedAt: Value(DateTime.now()),
+          isPendingDelete: const Value(false),
+        ),
+      );
 
       await _deleteDetailOnlyByServerId(serverId);
 
@@ -274,23 +305,6 @@ class CachedPaymentOrdersDao {
 
     if (order == null) return null;
 
-    final itemRows = await (db.select(db.cachedPaymentOrderItems)
-          ..where((tbl) => tbl.orderServerId.equals(serverId)))
-        .get();
-
-    final detailIds = itemRows.map((e) => e.serverDetailId).toList();
-
-    final optionRows = detailIds.isEmpty
-        ? <CachedPaymentOrderItemOption>[]
-        : await (db.select(db.cachedPaymentOrderItemOptions)
-              ..where((tbl) => tbl.orderDetailServerId.isIn(detailIds)))
-            .get();
-
-    final optionsByDetailId = <int, List<CachedPaymentOrderItemOption>>{};
-    for (final opt in optionRows) {
-      optionsByDetailId.putIfAbsent(opt.orderDetailServerId, () => []).add(opt);
-    }
-
     Map<String, dynamic>? paymentRequest;
     if (order.paymentRequestJson != null &&
         order.paymentRequestJson!.trim().isNotEmpty) {
@@ -307,6 +321,98 @@ class CachedPaymentOrdersDao {
       if (decoded is Map) {
         latestPayment = Map<String, dynamic>.from(decoded);
       }
+    }
+
+    // =========================================================
+    // PRIORITAS 1: pakai detailJson utuh supaya category tetap ada
+    // =========================================================
+    if (order.detailJson != null && order.detailJson!.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(order.detailJson!);
+        if (decoded is Map) {
+          final detail = Map<String, dynamic>.from(decoded);
+
+          detail['id'] = order.serverId;
+          detail['server_id'] = order.serverId;
+          detail['booking_order_code'] = order.bookingOrderCode;
+          detail['customer_name'] = order.customerName;
+          detail['order_status'] = order.orderStatus;
+          detail['payment_method'] = order.paymentMethod;
+          detail['total_order_value'] = order.subtotal;
+          detail['ppn'] = order.ppnPercent;
+          detail['is_ppn_active'] = order.isPpnActive;
+          detail['grand_total'] = order.grandTotal;
+
+          if (paymentRequest != null) {
+            final current = detail['payment_request'] is Map
+                ? Map<String, dynamic>.from(detail['payment_request'])
+                : <String, dynamic>{};
+
+            detail['payment_request'] = {
+              ...current,
+              ...paymentRequest,
+            };
+          }
+
+          if (latestPayment != null) {
+            final current = detail['latest_payment'] is Map
+                ? Map<String, dynamic>.from(detail['latest_payment'])
+                : <String, dynamic>{};
+
+            // merge owner_manual_payment juga kalau ada
+            final currentOwner = current['owner_manual_payment'] is Map
+                ? Map<String, dynamic>.from(current['owner_manual_payment'])
+                : <String, dynamic>{};
+
+            final cachedOwner = latestPayment['owner_manual_payment'] is Map
+                ? Map<String, dynamic>.from(latestPayment['owner_manual_payment'])
+                : <String, dynamic>{};
+
+            detail['latest_payment'] = {
+              ...current,
+              ...latestPayment,
+              'owner_manual_payment': {
+                ...currentOwner,
+                ...cachedOwner,
+              },
+            };
+          }
+
+          detail['table'] ??= {
+            'table_no': order.tableNo ?? '-',
+          };
+
+          detail['payment'] ??= {
+            'note': '',
+          };
+
+          detail['order_details'] ??= <dynamic>[];
+
+          return detail;
+        }
+      } catch (e) {
+        debugPrint('⚠️ decode payment detailJson failed: $e');
+      }
+    }
+
+    // =========================================================
+    // PRIORITAS 2: fallback lama kalau detailJson belum ada
+    // =========================================================
+    final itemRows = await (db.select(db.cachedPaymentOrderItems)
+          ..where((tbl) => tbl.orderServerId.equals(serverId)))
+        .get();
+
+    final detailIds = itemRows.map((e) => e.serverDetailId).toList();
+
+    final optionRows = detailIds.isEmpty
+        ? <CachedPaymentOrderItemOption>[]
+        : await (db.select(db.cachedPaymentOrderItemOptions)
+              ..where((tbl) => tbl.orderDetailServerId.isIn(detailIds)))
+            .get();
+
+    final optionsByDetailId = <int, List<CachedPaymentOrderItemOption>>{};
+    for (final opt in optionRows) {
+      optionsByDetailId.putIfAbsent(opt.orderDetailServerId, () => []).add(opt);
     }
 
     return <String, dynamic>{
@@ -331,7 +437,8 @@ class CachedPaymentOrdersDao {
         'note': '',
       },
       'order_details': itemRows.map((item) {
-        final opts = optionsByDetailId[item.serverDetailId] ?? const <CachedPaymentOrderItemOption>[];
+        final opts =
+            optionsByDetailId[item.serverDetailId] ?? const <CachedPaymentOrderItemOption>[];
 
         return <String, dynamic>{
           'id': item.serverDetailId,
@@ -394,6 +501,22 @@ class CachedPaymentOrdersDao {
     }
   }
 
+  Future<List<CachedPaymentOrder>> getAllActiveOrders() {
+    return (db.select(db.cachedPaymentOrders)
+          ..where((t) => t.isPendingDelete.equals(false))
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.createdAt),
+            (t) => OrderingTerm.desc(t.cachedAt),
+          ]))
+        .get();
+  }
+
+  Future<CachedPaymentOrder?> findByServerId(int serverId) {
+    return (db.select(db.cachedPaymentOrders)
+          ..where((t) => t.serverId.equals(serverId)))
+        .getSingleOrNull();
+  }
+
   int? _toInt(dynamic v) {
     if (v == null) return null;
     if (v is int) return v;
@@ -413,3 +536,4 @@ class CachedPaymentOrdersDao {
     return s == '1' || s == 'true';
   }
 }
+

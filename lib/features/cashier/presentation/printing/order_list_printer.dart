@@ -142,10 +142,23 @@ class OrderListPrinter {
 }
 
 String _categoryNameOf(Map<String, dynamic> m) {
-  if (m['partner_product'] is Map &&
-      m['partner_product']['category'] is Map &&
-      m['partner_product']['category']['category_name'] != null) {
-    return m['partner_product']['category']['category_name'].toString().trim();
+  final direct = (m['category_name'] ?? '').toString().trim();
+  if (direct.isNotEmpty) return direct;
+
+  if (m['partner_product'] is Map) {
+    final pp = Map<String, dynamic>.from(m['partner_product']);
+
+    final cat1 = pp['category'];
+    if (cat1 is Map) {
+      final name1 = (cat1['category_name'] ?? cat1['name'] ?? '').toString().trim();
+      if (name1.isNotEmpty) return name1;
+    }
+
+    final cat2 = pp['partner_product_category'];
+    if (cat2 is Map) {
+      final name2 = (cat2['category_name'] ?? cat2['name'] ?? '').toString().trim();
+      if (name2.isNotEmpty) return name2;
+    }
   }
 
   return 'Tanpa Kategori';

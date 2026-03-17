@@ -14,6 +14,9 @@ class LocalOrderItems extends Table {
   TextColumn get promoType => text().nullable()();
   RealColumn get promoAmount => real().nullable()();
 
+  IntColumn get categoryServerId => integer().nullable()();
+  TextColumn get categoryNameSnapshot => text().nullable()();
+
   RealColumn get optionsPrice => real().withDefault(const Constant(0))();
   IntColumn get qty => integer()();
   TextColumn get customerNote => text().nullable()();

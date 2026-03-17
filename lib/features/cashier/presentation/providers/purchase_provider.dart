@@ -192,7 +192,6 @@ class PurchaseProvider extends ChangeNotifier {
       payment.kind == PayKind.manual
           ? (payment.manualType ?? paymentMethod)
           : paymentMethod;
-
     String? manualPaymentRawJson;
 
     if (payment.kind == PayKind.manual) {
@@ -267,6 +266,10 @@ class PurchaseProvider extends ChangeNotifier {
       }
 
       final promo = cartItem.product.promotion;
+      final category = categories.cast<Category?>().firstWhere(
+        (c) => c?.id == cartItem.product.categoryId,
+        orElse: () => null,
+      );
 
       num promoAmount = 0;
       if (promo != null) {
@@ -290,6 +293,8 @@ class PurchaseProvider extends ChangeNotifier {
         promoId: promo?.id,
         promoType: promo?.type,
         promoAmount: promoAmount.toDouble(),
+        categoryServerId: category?.id,
+        categoryNameSnapshot: category?.name,
       );
 
       items.add(item);
