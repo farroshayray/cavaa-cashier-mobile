@@ -1,5 +1,6 @@
 import 'dart:async';
 import '/core/config/env.dart';
+import 'package:dio/dio.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,13 +8,11 @@ import 'package:provider/provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
-import '/core/navigation/app_navigator.dart';
 
 import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
 import '/features/cashier/presentation/realtime/pusher_orders_service.dart';
-import '/core/services/sound_service.dart';
 import '/core/storage/secure_storage_service.dart';
 
 import '/features/cashier/presentation/providers/payment_provider.dart';
@@ -22,6 +21,8 @@ import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 
 import '/core/services/push_notification_service.dart';
+import '/core/services/in_app_apk_updater.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'tabs/purchase_tab.dart' as purchase_tab;
 import 'tabs/payment_tab.dart' as payment_tab;
@@ -42,6 +43,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   // ===== Realtime =====
   final _pusherSvc = PusherOrdersService(SecureStorageService());
   bool _pusherStarted = false;
+  final InAppApkUpdater _apkUpdater = InAppApkUpdater();
+  final ValueNotifier<double> _updateProgressNotifier = ValueNotifier<double>(0);
+
+  bool _isDownloadingUpdate = false;
+  bool _activeUpdateIsForce = false;
 
   // ===== UI =====
   DateTime? _lastBackPressed;
@@ -60,7 +66,6 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
   StreamSubscription<Map<String, dynamic>>? _fcmMessageSub;
   StreamSubscription<Map<String, dynamic>>? _fcmTapSub;
-
 
   @override
   void initState() {
@@ -227,6 +232,25 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     }
   }
 
+  Future<void> _cancelApkDownload() async {
+    _apkUpdater.cancelDownload();
+
+    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isDownloadingUpdate = false;
+      _activeUpdateIsForce = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Download update dibatalkan')),
+    );
+  }
+
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
 
   Future<int?> _resolveTabIndexByOrderId(int orderId) async {
@@ -271,6 +295,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     _fcmMessageSub?.cancel();
     _fcmTapSub?.cancel();
 
+    _updateProgressNotifier.dispose();
     _pusherSvc.stop();
 
     WidgetsBinding.instance.removeObserver(this);
@@ -334,6 +359,168 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
         ),
       ),
     );
+  }
+
+  Future<void> _showDownloadingDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Downloading Update'),
+        content: ValueListenableBuilder<double>(
+          valueListenable: _updateProgressNotifier,
+          builder: (context, progress, _) {
+            final isKnownProgress = progress >= 0 && progress <= 1;
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Sedang mengunduh APK versi terbaru...'),
+                const SizedBox(height: 16),
+                LinearProgressIndicator(
+                  value: isKnownProgress ? progress : null,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isKnownProgress
+                      ? '${(progress * 100).toStringAsFixed(0)}%'
+                      : 'Downloading...',
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          if (!_activeUpdateIsForce)
+            TextButton(
+              onPressed: _cancelApkDownload,
+              child: const Text('Batalkan'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startApkUpdate(String apkUrl, {required bool force}) async {
+    if (apkUrl.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link update tidak tersedia')),
+      );
+      return;
+    }
+
+    try {
+      if (mounted) {
+        setState(() {
+          _isDownloadingUpdate = true;
+          _activeUpdateIsForce = force;
+        });
+      }
+
+      _updateProgressNotifier.value = 0;
+
+      unawaited(_showDownloadingDialog());
+
+      await _apkUpdater.downloadAndInstall(
+        apkUrl: apkUrl,
+        onProgress: (received, total) {
+          if (!mounted) return;
+
+          if (total > 0) {
+            _updateProgressNotifier.value = received / total;
+          } else {
+            _updateProgressNotifier.value = -1;
+          }
+        },
+      );
+
+      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    } on DioException catch (e) {
+      final wasCancelled = CancelToken.isCancel(e);
+
+      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      if (!mounted) return;
+
+      if (!wasCancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              force
+                  ? 'Gagal mengunduh update. Silakan coba lagi.'
+                  : 'Gagal mengunduh update.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('apk update failed: $e');
+
+      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            force
+                ? 'Gagal mengunduh update. Silakan coba lagi.'
+                : 'Gagal mengunduh update.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloadingUpdate = false;
+          _activeUpdateIsForce = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleManualUpdateTap() async {
+    final auth = context.read<AuthProvider>();
+    final data = auth.appUpdate;
+
+    if (data == null) return;
+
+    final title = (data['title'] ?? 'Update Available').toString();
+    final message = (data['message'] ?? 'A new version is available.').toString();
+    final storeUrl = (data['store_url'] ?? '').toString();
+    final force = data['force_update'] == true;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: !force,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          if (!force)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Later'),
+            ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _startApkUpdate(storeUrl, force: force);
+    }
   }
 
   void _listenFcmEvents() {
@@ -571,6 +758,10 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final appUpdateData = auth.appUpdate;
+    final hasAppUpdate = appUpdateData?['update_available'] == true;
+    
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
     final shortestSide = media.size.shortestSide;
@@ -617,9 +808,39 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
               MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
             );
           },
+          onTapUpdate: hasAppUpdate && !_isDownloadingUpdate
+              ? _handleManualUpdateTap
+              : null,
+          showUpdateBadge: hasAppUpdate,
           onLogout: _logout,
         ),
         appBar: AppBar(
+          leading: Builder(
+            builder: (context) {
+              return IconButton(
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.menu),
+                    if (hasAppUpdate)
+                      Positioned(
+                        right: 2,
+                        top: 2,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
           titleSpacing: 12,
           title: Row(
             children: [
@@ -1167,10 +1388,14 @@ class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
     required this.onOpenPrinterSettings,
     required this.onLogout,
+    required this.showUpdateBadge,
+    this.onTapUpdate,
   });
 
   final VoidCallback onOpenPrinterSettings;
   final VoidCallback onLogout;
+  final bool showUpdateBadge;
+  final VoidCallback? onTapUpdate;
 
   String? _buildUserImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.trim().isEmpty) return null;
@@ -1203,58 +1428,99 @@ class _AppDrawer extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
                 children: [
-                  _UserAvatar(imageUrl: imageUrl),
-                  const SizedBox(height: 12),
-                  Text(
-                    fullName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _UserAvatar(imageUrl: imageUrl),
+                        const SizedBox(height: 12),
+                        Text(
+                          fullName,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          userName,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        const Text(
+                          'Cashier Account',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 1),
-                  Text(
-                    userName,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.black,
-                    ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.print_outlined, color: brand),
+                    title: const Text('Pairing Printer'),
+                    subtitle: const Text('Bluetooth / Kabel (USB)'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onOpenPrinterSettings();
+                    },
                   ),
-                  const SizedBox(height: 7),
-                  const Text(
-                    'Cashier Account',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.black54,
+                  if (onTapUpdate != null) ...[
+                    const Divider(),
+                    ListTile(
+                      leading: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(Icons.system_update_alt, color: brand),
+                          if (showUpdateBadge)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      title: const Text('Update App'),
+                      subtitle: const Text('Versi baru tersedia'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onTapUpdate?.call();
+                      },
                     ),
+                  ],
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.red),
+                    title: const Text('Logout'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onLogout();
+                    },
                   ),
                 ],
               ),
             ),
+
+            // 🔥 INI FOOTER VERSION
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.print_outlined, color: brand),
-              title: const Text('Pairing Printer'),
-              subtitle: const Text('Bluetooth / Kabel (USB)'),
-              onTap: () {
-                Navigator.of(context).pop();
-                onOpenPrinterSettings();
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Logout'),
-              onTap: () {
-                Navigator.of(context).pop();
-                onLogout();
-              },
-            ),
+            const _AppVersionText(),
           ],
         ),
       ),
@@ -1320,6 +1586,38 @@ class _UserAvatar extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+class _AppVersionText extends StatelessWidget {
+  const _AppVersionText();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final info = snapshot.data!;
+        final version = info.version;
+        final build = info.buildNumber;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'Version $version ($build)',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+            ),
+          ),
+        );
+      },
     );
   }
 }

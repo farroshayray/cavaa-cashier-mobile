@@ -155,6 +155,7 @@ class _CavaaAppState extends State<CavaaApp> {
 
     return MultiProvider(
       providers: [
+        Provider<DioClient>.value(value: dioClient),
         ChangeNotifierProvider(
           create: (_) => ConnectivityStatusProvider()..init(),
         ),

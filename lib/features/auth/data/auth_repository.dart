@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '/core/services/push_notification_service.dart';
 import 'auth_api.dart';
 import 'models/login_request.dart';
 import 'models/login_response.dart';
 import '/features/auth/data/models/user_model.dart';
+import 'models/me_response.dart';
 
 class AuthRepository {
   final AuthApi api;
@@ -51,7 +51,7 @@ class AuthRepository {
     return storage.getCachedUser();
   }
 
-  Future<UserModel> me() async {
+  Future<MeResponse> me() async {
     return await api.me();
   }
 }

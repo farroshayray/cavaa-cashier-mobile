@@ -12,6 +12,7 @@ class AuthProvider extends ChangeNotifier {
   String? errorMessage;
   bool isLoggedIn = false;
   UserModel? user;
+  Map<String, dynamic>? appUpdate;
 
   Future<void> bootstrap() async {
     final hasToken = await repo.hasToken();
@@ -19,14 +20,13 @@ class AuthProvider extends ChangeNotifier {
     if (!hasToken) {
       isLoggedIn = false;
       user = null;
+      appUpdate = null;
       notifyListeners();
       return;
     }
 
-    // token ada -> anggap sementara login
     isLoggedIn = true;
 
-    // coba isi user dari cache dulu supaya langsung ada saat offline
     final cachedUser = await repo.getCachedUser();
     if (cachedUser != null) {
       user = cachedUser;
@@ -39,12 +39,10 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('bootstrap fetchMe failed, keep logged in with cached token: $e');
 
-      // kalau fetchMe gagal, tetap gunakan cached user bila ada
       if (cachedUser != null) {
         user = cachedUser;
         isLoggedIn = true;
       } else {
-        // token ada tapi cached user tidak ada
         isLoggedIn = true;
       }
 
@@ -52,7 +50,11 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> login(String username, String password, {required bool rememberMe}) async {
+  Future<bool> login(
+    String username,
+    String password, {
+    required bool rememberMe,
+  }) async {
     try {
       isLoading = true;
       errorMessage = null;
@@ -60,10 +62,12 @@ class AuthProvider extends ChangeNotifier {
 
       await repo.login(username, password, rememberMe: rememberMe);
 
-      final u = await repo.me();
-      user = u;
+      final me = await repo.me();
+      user = me.user;
+      appUpdate = me.appUpdate;
       isLoggedIn = true;
-      await repo.saveCachedUser(u);
+
+      await repo.saveCachedUser(me.user);
 
       return true;
     } on DioException catch (e) {
@@ -89,10 +93,12 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> fetchMe() async {
     try {
-      final u = await repo.me();
-      user = u;
+      final me = await repo.me();
+      user = me.user;
+      appUpdate = me.appUpdate;
       isLoggedIn = true;
-      await repo.saveCachedUser(u);
+
+      await repo.saveCachedUser(me.user);
       notifyListeners();
     } catch (e) {
       debugPrint('fetchMe error: $e');
@@ -103,6 +109,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await repo.logout();
     user = null;
+    appUpdate = null;
     isLoggedIn = false;
     notifyListeners();
   }
