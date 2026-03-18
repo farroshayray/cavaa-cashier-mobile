@@ -10,6 +10,8 @@ class DioClient {
   final Dio dio;
   final SecureStorageService storage;
 
+  bool _isHandlingUnauthorized = false;
+
   DioClient(this.storage)
       : dio = Dio(
           BaseOptions(
@@ -40,19 +42,50 @@ class DioClient {
           handler.next(response);
         },
         onError: (e, handler) async {
-          // debugPrint('❌ [ERR] ${e.requestOptions.path}');
-          // debugPrint('❌ [ERR STATUS] ${e.response?.statusCode}');
-          // debugPrint('❌ [ERR DATA] ${e.response?.data}');
-
           final path = e.requestOptions.path;
           final isLogin = path.contains('/api/v1/mobile/cashier/login');
+          final statusCode = e.response?.statusCode;
 
-          // penting: login jangan di-refresh / retry
+          debugPrint('❌ DIO ERROR path=$path status=$statusCode');
+
+          // skip kalau endpoint login
           if (isLogin) {
             return handler.next(e);
           }
 
-          // kalau ada logic refresh token, letakkan di sini hanya untuk endpoint selain login
+          // handle 401 global
+          if (statusCode == 401 && !_isHandlingUnauthorized) {
+            _isHandlingUnauthorized = true;
+
+            try {
+              debugPrint('🚨 401 detected -> force logout');
+
+              // 1. clear session
+              await storage.deleteToken();
+              await storage.deleteCachedUser();
+
+              // 2. redirect ke login (AMAN)
+              final nav = appNavigatorKey.currentState;
+
+              if (nav != null) {
+                // penting: delay ke next frame biar tidak bentrok lifecycle
+                Future.microtask(() {
+                  nav.pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (_) => false,
+                  );
+                });
+              } else {
+                debugPrint('⚠️ Navigator not ready');
+              }
+            } catch (err, st) {
+              debugPrint('❌ 401 handler failed: $err');
+              debugPrint('$st');
+            } finally {
+              _isHandlingUnauthorized = false;
+            }
+          }
+
           handler.next(e);
         },
       ),

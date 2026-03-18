@@ -841,11 +841,52 @@ class _PaymentRequestCard extends StatelessWidget {
             ),
 
             if (!isPdf)
-              ClipRRect(
+              InkWell(
                 borderRadius: BorderRadius.circular(14),
-                child: AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: _buildProofImage(localFile, proofUrl),
+                onTap: effectiveProofPath.isEmpty
+                    ? null
+                    : () => _showZoomableImagePreview(
+                          context,
+                          title: 'Bukti Bayar',
+                          localFile: hasLocalFile ? localFile : null,
+                          imageUrl: hasLocalFile ? null : proofUrl,
+                        ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 4 / 3,
+                        child: _buildProofImage(localFile, proofUrl),
+                      ),
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.65),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Perbesar',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               )
             else
@@ -989,11 +1030,52 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
                 ),
               ],
             ),
-            ClipRRect(
+            InkWell(
               borderRadius: BorderRadius.circular(14),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: _buildQrisImage(localFile, qrisUrl),
+              onTap: (localFile != null && localFile.existsSync()) || qrisUrl.isNotEmpty
+                  ? () => _showZoomableImagePreview(
+                        context,
+                        title: 'QRIS',
+                        localFile: (localFile != null && localFile.existsSync()) ? localFile : null,
+                        imageUrl: (localFile != null && localFile.existsSync()) ? null : qrisUrl,
+                      )
+                  : null,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Stack(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: _buildQrisImage(localFile, qrisUrl),
+                    ),
+                    Positioned(
+                      right: 10,
+                      bottom: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Perbesar',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -1407,6 +1489,131 @@ class _ErrorView extends StatelessWidget {
             ElevatedButton(onPressed: onRetry, child: const Text('Coba lagi')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+Future<void> _showZoomableImagePreview(
+  BuildContext context, {
+  required String title,
+  File? localFile,
+  String? imageUrl,
+}) async {
+  await showDialog<void>(
+    context: context,
+    useRootNavigator: true,
+    barrierColor: Colors.black.withOpacity(0.85),
+    builder: (_) {
+      return Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 52, 12, 12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 5,
+                  panEnabled: true,
+                  child: Container(
+                    color: Colors.white,
+                    alignment: Alignment.center,
+                    child: _PreviewImageContent(
+                      localFile: localFile,
+                      imageUrl: imageUrl,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            Positioned(
+              top: 10,
+              left: 16,
+              right: 56,
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Material(
+                color: Colors.white.withOpacity(0.12),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  tooltip: 'Tutup',
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _PreviewImageContent extends StatelessWidget {
+  const _PreviewImageContent({
+    this.localFile,
+    this.imageUrl,
+  });
+
+  final File? localFile;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    if (localFile != null && localFile!.existsSync()) {
+      return Image.file(
+        localFile!,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _previewBroken(),
+      );
+    }
+
+    final url = (imageUrl ?? '').trim();
+    if (url.isNotEmpty) {
+      return Image.network(
+        url,
+        fit: BoxFit.contain,
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) return child;
+          return const SizedBox(
+            height: 280,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        },
+        errorBuilder: (_, __, ___) => _previewBroken(),
+      );
+    }
+
+    return _previewBroken();
+  }
+
+  Widget _previewBroken() {
+    return const SizedBox(
+      height: 280,
+      child: Center(
+        child: Icon(Icons.broken_image_outlined, size: 48),
       ),
     );
   }

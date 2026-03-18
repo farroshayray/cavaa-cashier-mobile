@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/data/models/purchase_models.dart';
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProductOptionsSheet extends StatefulWidget {
   const ProductOptionsSheet({super.key, required this.product});
@@ -80,22 +82,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                         width: 72,
                         height: 72,
                         color: const Color(0xFFF3F4F6),
-                        child: widget.product.imagePath == null ||
-                                widget.product.imagePath!.trim().isEmpty
-                            ? const Icon(
-                                Icons.image_not_supported_outlined,
-                                size: 32,
-                                color: Colors.black45,
-                              )
-                            : Image.network(
-                                widget.product.imagePath!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.broken_image_outlined,
-                                  size: 32,
-                                  color: Colors.black45,
-                                ),
-                              ),
+                        child: _ProductImage(path: widget.product.imagePath),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -325,6 +312,60 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ProductImage extends StatelessWidget {
+  const _ProductImage({required this.path});
+
+  final String? path;
+
+  bool _isLocalFile(String value) {
+    return value.startsWith('/') || value.startsWith('file://');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = path?.trim();
+
+    if (raw == null || raw.isEmpty) {
+      return const Icon(
+        Icons.image_not_supported_outlined,
+        size: 32,
+        color: Colors.black45,
+      );
+    }
+
+    if (_isLocalFile(raw)) {
+      final filePath = raw.startsWith('file://')
+          ? raw.replaceFirst('file://', '')
+          : raw;
+
+      final file = File(filePath);
+
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Icon(
+          Icons.broken_image_outlined,
+          size: 32,
+          color: Colors.black45,
+        ),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: raw,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => const Center(
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+      errorWidget: (_, __, ___) => const Icon(
+        Icons.broken_image_outlined,
+        size: 32,
+        color: Colors.black45,
       ),
     );
   }
