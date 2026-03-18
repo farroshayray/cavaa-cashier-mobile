@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../presentation/providers/purchase_provider.dart';
 import '../../../data/models/purchase_models.dart';
@@ -657,14 +658,17 @@ class _ProductCard extends StatelessWidget {
                         color: const Color(0xFFF3F4F6),
                         child: product.imagePath == null
                             ? const Center(child: Icon(Icons.image_not_supported_outlined, size: 44))
-                            : Image.network(
-                                product.imagePath!,
+                            : CachedNetworkImage(
+                                imageUrl: product.imagePath!,
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
-                                errorBuilder: (_, __, ___) =>
+                                placeholder: (_, __) => const Center(
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                                errorWidget: (_, __, ___) =>
                                     const Center(child: Icon(Icons.broken_image_outlined, size: 44)),
-                              ),
+                              )
                       ),
                     ),
 

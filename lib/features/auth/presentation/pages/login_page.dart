@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../auth_provider.dart';
 import '../../../cashier/presentation/pages/cashier_home_page.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -352,6 +353,10 @@ class _LoginCard extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 4),
+            const Center(
+              child: _AppVersionText(),
+            ),
           ],
         ),
       ),
@@ -372,6 +377,35 @@ class _Label extends StatelessWidget {
         fontWeight: FontWeight.w700,
         fontSize: 13,
       ),
+    );
+  }
+}
+
+class _AppVersionText extends StatelessWidget {
+  const _AppVersionText();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final info = snapshot.data!;
+        final version = info.version;
+        final build = info.buildNumber;
+
+        return Text(
+          'Version $version ($build)',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.black.withOpacity(0.50),
+          ),
+        );
+      },
     );
   }
 }

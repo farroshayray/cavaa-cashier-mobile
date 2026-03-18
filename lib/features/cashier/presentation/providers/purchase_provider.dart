@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 import '../../data/models/purchase_models.dart';
 import '/features/cashier/data/models/purchase_repository.dart';
-import '/features/cashier/presentation/pages/tabs/modals/checkout_sheet.dart';
+import '/features/cashier/data/local/db/cashier_db.dart';
+import 'dart:convert';
+
+import 'package:uuid/uuid.dart';
+import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
+import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
 
 class PurchaseProvider extends ChangeNotifier {
   final PurchaseRepository repo;
+  final LocalOrdersDao localOrdersDao;
+  final Uuid _uuid = const Uuid();
 
-  PurchaseProvider(this.repo);
+  PurchaseProvider({
+    required this.repo,
+    required this.localOrdersDao,
+  });
 
   bool isLoading = false;
   String? error;
@@ -30,7 +40,7 @@ class PurchaseProvider extends ChangeNotifier {
 
   /// total harga semua item (untuk total di bar)
   num get cartGrandTotal =>
-      cart.fold<num>(0, (sum, item) => sum + item.lineTotal);
+      cart.fold<num>(0, (sum, item) => sum + item.lineTotal); // subtotal sebelum PPN
 
   num get cartSubtotal =>
     cart.fold<num>(0, (sum, item) => sum + item.lineTotal);
@@ -51,6 +61,27 @@ class PurchaseProvider extends ChangeNotifier {
 
   num get cartGrandTotalRounded =>
     cartGrandTotalWithPpn.toDouble().ceil();
+
+  String _buildClientOrderCode() {
+    final now = DateTime.now();
+    final y = now.year.toString();
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    final hh = now.hour.toString().padLeft(2, '0');
+    final mm = now.minute.toString().padLeft(2, '0');
+    final ss = now.second.toString().padLeft(2, '0');
+    return 'OFFLINE-$y$m$d-$hh$mm$ss';
+  }
+
+  String _normalizeGuestName(String name) {
+    final cleaned = name.trim();
+    if (cleaned.isEmpty) return 'guest';
+
+    final lower = cleaned.toLowerCase();
+    if (lower.startsWith('guest-')) return cleaned;
+
+    return 'guest-$cleaned';
+  }
 
   // ===== LOAD =====
   Future<void> load() async {
@@ -79,9 +110,21 @@ class PurchaseProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> checkout({
     required String customerName,
     required StoreTable table,
-    required String paymentMethod, // "CASH" / "QRIS"
+    required String paymentMethod,
     required PaymentOption payment,
   }) async {
+    // 1. simpan lokal dulu
+    // final normalizedCustomerName = _normalizeGuestName(customerName);
+    final normalizedCustomerName = customerName;
+
+    final localOrderId = await _saveOrderToLocal(
+      customerName: normalizedCustomerName,
+      table: table,
+      paymentMethod: paymentMethod,
+      payment: payment,
+    );
+
+    // 2. siapkan payload API seperti sebelumnya
     final itemsPayload = cart.map((it) {
       final optionIds = it.selected.values.expand((s) => s).toList();
 
@@ -94,27 +137,178 @@ class PurchaseProvider extends ChangeNotifier {
       };
     }).toList();
 
-    // ✅ token tidak perlu, karena DioClient interceptor yg pasang Authorization header
-    final resp = await repo.api.checkout(
-      orderTable: table.id,
-      orderName: customerName,
-      paymentMethod: paymentMethod,
-      // totalAmount: cartGrandTotalRounded,
-      totalAmount: cartGrandTotal,
-      items: itemsPayload,
-    );
+    try {
+      final resp = await repo.api.checkout(
+        orderTable: table.id,
+        orderName: normalizedCustomerName,
+        paymentMethod: paymentMethod,
+        totalAmount: cartGrandTotal,
+        items: itemsPayload,
+      );
 
-    if (paymentMethod == "QRIS") {
+      await localOrdersDao.deleteOrderByLocalId(localOrderId);
 
-    } else {
+      if (paymentMethod != "QRIS") {
+        cart.clear();
+        notifyListeners();
+      }
+
+      return {
+        ...resp,
+        'local_order_id': localOrderId,
+        'saved_local': true,
+      };
+    } catch (e) {
+      debugPrint('checkout online failed, saved locally only: $e');
+
       cart.clear();
       notifyListeners();
-    }
 
-    return resp;
+      return {
+        'status': true,
+        'message': 'Order disimpan lokal, menunggu sinkronisasi',
+        'local_order_id': localOrderId,
+        'saved_local': true,
+        'offline': true,
+      };
+    }
   }
 
+  Future<String> _saveOrderToLocal({
+    required String customerName,
+    required StoreTable table,
+    required String paymentMethod,
+    required PaymentOption payment,
+  }) async {
+    final localOrderId = _uuid.v4();
+    final clientOrderCode = _buildClientOrderCode();
 
+    final subtotal = cartSubtotal.toDouble();
+    final ppn = ppnPercent.toDouble();
+    final grandTotal = cartGrandTotalWithPpn.toDouble();
+
+    final selectedPaymentMethod = paymentMethod;
+    final effectivePaymentMethod =
+      payment.kind == PayKind.manual
+          ? (payment.manualType ?? paymentMethod)
+          : paymentMethod;
+    String? manualPaymentRawJson;
+
+    if (payment.kind == PayKind.manual) {
+      manualPaymentRawJson = jsonEncode({
+        'id': payment.manualId,
+        'payment_type': payment.manualType,
+        'provider_name': payment.providerName ?? payment.label,
+        'provider_account_name': payment.providerAccountName,
+        'provider_account_no': payment.providerAccountNo,
+        'qris_image_url': payment.qrisImageUrl,
+        'qris_image_local_path': payment.qrisImageLocalPath,
+        'label': payment.label,
+        'desc': payment.desc,
+      });
+    }
+
+    final order = LocalOrderMapper.toLocalOrder(
+      localId: localOrderId,
+      clientOrderCode: clientOrderCode,
+      customerName: customerName,
+      partnerId: partnerData?.id,
+      partnerName: partnerData?.name,
+      tableServerId: table.id,
+      tableNoSnapshot: table.tableNo,
+
+      paymentMethodSelected: selectedPaymentMethod,   // untuk backend, contoh "3"
+      paymentMethodEffective: effectivePaymentMethod, // untuk UI, contoh "manual_qris"
+
+      manualPaymentRawJson: manualPaymentRawJson,
+      subtotal: subtotal,
+      discountValue: 0,
+      ppnPercent: ppn,
+      isPpnActive: isPpnActive,
+      grandTotal: grandTotal,
+      orderStatusLocal: 'UNPAID',
+      syncStatus: 'PENDING',
+    );
+
+    final items = <LocalOrderItemsCompanion>[];
+    final itemOptions = <String, List<LocalOrderItemOptionsCompanion>>{};
+
+    for (final cartItem in cart) {
+      final itemLocalId = _uuid.v4();
+
+      num optionsPrice = 0;
+      final optionsForThisItem = <LocalOrderItemOptionsCompanion>[];
+
+      for (final group in cartItem.product.optionGroups) {
+        final selectedIds = cartItem.selected[group.id] ?? <int>{};
+
+        for (final optId in selectedIds) {
+          final opt = group.items.cast<OptionItem?>().firstWhere(
+                (x) => x?.id == optId,
+                orElse: () => null,
+              );
+
+          if (opt != null) {
+            optionsPrice += opt.price;
+
+            optionsForThisItem.add(
+              LocalOrderMapper.toLocalOption(
+                localId: _uuid.v4(),
+                orderItemLocalId: itemLocalId,
+                optionServerId: opt.id,
+                optionNameSnapshot: opt.name,
+                price: opt.price.toDouble(),
+                parentNameSnapshot: group.name,
+              ),
+            );
+          }
+        }
+      }
+
+      final promo = cartItem.product.promotion;
+      final category = categories.cast<Category?>().firstWhere(
+        (c) => c?.id == cartItem.product.categoryId,
+        orElse: () => null,
+      );
+
+      num promoAmount = 0;
+      if (promo != null) {
+        if (promo.type == 'percentage') {
+          promoAmount = cartItem.product.price.toDouble() - _promoFinalUnitPrice(cartItem.product).toDouble();
+        } else {
+          promoAmount = promo.value;
+        }
+      }
+
+      final item = LocalOrderMapper.toLocalItem(
+        localId: itemLocalId,
+        orderLocalId: localOrderId,
+        productServerId: cartItem.product.id,
+        productNameSnapshot: cartItem.product.name,
+        basePrice: cartItem.product.price.toDouble(),
+        qty: cartItem.qty,
+        customerNote: cartItem.note.isEmpty ? null : cartItem.note,
+        optionsPrice: optionsPrice.toDouble(),
+        lineTotal: cartItem.lineTotal.toDouble(),
+        promoId: promo?.id,
+        promoType: promo?.type,
+        promoAmount: promoAmount.toDouble(),
+        categoryServerId: category?.id,
+        categoryNameSnapshot: category?.name,
+      );
+
+      items.add(item);
+      itemOptions[itemLocalId] = optionsForThisItem;
+    }
+
+    await localOrdersDao.createOrderWithItems(
+      order: order,
+      items: items,
+      itemOptions: itemOptions,
+    );
+
+    return localOrderId;
+  }
 
 
   // ===== CART HELPERS =====
@@ -211,6 +405,13 @@ class PurchaseProvider extends ChangeNotifier {
       if (!sa.containsAll(sb)) return false;
     }
     return true;
+  }
+
+  String _manualTypeLabelFromMethod(String method) {
+    if (method == 'manual_tf') return 'Transfer Manual';
+    if (method == 'manual_ewallet') return 'E-Wallet';
+    if (method == 'manual_qris') return 'QR Statis';
+    return method;
   }
 
   // ===== FILTERING =====
@@ -316,5 +517,4 @@ class PurchaseProvider extends ChangeNotifier {
       return after < 0 ? 0 : after;
     }
   }
-
 }

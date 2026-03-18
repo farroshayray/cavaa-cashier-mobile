@@ -10,6 +10,8 @@ import 'package:provider/provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/models/orders_repository.dart';
+import '/core/services/connectivity_status_provider.dart';
+import '/features/cashier/presentation/providers/payment_provider.dart';
 
 
 class PaymentProcessSheet extends StatefulWidget {
@@ -60,6 +62,35 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     _paidCtrl.removeListener(_recalcChange);
     _paidCtrl.dispose();
     super.dispose();
+  }
+
+  Map<String, dynamic> _buildOfflinePrintableOrder(
+    Map<String, dynamic> source, {
+    required num paid,
+    required num change,
+  }) {
+    final cloned = Map<String, dynamic>.from(source);
+
+    cloned['payment'] = {
+      'updated_at': DateTime.now().toIso8601String(),
+      'paid_amount': paid,
+      'change_amount': change,
+    };
+
+    cloned['latest_payment'] ??= cloned['payment'];
+
+    cloned['booking_order_code'] ??= cloned['client_order_code'] ?? '-';
+    cloned['customer_name'] ??= 'Guest';
+    cloned['employee_name'] ??= '-';
+    cloned['store_name'] ??= 'CAVAA';
+    cloned['store_address'] ??= '';
+    cloned['store_is_wifi_shown'] ??= 0;
+    cloned['store_wifi_user'] ??= '';
+    cloned['store_wifi_password'] ??= '';
+
+    cloned['order_details'] ??= <dynamic>[];
+
+    return cloned;
   }
 
   bool get _isCaseA {
@@ -308,20 +339,42 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final repo = widget.ordersRepo;
 
     // 1. Simpan pembayaran dulu
-    await repo.paymentOrder(
-      id: widget.orderId,
-      paidAmount: paid,
-      changeAmount: change,
-      lastPaymentId: _isCaseB ? _lastPaymentId : null,
-      cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
-    ).timeout(const Duration(seconds: 15));
+
+    final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
+    if (isOnline) {
+      await widget.ordersRepo.paymentOrder(
+        id: widget.orderId,
+        paidAmount: paid,
+        changeAmount: change,
+        lastPaymentId: _isCaseB ? _lastPaymentId : null,
+        cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
+      ).timeout(const Duration(seconds: 15));
+    } else {
+      await context.read<PaymentProvider>().confirmPaymentOffline(
+        order: _order!,
+        paidAmount: paid,
+        changeAmount: change,
+        cashierProofImagePath: _cashierProofImage?.path,
+        lastPaymentId: _isCaseB ? _lastPaymentId : null,
+      );
+    }
 
     // 2. Setelah pembayaran sukses, coba print
     String? printError;
     try {
-      final printOrder = await repo
-        .fetchPrintDetail(widget.orderId)
-        .timeout(const Duration(seconds: 15));
+      Map<String, dynamic> printOrder;
+
+      if (isOnline) {
+        printOrder = await repo
+            .fetchPrintDetail(widget.orderId)
+            .timeout(const Duration(seconds: 15));
+      } else {
+        printOrder = _buildOfflinePrintableOrder(
+          _order!,
+          paid: paid,
+          change: change,
+        );
+      }
 
       await _printReceiptWithOrder(
         printOrder,
@@ -553,10 +606,14 @@ class _Body extends StatelessWidget {
     
 
     // ✅ TARUH DI SINI (bukan di dalam children)
-    final hasPaymentRequest = order['payment_request'] != null;
+    final paymentRequest = order['payment_request'];
+    final hasPaymentRequest =
+        (order['order_status'] ?? '').toString() == 'PAYMENT REQUEST' &&
+        paymentRequest is Map;
 
     final latestPayment = order['latest_payment'];
     final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+
     final hasCashierPaymentInstruction =
         (order['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
 
@@ -737,11 +794,17 @@ class _PaymentRequestCard extends StatelessWidget {
     final provider = (paymentRequest['manual_provider_name'] ?? '-').toString();
     final accName = (paymentRequest['manual_provider_account_name'] ?? '-').toString();
     final accNo = (paymentRequest['manual_provider_account_no'] ?? '').toString().trim();
+
     final proof = (paymentRequest['manual_payment_image'] ?? '').toString().trim();
+    final proofLocalPath =
+        (paymentRequest['manual_payment_image_local_path'] ?? '').toString().trim();
 
     final proofUrl = _normalizeProofUrl(proof);
+    final localFile = proofLocalPath.isNotEmpty ? File(proofLocalPath) : null;
+    final hasLocalFile = localFile != null && localFile.existsSync();
 
-    final isPdf = proofUrl.toLowerCase().endsWith('.pdf');
+    final effectiveProofPath = hasLocalFile ? proofLocalPath : proofUrl;
+    final isPdf = effectiveProofPath.toLowerCase().endsWith('.pdf');
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -762,32 +825,67 @@ class _PaymentRequestCard extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          if (proofUrl.isNotEmpty) ...[
+          if (effectiveProofPath.isNotEmpty) ...[
             Row(
               children: [
                 const Expanded(
                   child: Text('Bukti bayar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                 ),
-                TextButton.icon(
-                  onPressed: () => _openUrl(proofUrl),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text('Lihat Bukti'),
-                )
+                if (proofUrl.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => _openUrl(proofUrl),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: const Text('Lihat Bukti'),
+                  )
               ],
             ),
 
             if (!isPdf)
-              ClipRRect(
+              InkWell(
                 borderRadius: BorderRadius.circular(14),
-                child: AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: Image.network(
-                    proofUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.white,
-                      child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
-                    ),
+                onTap: effectiveProofPath.isEmpty
+                    ? null
+                    : () => _showZoomableImagePreview(
+                          context,
+                          title: 'Bukti Bayar',
+                          localFile: hasLocalFile ? localFile : null,
+                          imageUrl: hasLocalFile ? null : proofUrl,
+                        ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 4 / 3,
+                        child: _buildProofImage(localFile, proofUrl),
+                      ),
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.65),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Perbesar',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               )
@@ -795,7 +893,9 @@ class _PaymentRequestCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  'Bukti berbentuk PDF. Klik “Lihat Bukti” untuk membuka.',
+                  hasLocalFile
+                      ? 'Bukti bayar tersimpan sebagai file PDF lokal.'
+                      : 'Bukti berbentuk PDF. Klik “Lihat Bukti” untuk membuka.',
                   style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.6)),
                 ),
               ),
@@ -835,6 +935,35 @@ class _PaymentRequestCard extends StatelessWidget {
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
+
+  Widget _buildProofImage(File? localFile, String proofUrl) {
+    if (localFile != null && localFile.existsSync()) {
+      return Image.file(
+        localFile,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.white,
+          child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+        ),
+      );
+    }
+
+    if (proofUrl.isNotEmpty) {
+      return Image.network(
+        proofUrl,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.white,
+          child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.white,
+      child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+    );
+  }
 }
 
 class _CashierPaymentInstructionCard extends StatelessWidget {
@@ -858,11 +987,17 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
     final provider = (paymentInstruction['provider_name'] ?? '-').toString();
     final accName = (paymentInstruction['provider_account_name'] ?? '-').toString();
     final accNo = (paymentInstruction['provider_account_no'] ?? '').toString().trim();
+
     final qris = (paymentInstruction['qris_image_url'] ?? '').toString().trim();
+    final qrisLocalPath =
+        (paymentInstruction['qris_image_local_path'] ?? '').toString().trim();
 
     final qrisUrl = _normalizeProofUrl(qris);
     final showAccNo = type == 'manual_tf' || type == 'manual_ewallet';
-    final showQris = type == 'manual_qris' && qrisUrl.isNotEmpty;
+    final showQris = type == 'manual_qris' &&
+        (qrisLocalPath.isNotEmpty || qrisUrl.isNotEmpty);
+
+    final localFile = qrisLocalPath.isNotEmpty ? File(qrisLocalPath) : null;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -889,23 +1024,57 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
                   child: Text('QRIS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                 ),
                 TextButton.icon(
-                  onPressed: () => _openUrl(qrisUrl),
+                  onPressed: qrisUrl.isEmpty ? null : () => _openUrl(qrisUrl),
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
                   label: const Text('Buka QRIS'),
                 ),
               ],
             ),
-            ClipRRect(
+            InkWell(
               borderRadius: BorderRadius.circular(14),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Image.network(
-                  qrisUrl,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.white,
-                    child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
-                  ),
+              onTap: (localFile != null && localFile.existsSync()) || qrisUrl.isNotEmpty
+                  ? () => _showZoomableImagePreview(
+                        context,
+                        title: 'QRIS',
+                        localFile: (localFile != null && localFile.existsSync()) ? localFile : null,
+                        imageUrl: (localFile != null && localFile.existsSync()) ? null : qrisUrl,
+                      )
+                  : null,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Stack(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: _buildQrisImage(localFile, qrisUrl),
+                    ),
+                    Positioned(
+                      right: 10,
+                      bottom: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Perbesar',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -955,6 +1124,33 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildQrisImage(File? localFile, String qrisUrl) {
+    if (localFile != null && localFile.existsSync()) {
+      return Image.file(
+        localFile,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _brokenImage(),
+      );
+    }
+
+    if (qrisUrl.isNotEmpty) {
+      return Image.network(
+        qrisUrl,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _brokenImage(),
+      );
+    }
+
+    return _brokenImage();
+  }
+
+  Widget _brokenImage() {
+    return Container(
+      color: Colors.white,
+      child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
     );
   }
 
@@ -1293,6 +1489,131 @@ class _ErrorView extends StatelessWidget {
             ElevatedButton(onPressed: onRetry, child: const Text('Coba lagi')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+Future<void> _showZoomableImagePreview(
+  BuildContext context, {
+  required String title,
+  File? localFile,
+  String? imageUrl,
+}) async {
+  await showDialog<void>(
+    context: context,
+    useRootNavigator: true,
+    barrierColor: Colors.black.withOpacity(0.85),
+    builder: (_) {
+      return Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 52, 12, 12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 5,
+                  panEnabled: true,
+                  child: Container(
+                    color: Colors.white,
+                    alignment: Alignment.center,
+                    child: _PreviewImageContent(
+                      localFile: localFile,
+                      imageUrl: imageUrl,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            Positioned(
+              top: 10,
+              left: 16,
+              right: 56,
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Material(
+                color: Colors.white.withOpacity(0.12),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  tooltip: 'Tutup',
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _PreviewImageContent extends StatelessWidget {
+  const _PreviewImageContent({
+    this.localFile,
+    this.imageUrl,
+  });
+
+  final File? localFile;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    if (localFile != null && localFile!.existsSync()) {
+      return Image.file(
+        localFile!,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _previewBroken(),
+      );
+    }
+
+    final url = (imageUrl ?? '').trim();
+    if (url.isNotEmpty) {
+      return Image.network(
+        url,
+        fit: BoxFit.contain,
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) return child;
+          return const SizedBox(
+            height: 280,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        },
+        errorBuilder: (_, __, ___) => _previewBroken(),
+      );
+    }
+
+    return _previewBroken();
+  }
+
+  Widget _previewBroken() {
+    return const SizedBox(
+      height: 280,
+      child: Center(
+        child: Icon(Icons.broken_image_outlined, size: 48),
       ),
     );
   }

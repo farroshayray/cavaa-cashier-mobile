@@ -4,31 +4,22 @@ import '../../../core/network/dio_client.dart';
 import 'models/login_request.dart';
 import 'models/login_response.dart';
 import '/features/auth/data/models/user_model.dart';
+import 'models/me_response.dart';
 
 class AuthApi {
   final DioClient client;
 
   AuthApi(this.client);
 
-  Future<UserModel> me() async {
-    final Response res =
-        await client.dio.get('/api/v1/mobile/cashier/me');
-
-    // print('ME RAW RESPONSE: ${res.data}');
+  Future<MeResponse> me() async {
+    final Response res = await client.dio.get('/api/v1/mobile/cashier/me');
 
     final data = res.data;
-    final userJson =
-        (data is Map<String, dynamic>) ? data['user'] : null;
-
-    if (userJson is! Map) {
-      throw Exception('Invalid /me response: missing user');
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Invalid /me response');
     }
 
-    // print('ME USER JSON: $userJson');
-
-    return UserModel.fromJson(
-      Map<String, dynamic>.from(userJson),
-    );
+    return MeResponse.fromJson(data);
   }
 
 

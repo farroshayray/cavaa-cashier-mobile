@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/data/models/purchase_models.dart';
 import '/core/utils/open_url.dart';
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CheckoutSheet extends StatefulWidget {
   const CheckoutSheet({
@@ -403,14 +405,7 @@ class _ItemRow extends StatelessWidget {
               width: 52,
               height: 52,
               color: const Color(0xFFF3F4F6),
-              child: (it.product.imagePath == null)
-                  ? const Icon(Icons.fastfood_outlined)
-                  : Image.network(
-                      it.product.imagePath!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.broken_image_outlined),
-                    ),
+              child: _ProductThumb(path: it.product.imagePath),
             ),
           ),
           const SizedBox(width: 12),
@@ -754,6 +749,52 @@ class _PaymentGroupTitle extends StatelessWidget {
   }
 }
 
+class _ProductThumb extends StatelessWidget {
+  const _ProductThumb({required this.path});
+
+  final String? path;
+
+  bool _isLocalFile(String value) {
+    return value.startsWith('/') || value.startsWith('file://');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = path?.trim();
+
+    if (raw == null || raw.isEmpty) {
+      return const Icon(Icons.fastfood_outlined);
+    }
+
+    if (_isLocalFile(raw)) {
+      final filePath = raw.startsWith('file://')
+          ? raw.replaceFirst('file://', '')
+          : raw;
+
+      return Image.file(
+        File(filePath),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            const Icon(Icons.broken_image_outlined),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: raw,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => const Center(
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      errorWidget: (_, __, ___) =>
+          const Icon(Icons.broken_image_outlined),
+    );
+  }
+}
+
 String _rupiah(num n) {
   final s = n.toInt().toString();
   final buf = StringBuffer();
@@ -763,12 +804,4 @@ String _rupiah(num n) {
     if (idxFromEnd > 1 && idxFromEnd % 3 == 1) buf.write('.');
   }
   return buf.toString();
-}
-
-
-num? _tryReadNum(dynamic obj, String key) {
-  try {
-    final v = (obj as dynamic).__getattribute__(key); // ini tidak ada di Dart, jadi jangan
-  } catch (_) {}
-  return null;
 }

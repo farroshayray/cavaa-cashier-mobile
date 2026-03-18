@@ -7,6 +7,7 @@ import '../../providers/process_provider.dart';
 import '../../../../scanner/pages/barcode_scanner_page.dart';
 import '/features/cashier/presentation/pages/tabs/modals/payment_process_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
+import '/core/services/connectivity_status_provider.dart';
 
 
 
@@ -69,6 +70,8 @@ class _PaymentViewState extends State<_PaymentView> {
   int? _blinkOrderId;
   Timer? _blinkTimer;
   int? _lastHandledFocus;
+  bool? _lastOnline;
+  ConnectivityStatusProvider? _connectivity;
 
 
   @override
@@ -98,6 +101,7 @@ class _PaymentViewState extends State<_PaymentView> {
 
   @override
   void dispose() {
+    _connectivity?.removeListener(_onConnectivityChanged);
     _blinkTimer?.cancel();
     _searchCtrl.dispose();
     _listCtrl.dispose();
@@ -108,6 +112,14 @@ class _PaymentViewState extends State<_PaymentView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    final newConnectivity = context.read<ConnectivityStatusProvider>();
+    if (_connectivity != newConnectivity) {
+      _connectivity?.removeListener(_onConnectivityChanged);
+      _connectivity = newConnectivity;
+      _connectivity?.addListener(_onConnectivityChanged);
+      _lastOnline = _connectivity?.isOnline;
+    }
+
     final id = widget.focusOrderId;
     if (id != null && id > 0 && id != _lastHandledFocus) {
       _lastHandledFocus = id;
@@ -115,6 +127,31 @@ class _PaymentViewState extends State<_PaymentView> {
         if (mounted) _goToAndBlink(id);
       });
     }
+  }
+
+  void _onConnectivityChanged() {
+    final current = _connectivity?.isOnline;
+    if (current == null) return;
+
+    if (_lastOnline == null) {
+      _lastOnline = current;
+      return;
+    }
+
+    // transisi offline -> online
+    if (_lastOnline == false && current == true) {
+      if (!mounted) return;
+
+      Future.microtask(() async {
+        try {
+          await context.read<PaymentProvider>().load();
+        } catch (e) {
+          debugPrint('❌ payment reload after reconnect failed: $e');
+        }
+      });
+    }
+
+    _lastOnline = current;
   }
 
 
@@ -312,8 +349,6 @@ class _PaymentViewState extends State<_PaymentView> {
                       child: _PaymentOrderCard(
                         data: data,
                         onDetail: () async {
-                          if (id <= 0) return;
-
                           await showModalBottomSheet(
                             context: context,
                             useRootNavigator: true,
@@ -323,21 +358,35 @@ class _PaymentViewState extends State<_PaymentView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: DetailOrderSheet(
                                 orderId: id,
-                                loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
+                                loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
                               ),
                             ),
                           );
                         },
                         onDelete: () async {
-                          if (id <= 0) return;
+                          final isLocalOnly = data['is_local_only'] == true;
+                          final serverId = (data['server_id'] ?? data['id']);
+                          final hasServerId = serverId != null && serverId.toString() != '-1';
+
+                          final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
 
                           final ok = await showDialog<bool>(
                             context: context,
                             useRootNavigator: true,
                             builder: (ctx) {
+                              String message;
+
+                              if (isLocalOnly && !hasServerId) {
+                                message = 'Order lokal yang belum sinkron akan dihapus permanen dari device.';
+                              } else if (!isOnline) {
+                                message = 'Order akan ditandai sebagai Pending Delete dan dihapus saat koneksi kembali online.';
+                              } else {
+                                message = 'Order akan dihapus.';
+                              }
+
                               return AlertDialog(
                                 title: const Text('Hapus order?'),
-                                content: const Text('Order yang dihapus tidak dapat dikembalikan.'),
+                                content: Text(message),
                                 actions: [
                                   TextButton(
                                     onPressed: () => Navigator.of(ctx).pop(false),
@@ -359,10 +408,14 @@ class _PaymentViewState extends State<_PaymentView> {
                           if (ok != true) return;
 
                           try {
-                            await context.read<PaymentProvider>().deleteOrder(id);
+                            await context.read<PaymentProvider>().deleteOrderItem(
+                              data,
+                              isOnline: isOnline,
+                            );
+
                             if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Order berhasil dihapus.')),
+                              const SnackBar(content: Text('Order berhasil diperbarui.')),
                             );
                           } catch (e) {
                             if (!context.mounted) return;
@@ -372,7 +425,16 @@ class _PaymentViewState extends State<_PaymentView> {
                           }
                         },
                         onProcess: () async {
-                          if (id <= 0) return;
+                          final syncStatus = (data['sync_status'] ?? '').toString();
+                          // 🚫 kalau order sedang pending delete
+                          if (syncStatus == 'PENDING_DELETE') {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Order ini sedang menunggu penghapusan.'),
+                              ),
+                            );
+                            return;
+                          }
 
                           final result = await showModalBottomSheet<bool>(
                             context: context,
@@ -383,7 +445,8 @@ class _PaymentViewState extends State<_PaymentView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: PaymentProcessSheet(
                                 orderId: id,
-                                loadDetail: (orderId) => context.read<PaymentProvider>().getOrderDetail(orderId),
+                                // 🔑 ini yang membuat modal bisa offline
+                                loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
                                 ordersRepo: context.read<PaymentProvider>().repo,
                               ),
                             ),
@@ -561,11 +624,16 @@ class _PaymentOrderCard extends StatelessWidget {
 
     final code = (data['booking_order_code'] ?? '-').toString();
     final customer = (data['customer_name'] ?? '-').toString();
-    final total = _calcGrandTotalFromMap(data);
+    final total = _calcDisplayGrandTotal(data);
     final status = (data['order_status'] ?? '').toString();
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
 
-    final badge = _statusBadge(status, (data['payment_method'] ?? '').toString());
+    final badge = _statusBadge(
+      status,
+      (data['payment_method'] ?? '').toString(),
+      data['is_local_only'] == true,
+      data['sync_status']?.toString(),
+    );
 
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
@@ -817,8 +885,51 @@ class _PaymentOrderCard extends StatelessWidget {
     );
   }
 
-  Widget _statusBadge(String orderStatus, String paymentMethod) {
-    // kamu bisa refine sesuai web kamu
+  Widget _statusBadge(String orderStatus, String paymentMethod, bool isLocalOnly, String? syncStatus) {
+    if (syncStatus == 'PENDING_DELETE') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDF2F8),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFBCFE8)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.delete_forever_rounded, size: 14, color: Color(0xFFDC2626)),
+            SizedBox(width: 6),
+            Text(
+              'Pending Delete',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (isLocalOnly) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFDE68A)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.cloud_off_rounded, size: 14, color: Color(0xFFF59E0B)),
+            SizedBox(width: 6),
+            Text(
+              'Pending Sync',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
+
     final isExpiredQris = paymentMethod == 'QRIS' && orderStatus == 'EXPIRED';
     final isRequest = orderStatus == 'PAYMENT REQUEST';
 
@@ -889,11 +1000,24 @@ bool _toBool(dynamic v) {
   return s == '1' || s == 'true';
 }
 
-num _calcGrandTotalFromMap(Map<String, dynamic> data) {
+num _calcDisplayGrandTotal(Map<String, dynamic> data) {
+  final isLocalOnly = data['is_local_only'] == true;
+
+  if (isLocalOnly) {
+    final snap = _toNum(data['grand_total']);
+    if (snap > 0) return snap.ceil();
+
+    final subtotal = _toNum(data['subtotal']);
+    final isPpnActive = _toBool(data['is_ppn_active']);
+    final ppnPercent = _toNum(data['ppn']);
+    return isPpnActive
+        ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+        : subtotal.ceil();
+  }
+
   final subtotal = _toNum(data['total_order_value']);
   final isPpnActive = _toBool(data['is_ppn_active']);
   final ppnPercent = _toNum(data['ppn']);
-
   return isPpnActive
       ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
       : subtotal.ceil();

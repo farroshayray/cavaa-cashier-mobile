@@ -236,6 +236,12 @@ class _ProcessViewState extends State<_ProcessView> {
                   itemBuilder: (_, i) {
                     final data = vm.items[i];
                     final id = _toId(data['id']);
+                    final actionKey = id > 0
+                        ? id
+                        : ((data['local_id'] ?? '').toString().isNotEmpty
+                            ? data['local_id'].toString().hashCode
+                            : data.hashCode);
+                    final printKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
                     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
                     return AnimatedContainer(
@@ -250,11 +256,11 @@ class _ProcessViewState extends State<_ProcessView> {
                       ),
                       child: _ProcessOrderCard(
                         data: data,
-                        isPrinting: _printingIds.contains(id),
-                        isActing: vm.isActionLoading(id),
+                        isPrinting: _printingIds.contains(printKey),
+                        isActing: vm.isActionLoading(actionKey),
                         onDetail: () async {
-                          final id = _toId(vm.items[i]['id']);
-                          if (id <= 0) return;
+                          final row = vm.items[i];
+                          final id = _toId(row['id']);
 
                           await showModalBottomSheet(
                             context: context,
@@ -264,28 +270,33 @@ class _ProcessViewState extends State<_ProcessView> {
                             builder: (_) => SizedBox(
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: DetailOrderSheet(
-                                orderId: id,
-                                loadDetail: (orderId) =>
-                                    context.read<ProcessProvider>().getOrderDetail(orderId),
+                                orderId: id > 0 ? id : -1,
+                                loadDetail: (_) =>
+                                    context.read<ProcessProvider>().getOrderDetailFromListItem(row),
                               ),
                             ),
                           );
                         },
                         onPrint: () async {
-                          final id = _toId(vm.items[i]['id']);
-                          if (id <= 0) return;
-                          await _printOrder(id);
+                          final row = vm.items[i];
+                          await _printOrder(row);
                         },
                         onProcess: () async {
-                          final id = _toId(vm.items[i]['id']);
-                          if (id <= 0) return;
+                          final row = vm.items[i];
                           try {
-                            final res = await context.read<ProcessProvider>().actionProcess(id);
+                            final res = await context.read<ProcessProvider>().actionProcess(row);
                             if (!mounted) return;
-                            final st = (res['status'] ?? 'ok').toString();
-                            final msg = (res['message'] ?? 'OK').toString();
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-                            if (st == 'warning') await context.read<ProcessProvider>().load();
+
+                            final status = (res['status'] ?? 'ok').toString();
+                            final message = (res['message'] ?? 'Berhasil diproses').toString();
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message)),
+                            );
+
+                            if (status == 'warning') {
+                              await context.read<ProcessProvider>().load();
+                            }
                           } catch (e) {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -294,14 +305,16 @@ class _ProcessViewState extends State<_ProcessView> {
                           }
                         },
                         onCancelProcess: () async {
-                          final id = _toId(vm.items[i]['id']);
-                          if (id <= 0) return;
+                          final row = vm.items[i];
                           try {
-                            await context.read<ProcessProvider>().actionCancelProcess(id);
+                            final res = await context.read<ProcessProvider>().actionCancelProcess(row);
                             if (!mounted) return;
 
+                            final message =
+                                (res['message'] ?? 'Proses dibatalkan').toString();
+
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Proses dibatalkan')),
+                              SnackBar(content: Text(message)),
                             );
                           } catch (e) {
                             if (!mounted) return;
@@ -311,18 +324,21 @@ class _ProcessViewState extends State<_ProcessView> {
                           }
                         },
                         onFinish: () async {
-                          final id = _toId(vm.items[i]['id']);
-                          if (id <= 0) return;
+                          final row = vm.items[i];
                           try {
-                            await context.read<ProcessProvider>().actionFinish(id);
+                            final res = await context.read<ProcessProvider>().actionFinish(row);
+
+                            await _refreshKeepScroll();
                             await context.read<DoneProvider>().load();
 
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Order selesai')),
-                            );
 
-                            await _refreshKeepScroll();
+                            final message =
+                                (res['message'] ?? 'Order selesai').toString();
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message)),
+                            );
                           } catch (e) {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -344,34 +360,36 @@ class _ProcessViewState extends State<_ProcessView> {
 
   final Set<int> _printingIds = <int>{};
 
-  Future<void> _printOrder(int id) async {
-    if (_printingIds.contains(id)) return;
+  Future<void> _printOrder(Map<String, dynamic> row) async {
+    final id = _toId(row['id']);
+    final printKey = id > 0 ? id : row['local_id'].hashCode;
 
-    setState(() => _printingIds.add(id));
+    if (_printingIds.contains(printKey)) return;
+
+    setState(() => _printingIds.add(printKey));
     try {
-      // 1) ambil data print-detail (include store_name, address, wifi, payment updated_at, dll)
-      final order = await context.read<ProcessProvider>().getPrintDetail(id);
+      final order =
+          await context.read<ProcessProvider>().getPrintDetailFromListItem(row);
 
-      // 2) ambil paid & change dari response (fallback aman)
       final paid = _pickNum(order, ['payment', 'paid_amount']) ??
           _pickNum(order, ['latest_payment', 'paid_amount']) ??
           _pickNum(order, ['paid_amount']) ??
-          _orderGrandTotal(order); // fallback: total
+          _orderGrandTotal(order);
 
       final change = _pickNum(order, ['payment', 'change_amount']) ??
           _pickNum(order, ['latest_payment', 'change_amount']) ??
           _pickNum(order, ['change_amount']) ??
           0;
 
-      // 3) default printer
       final pm = context.read<PrinterManager>();
       final p = pm.defaultPrinter;
       if (p == null) throw Exception('Default printer belum dipilih');
-      if (p.type != PrinterType.bluetooth || p.address == null || p.address!.trim().isEmpty) {
+      if (p.type != PrinterType.bluetooth ||
+          p.address == null ||
+          p.address!.trim().isEmpty) {
         throw Exception('Default printer bukan Bluetooth / address kosong');
       }
 
-      // 4) print
       final bytes = await ReceiptPrinter().buildReceiptBytes(
         order: order,
         paidAmount: paid,
@@ -390,7 +408,7 @@ class _ProcessViewState extends State<_ProcessView> {
         SnackBar(content: Text('Gagal print: $e')),
       );
     } finally {
-      if (mounted) setState(() => _printingIds.remove(id));
+      if (mounted) setState(() => _printingIds.remove(printKey));
     }
   }
 
@@ -618,7 +636,11 @@ class _ProcessOrderCard extends StatelessWidget {
     final code = (data['booking_order_code'] ?? '-').toString();
     final customer = (data['customer_name'] ?? '-').toString();
     final total = _calcGrandTotalFromMap(data);
-    final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
+    final table = (
+      data['table'] is Map
+          ? (data['table']['table_no'] ?? data['table_no_snapshot'] ?? '-')
+          : (data['table_no_snapshot'] ?? '-')
+    ).toString();
 
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
@@ -699,6 +721,19 @@ class _ProcessOrderCard extends StatelessWidget {
                     'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
+                  if (data['is_synced'] == false) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      ((data['pending_action'] ?? '').toString().isNotEmpty)
+                          ? 'Perubahan lokal: ${data['pending_action']}'
+                          : 'Perubahan lokal belum tersinkron',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -872,9 +907,97 @@ class _ProcessOrderCard extends StatelessWidget {
   }
 
   Widget _statusChip() {
-    final bg = const Color(0xFFECFDF5);
-    final border = const Color(0xFFBBF7D0);
-    final dot = const Color(0xFF22C55E);
+    final st = (data['order_status'] ?? '').toString();
+    final isLocalOnly = data['is_local_only'] == true;
+    final isSynced = data['is_synced'] == true;
+    final pendingAction = (data['pending_action'] ?? '').toString();
+
+    if (isLocalOnly) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFDE68A)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF59E0B),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Pending Sync',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!isSynced) {
+      String label = 'Menunggu sync';
+
+      if (pendingAction == 'PROCESS') {
+        label = 'Sync proses';
+      } else if (pendingAction == 'CANCEL_PROCESS') {
+        label = 'Sync batal';
+      } else if (pendingAction == 'FINISH') {
+        label = 'Sync selesai';
+      }
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFDE68A)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF59E0B),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Color bg = const Color(0xFFECFDF5);
+    Color border = const Color(0xFFBBF7D0);
+    Color dot = const Color(0xFF22C55E);
+    String label = 'Proses';
+
+    if (st == 'PAID') {
+      bg = const Color(0xFFFFF7ED);
+      border = const Color(0xFFFED7AA);
+      dot = const Color(0xFFEA580C);
+      label = 'Siap proses';
+    } else if (st == 'PROCESSED') {
+      label = 'Proses';
+    } else if (st == 'SERVED') {
+      bg = const Color(0xFFF5F3FF);
+      border = const Color(0xFFDDD6FE);
+      dot = const Color(0xFF7C3AED);
+      label = 'Selesai';
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -889,10 +1012,16 @@ class _ProcessOrderCard extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: dot,
+              shape: BoxShape.circle,
+            ),
           ),
           const SizedBox(width: 6),
-          const Text('Proses', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
