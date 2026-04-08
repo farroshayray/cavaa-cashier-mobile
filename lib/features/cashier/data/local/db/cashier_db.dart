@@ -63,7 +63,7 @@ class CashierDb extends _$CashierDb {
   CashierDb() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(

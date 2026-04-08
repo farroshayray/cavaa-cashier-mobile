@@ -112,6 +112,7 @@ class CachedProcessOrdersDao extends DatabaseAccessor<CashierDb>
             subtotal: row.subtotal,
             ppnPercent: row.ppnPercent,
             isPpnActive: row.isPpnActive,
+            processedByKitchen: row.processedByKitchen,
             pendingAction: row.pendingAction,
             isSynced: row.isSynced,
             deletedLocally: row.deletedLocally,

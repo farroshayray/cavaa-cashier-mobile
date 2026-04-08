@@ -72,6 +72,7 @@ class ProcessProvider extends ChangeNotifier {
           'total_order_value': row.subtotal,
           'ppn': row.ppnPercent,
           'is_ppn_active': row.isPpnActive ? 1 : 0,
+          'processed_by_kitchen': row.processedByKitchen,
           'table': {
             'table_no': row.tableNo,
           },
@@ -98,6 +99,7 @@ class ProcessProvider extends ChangeNotifier {
 
         return <String, dynamic>{
           ...item,
+          'processed_by_kitchen': false,
           'is_local_only': true,
           'is_synced': false,
           'pending_action': 'LOCAL_ONLY',
@@ -210,6 +212,7 @@ class ProcessProvider extends ChangeNotifier {
           double.tryParse((map['ppn'] ?? '0').toString()) ?? 0,
         ),
         isPpnActive: Value((map['is_ppn_active'] ?? 0) == 1),
+        processedByKitchen: Value(_toBool(map['processed_by_kitchen'])),
         pendingAction: const Value(null),
         isSynced: const Value(true),
         deletedLocally: const Value(false),
