@@ -182,7 +182,12 @@ class _ProcessViewState extends State<_ProcessView> {
 
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () => context.read<ProcessProvider>().load(),
+            onRefresh: () async {
+              await Future.wait([
+                context.read<DoneProvider>().load(),
+                context.read<ProcessProvider>().load(),
+              ]);
+            },
             child: Builder(
               builder: (_) {
                 if (vm.isLoading) {
@@ -235,6 +240,7 @@ class _ProcessViewState extends State<_ProcessView> {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, i) {
                     final data = vm.items[i];
+                    debugPrint('Datadebug: ${data.toString()}');
                     final id = _toId(data['id']);
                     final actionKey = id > 0
                         ? id
@@ -1029,6 +1035,30 @@ class _ProcessOrderCard extends StatelessWidget {
 
   Widget _buildStatusActions() {
     final st = (data['order_status'] ?? '').toString();
+    final processedByKitchen = _isProcessedByKitchen(data);
+
+    if (processedByKitchen) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: ElevatedButton(
+          onPressed: null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey.shade400,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: Colors.grey.shade400,
+            disabledForegroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          child: const Text(
+            'Kitchen',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      );
+    }
 
     if (st == 'PAID') {
       return Padding(
@@ -1076,6 +1106,29 @@ class _ProcessOrderCard extends StatelessWidget {
 
   Widget _buildLandscapeStatusActions() {
     final st = (data['order_status'] ?? '').toString();
+    final processedByKitchen = _isProcessedByKitchen(data);
+
+    if (processedByKitchen) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: ElevatedButton(
+          onPressed: null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey.shade400,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: Colors.grey.shade400,
+            disabledForegroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            minimumSize: const Size(0, 40),
+          ),
+          child: const Text(
+            'Kitchen',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      );
+    }
 
     if (st == 'PAID') {
       return Padding(
@@ -1156,6 +1209,10 @@ bool _toBool(dynamic v) {
   if (v is bool) return v;
   final s = v.toString().toLowerCase();
   return s == '1' || s == 'true';
+}
+
+bool _isProcessedByKitchen(Map<String, dynamic> data) {
+  return _toBool(data['processed_by_kitchen']);
 }
 
 num _calcGrandTotalFromMap(Map<String, dynamic> data) {

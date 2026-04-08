@@ -10580,6 +10580,20 @@ class $CachedProcessOrdersTable extends CachedProcessOrders
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _processedByKitchenMeta =
+      const VerificationMeta('processedByKitchen');
+  @override
+  late final GeneratedColumn<bool> processedByKitchen = GeneratedColumn<bool>(
+    'processed_by_kitchen',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("processed_by_kitchen" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _deletedLocallyMeta = const VerificationMeta(
     'deletedLocally',
   );
@@ -10622,6 +10636,7 @@ class $CachedProcessOrdersTable extends CachedProcessOrders
     isPpnActive,
     pendingAction,
     isSynced,
+    processedByKitchen,
     deletedLocally,
     syncedAt,
   ];
@@ -10751,6 +10766,15 @@ class $CachedProcessOrdersTable extends CachedProcessOrders
         isSynced.isAcceptableOrUnknown(data['is_synced']!, _isSyncedMeta),
       );
     }
+    if (data.containsKey('processed_by_kitchen')) {
+      context.handle(
+        _processedByKitchenMeta,
+        processedByKitchen.isAcceptableOrUnknown(
+          data['processed_by_kitchen']!,
+          _processedByKitchenMeta,
+        ),
+      );
+    }
     if (data.containsKey('deleted_locally')) {
       context.handle(
         _deletedLocallyMeta,
@@ -10831,6 +10855,10 @@ class $CachedProcessOrdersTable extends CachedProcessOrders
         DriftSqlType.bool,
         data['${effectivePrefix}is_synced'],
       )!,
+      processedByKitchen: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}processed_by_kitchen'],
+      )!,
       deletedLocally: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}deleted_locally'],
@@ -10864,6 +10892,7 @@ class CachedProcessOrder extends DataClass
   final bool isPpnActive;
   final String? pendingAction;
   final bool isSynced;
+  final bool processedByKitchen;
   final bool deletedLocally;
   final DateTime? syncedAt;
   const CachedProcessOrder({
@@ -10881,6 +10910,7 @@ class CachedProcessOrder extends DataClass
     required this.isPpnActive,
     this.pendingAction,
     required this.isSynced,
+    required this.processedByKitchen,
     required this.deletedLocally,
     this.syncedAt,
   });
@@ -10913,6 +10943,7 @@ class CachedProcessOrder extends DataClass
       map['pending_action'] = Variable<String>(pendingAction);
     }
     map['is_synced'] = Variable<bool>(isSynced);
+    map['processed_by_kitchen'] = Variable<bool>(processedByKitchen);
     map['deleted_locally'] = Variable<bool>(deletedLocally);
     if (!nullToAbsent || syncedAt != null) {
       map['synced_at'] = Variable<DateTime>(syncedAt);
@@ -10948,6 +10979,7 @@ class CachedProcessOrder extends DataClass
           ? const Value.absent()
           : Value(pendingAction),
       isSynced: Value(isSynced),
+      processedByKitchen: Value(processedByKitchen),
       deletedLocally: Value(deletedLocally),
       syncedAt: syncedAt == null && nullToAbsent
           ? const Value.absent()
@@ -10979,6 +11011,7 @@ class CachedProcessOrder extends DataClass
       isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
       pendingAction: serializer.fromJson<String?>(json['pendingAction']),
       isSynced: serializer.fromJson<bool>(json['isSynced']),
+      processedByKitchen: serializer.fromJson<bool>(json['processedByKitchen']),
       deletedLocally: serializer.fromJson<bool>(json['deletedLocally']),
       syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
     );
@@ -11001,6 +11034,7 @@ class CachedProcessOrder extends DataClass
       'isPpnActive': serializer.toJson<bool>(isPpnActive),
       'pendingAction': serializer.toJson<String?>(pendingAction),
       'isSynced': serializer.toJson<bool>(isSynced),
+      'processedByKitchen': serializer.toJson<bool>(processedByKitchen),
       'deletedLocally': serializer.toJson<bool>(deletedLocally),
       'syncedAt': serializer.toJson<DateTime?>(syncedAt),
     };
@@ -11021,6 +11055,7 @@ class CachedProcessOrder extends DataClass
     bool? isPpnActive,
     Value<String?> pendingAction = const Value.absent(),
     bool? isSynced,
+    bool? processedByKitchen,
     bool? deletedLocally,
     Value<DateTime?> syncedAt = const Value.absent(),
   }) => CachedProcessOrder(
@@ -11046,6 +11081,7 @@ class CachedProcessOrder extends DataClass
         ? pendingAction.value
         : this.pendingAction,
     isSynced: isSynced ?? this.isSynced,
+    processedByKitchen: processedByKitchen ?? this.processedByKitchen,
     deletedLocally: deletedLocally ?? this.deletedLocally,
     syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
   );
@@ -11085,6 +11121,9 @@ class CachedProcessOrder extends DataClass
           ? data.pendingAction.value
           : this.pendingAction,
       isSynced: data.isSynced.present ? data.isSynced.value : this.isSynced,
+      processedByKitchen: data.processedByKitchen.present
+          ? data.processedByKitchen.value
+          : this.processedByKitchen,
       deletedLocally: data.deletedLocally.present
           ? data.deletedLocally.value
           : this.deletedLocally,
@@ -11109,6 +11148,7 @@ class CachedProcessOrder extends DataClass
           ..write('isPpnActive: $isPpnActive, ')
           ..write('pendingAction: $pendingAction, ')
           ..write('isSynced: $isSynced, ')
+          ..write('processedByKitchen: $processedByKitchen, ')
           ..write('deletedLocally: $deletedLocally, ')
           ..write('syncedAt: $syncedAt')
           ..write(')'))
@@ -11131,6 +11171,7 @@ class CachedProcessOrder extends DataClass
     isPpnActive,
     pendingAction,
     isSynced,
+    processedByKitchen,
     deletedLocally,
     syncedAt,
   );
@@ -11152,6 +11193,7 @@ class CachedProcessOrder extends DataClass
           other.isPpnActive == this.isPpnActive &&
           other.pendingAction == this.pendingAction &&
           other.isSynced == this.isSynced &&
+          other.processedByKitchen == this.processedByKitchen &&
           other.deletedLocally == this.deletedLocally &&
           other.syncedAt == this.syncedAt);
 }
@@ -11171,6 +11213,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
   final Value<bool> isPpnActive;
   final Value<String?> pendingAction;
   final Value<bool> isSynced;
+  final Value<bool> processedByKitchen;
   final Value<bool> deletedLocally;
   final Value<DateTime?> syncedAt;
   const CachedProcessOrdersCompanion({
@@ -11188,6 +11231,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     this.isPpnActive = const Value.absent(),
     this.pendingAction = const Value.absent(),
     this.isSynced = const Value.absent(),
+    this.processedByKitchen = const Value.absent(),
     this.deletedLocally = const Value.absent(),
     this.syncedAt = const Value.absent(),
   });
@@ -11206,6 +11250,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     this.isPpnActive = const Value.absent(),
     this.pendingAction = const Value.absent(),
     this.isSynced = const Value.absent(),
+    this.processedByKitchen = const Value.absent(),
     this.deletedLocally = const Value.absent(),
     this.syncedAt = const Value.absent(),
   }) : bookingOrderCode = Value(bookingOrderCode),
@@ -11226,6 +11271,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     Expression<bool>? isPpnActive,
     Expression<String>? pendingAction,
     Expression<bool>? isSynced,
+    Expression<bool>? processedByKitchen,
     Expression<bool>? deletedLocally,
     Expression<DateTime>? syncedAt,
   }) {
@@ -11245,6 +11291,8 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
       if (isPpnActive != null) 'is_ppn_active': isPpnActive,
       if (pendingAction != null) 'pending_action': pendingAction,
       if (isSynced != null) 'is_synced': isSynced,
+      if (processedByKitchen != null)
+        'processed_by_kitchen': processedByKitchen,
       if (deletedLocally != null) 'deleted_locally': deletedLocally,
       if (syncedAt != null) 'synced_at': syncedAt,
     });
@@ -11265,6 +11313,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     Value<bool>? isPpnActive,
     Value<String?>? pendingAction,
     Value<bool>? isSynced,
+    Value<bool>? processedByKitchen,
     Value<bool>? deletedLocally,
     Value<DateTime?>? syncedAt,
   }) {
@@ -11283,6 +11332,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
       isPpnActive: isPpnActive ?? this.isPpnActive,
       pendingAction: pendingAction ?? this.pendingAction,
       isSynced: isSynced ?? this.isSynced,
+      processedByKitchen: processedByKitchen ?? this.processedByKitchen,
       deletedLocally: deletedLocally ?? this.deletedLocally,
       syncedAt: syncedAt ?? this.syncedAt,
     );
@@ -11333,6 +11383,9 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
     if (isSynced.present) {
       map['is_synced'] = Variable<bool>(isSynced.value);
     }
+    if (processedByKitchen.present) {
+      map['processed_by_kitchen'] = Variable<bool>(processedByKitchen.value);
+    }
     if (deletedLocally.present) {
       map['deleted_locally'] = Variable<bool>(deletedLocally.value);
     }
@@ -11359,6 +11412,7 @@ class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
           ..write('isPpnActive: $isPpnActive, ')
           ..write('pendingAction: $pendingAction, ')
           ..write('isSynced: $isSynced, ')
+          ..write('processedByKitchen: $processedByKitchen, ')
           ..write('deletedLocally: $deletedLocally, ')
           ..write('syncedAt: $syncedAt')
           ..write(')'))
@@ -18004,6 +18058,7 @@ typedef $$CachedProcessOrdersTableCreateCompanionBuilder =
       Value<bool> isPpnActive,
       Value<String?> pendingAction,
       Value<bool> isSynced,
+      Value<bool> processedByKitchen,
       Value<bool> deletedLocally,
       Value<DateTime?> syncedAt,
     });
@@ -18023,6 +18078,7 @@ typedef $$CachedProcessOrdersTableUpdateCompanionBuilder =
       Value<bool> isPpnActive,
       Value<String?> pendingAction,
       Value<bool> isSynced,
+      Value<bool> processedByKitchen,
       Value<bool> deletedLocally,
       Value<DateTime?> syncedAt,
     });
@@ -18103,6 +18159,11 @@ class $$CachedProcessOrdersTableFilterComposer
 
   ColumnFilters<bool> get isSynced => $composableBuilder(
     column: $table.isSynced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get processedByKitchen => $composableBuilder(
+    column: $table.processedByKitchen,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18196,6 +18257,11 @@ class $$CachedProcessOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get processedByKitchen => $composableBuilder(
+    column: $table.processedByKitchen,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get deletedLocally => $composableBuilder(
     column: $table.deletedLocally,
     builder: (column) => ColumnOrderings(column),
@@ -18278,6 +18344,11 @@ class $$CachedProcessOrdersTableAnnotationComposer
   GeneratedColumn<bool> get isSynced =>
       $composableBuilder(column: $table.isSynced, builder: (column) => column);
 
+  GeneratedColumn<bool> get processedByKitchen => $composableBuilder(
+    column: $table.processedByKitchen,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get deletedLocally => $composableBuilder(
     column: $table.deletedLocally,
     builder: (column) => column,
@@ -18344,6 +18415,7 @@ class $$CachedProcessOrdersTableTableManager
                 Value<bool> isPpnActive = const Value.absent(),
                 Value<String?> pendingAction = const Value.absent(),
                 Value<bool> isSynced = const Value.absent(),
+                Value<bool> processedByKitchen = const Value.absent(),
                 Value<bool> deletedLocally = const Value.absent(),
                 Value<DateTime?> syncedAt = const Value.absent(),
               }) => CachedProcessOrdersCompanion(
@@ -18361,6 +18433,7 @@ class $$CachedProcessOrdersTableTableManager
                 isPpnActive: isPpnActive,
                 pendingAction: pendingAction,
                 isSynced: isSynced,
+                processedByKitchen: processedByKitchen,
                 deletedLocally: deletedLocally,
                 syncedAt: syncedAt,
               ),
@@ -18380,6 +18453,7 @@ class $$CachedProcessOrdersTableTableManager
                 Value<bool> isPpnActive = const Value.absent(),
                 Value<String?> pendingAction = const Value.absent(),
                 Value<bool> isSynced = const Value.absent(),
+                Value<bool> processedByKitchen = const Value.absent(),
                 Value<bool> deletedLocally = const Value.absent(),
                 Value<DateTime?> syncedAt = const Value.absent(),
               }) => CachedProcessOrdersCompanion.insert(
@@ -18397,6 +18471,7 @@ class $$CachedProcessOrdersTableTableManager
                 isPpnActive: isPpnActive,
                 pendingAction: pendingAction,
                 isSynced: isSynced,
+                processedByKitchen: processedByKitchen,
                 deletedLocally: deletedLocally,
                 syncedAt: syncedAt,
               ),

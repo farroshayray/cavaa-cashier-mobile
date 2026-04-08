@@ -19,6 +19,8 @@ class CachedProcessOrders extends Table {
 
   TextColumn get pendingAction => text().nullable()();
   BoolColumn get isSynced => boolean().withDefault(const Constant(true))();
+  BoolColumn get processedByKitchen =>
+      boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
   DateTimeColumn get syncedAt => dateTime().nullable()();
