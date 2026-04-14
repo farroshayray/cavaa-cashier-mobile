@@ -55,6 +55,7 @@ class IncomingOrderNotif {
 
 class NotificationsProvider extends ChangeNotifier {
   static const String _storageKey = 'cashier_notifications';
+  static const String _unreadKey = 'cashier_notifications_unread';
 
   final List<IncomingOrderNotif> _items = [];
   int _unread = 0;
@@ -66,15 +67,26 @@ class NotificationsProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final rawList = prefs.getStringList(_storageKey) ?? [];
 
-    final loaded = rawList
-        .map((e) => IncomingOrderNotif.fromMap(jsonDecode(e)))
-        .toList();
+    final loaded = <IncomingOrderNotif>[];
+
+    for (final e in rawList) {
+      try {
+        final decoded = jsonDecode(e);
+        if (decoded is Map<String, dynamic>) {
+          loaded.add(IncomingOrderNotif.fromMap(decoded));
+        } else if (decoded is Map) {
+          loaded.add(
+            IncomingOrderNotif.fromMap(Map<String, dynamic>.from(decoded)),
+          );
+        }
+      } catch (_) {}
+    }
 
     _items
       ..clear()
       ..addAll(loaded);
 
-    _unread = _items.length;
+    _unread = prefs.getInt(_unreadKey) ?? _items.length;
     notifyListeners();
   }
 
@@ -82,6 +94,7 @@ class NotificationsProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final rawList = _items.map((e) => jsonEncode(e.toMap())).toList();
     await prefs.setStringList(_storageKey, rawList);
+    await prefs.setInt(_unreadKey, _unread);
   }
 
   Future<void> push(IncomingOrderNotif n) async {
@@ -101,6 +114,7 @@ class NotificationsProvider extends ChangeNotifier {
 
   Future<void> markAllRead() async {
     _unread = 0;
+    await _saveToStorage();
     notifyListeners();
   }
 
@@ -110,6 +124,7 @@ class NotificationsProvider extends ChangeNotifier {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
+    await prefs.remove(_unreadKey);
 
     notifyListeners();
   }

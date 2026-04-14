@@ -315,9 +315,13 @@ class _MiniCartBar extends StatelessWidget {
 
                   if (result != null && context.mounted) {
                     final refreshTarget = (result['refresh_target'] ?? '').toString();
+                    final isSuccess = result['success'] == true;
 
-                    if (refreshTarget == 'payment') {
-                      context.read<PaymentProvider>().load();
+                    if (isSuccess && refreshTarget == 'payment') {
+                      await Future.wait([
+                        context.read<PaymentProvider>().load(),
+                        context.read<PurchaseProvider>().load(),
+                      ]);
                     }
                   }
                 },

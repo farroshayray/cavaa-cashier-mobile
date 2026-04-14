@@ -29,17 +29,60 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
   PaymentOption? _selectedPay;
   bool _submitting = false;
 
+  bool _showValidation = false;
+
+  bool get _nameInvalid => _showValidation && _nameCtrl.text.trim().isEmpty;
+  bool get _tableInvalid => _showValidation && _selectedTable == null;
+  bool get _paymentInvalid => _showValidation && _selectedPay == null;
+
   @override
   void dispose() {
     _nameCtrl.dispose();
     super.dispose();
   }
 
-  bool get _isValid {
-    final nameOk = _nameCtrl.text.trim().isNotEmpty;
-    final tableOk = _selectedTable != null;
-    final methodOk = _selectedPay != null;
-    return nameOk && tableOk && methodOk && !_submitting;
+  bool get _isValid => !_submitting;
+  bool get _allRequiredFilled {
+    return _nameCtrl.text.trim().isNotEmpty &&
+        _selectedTable != null &&
+        _selectedPay != null;
+  }
+
+  Future<bool> _showSubmitConfirmation() async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Konfirmasi Pembayaran',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          content: const Text(
+            'Apakah Anda yakin ingin memproses pembayaran untuk pesanan ini?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFAE1504),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Ya, Lanjutkan'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
   }
 
   @override
@@ -47,7 +90,25 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     const brand = Color(0xFFAE1504);
     final vm = context.watch<PurchaseProvider>();
     final items = vm.cart;
-    final availableTables = vm.tables.where((t) => t.isAvailable).toList();
+    final availableTables = vm.tables.where((t) => t.isAvailable).toList()
+      ..sort((a, b) {
+        final classCompare = (a.tableClass ?? '').compareTo(b.tableClass ?? '');
+        if (classCompare != 0) return classCompare;
+        return a.label.compareTo(b.label);
+      });
+
+    final Map<String, List<StoreTable>> groupedTables = {};
+    for (final table in availableTables) {
+      final groupName = (table.tableClass?.trim().isNotEmpty ?? false)
+          ? table.tableClass!.trim()
+          : 'Lainnya';
+
+      groupedTables.putIfAbsent(groupName, () => []).add(table);
+    }
+    debugPrint(
+      'Datadebug: ${availableTables.map((t) => '${t.id}-${t.tableNo}-${t.tableClass}').toList()}'
+    );
+
     final payOptions = vm.paymentOptions;
 
     final subtotal = vm.cartSubtotal;
@@ -135,7 +196,11 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                     const SizedBox(height: 14),
 
                     // Nama Pemesan
-                    _SectionLabel(icon: Icons.person_outline_rounded, text: 'Nama Pemesan'),
+                    _SectionLabel(
+                      icon: Icons.person_outline_rounded,
+                      text: 'Nama Pemesan',
+                      requiredMark: true,
+                    ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _nameCtrl,
@@ -144,44 +209,116 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                       textInputAction: TextInputAction.next,
                       decoration: InputDecoration(
                         hintText: 'Contoh: Budi Setiawan',
-                        helperText: 'Isi nama agar pesanan mudah dipanggil',
+                        helperText: _nameInvalid
+                            ? 'Nama pemesan wajib diisi'
+                            : 'Isi nama agar pesanan mudah dipanggil',
+                        helperStyle: TextStyle(
+                          color: _nameInvalid ? Colors.red : Colors.black54,
+                        ),
                         filled: true,
                         fillColor: const Color(0xFFF7F8FA),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.10)),
+                          borderSide: BorderSide(
+                            color: _nameInvalid
+                                ? Colors.red
+                                : Colors.black.withOpacity(0.10),
+                            width: _nameInvalid ? 1.4 : 1.0,
+                          ),
                         ),
-                        focusedBorder: const OutlineInputBorder(
-                          borderSide: BorderSide(color: brand, width: 1.3),
-                          borderRadius: BorderRadius.all(Radius.circular(14)),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: _nameInvalid ? Colors.red : brand,
+                            width: 1.3,
+                          ),
+                          borderRadius: const BorderRadius.all(Radius.circular(14)),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Colors.red, width: 1.4),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Colors.red, width: 1.4),
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
 
                     // Pilih Meja
-                    _SectionLabel(icon: Icons.table_restaurant_outlined, text: 'Pilih Meja'),
+                    _SectionLabel(
+                      icon: Icons.table_restaurant_outlined,
+                      text: 'Pilih Meja',
+                      requiredMark: true,
+                    ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<StoreTable>(
                       value: _selectedTable,
-                      items: availableTables
-                          .map((t) => DropdownMenuItem(value: t, child: Text(t.label)))
-                          .toList(),
-                      onChanged: _submitting ? null : (v) => setState(() => _selectedTable = v),
+                      items: groupedTables.entries.expand((entry) {
+                        final groupName = entry.key;
+                        final tables = entry.value;
+
+                        return [
+                          DropdownMenuItem<StoreTable>(
+                            enabled: false,
+                            value: null,
+                            child: Text(
+                              groupName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFFAE1504),
+                              ),
+                            ),
+                          ),
+                          ...tables.map(
+                            (t) => DropdownMenuItem<StoreTable>(
+                              value: t,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: Text(t.label),
+                              ),
+                            ),
+                          ),
+                        ];
+                      }).toList(),
+                      onChanged: _submitting
+                        ? null
+                        : (v) => setState(() => _selectedTable = v),
                       decoration: InputDecoration(
                         hintText: availableTables.isEmpty ? 'Tidak ada meja tersedia' : 'Pilih meja',
-                        helperText: 'Meja yang tidak tersedia tidak dapat dipilih',
+                        helperText: _tableInvalid
+                            ? 'Meja wajib dipilih'
+                            : 'Meja yang tidak tersedia tidak dapat dipilih',
+                        helperStyle: TextStyle(
+                          color: _tableInvalid ? Colors.red : Colors.black54,
+                        ),
                         filled: true,
                         fillColor: const Color(0xFFF7F8FA),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.10)),
+                          borderSide: BorderSide(
+                            color: _tableInvalid
+                                ? Colors.red
+                                : Colors.black.withOpacity(0.10),
+                            width: _tableInvalid ? 1.4 : 1.0,
+                          ),
                         ),
-                        focusedBorder: const OutlineInputBorder(
-                          borderSide: BorderSide(color: brand, width: 1.3),
-                          borderRadius: BorderRadius.all(Radius.circular(14)),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: _tableInvalid ? Colors.red : brand,
+                            width: 1.3,
+                          ),
+                          borderRadius: const BorderRadius.all(Radius.circular(14)),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Colors.red, width: 1.4),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Colors.red, width: 1.4),
                         ),
                       ),
                     ),
@@ -189,56 +326,84 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                     const SizedBox(height: 12),
 
                     // Metode Pembayaran
-                    _SectionLabel(icon: Icons.credit_card_rounded, text: 'Metode Pembayaran'),
+                    _SectionLabel(
+                      icon: Icons.credit_card_rounded,
+                      text: 'Metode Pembayaran',
+                      requiredMark: true,
+                    ),
                     const SizedBox(height: 10),
 
-                    if (payOptions.isEmpty)
-                      Text(
-                        'Metode pembayaran belum tersedia.',
-                        style: TextStyle(color: Colors.black.withOpacity(0.55)),
-                      )
-                    else ...[
-                      if (instantPayments.isNotEmpty) ...[
-                        _PaymentGroupTitle(title: 'Pembayaran Instan'),
-                        const SizedBox(height: 8),
-                        ...instantPayments.map((opt) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _buildPaymentCard(opt, brand),
-                            )),
-                        const SizedBox(height: 8),
-                      ],
-
-                      if (manualTfPayments.isNotEmpty) ...[
-                        _PaymentGroupTitle(title: 'Transfer Bank'),
-                        const SizedBox(height: 8),
-                        ...manualTfPayments.map((opt) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _buildPaymentCard(opt, brand),
-                            )),
-                        const SizedBox(height: 8),
-                      ],
-
-                      if (manualEwalletPayments.isNotEmpty) ...[
-                        _PaymentGroupTitle(title: 'E-Wallet'),
-                        const SizedBox(height: 8),
-                        ...manualEwalletPayments.map((opt) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _buildPaymentCard(opt, brand),
-                            )),
-                        const SizedBox(height: 8),
-                      ],
-
-                      if (manualQrisPayments.isNotEmpty) ...[
-                        _PaymentGroupTitle(title: 'QRIS Manual'),
-                        const SizedBox(height: 8),
-                        ...manualQrisPayments.map((opt) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _buildPaymentCard(opt, brand),
-                            )),
-                      ],
-                    ],
-
-                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F8FA),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _paymentInvalid
+                              ? Colors.red
+                              : Colors.black.withOpacity(0.10),
+                          width: _paymentInvalid ? 1.4 : 1.0,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (payOptions.isEmpty)
+                            Text(
+                              'Metode pembayaran belum tersedia.',
+                              style: TextStyle(color: Colors.black.withOpacity(0.55)),
+                            )
+                          else ...[
+                            if (instantPayments.isNotEmpty) ...[
+                              _PaymentGroupTitle(title: 'Pembayaran Instan'),
+                              const SizedBox(height: 8),
+                              ...instantPayments.map((opt) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _buildPaymentCard(opt, brand),
+                                  )),
+                              const SizedBox(height: 8),
+                            ],
+                            if (manualTfPayments.isNotEmpty) ...[
+                              _PaymentGroupTitle(title: 'Transfer Bank'),
+                              const SizedBox(height: 8),
+                              ...manualTfPayments.map((opt) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _buildPaymentCard(opt, brand),
+                                  )),
+                              const SizedBox(height: 8),
+                            ],
+                            if (manualEwalletPayments.isNotEmpty) ...[
+                              _PaymentGroupTitle(title: 'E-Wallet'),
+                              const SizedBox(height: 8),
+                              ...manualEwalletPayments.map((opt) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _buildPaymentCard(opt, brand),
+                                  )),
+                              const SizedBox(height: 8),
+                            ],
+                            if (manualQrisPayments.isNotEmpty) ...[
+                              _PaymentGroupTitle(title: 'QRIS Manual'),
+                              const SizedBox(height: 8),
+                              ...manualQrisPayments.map((opt) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _buildPaymentCard(opt, brand),
+                                  )),
+                            ],
+                          ],
+                          if (_paymentInvalid) ...[
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Metode pembayaran wajib dipilih',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -267,10 +432,19 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
-                      onPressed: (!_isValid || items.isEmpty)
+                      onPressed: _submitting || items.isEmpty
                         ? null
                         : () async {
+                            final valid = _validateBeforeSubmit();
+                            if (!valid) return;
+
+                            final confirmed = await _showSubmitConfirmation();
+                            if (!confirmed) return;
+
+                            if (widget.onSubmit == null) return;
+
                             setState(() => _submitting = true);
+
                             try {
                               final selectedPay = _selectedPay!;
 
@@ -283,9 +457,6 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               final redirect = resp['redirect'];
                               final isXenditQris = selectedPay.kind == PayKind.onlineQris;
 
-                              // patokan refresh baru:
-                              // - QRIS Xendit -> jangan refresh dari sini
-                              // - selain itu  -> refresh payment
                               final refreshTarget = isXenditQris ? '' : 'payment';
 
                               if (isXenditQris && redirect is String && redirect.isNotEmpty) {
@@ -307,16 +478,25 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               }
                             } catch (_) {
                               if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Gagal memproses pembayaran. Coba lagi.')),
-                              );
+                              ScaffoldMessenger.of(context)
+                                ..hideCurrentSnackBar()
+                                ..showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Gagal memproses pembayaran. Coba lagi.'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
                             } finally {
-                              if (mounted) setState(() => _submitting = false);
+                              if (mounted) {
+                                setState(() => _submitting = false);
+                              }
                             }
                           },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: brand,
+                        backgroundColor: _allRequiredFilled ? brand : brand.withOpacity(0.55),
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: brand.withOpacity(0.35),
+                        disabledForegroundColor: Colors.white70,
                         shape: const StadiumBorder(),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -371,6 +551,37 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
       active: active,
       onTap: _submitting ? null : () => setState(() => _selectedPay = opt),
     );
+  }
+
+  bool _validateBeforeSubmit() {
+    setState(() => _showValidation = true);
+
+    final missing = <String>[];
+
+    if (_nameCtrl.text.trim().isEmpty) {
+      missing.add('Nama Pemesan');
+    }
+    if (_selectedTable == null) {
+      missing.add('Pilih Meja');
+    }
+    if (_selectedPay == null) {
+      missing.add('Metode Pembayaran');
+    }
+
+    if (missing.isNotEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Mohon lengkapi: ${missing.join(', ')}'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return false;
+    }
+
+    return true;
   }
 }
 
@@ -640,9 +851,15 @@ class _TotalCard extends StatelessWidget {
 }
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.icon, required this.text});
+  const _SectionLabel({
+    required this.icon,
+    required this.text,
+    this.requiredMark = false,
+  });
+
   final IconData icon;
   final String text;
+  final bool requiredMark;
 
   @override
   Widget build(BuildContext context) {
@@ -652,6 +869,17 @@ class _SectionLabel extends StatelessWidget {
         Icon(icon, size: 18, color: brand),
         const SizedBox(width: 8),
         Text(text, style: const TextStyle(fontWeight: FontWeight.w900)),
+        if (requiredMark) ...[
+          const SizedBox(width: 4),
+          const Text(
+            '*',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -757,6 +985,7 @@ class _ProductThumb extends StatelessWidget {
   bool _isLocalFile(String value) {
     return value.startsWith('/') || value.startsWith('file://');
   }
+  
 
   @override
   Widget build(BuildContext context) {

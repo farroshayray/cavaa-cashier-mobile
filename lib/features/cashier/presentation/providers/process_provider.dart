@@ -252,6 +252,18 @@ class ProcessProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> clearStateAndCache() async {
+    isLoading = false;
+    error = null;
+    query = '';
+    items = [];
+    actionLoadingIds.clear();
+
+    await cachedProcessOrdersDao.clearAll();
+    notifyListeners();
+  }
+
+
   Future<Map<String, dynamic>?> _getCachedProcessDetailMap(int serverId) async {
     final row = await cachedProcessOrdersDao.findByServerId(serverId);
     if (row == null) return null;

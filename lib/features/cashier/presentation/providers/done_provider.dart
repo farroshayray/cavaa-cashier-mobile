@@ -164,6 +164,16 @@ class DoneProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> clearStateAndCache() async {
+    isLoading = false;
+    error = null;
+    query = '';
+    items = [];
+
+    await cachedDoneOrdersDao.clearAll();
+    notifyListeners();
+  }
+
   Future<void> _refreshDoneOrdersFromServer() async {
     final res = await repo.fetchOrdersData(
       tab: 'selesai',

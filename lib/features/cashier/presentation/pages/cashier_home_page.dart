@@ -73,6 +73,16 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     WidgetsBinding.instance.addObserver(this);
     _listenFcmEvents();
 
+    Future.microtask(() async {
+      final pendingTap =
+          await PushNotificationService.instance.consumePendingNotificationTap();
+
+      if (pendingTap != null && mounted) {
+        await context.read<NotificationsProvider>().pushFromFcm(pendingTap);
+        await _handleFcmTap(pendingTap);
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _setupConnectivitySyncHook();
@@ -199,6 +209,41 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     }
   }
 
+  Future<void> _confirmLogout() async {
+    // 🔥 ambil status pending dulu
+    final hasPending = await context.read<SyncService>().hasPendingData();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Konfirmasi Logout'),
+        content: Text(
+          hasPending
+              ? '⚠️ Masih ada data yang belum tersinkronisasi.\n\nLogout akan menghapus data tersebut.'
+              : 'Apakah Anda yakin ingin logout?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 114, 9, 2),
+              foregroundColor: Colors.white, // 🔥 ini kuncinya
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _logout();
+    }
+  }
+
   Future<void> _startRealtimeIfReady() async {
     if (!mounted || _pusherStarted) return;
 
@@ -306,6 +351,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   void _onTap(int i) => setState(() => _index = i);
 
   Future<void> _logout() async {
+    await context.read<NotificationsProvider>().clear();
+    await context.read<PaymentProvider>().clearStateAndCache();
+    await context.read<ProcessProvider>().clearStateAndCache();
+    await context.read<DoneProvider>().clearStateAndCache();
+    await context.read<SyncService>().clearCashierSessionData();
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
 
@@ -325,6 +375,12 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       );
       return;
     }
+
+    await Future.wait([
+      context.read<PaymentProvider>().load(),
+      context.read<ProcessProvider>().load(),
+      context.read<DoneProvider>().load(),
+    ]);
 
     final targetIndex = await _resolveTabIndexByOrderId(orderId);
 
@@ -658,6 +714,10 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     if (!mounted) return;
 
     await context.read<NotificationsProvider>().clear();
+    await context.read<PaymentProvider>().clearStateAndCache();
+    await context.read<ProcessProvider>().clearStateAndCache();
+    await context.read<DoneProvider>().clearStateAndCache();
+    await context.read<SyncService>().clearCashierSessionData();
     await context.read<AuthProvider>().logout();
 
     if (!mounted) return;
@@ -812,7 +872,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
               ? _handleManualUpdateTap
               : null,
           showUpdateBadge: hasAppUpdate,
-          onLogout: _logout,
+          onLogout: _confirmLogout,
         ),
         appBar: AppBar(
           leading: Builder(

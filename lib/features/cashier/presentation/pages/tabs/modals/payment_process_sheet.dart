@@ -36,6 +36,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   bool _printing = false;
   bool _printed = false;
   bool _paying = false;
+  bool _showCashValidation = false;
 
   Map<String, dynamic>? _lastPaymentResp;
   String? _error;
@@ -109,6 +110,83 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 
   bool get _isCaseC => !_isCaseA && !_isCaseB;
+
+  bool get _needsCashValidation {
+    if (_order == null) return false;
+    return _isCaseA || _isCaseB || ((_order!['payment_method'] ?? '').toString() == 'CASH');
+  }
+
+  bool get _paidInvalid {
+    if (!_needsCashValidation) return false;
+    if (!_showCashValidation) return false;
+
+    final paid = _num(_paidCtrl.text);
+    return paid <= 0;
+  }
+
+  bool get _paidInsufficient {
+    if (!_needsCashValidation) return false;
+    if (!_showCashValidation) return false;
+
+    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final paid = _num(_paidCtrl.text);
+    return paid > 0 && paid < total;
+  }
+
+  bool get _cashInputValid {
+    if (!_needsCashValidation) return true;
+
+    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final paid = _num(_paidCtrl.text);
+
+    return paid > 0 && paid >= total;
+  }
+
+  bool _validateCashInputBeforeConfirm() {
+    if (!_needsCashValidation) return true;
+
+    setState(() => _showCashValidation = true);
+
+    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final paid = _num(_paidCtrl.text);
+
+    if (paid <= 0) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Uang diterima belum diisi'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return false;
+    }
+
+    if (paid < total) {
+      showDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        builder: (_) => AlertDialog(
+          title: const Text('Uang tidak cukup'),
+          content: Text(
+            'Uang diterima Rp ${_rupiah(paid)}\n'
+            'Total tagihan Rp ${_rupiah(total)}\n\n'
+            'Silakan periksa kembali nominal pembayaran.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+
+    return true;
+  }
 
   Future<void> _pickCashierProof({required ImageSource source}) async {
     try {
@@ -220,7 +298,10 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
     final paid = _num(_paidCtrl.text);
     final change = (paid - total);
-    setState(() => _change = change > 0 ? change : 0);
+
+    setState(() {
+      _change = change > 0 ? change : 0;
+    });
   }
 
   @override
@@ -249,17 +330,20 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                       : _error != null
                           ? _ErrorView(message: _error!, onRetry: _fetch)
                           : _Body(
-                              order: _order!,
-                              paidCtrl: _paidCtrl,
-                              change: _change,
-                              cashierProofImage: _cashierProofImage,
-                              cashierProofError: _cashierProofError,
-                              onPickImage: _showImageSourcePicker,
-                              onRemoveImage: _removeCashierProof,
-                            ),
+                            order: _order!,
+                            paidCtrl: _paidCtrl,
+                            change: _change,
+                            cashierProofImage: _cashierProofImage,
+                            cashierProofError: _cashierProofError,
+                            onPickImage: _showImageSourcePicker,
+                            onRemoveImage: _removeCashierProof,
+                            paidInvalid: _paidInvalid,
+                            paidInsufficient: _paidInsufficient,
+                          ),
                 ),
                 _Footer2(
                   paying: _paying,
+                  ready: _cashInputValid,
                   onBack: () => Navigator.of(context).pop(false),
                   onConfirm: () async => _confirmAndPay(),
                 ),
@@ -272,156 +356,131 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 
   Future<void> _confirmAndPay() async {
-  if (_paying) return;
+    if (_paying) return;
 
-  final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-  final paid  = _num(_paidCtrl.text);
-  final change = (paid - total) > 0 ? (paid - total) : 0;
+    final valid = _validateCashInputBeforeConfirm();
+    if (!valid) return;
 
-  if (paid <= 0) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Uang diterima belum diisi')),
-    );
-    return;
-  }
+    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final paid = _num(_paidCtrl.text);
+    final change = (paid - total) > 0 ? (paid - total) : 0;
 
-  if (paid < total) {
-    await showDialog<void>(
+    final ok = await showDialog<bool>(
       context: context,
       useRootNavigator: true,
       builder: (_) => AlertDialog(
-        title: const Text('Uang tidak cukup'),
+        title: const Text('Konfirmasi Pembayaran'),
         content: Text(
           'Uang diterima Rp ${_rupiah(paid)}\n'
-          'Total tagihan Rp ${_rupiah(total)}\n\n'
-          'Silakan periksa kembali nominal pembayaran.',
+          'Total tagihan Rp ${_rupiah(total)}\n'
+          'Kembalian Rp ${_rupiah(change)}\n\n'
+          'Lanjutkan proses pembayaran?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ya, lanjutkan'),
           ),
         ],
       ),
     );
-    return;
-  }
 
-  final ok = await showDialog<bool>(
-    context: context,
-    useRootNavigator: true,
-    builder: (_) => AlertDialog(
-      title: const Text('Konfirmasi Pembayaran'),
-      content: Text(
-        'Uang diterima Rp ${_rupiah(paid)}\n'
-        'Total tagihan Rp ${_rupiah(total)}\n'
-        'Kembalian Rp ${_rupiah(change)}\n\n'
-        'Lanjutkan proses pembayaran?',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Batal'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Ya, lanjutkan'),
-        ),
-      ],
-    ),
-  );
+    if (ok != true) return;
 
-  if (ok != true) return;
+    setState(() => _paying = true);
 
-  setState(() => _paying = true);
-
-  try {
-    final repo = widget.ordersRepo;
-
-    // 1. Simpan pembayaran dulu
-
-    final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
-    if (isOnline) {
-      await widget.ordersRepo.paymentOrder(
-        id: widget.orderId,
-        paidAmount: paid,
-        changeAmount: change,
-        lastPaymentId: _isCaseB ? _lastPaymentId : null,
-        cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
-      ).timeout(const Duration(seconds: 15));
-    } else {
-      await context.read<PaymentProvider>().confirmPaymentOffline(
-        order: _order!,
-        paidAmount: paid,
-        changeAmount: change,
-        cashierProofImagePath: _cashierProofImage?.path,
-        lastPaymentId: _isCaseB ? _lastPaymentId : null,
-      );
-    }
-
-    // 2. Setelah pembayaran sukses, coba print
-    String? printError;
     try {
-      Map<String, dynamic> printOrder;
+      final repo = widget.ordersRepo;
+      final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
 
       if (isOnline) {
-        printOrder = await repo
-            .fetchPrintDetail(widget.orderId)
-            .timeout(const Duration(seconds: 15));
+        await widget.ordersRepo.paymentOrder(
+          id: widget.orderId,
+          paidAmount: paid,
+          changeAmount: change,
+          lastPaymentId: _isCaseB ? _lastPaymentId : null,
+          cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
+        ).timeout(const Duration(seconds: 15));
       } else {
-        printOrder = _buildOfflinePrintableOrder(
-          _order!,
-          paid: paid,
-          change: change,
+        await context.read<PaymentProvider>().confirmPaymentOffline(
+          order: _order!,
+          paidAmount: paid,
+          changeAmount: change,
+          cashierProofImagePath: _cashierProofImage?.path,
+          lastPaymentId: _isCaseB ? _lastPaymentId : null,
         );
       }
 
-      await _printReceiptWithOrder(
-        printOrder,
-        paid: paid,
-        change: change,
-      );
-    } catch (e) {
-      printError = e.toString();
-    }
+      String? printError;
+      try {
+        Map<String, dynamic> printOrder;
 
-    if (!mounted) return;
+        if (isOnline) {
+          printOrder = await repo
+              .fetchPrintDetail(widget.orderId)
+              .timeout(const Duration(seconds: 15));
+        } else {
+          printOrder = _buildOfflinePrintableOrder(
+            _order!,
+            paid: paid,
+            change: change,
+          );
+        }
 
-    // 3. Tampilkan hasil
-    await showDialog<void>(
-      context: context,
-      useRootNavigator: true,
-      builder: (_) => AlertDialog(
-        title: Text(
-          printError == null
-              ? 'Pembayaran berhasil'
-              : 'Pembayaran berhasil, print gagal',
-        ),
-        content: Text(
-          printError == null
-              ? 'Pembayaran berhasil disimpan dan struk sedang diprint.'
-              : 'Pembayaran berhasil disimpan, tetapi struk gagal diprint.\n\nError: $printError',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+        await _printReceiptWithOrder(
+          printOrder,
+          paid: paid,
+          change: change,
+        );
+      } catch (e) {
+        printError = e.toString();
+      }
+
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        builder: (_) => AlertDialog(
+          title: Text(
+            printError == null
+                ? 'Pembayaran berhasil'
+                : 'Pembayaran berhasil, print gagal',
           ),
-        ],
-      ),
-    );
+          content: Text(
+            printError == null
+                ? 'Pembayaran berhasil disimpan dan struk sedang diprint.'
+                : 'Pembayaran berhasil disimpan, tetapi struk gagal diprint.\n\nError: $printError',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
 
-    if (!mounted) return;
-    Navigator.of(context).pop(true);
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Gagal menyimpan pembayaran: $e')),
-    );
-  } finally {
-    if (mounted) setState(() => _paying = false);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan pembayaran: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _paying = false);
+    }
   }
-}
 
 
 
@@ -584,6 +643,8 @@ class _Body extends StatelessWidget {
     required this.cashierProofError,
     required this.onPickImage,
     required this.onRemoveImage,
+    required this.paidInvalid,
+    required this.paidInsufficient,
   });
 
   final Map<String, dynamic> order;
@@ -593,6 +654,8 @@ class _Body extends StatelessWidget {
   final String? cashierProofError;
   final Future<void> Function() onPickImage;
   final VoidCallback onRemoveImage;
+  final bool paidInvalid;
+  final bool paidInsufficient;  
 
   @override
   Widget build(BuildContext context) {
@@ -659,6 +722,8 @@ class _Body extends StatelessWidget {
               total: total,
               paidCtrl: paidCtrl,
               change: change,
+              invalid: paidInvalid,
+              insufficient: paidInsufficient,
             )
           else
             _HintCard(
@@ -1274,20 +1339,29 @@ class _CashInputCard extends StatelessWidget {
     required this.total,
     required this.paidCtrl,
     required this.change,
+    required this.invalid,
+    required this.insufficient,
   });
 
   final num total;
   final TextEditingController paidCtrl;
   final num change;
+  final bool invalid;
+  final bool insufficient;
 
   @override
   Widget build(BuildContext context) {
+    final hasError = invalid || insufficient;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFFFCFCFD),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
+        border: Border.all(
+          color: hasError ? Colors.red : Colors.black.withOpacity(0.08),
+          width: hasError ? 1.3 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1295,25 +1369,73 @@ class _CashInputCard extends StatelessWidget {
           const Text('Pembayaran Cash', style: TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
 
-          Text('Uang Diterima', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+          Row(
+            children: const [
+              Text(
+                'Uang Diterima',
+                style: TextStyle(fontSize: 12),
+              ),
+              SizedBox(width: 4),
+              Text(
+                '*',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
+
           TextField(
             controller: paidCtrl,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               hintText: 'cth: 100000',
+              helperText: invalid
+                  ? 'Uang diterima wajib diisi'
+                  : insufficient
+                      ? 'Nominal uang diterima kurang dari total tagihan'
+                      : null,
+              helperStyle: TextStyle(
+                color: hasError ? Colors.red : Colors.black54,
+              ),
               filled: true,
               fillColor: const Color(0xFFF7F8FA),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: Colors.black.withOpacity(0.10)),
+                borderSide: BorderSide(
+                  color: hasError ? Colors.red : Colors.black.withOpacity(0.10),
+                  width: hasError ? 1.4 : 1.0,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: hasError ? Colors.red : const Color(0xFFAE1504),
+                  width: 1.3,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Colors.red, width: 1.4),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Colors.red, width: 1.4),
               ),
             ),
           ),
           const SizedBox(height: 12),
 
-          Text('Kembalian', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+          Text(
+            'Kembalian',
+            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+          ),
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1425,11 +1547,13 @@ class _Footer2 extends StatelessWidget {
     required this.onBack,
     required this.onConfirm,
     required this.paying,
+    required this.ready,
   });
 
   final VoidCallback onBack;
   final Future<void> Function() onConfirm;
   final bool paying;
+  final bool ready;
 
   @override
   Widget build(BuildContext context) {
@@ -1454,7 +1578,7 @@ class _Footer2 extends StatelessWidget {
           Expanded(
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: brand,
+                backgroundColor: ready ? brand : brand.withOpacity(0.55),
                 foregroundColor: Colors.white,
               ),
               onPressed: paying ? null : () async => onConfirm(),

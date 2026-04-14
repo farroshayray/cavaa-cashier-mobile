@@ -31,6 +31,20 @@ class SyncService {
 
   bool get isRunning => _isRunning;
 
+  Future<bool> hasPendingData() async {
+    final pendingOrders = await localOrdersDao.getUnsyncedOrders();
+    final pendingDeletes = await localOrdersDao.getPendingDeleteOrders();
+    final cachedPendingDeletes =
+        await cachedPaymentOrdersDao.getPendingDeleteOrders();
+    final pendingProcessActions =
+        await cachedProcessOrdersDao.getPendingProcessActions();
+
+    return pendingOrders.isNotEmpty ||
+        pendingDeletes.isNotEmpty ||
+        cachedPendingDeletes.isNotEmpty ||
+        pendingProcessActions.isNotEmpty;
+  }
+
   Future<void> syncPendingOrders() async {
     if (_isRunning) {
       debugPrint('⏭️ sync skipped: already running');
@@ -437,6 +451,13 @@ class SyncService {
     debugPrint('🧾 purchase sync raw response for ${order.localId}: $resp');
 
     return resp;
+  }
+
+  Future<void> clearCashierSessionData() async {
+    await cachedPaymentOrdersDao.clearAll();
+    await cachedProcessOrdersDao.clearAll();
+    await cachedDoneOrdersDao.clearAll();
+    await localOrdersDao.clearAll();
   }
 
   Future<void> _syncPayment(LocalOrder order, int serverId) async {
