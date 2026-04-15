@@ -30,6 +30,7 @@ import 'tabs/process_tab.dart' as process_tab;
 import 'tabs/done_tab.dart' as done_tab;
 
 import '/features/cashier/presentation/pages/printer/printer_settings_page.dart';
+import '/features/cashier/presentation/pages/reports/reports_page.dart';
 import '/core/services/connectivity_status_provider.dart';
 
 class CashierHomePage extends StatefulWidget {
@@ -72,6 +73,16 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _listenFcmEvents();
+
+    Future.microtask(() async {
+      final pendingTap =
+          await PushNotificationService.instance.consumePendingNotificationTap();
+
+      if (pendingTap != null && mounted) {
+        await context.read<NotificationsProvider>().pushFromFcm(pendingTap);
+        await _handleFcmTap(pendingTap);
+      }
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -199,6 +210,41 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     }
   }
 
+  Future<void> _confirmLogout() async {
+    // 🔥 ambil status pending dulu
+    final hasPending = await context.read<SyncService>().hasPendingData();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Konfirmasi Logout'),
+        content: Text(
+          hasPending
+              ? '⚠️ Masih ada data yang belum tersinkronisasi.\n\nLogout akan menghapus data tersebut.'
+              : 'Apakah Anda yakin ingin logout?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 114, 9, 2),
+              foregroundColor: Colors.white, // 🔥 ini kuncinya
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _logout();
+    }
+  }
+
   Future<void> _startRealtimeIfReady() async {
     if (!mounted || _pusherStarted) return;
 
@@ -306,6 +352,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   void _onTap(int i) => setState(() => _index = i);
 
   Future<void> _logout() async {
+    await context.read<NotificationsProvider>().clear();
+    await context.read<PaymentProvider>().clearStateAndCache();
+    await context.read<ProcessProvider>().clearStateAndCache();
+    await context.read<DoneProvider>().clearStateAndCache();
+    await context.read<SyncService>().clearCashierSessionData();
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
 
@@ -325,6 +376,12 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       );
       return;
     }
+
+    await Future.wait([
+      context.read<PaymentProvider>().load(),
+      context.read<ProcessProvider>().load(),
+      context.read<DoneProvider>().load(),
+    ]);
 
     final targetIndex = await _resolveTabIndexByOrderId(orderId);
 
@@ -658,6 +715,10 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     if (!mounted) return;
 
     await context.read<NotificationsProvider>().clear();
+    await context.read<PaymentProvider>().clearStateAndCache();
+    await context.read<ProcessProvider>().clearStateAndCache();
+    await context.read<DoneProvider>().clearStateAndCache();
+    await context.read<SyncService>().clearCashierSessionData();
     await context.read<AuthProvider>().logout();
 
     if (!mounted) return;
@@ -803,6 +864,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       },
       child: Scaffold(
         drawer: _AppDrawer(
+          onOpenReports: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ReportsPage()),
+            );
+          },
           onOpenPrinterSettings: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
@@ -812,7 +878,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
               ? _handleManualUpdateTap
               : null,
           showUpdateBadge: hasAppUpdate,
-          onLogout: _logout,
+          onLogout: _confirmLogout,
         ),
         appBar: AppBar(
           leading: Builder(
@@ -903,10 +969,10 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
                         onTap: () => _onTap(1),
                         badge: paymentCount,
                       ),
-                      _BarcodeNavItem(
-                        active: false,
-                        onTap: _openBarcode,
-                      ),
+                      // _BarcodeNavItem(
+                      //   active: false,
+                      //   onTap: _openBarcode,
+                      // ),
                       _NavItem(
                         icon: Icons.sync_rounded,
                         label: 'Proses',
@@ -1386,12 +1452,14 @@ class _BarcodeNavItem extends StatelessWidget {
 
 class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
+    required this.onOpenReports,
     required this.onOpenPrinterSettings,
     required this.onLogout,
     required this.showUpdateBadge,
     this.onTapUpdate,
   });
 
+  final VoidCallback onOpenReports;
   final VoidCallback onOpenPrinterSettings;
   final VoidCallback onLogout;
   final bool showUpdateBadge;
@@ -1466,6 +1534,15 @@ class _AppDrawer extends StatelessWidget {
                     ),
                   ),
                   const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.edit_document, color: brand),
+                    title: const Text('Laporan'),
+                    subtitle: const Text('Lihat laporan penjualan'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onOpenReports();
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.print_outlined, color: brand),
                     title: const Text('Pairing Printer'),

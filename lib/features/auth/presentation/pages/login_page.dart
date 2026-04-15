@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../data/remembered_login_storage.dart';
 import '../auth_provider.dart';
 import '../../../cashier/presentation/pages/cashier_home_page.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -14,7 +15,9 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _username = TextEditingController();
   final _pass = TextEditingController();
+  final _rememberedLoginStorage = RememberedLoginStorage();
 
+  bool _loadingRemembered = true;
   bool _rememberMe = true;
   bool _obscure = true;
 
@@ -25,17 +28,48 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedLogin();
+  }
+
+  Future<void> _loadRememberedLogin() async {
+    final data = await _rememberedLoginStorage.load();
+
+    if (!mounted) return;
+
+    setState(() {
+      _rememberMe = data['rememberMe'] as bool? ?? true;
+      _username.text = data['username'] as String? ?? '';
+      _pass.text = data['password'] as String? ?? '';
+      _loadingRemembered = false;
+    });
+  }
+
   Future<void> _submit() async {
     final auth = context.read<AuthProvider>();
+
+    final username = _username.text.trim();
+    final password = _pass.text;
+
     final ok = await auth.login(
-      _username.text.trim(),
-      _pass.text,
+      username,
+      password,
       rememberMe: _rememberMe,
     );
 
     if (!mounted) return;
 
     if (ok) {
+      await _rememberedLoginStorage.save(
+        username: username,
+        password: password,
+        rememberMe: _rememberMe,
+      );
+
+      if (!mounted) return;
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const CashierHomePage()),
       );
@@ -50,39 +84,16 @@ class _LoginPageState extends State<LoginPage> {
     final size = MediaQuery.sizeOf(context);
     final isTablet = size.width >= 600;
 
+    if (_loadingRemembered) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
-      // appBar: AppBar(
-      //   backgroundColor: Colors.white,
-      //   elevation: 0.8,
-      //   titleSpacing: 12,
-      //   title: Row(
-      //     children: [
-      //       // Logo (upload ke assets/images/cavaa_logo.png)
-      //       Image.asset(
-      //         'assets/images/cavaa_logo.png',
-      //         height: 28,
-      //         errorBuilder: (context, error, stackTrace) => const Text(
-      //           'Cavaa',
-      //           style: TextStyle(fontWeight: FontWeight.w800),
-      //         ),
-      //       ),
-      //     ],
-      //   ),
-      //   actions: [
-      //     IconButton(
-      //       onPressed: () {},
-      //       icon: const Icon(Icons.notifications_none_rounded),
-      //       tooltip: 'Notifications',
-      //     ),
-      //     IconButton(
-      //       onPressed: () {},
-      //       icon: const Icon(Icons.menu_rounded),
-      //       tooltip: 'Menu',
-      //     ),
-      //     const SizedBox(width: 6),
-      //   ],
-      // ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

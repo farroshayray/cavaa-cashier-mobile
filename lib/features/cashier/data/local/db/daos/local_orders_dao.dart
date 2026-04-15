@@ -257,6 +257,14 @@ class LocalOrdersDao {
     await deleteOrderByLocalId(localId);
   }
 
+  Future<void> clearAll() async {
+    await db.transaction(() async {
+      await db.delete(db.localOrderItemOptions).go();
+      await db.delete(db.localOrderItems).go();
+      await db.delete(db.localOrders).go();
+    });
+  }
+
   Future<Map<String, dynamic>?> getOrderDetailMapByLocalId(String localId) async {
     
     final bundle = await getOrderBundle(localId);

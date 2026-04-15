@@ -37,6 +37,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   final prefs = await SharedPreferences.getInstance();
   const key = 'cashier_notifications';
+  const unreadKey = 'cashier_notifications_unread';
 
   final rawList = prefs.getStringList(key) ?? [];
 
@@ -59,7 +60,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       rawList.removeRange(200, rawList.length);
     }
 
+    final currentUnread = prefs.getInt(unreadKey) ?? 0;
+
     await prefs.setStringList(key, rawList);
+    await prefs.setInt(unreadKey, currentUnread + 1);
   }
 }
 
@@ -162,7 +166,17 @@ class PushNotificationService {
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (details) {
-        // debugPrint('🔔 Local notification clicked. payload=${details.payload}');
+        final payload = details.payload;
+        if (payload == null || payload.isEmpty) return;
+
+        try {
+          final decoded = jsonDecode(payload);
+          if (decoded is Map<String, dynamic>) {
+            _messageTapController.add(decoded);
+          } else if (decoded is Map) {
+            _messageTapController.add(Map<String, dynamic>.from(decoded));
+          }
+        } catch (_) {}
       },
     );
 
@@ -196,12 +210,31 @@ class PushNotificationService {
 
     final remoteMessage = await _messaging.getInitialMessage();
     if (remoteMessage != null) {
-      // debugPrint('🚀 App launched from FCM notification: ${remoteMessage.data}');
-
       if (remoteMessage.data.isNotEmpty) {
-        _messageTapController.add(Map<String, dynamic>.from(remoteMessage.data));
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          'cashier_pending_notification_tap',
+          jsonEncode(Map<String, dynamic>.from(remoteMessage.data)),
+        );
       }
     }
+  }
+
+  Future<Map<String, dynamic>?> consumePendingNotificationTap() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('cashier_pending_notification_tap');
+
+    if (raw == null || raw.isEmpty) return null;
+
+    await prefs.remove('cashier_pending_notification_tap');
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+
+    return null;
   }
 
   Future<Map<String, dynamic>?> consumePendingForceLogout() async {

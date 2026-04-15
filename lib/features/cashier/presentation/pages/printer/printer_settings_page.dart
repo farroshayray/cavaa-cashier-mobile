@@ -53,7 +53,7 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage>
           controller: _tab,
           tabs: const [
             Tab(text: 'Bluetooth'),
-            Tab(text: 'USB'),
+            // Tab(text: 'USB'),
           ],
         ),
       ),

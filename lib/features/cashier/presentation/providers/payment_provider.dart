@@ -229,6 +229,16 @@ class PaymentProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> clearStateAndCache() async {
+    isLoading = false;
+    error = null;
+    query = '';
+    items = [];
+
+    await cachedPaymentOrdersDao.clearAll();
+    notifyListeners();
+  }
+
   CachedPaymentOrdersCompanion _mapServerItemToCachedCompanion(
     Map<String, dynamic> item,
   ) {

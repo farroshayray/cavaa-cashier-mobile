@@ -126,6 +126,14 @@ class CachedPaymentOrdersDao {
         .get();
   }
 
+  Future<void> clearAll() async {
+    await db.transaction(() async {
+      await db.delete(db.cachedPaymentOrderItemOptions).go();
+      await db.delete(db.cachedPaymentOrderItems).go();
+      await db.delete(db.cachedPaymentOrders).go();
+    });
+  }
+
   Future<void> _deleteDetailOnlyByServerId(int serverId) async {
     await db.transaction(() async {
       await (db.delete(db.cachedPaymentOrderItemOptions)

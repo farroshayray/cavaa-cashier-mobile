@@ -172,7 +172,10 @@ class _CavaaAppState extends State<CavaaApp> {
           ),
         ),
 
-        ChangeNotifierProvider(create: (_) => NotificationsProvider()),
+        // ChangeNotifierProvider(create: (_) => NotificationsProvider()),
+        ChangeNotifierProvider(
+          create: (_) => NotificationsProvider()..loadFromStorage(),
+        ),
         ChangeNotifierProvider(create: (_) => AuthProvider(authRepo)),
 
         ChangeNotifierProvider(

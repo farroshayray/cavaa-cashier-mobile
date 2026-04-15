@@ -69,6 +69,9 @@ class CachedProcessOrdersDao extends DatabaseAccessor<CashierDb>
       ),
     );
   }
+  Future<void> clearAll() {
+    return delete(cachedProcessOrders).go();
+  }
 
   Future<void> markSynced(int serverId, {String? latestJson}) {
     return (update(cachedProcessOrders)
