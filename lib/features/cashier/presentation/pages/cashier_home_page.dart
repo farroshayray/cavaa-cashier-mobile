@@ -30,6 +30,7 @@ import 'tabs/process_tab.dart' as process_tab;
 import 'tabs/done_tab.dart' as done_tab;
 
 import '/features/cashier/presentation/pages/printer/printer_settings_page.dart';
+import '/features/cashier/presentation/pages/reports/reports_page.dart';
 import '/core/services/connectivity_status_provider.dart';
 
 class CashierHomePage extends StatefulWidget {
@@ -863,6 +864,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       },
       child: Scaffold(
         drawer: _AppDrawer(
+          onOpenReports: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ReportsPage()),
+            );
+          },
           onOpenPrinterSettings: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
@@ -963,10 +969,10 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
                         onTap: () => _onTap(1),
                         badge: paymentCount,
                       ),
-                      _BarcodeNavItem(
-                        active: false,
-                        onTap: _openBarcode,
-                      ),
+                      // _BarcodeNavItem(
+                      //   active: false,
+                      //   onTap: _openBarcode,
+                      // ),
                       _NavItem(
                         icon: Icons.sync_rounded,
                         label: 'Proses',
@@ -1446,12 +1452,14 @@ class _BarcodeNavItem extends StatelessWidget {
 
 class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
+    required this.onOpenReports,
     required this.onOpenPrinterSettings,
     required this.onLogout,
     required this.showUpdateBadge,
     this.onTapUpdate,
   });
 
+  final VoidCallback onOpenReports;
   final VoidCallback onOpenPrinterSettings;
   final VoidCallback onLogout;
   final bool showUpdateBadge;
@@ -1526,6 +1534,15 @@ class _AppDrawer extends StatelessWidget {
                     ),
                   ),
                   const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.edit_document, color: brand),
+                    title: const Text('Laporan'),
+                    subtitle: const Text('Lihat laporan penjualan'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onOpenReports();
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.print_outlined, color: brand),
                     title: const Text('Pairing Printer'),
