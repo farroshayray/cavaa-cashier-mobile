@@ -64,11 +64,14 @@ class _PaymentView extends StatefulWidget {
 }
 
 class _PaymentViewState extends State<_PaymentView> {
+  static const Duration _searchDebounceDelay = Duration(milliseconds: 500);
+
   final _searchCtrl = TextEditingController();
   final ScrollController _listCtrl = ScrollController();
 
   int? _blinkOrderId;
   Timer? _blinkTimer;
+  Timer? _searchDebounce;
   int? _lastHandledFocus;
   bool? _lastOnline;
   ConnectivityStatusProvider? _connectivity;
@@ -103,6 +106,7 @@ class _PaymentViewState extends State<_PaymentView> {
   void dispose() {
     _connectivity?.removeListener(_onConnectivityChanged);
     _blinkTimer?.cancel();
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     _listCtrl.dispose();
     super.dispose();
@@ -154,6 +158,20 @@ class _PaymentViewState extends State<_PaymentView> {
     _lastOnline = current;
   }
 
+  Future<void> _runSearch() async {
+    final provider = context.read<PaymentProvider>();
+    provider.setQuery(_searchCtrl.text.trim());
+    await provider.load();
+  }
+
+  void _scheduleSearch() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDebounceDelay, () {
+      if (!mounted) return;
+      unawaited(_runSearch());
+    });
+  }
+
 
   Future<void> _scanAndSearch() async {
     final code = await Navigator.of(context).push<String>(
@@ -164,9 +182,8 @@ class _PaymentViewState extends State<_PaymentView> {
 
     if (code != null && code.trim().isNotEmpty) {
       _searchCtrl.text = code.trim();
-      final provider = context.read<PaymentProvider>();
-      provider.setQuery(_searchCtrl.text);
-      await provider.load();
+      _searchDebounce?.cancel();
+      await _runSearch();
       FocusScope.of(context).unfocus();
     }
   }
@@ -234,14 +251,15 @@ class _PaymentViewState extends State<_PaymentView> {
             compact: isMobileLandscape,
             controller: _searchCtrl,
             onScan: _scanAndSearch,
+            onChanged: (_) => _scheduleSearch(),
             onSubmit: () {
-              context.read<PaymentProvider>().setQuery(_searchCtrl.text);
-              context.read<PaymentProvider>().load();
+              _searchDebounce?.cancel();
+              unawaited(_runSearch());
             },
             onClear: () {
+              _searchDebounce?.cancel();
               _searchCtrl.clear();
-              context.read<PaymentProvider>().setQuery('');
-              context.read<PaymentProvider>().load();
+              unawaited(_runSearch());
               setState(() {});
             },
           ),
@@ -474,6 +492,7 @@ class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
     required this.onScan,
+    required this.onChanged,
     required this.onSubmit,
     required this.onClear,
     this.compact = false,
@@ -481,6 +500,7 @@ class _SearchBar extends StatelessWidget {
 
   final TextEditingController controller;
   final VoidCallback onScan;
+  final ValueChanged<String> onChanged;
   final VoidCallback onSubmit;
   final VoidCallback onClear;
   final bool compact;
@@ -523,6 +543,7 @@ class _SearchBar extends StatelessWidget {
               controller: controller,
               textInputAction: TextInputAction.search,
               style: TextStyle(fontSize: compact ? 13 : 14),
+              onChanged: onChanged,
               onSubmitted: (_) => onSubmit(),
               decoration: InputDecoration(
                 isDense: true,
@@ -627,6 +648,7 @@ class _PaymentOrderCard extends StatelessWidget {
     final total = _calcDisplayGrandTotal(data);
     final status = (data['order_status'] ?? '').toString();
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
+    final orderDateTime = _formatOrderDateTime(data);
 
     final badge = _statusBadge(
       status,
@@ -662,6 +684,7 @@ class _PaymentOrderCard extends StatelessWidget {
               customer: customer,
               table: table,
               total: total,
+              orderDateTime: orderDateTime,
               badge: badge,
             )
           : _buildDefaultLayout(
@@ -669,6 +692,7 @@ class _PaymentOrderCard extends StatelessWidget {
               customer: customer,
               table: table,
               total: total,
+              orderDateTime: orderDateTime,
               badge: badge,
             ),
     );
@@ -679,6 +703,7 @@ class _PaymentOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required String? orderDateTime,
     required Widget badge,
   }) {
     return Column(
@@ -714,7 +739,9 @@ class _PaymentOrderCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Meja: $table',
+                    orderDateTime != null
+                        ? 'Meja: $table  |  $orderDateTime'
+                        : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
                 ],
@@ -774,6 +801,7 @@ class _PaymentOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required String? orderDateTime,
     required Widget badge,
   }) {
     return Column(
@@ -818,7 +846,9 @@ class _PaymentOrderCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Meja: $table',
+                    orderDateTime != null
+                        ? 'Meja: $table  |  $orderDateTime'
+                        : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
                 ],
@@ -1022,3 +1052,23 @@ num _calcDisplayGrandTotal(Map<String, dynamic> data) {
       ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
       : subtotal.ceil();
 }
+
+String? _formatOrderDateTime(Map<String, dynamic> data) {
+  final raw = (data['created_at'] ??
+          data['sort_time'] ??
+          data['updated_at_local'] ??
+          data['cached_at'])
+      ?.toString();
+  if (raw == null || raw.trim().isEmpty) return null;
+
+  final dateTime = DateTime.tryParse(raw)?.toLocal();
+  if (dateTime == null) return null;
+
+  final date =
+      '${_twoDigits(dateTime.day)}/${_twoDigits(dateTime.month)}/${dateTime.year}';
+  final time =
+      '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+  return '$date $time';
+}
+
+String _twoDigits(int value) => value.toString().padLeft(2, '0');

@@ -65,6 +65,7 @@ class NotificationsProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     final rawList = prefs.getStringList(_storageKey) ?? [];
 
     final loaded = <IncomingOrderNotif>[];

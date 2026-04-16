@@ -406,6 +406,468 @@ class _PeriodFilterSheet extends StatelessWidget {
   }
 }
 
+class _CustomRangePickerSheet extends StatefulWidget {
+  const _CustomRangePickerSheet({
+    required this.initialRange,
+    required this.firstDate,
+    required this.lastDate,
+  });
+
+  final DateTimeRange initialRange;
+  final DateTime firstDate;
+  final DateTime lastDate;
+
+  @override
+  State<_CustomRangePickerSheet> createState() => _CustomRangePickerSheetState();
+}
+
+class _CustomRangePickerSheetState extends State<_CustomRangePickerSheet> {
+  late DateTime _selectedStart;
+  late DateTime _selectedEnd;
+  late final ScrollController _scrollController;
+  late final Map<String, GlobalKey> _monthKeys;
+
+  static const _weekdayLabels = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedStart = _normalizeDate(widget.initialRange.start);
+    _selectedEnd = _normalizeDate(widget.initialRange.end);
+    _scrollController = ScrollController();
+    _monthKeys = <String, GlobalKey>{};
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToSelectedMonth();
+    });
+  }
+
+  DateTime get _maxAllowedEndDate {
+    final twoMonthsAfterStart = _addMonthsClamped(_selectedStart, 2);
+    return twoMonthsAfterStart.isAfter(widget.lastDate)
+        ? _normalizeDate(widget.lastDate)
+        : twoMonthsAfterStart;
+  }
+
+  void _selectDate(DateTime date) {
+    final normalized = _normalizeDate(date);
+    if (_isDisabled(normalized)) return;
+
+    setState(() {
+      if (_selectedStart == _selectedEnd) {
+        if (normalized.isBefore(_selectedStart)) {
+          _selectedStart = normalized;
+          _selectedEnd = normalized;
+        } else {
+          _selectedEnd = normalized;
+        }
+        return;
+      }
+
+      if (normalized.isBefore(_selectedStart) || normalized.isAfter(_selectedEnd)) {
+        _selectedStart = normalized;
+        _selectedEnd = normalized;
+      } else {
+        _selectedStart = normalized;
+        _selectedEnd = normalized;
+      }
+    });
+  }
+
+  bool _isDisabled(DateTime day) {
+    if (day.isBefore(_normalizeDate(widget.firstDate))) return true;
+    if (day.isAfter(_normalizeDate(widget.lastDate))) return true;
+
+    if (_selectedStart == _selectedEnd) {
+      final maxEndDate = _maxAllowedEndDate;
+      return day.isAfter(maxEndDate) && !day.isAtSameMomentAs(_selectedStart);
+    }
+
+    return false;
+  }
+
+  bool _isSelectedStart(DateTime day) => _isSameDate(day, _selectedStart);
+  bool _isSelectedEnd(DateTime day) => _isSameDate(day, _selectedEnd);
+
+  bool _isInRange(DateTime day) {
+    if (_selectedStart == _selectedEnd) return false;
+    return day.isAfter(_selectedStart) && day.isBefore(_selectedEnd);
+  }
+
+  List<DateTime> get _visibleMonths {
+    final months = <DateTime>[];
+    var current = DateTime(widget.firstDate.year, widget.firstDate.month, 1);
+    final lastMonth = DateTime(widget.lastDate.year, widget.lastDate.month, 1);
+
+    while (!current.isAfter(lastMonth)) {
+      months.add(current);
+      current = _addMonths(current, 1);
+    }
+
+    return months;
+  }
+
+  Future<void> _scrollToSelectedMonth() async {
+    final selectedMonth = DateTime(_selectedStart.year, _selectedStart.month, 1);
+    final key = _monthKeys[_monthKey(selectedMonth)];
+    final context = key?.currentContext;
+    if (context == null) return;
+
+    await Scrollable.ensureVisible(
+      context,
+      duration: Duration.zero,
+      alignment: 0.5,
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  String _monthKey(DateTime month) =>
+      '${month.year}-${month.month.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.9,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Pilih Periode Transaksi',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Rentang maksimal 2 bulan dan tidak bisa melewati hari ini.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.black.withOpacity(0.6),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SelectedDateCard(
+                        label: 'Tanggal awal',
+                        value: _displayDateLabel(_selectedStart),
+                        active: true,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SelectedDateCard(
+                        label: 'Tanggal akhir',
+                        value: _displayDateLabel(_selectedEnd),
+                        active: _selectedStart != _selectedEnd,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    child: Column(
+                      children: _visibleMonths
+                          .map(
+                            (month) => Padding(
+                              key: _monthKeys.putIfAbsent(
+                                _monthKey(month),
+                                () => GlobalKey(),
+                              ),
+                              padding: const EdgeInsets.only(bottom: 18),
+                              child: _MonthCalendar(
+                                month: month,
+                                weekdayLabels: _weekdayLabels,
+                                isDisabled: _isDisabled,
+                                isSelectedStart: _isSelectedStart,
+                                isSelectedEnd: _isSelectedEnd,
+                                isInRange: _isInRange,
+                                onDateTap: _selectDate,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Batal'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(
+                            DateTimeRange(
+                              start: _selectedStart,
+                              end: _selectedEnd,
+                            ),
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFAE1504),
+                        ),
+                        child: const Text('Terapkan'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static DateTime _normalizeDate(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  static DateTime _addMonths(DateTime date, int months) {
+    final targetMonthIndex = date.month - 1 + months;
+    final year = date.year + (targetMonthIndex ~/ 12);
+    final month = (targetMonthIndex % 12) + 1;
+    return DateTime(year, month, 1);
+  }
+
+  static DateTime _addMonthsClamped(DateTime date, int months) {
+    final targetMonthIndex = date.month - 1 + months;
+    final year = date.year + (targetMonthIndex ~/ 12);
+    final month = (targetMonthIndex % 12) + 1;
+    final lastDayOfTargetMonth = DateTime(year, month + 1, 0).day;
+    final day = date.day > lastDayOfTargetMonth ? lastDayOfTargetMonth : date.day;
+    return DateTime(year, month, day);
+  }
+
+  static bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _displayDateLabel(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+}
+
+class _MonthCalendar extends StatelessWidget {
+  const _MonthCalendar({
+    required this.month,
+    required this.weekdayLabels,
+    required this.isDisabled,
+    required this.isSelectedStart,
+    required this.isSelectedEnd,
+    required this.isInRange,
+    required this.onDateTap,
+  });
+
+  final DateTime month;
+  final List<String> weekdayLabels;
+  final bool Function(DateTime day) isDisabled;
+  final bool Function(DateTime day) isSelectedStart;
+  final bool Function(DateTime day) isSelectedEnd;
+  final bool Function(DateTime day) isInRange;
+  final ValueChanged<DateTime> onDateTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final firstDayOfMonth = DateTime(month.year, month.month, 1);
+    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
+    final leadingEmpty = firstDayOfMonth.weekday % 7;
+    final cells = <Widget>[];
+
+    for (final label in weekdayLabels) {
+      cells.add(
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.black.withOpacity(0.45),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    for (var i = 0; i < leadingEmpty; i++) {
+      cells.add(const SizedBox.shrink());
+    }
+
+    for (var day = 1; day <= daysInMonth; day++) {
+      final currentDate = DateTime(month.year, month.month, day);
+      final disabled = isDisabled(currentDate);
+      final selectedStart = isSelectedStart(currentDate);
+      final selectedEnd = isSelectedEnd(currentDate);
+      final inRange = isInRange(currentDate);
+      final selected = selectedStart || selectedEnd;
+
+      cells.add(
+        GestureDetector(
+          onTap: disabled ? null : () => onDateTap(currentDate),
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 3),
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFFAE1504)
+                  : inRange
+                      ? const Color(0xFFFFE4DF)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '$day',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                color: disabled
+                    ? Colors.black26
+                    : selected
+                        ? Colors.white
+                        : const Color(0xFF111827),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _monthTitle(month),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 7,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1,
+            children: cells,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _monthTitle(DateTime month) {
+    const monthNames = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    return '${monthNames[month.month - 1]} ${month.year}';
+  }
+}
+
+class _SelectedDateCard extends StatelessWidget {
+  const _SelectedDateCard({
+    required this.label,
+    required this.value,
+    required this.active,
+  });
+
+  final String label;
+  final String value;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    const brand = Color(0xFFAE1504);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: active ? brand.withOpacity(0.08) : const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: active ? brand.withOpacity(0.24) : const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.black.withOpacity(0.5),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
 class _ChoiceTile extends StatelessWidget {
   const _ChoiceTile({
     required this.title,

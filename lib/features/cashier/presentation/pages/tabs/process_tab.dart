@@ -63,11 +63,14 @@ class _ProcessView extends StatefulWidget {
 
 
 class _ProcessViewState extends State<_ProcessView> {
+  static const Duration _searchDebounceDelay = Duration(milliseconds: 500);
+
   final _searchCtrl = TextEditingController();
   final ScrollController _listCtrl = ScrollController();
   double _lastOffset = 0;
   int? _blinkOrderId;
   Timer? _blinkTimer;
+  Timer? _searchDebounce;
   int? _lastHandledFocus;
 
   @override
@@ -81,6 +84,7 @@ class _ProcessViewState extends State<_ProcessView> {
   @override
   void dispose() {
     _blinkTimer?.cancel();
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     _listCtrl.dispose();
     super.dispose();
@@ -114,6 +118,20 @@ class _ProcessViewState extends State<_ProcessView> {
     }
   }
 
+  Future<void> _runSearch() async {
+    final provider = context.read<ProcessProvider>();
+    provider.setQuery(_searchCtrl.text.trim());
+    await provider.load();
+  }
+
+  void _scheduleSearch() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDebounceDelay, () {
+      if (!mounted) return;
+      unawaited(_runSearch());
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<ProcessProvider>();
@@ -134,14 +152,15 @@ class _ProcessViewState extends State<_ProcessView> {
           child: _SearchBar(
             compact: isMobileLandscape,
             controller: _searchCtrl,
+            onChanged: (_) => _scheduleSearch(),
             onSubmit: () {
-              context.read<ProcessProvider>().setQuery(_searchCtrl.text);
-              context.read<ProcessProvider>().load();
+              _searchDebounce?.cancel();
+              unawaited(_runSearch());
             },
             onClear: () {
+              _searchDebounce?.cancel();
               _searchCtrl.clear();
-              context.read<ProcessProvider>().setQuery('');
-              context.read<ProcessProvider>().load();
+              unawaited(_runSearch());
               setState(() {});
             },
           ),
@@ -494,12 +513,14 @@ int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
 class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
+    required this.onChanged,
     required this.onSubmit,
     required this.onClear,
     this.compact = false,
   });
 
   final TextEditingController controller;
+  final ValueChanged<String> onChanged;
   final VoidCallback onSubmit;
   final VoidCallback onClear;
   final bool compact;
@@ -542,6 +563,7 @@ class _SearchBar extends StatelessWidget {
               controller: controller,
               textInputAction: TextInputAction.search,
               style: TextStyle(fontSize: compact ? 13 : 14),
+              onChanged: onChanged,
               onSubmitted: (_) => onSubmit(),
               decoration: InputDecoration(
                 isDense: true,
@@ -642,6 +664,7 @@ class _ProcessOrderCard extends StatelessWidget {
     final code = (data['booking_order_code'] ?? '-').toString();
     final customer = (data['customer_name'] ?? '-').toString();
     final total = _calcGrandTotalFromMap(data);
+    final orderDateTime = _formatOrderDateTime(data);
     final table = (
       data['table'] is Map
           ? (data['table']['table_no'] ?? data['table_no_snapshot'] ?? '-')
@@ -675,12 +698,14 @@ class _ProcessOrderCard extends StatelessWidget {
               customer: customer,
               table: table,
               total: total,
+              orderDateTime: orderDateTime,
             )
           : _buildDefaultLayout(
               code: code,
               customer: customer,
               table: table,
               total: total,
+              orderDateTime: orderDateTime,
             ),
     );
   }
@@ -690,6 +715,7 @@ class _ProcessOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required String? orderDateTime,
   }) {
     return Column(
       children: [
@@ -724,7 +750,9 @@ class _ProcessOrderCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Meja: $table',
+                    orderDateTime != null
+                        ? 'Meja: $table  |  $orderDateTime'
+                        : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
                   if (data['is_synced'] == false) ...[
@@ -802,6 +830,7 @@ class _ProcessOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required String? orderDateTime,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -843,7 +872,9 @@ class _ProcessOrderCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Meja: $table',
+                orderDateTime != null
+                    ? 'Meja: $table  |  $orderDateTime'
+                    : 'Meja: $table',
                 style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
               ),
             ],
@@ -1080,10 +1111,18 @@ class _ProcessOrderCard extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
+          OutlinedButton(
             onPressed: isActing ? null : onCancelProcess,
-            icon: const Icon(Icons.close_rounded),
-            tooltip: 'Cancel process',
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFB45309),
+              side: const BorderSide(color: Color(0xFFF59E0B)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              minimumSize: const Size(40, 40),
+            ),
+            child: const Icon(Icons.undo_rounded, size: 18),
           ),
           const SizedBox(width: 2),
           ElevatedButton(
@@ -1151,12 +1190,18 @@ class _ProcessOrderCard extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          OutlinedButton(
             onPressed: isActing ? null : onCancelProcess,
-            icon: const Icon(Icons.close_rounded),
-            tooltip: 'Cancel process',
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFB45309),
+              side: const BorderSide(color: Color(0xFFF59E0B)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              minimumSize: const Size(40, 40),
+            ),
+            child: const Icon(Icons.undo_rounded, size: 16),
           ),
           const SizedBox(width: 2),
           ElevatedButton(
@@ -1236,3 +1281,23 @@ num _orderGrandTotal(Map<String, dynamic> order) {
 
   return total.ceil();
 }
+
+String? _formatOrderDateTime(Map<String, dynamic> data) {
+  final raw = (data['created_at'] ??
+          data['sort_time'] ??
+          data['updated_at_local'] ??
+          data['cached_at'])
+      ?.toString();
+  if (raw == null || raw.trim().isEmpty) return null;
+
+  final dateTime = DateTime.tryParse(raw)?.toLocal();
+  if (dateTime == null) return null;
+
+  final date =
+      '${_twoDigits(dateTime.day)}/${_twoDigits(dateTime.month)}/${dateTime.year}';
+  final time =
+      '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+  return '$date $time';
+}
+
+String _twoDigits(int value) => value.toString().padLeft(2, '0');
