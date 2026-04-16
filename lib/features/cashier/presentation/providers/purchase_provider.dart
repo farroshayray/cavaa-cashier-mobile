@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import '../../data/models/checkout_exceptions.dart';
 import '../../data/models/purchase_models.dart';
 import '/features/cashier/data/models/purchase_repository.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
@@ -157,6 +159,27 @@ class PurchaseProvider extends ChangeNotifier {
         ...resp,
         'local_order_id': localOrderId,
         'saved_local': true,
+      };
+    } on StockInsufficientException {
+      await localOrdersDao.deleteOrderByLocalId(localOrderId);
+      rethrow;
+    } on DioException catch (e) {
+      if (e.response != null) {
+        await localOrdersDao.deleteOrderByLocalId(localOrderId);
+        rethrow;
+      }
+
+      debugPrint('checkout network failed, saved locally only: $e');
+
+      cart.clear();
+      notifyListeners();
+
+      return {
+        'status': true,
+        'message': 'Order disimpan lokal, menunggu sinkronisasi',
+        'local_order_id': localOrderId,
+        'saved_local': true,
+        'offline': true,
       };
     } catch (e) {
       debugPrint('checkout online failed, saved locally only: $e');

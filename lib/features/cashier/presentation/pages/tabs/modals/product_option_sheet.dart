@@ -89,6 +89,9 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
     final vm = context.watch<PurchaseProvider>();
     final maxQty = _maxSelectableQty(vm);
     final canSave = _isValid(vm);
+    final productRemaining = widget.product.alwaysAvailable
+        ? null
+        : widget.product.quantityAvailable - vm.qtyOf(widget.product.id);
 
     return SafeArea(
       child: Container(
@@ -152,6 +155,22 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                               color: Colors.black.withOpacity(0.7),
                             ),
                           ),
+                          if (productRemaining != null &&
+                              productRemaining <= 3) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              productRemaining <= 0
+                                  ? 'Stok produk habis'
+                                  : 'Sisa stok produk $productRemaining',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: productRemaining <= 0
+                                    ? Colors.redAccent
+                                    : Colors.orange,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

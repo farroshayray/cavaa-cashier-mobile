@@ -182,6 +182,17 @@ class LocalOrdersDao {
     );
   }
 
+  Future<void> markOrderStockConflict(String localId, {String? error}) async {
+    await (db.update(db.localOrders)..where((tbl) => tbl.localId.equals(localId)))
+        .write(
+      LocalOrdersCompanion(
+        syncStatus: const Value('STOCK_CONFLICT'),
+        lastError: Value(error),
+        updatedAtLocal: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<void> markOrderSynced({
     required String localId,
     int? serverId,
