@@ -29,6 +29,7 @@ class PurchaseProvider extends ChangeNotifier {
   List<PaymentOption> paymentOptions = [];
   PartnerData? partnerData;
 
+  List<LocalPendingStockLine> _pendingStockLines = [];
 
   // UI state
   int selectedCategoryId = -1; // -1 = All
@@ -99,6 +100,12 @@ class PurchaseProvider extends ChangeNotifier {
       paymentOptions = payload.paymentOptions;
       tables = payload.tables;
       partnerData = payload.partnerData;
+      try {
+        _pendingStockLines = await localOrdersDao.getPendingStockLines();
+      } catch (e) {
+        debugPrint('Failed to load local pending stock usage: $e');
+        _pendingStockLines = [];
+      }
 
       // ... logic lain (hot products, grouping, dst)
     } catch (e) {
@@ -344,6 +351,10 @@ class PurchaseProvider extends ChangeNotifier {
       .where((e) => e.product.id == productId && e != excludingItem)
       .fold<int>(0, (sum, item) => sum + item.qty);
 
+  int _pendingQtyOfProduct(int productId) => _pendingStockLines
+      .where((line) => line.productId == productId)
+      .fold<int>(0, (sum, line) => sum + line.qty);
+
   int qtyOfOption(int optionId) {
     return cart
         .where((item) => item.selected.values.any((ids) => ids.contains(optionId)))
@@ -358,7 +369,30 @@ class PurchaseProvider extends ChangeNotifier {
         .fold<int>(0, (sum, item) => sum + item.qty);
   }
 
-  Map<int, double> _rawUsageInCart({CartItem? excludingItem}) {
+  int _pendingQtyOfOption(int optionId) => _pendingStockLines
+      .where((line) => line.optionIds.contains(optionId))
+      .fold<int>(0, (sum, line) => sum + line.qty);
+
+  Product? _productById(int productId) {
+    for (final product in products) {
+      if (product.id == productId) return product;
+    }
+    return null;
+  }
+
+  OptionItem? _optionById(Product product, int optionId) {
+    for (final group in product.optionGroups) {
+      for (final option in group.items) {
+        if (option.id == optionId) return option;
+      }
+    }
+    return null;
+  }
+
+  Map<int, double> _rawUsage({
+    CartItem? excludingItem,
+    bool includePendingLocal = true,
+  }) {
     final usage = <int, double>{};
 
     void addRecipes(List<StockRecipe> recipes, int qty) {
@@ -387,6 +421,24 @@ class PurchaseProvider extends ChangeNotifier {
       }
     }
 
+    if (includePendingLocal) {
+      for (final line in _pendingStockLines) {
+        final product = _productById(line.productId);
+        if (product == null) continue;
+
+        if (!product.alwaysAvailable && product.stockType == 'linked') {
+          addRecipes(product.recipes, line.qty);
+        }
+
+        for (final optionId in line.optionIds) {
+          final option = _optionById(product, optionId);
+          if (option == null) continue;
+          if (option.alwaysAvailable || option.stockType != 'linked') continue;
+          addRecipes(option.recipes, line.qty);
+        }
+      }
+    }
+
     return usage;
   }
 
@@ -396,7 +448,7 @@ class PurchaseProvider extends ChangeNotifier {
   }) {
     if (recipes.isEmpty) return 999999;
 
-    final usage = _rawUsageInCart(excludingItem: excludingItem);
+    final usage = _rawUsage(excludingItem: excludingItem);
     var maxQty = 999999;
 
     for (final recipe in recipes) {
@@ -420,7 +472,9 @@ class PurchaseProvider extends ChangeNotifier {
     }
 
     final remaining =
-        product.quantityAvailable - _qtyOfProduct(product.id, excludingItem: excludingItem);
+        product.quantityAvailable -
+            _qtyOfProduct(product.id, excludingItem: excludingItem) -
+            _pendingQtyOfProduct(product.id);
     return remaining < 0 ? 0 : remaining;
   }
 
@@ -434,7 +488,9 @@ class PurchaseProvider extends ChangeNotifier {
     }
 
     final remaining =
-        option.quantityAvailable - _qtyOfOption(option.id, excludingItem: excludingItem);
+        option.quantityAvailable -
+            _qtyOfOption(option.id, excludingItem: excludingItem) -
+            _pendingQtyOfOption(option.id);
     return remaining < 0 ? 0 : remaining;
   }
 
@@ -451,14 +507,15 @@ class PurchaseProvider extends ChangeNotifier {
         // because they may consume the same raw stock in one cart line.
       } else {
         final available = product.quantityAvailable -
-            _qtyOfProduct(product.id, excludingItem: excludingItem);
+            _qtyOfProduct(product.id, excludingItem: excludingItem) -
+            _pendingQtyOfProduct(product.id);
         if (available < maxQty) maxQty = available;
       }
     }
 
     final rawPerUnit = <int, double>{};
     final rawAvailable = <int, double>{};
-    final rawUsed = _rawUsageInCart(excludingItem: excludingItem);
+    final rawUsed = _rawUsage(excludingItem: excludingItem);
 
     void addRawRecipes(List<StockRecipe> recipes) {
       for (final recipe in recipes) {
@@ -488,7 +545,8 @@ class PurchaseProvider extends ChangeNotifier {
           addRawRecipes(option.recipes);
         } else {
           final available = option.quantityAvailable -
-              _qtyOfOption(option.id, excludingItem: excludingItem);
+              _qtyOfOption(option.id, excludingItem: excludingItem) -
+              _pendingQtyOfOption(option.id);
           if (available < maxQty) maxQty = available;
         }
       }

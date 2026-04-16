@@ -369,7 +369,9 @@ class PaymentProvider extends ChangeNotifier {
     String? cashierProofImagePath,
     String? lastPaymentId,
   }) async {
-    final isOnline = connectivity.isOnline;
+    final isStockConflict =
+        (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
+    final isOnline = connectivity.isOnline && !isStockConflict;
 
     if (isOnline) {
       final serverId = _toInt(row['server_id'] ?? row['id']);
@@ -411,6 +413,8 @@ class PaymentProvider extends ChangeNotifier {
 
     String localId = (order['local_id'] ?? '').toString();
     final isLocalOnly = order['is_local_only'] == true;
+    final isStockConflict =
+        (order['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
 
     // =========================
     // A. Kalau order berasal dari server/cache
@@ -483,6 +487,7 @@ class PaymentProvider extends ChangeNotifier {
       paymentConfirmedAtLocal: now,
       latestPaymentServerId: int.tryParse(lastPaymentId ?? ''),
       orderSnapshotJson: jsonEncode(snapshot),
+      preserveStockConflict: isStockConflict,
     );
 
     // kalau source-nya cached server, tandai agar tidak tampil lagi di tab pembayaran

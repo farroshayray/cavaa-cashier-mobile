@@ -468,6 +468,7 @@ class _PaymentViewState extends State<_PaymentView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: PaymentProcessSheet(
                                 orderId: id,
+                                forceOffline: syncStatus == 'STOCK_CONFLICT',
                                 // 🔑 ini yang membuat modal bisa offline
                                 loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
                                 ordersRepo: context.read<PaymentProvider>().repo,
@@ -802,20 +803,11 @@ class _PaymentOrderCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: const Color(0xFFFECACA),
-                disabledForegroundColor: const Color(0xFF991B1B),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               ),
-              onPressed: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
-                  ? null
-                  : onProcess,
-              child: Text(
-                (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
-                    ? 'Stok Habis'
-                    : 'Process',
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
+              onPressed: onProcess,
+              child: const Text('Process', style: TextStyle(fontWeight: FontWeight.w900)),
             ),
           ],
         ),
@@ -936,20 +928,14 @@ class _PaymentOrderCard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0xFFFECACA),
-                      disabledForegroundColor: const Color(0xFF991B1B),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       minimumSize: const Size(0, 40),
                     ),
-                    onPressed: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
-                        ? null
-                        : onProcess,
-                    child: Text(
-                      (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
-                          ? 'Stok Habis'
-                          : 'Process',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    onPressed: onProcess,
+                    child: const Text(
+                      'Process',
+                      style: TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],

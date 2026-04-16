@@ -1110,23 +1110,6 @@ class _ProcessOrderCard extends StatelessWidget {
   Widget _buildStatusActions() {
     final st = (data['order_status'] ?? '').toString();
     final processedByKitchen = _isProcessedByKitchen(data);
-    final syncStatus = (data['sync_status'] ?? '').toString();
-
-    if (syncStatus == 'STOCK_CONFLICT') {
-      return Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: ElevatedButton(
-          onPressed: null,
-          style: ElevatedButton.styleFrom(
-            disabledBackgroundColor: const Color(0xFFFECACA),
-            disabledForegroundColor: const Color(0xFF991B1B),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          child: const Text('Stok Habis', style: TextStyle(fontWeight: FontWeight.w900)),
-        ),
-      );
-    }
 
     if (processedByKitchen) {
       return Padding(
@@ -1206,24 +1189,6 @@ class _ProcessOrderCard extends StatelessWidget {
   Widget _buildLandscapeStatusActions() {
     final st = (data['order_status'] ?? '').toString();
     final processedByKitchen = _isProcessedByKitchen(data);
-    final syncStatus = (data['sync_status'] ?? '').toString();
-
-    if (syncStatus == 'STOCK_CONFLICT') {
-      return Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: ElevatedButton(
-          onPressed: null,
-          style: ElevatedButton.styleFrom(
-            disabledBackgroundColor: const Color(0xFFFECACA),
-            disabledForegroundColor: const Color(0xFF991B1B),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            minimumSize: const Size(0, 40),
-          ),
-          child: const Text('Stok Habis', style: TextStyle(fontWeight: FontWeight.w900)),
-        ),
-      );
-    }
 
     if (processedByKitchen) {
       return Padding(

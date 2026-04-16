@@ -20,11 +20,13 @@ class PaymentProcessSheet extends StatefulWidget {
     required this.orderId,
     required this.loadDetail,
     required this.ordersRepo,
+    this.forceOffline = false,
   });
 
   final int orderId;
   final Future<Map<String, dynamic>> Function(int id) loadDetail;
   final OrdersRepository ordersRepo;
+  final bool forceOffline;
 
   @override
   State<PaymentProcessSheet> createState() => _PaymentProcessSheetState();
@@ -417,7 +419,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
     try {
       final repo = widget.ordersRepo;
-      final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
+      final isOnline =
+          context.read<ConnectivityStatusProvider>().isOnline && !widget.forceOffline;
 
       if (isOnline) {
         await widget.ordersRepo.paymentOrder(
@@ -428,8 +431,12 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
         ).timeout(const Duration(seconds: 15));
       } else {
+        final offlineOrder = Map<String, dynamic>.from(_order!);
+        if (widget.forceOffline) {
+          offlineOrder['sync_status'] = 'STOCK_CONFLICT';
+        }
         await context.read<PaymentProvider>().confirmPaymentOffline(
-          order: _order!,
+          order: offlineOrder,
           paidAmount: paid,
           changeAmount: change,
           cashierProofImagePath: _cashierProofImage?.path,
