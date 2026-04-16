@@ -8,6 +8,7 @@ import '../../../../scanner/pages/barcode_scanner_page.dart';
 import '/features/cashier/presentation/pages/tabs/modals/payment_process_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
 import '/core/services/connectivity_status_provider.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
 
 
 
@@ -300,7 +301,10 @@ class _PaymentViewState extends State<_PaymentView> {
 
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () => context.read<PaymentProvider>().load(),
+            onRefresh: () async {
+              await context.read<SyncService>().syncPendingOrders();
+              await context.read<PaymentProvider>().load();
+            },
             child: Builder(
               builder: (_) {
                 if (vm.isLoading) {
@@ -376,6 +380,7 @@ class _PaymentViewState extends State<_PaymentView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: DetailOrderSheet(
                                 orderId: id,
+                                stockConflictMessage: data['last_error']?.toString(),
                                 loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
                               ),
                             ),
@@ -744,6 +749,19 @@ class _PaymentOrderCard extends StatelessWidget {
                         : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
+                  if ((data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT') ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFFB91C1C),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -784,11 +802,20 @@ class _PaymentOrderCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFFECACA),
+                disabledForegroundColor: const Color(0xFF991B1B),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               ),
-              onPressed: onProcess,
-              child: const Text('Process', style: TextStyle(fontWeight: FontWeight.w900)),
+              onPressed: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                  ? null
+                  : onProcess,
+              child: Text(
+                (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                    ? 'Stok Habis'
+                    : 'Process',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
             ),
           ],
         ),
@@ -851,6 +878,19 @@ class _PaymentOrderCard extends StatelessWidget {
                         : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
+                  if ((data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT') ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFFB91C1C),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -896,14 +936,20 @@ class _PaymentOrderCard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFFECACA),
+                      disabledForegroundColor: const Color(0xFF991B1B),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       minimumSize: const Size(0, 40),
                     ),
-                    onPressed: onProcess,
-                    child: const Text(
-                      'Process',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                    onPressed: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                        ? null
+                        : onProcess,
+                    child: Text(
+                      (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                          ? 'Stok Habis'
+                          : 'Process',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
@@ -916,6 +962,28 @@ class _PaymentOrderCard extends StatelessWidget {
   }
 
   Widget _statusBadge(String orderStatus, String paymentMethod, bool isLocalOnly, String? syncStatus) {
+    if (syncStatus == 'STOCK_CONFLICT') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF1F2),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFECACA)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
+            SizedBox(width: 6),
+            Text(
+              'Konflik Stok',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (syncStatus == 'PENDING_DELETE') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

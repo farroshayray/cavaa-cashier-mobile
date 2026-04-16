@@ -172,6 +172,7 @@ class PaymentProvider extends ChangeNotifier {
           'payment_method': o.paymentMethodEffective,
           'order_status': o.orderStatusLocal,
           'sync_status': o.syncStatus,
+          'last_error': o.lastError,
           'server_id': o.serverId,
           'server_order_code': o.serverOrderCode,
           'is_local_only': true,

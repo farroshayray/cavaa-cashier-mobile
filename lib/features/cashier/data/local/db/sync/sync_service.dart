@@ -362,9 +362,10 @@ class SyncService {
       }
     } on StockInsufficientException catch (e) {
       debugPrint('stock conflict while syncing $localOrderId: ${e.message}');
+      final details = e.allItems.map((item) => item.label).join('\n');
       await localOrdersDao.markOrderStockConflict(
         localOrderId,
-        error: e.message,
+        error: details.isNotEmpty ? details : e.message,
       );
     } catch (e) {
       debugPrint('❌ universal lifecycle sync failed for $localOrderId: $e');

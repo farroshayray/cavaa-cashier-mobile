@@ -6,6 +6,7 @@ import 'dart:async';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
 
 import '../../providers/done_provider.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
@@ -170,7 +171,10 @@ class _DoneViewState extends State<_DoneView> {
 
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () => context.read<DoneProvider>().load(),
+            onRefresh: () async {
+              await context.read<SyncService>().syncPendingOrders();
+              await context.read<DoneProvider>().load();
+            },
             child: Builder(
               builder: (_) {
                 if (vm.isLoading) {
@@ -252,6 +256,7 @@ class _DoneViewState extends State<_DoneView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: DetailOrderSheet(
                                 orderId: id > 0 ? id : -1,
+                                stockConflictMessage: row['last_error']?.toString(),
                                 loadDetail: (_) =>
                                     context.read<DoneProvider>().getOrderDetailFromListItem(row),
                               ),
@@ -624,10 +629,14 @@ class _DoneOrderCard extends StatelessWidget {
                   if (data['is_local_only'] == true || data['is_synced'] == false) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'Perubahan lokal belum tersinkron',
+                      (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                          ? 'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}'
+                          : 'Perubahan lokal belum tersinkron',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.orange.shade800,
+                        color: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                            ? const Color(0xFFB91C1C)
+                            : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -737,10 +746,16 @@ class _DoneOrderCard extends StatelessWidget {
               if (data['is_local_only'] == true || data['is_synced'] == false) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Perubahan lokal belum tersinkron',
+                  (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                      ? 'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}'
+                      : 'Perubahan lokal belum tersinkron',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
-                    color: Colors.orange.shade800,
+                    color: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                        ? const Color(0xFFB91C1C)
+                        : Colors.orange.shade800,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -804,6 +819,28 @@ class _DoneOrderCard extends StatelessWidget {
     final isLocalOnly = data['is_local_only'] == true;
     final isSynced = data['is_synced'] == true;
     final syncStatus = (data['sync_status'] ?? '').toString();
+
+    if (syncStatus == 'STOCK_CONFLICT') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF1F2),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFECACA)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
+            SizedBox(width: 6),
+            Text(
+              'Konflik Stok',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (isLocalOnly || !isSynced || syncStatus == 'PENDING_FINISH') {
       return Container(

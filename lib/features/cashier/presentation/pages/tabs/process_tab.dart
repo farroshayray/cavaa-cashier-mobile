@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
 
 // ✅ bikin provider khusus proses (contoh)
@@ -202,6 +203,7 @@ class _ProcessViewState extends State<_ProcessView> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
+              await context.read<SyncService>().syncPendingOrders();
               await Future.wait([
                 context.read<DoneProvider>().load(),
                 context.read<ProcessProvider>().load(),
@@ -296,6 +298,7 @@ class _ProcessViewState extends State<_ProcessView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: DetailOrderSheet(
                                 orderId: id > 0 ? id : -1,
+                                stockConflictMessage: row['last_error']?.toString(),
                                 loadDetail: (_) =>
                                     context.read<ProcessProvider>().getOrderDetailFromListItem(row),
                               ),
@@ -758,12 +761,16 @@ class _ProcessOrderCard extends StatelessWidget {
                   if (data['is_synced'] == false) ...[
                     const SizedBox(height: 6),
                     Text(
-                      ((data['pending_action'] ?? '').toString().isNotEmpty)
+                      (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                          ? 'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}'
+                          : ((data['pending_action'] ?? '').toString().isNotEmpty)
                           ? 'Perubahan lokal: ${data['pending_action']}'
                           : 'Perubahan lokal belum tersinkron',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.orange.shade800,
+                        color: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                            ? const Color(0xFFB91C1C)
+                            : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -877,6 +884,19 @@ class _ProcessOrderCard extends StatelessWidget {
                     : 'Meja: $table',
                 style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
               ),
+              if ((data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT') ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFFB91C1C),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -948,6 +968,29 @@ class _ProcessOrderCard extends StatelessWidget {
     final isLocalOnly = data['is_local_only'] == true;
     final isSynced = data['is_synced'] == true;
     final pendingAction = (data['pending_action'] ?? '').toString();
+    final syncStatus = (data['sync_status'] ?? '').toString();
+
+    if (syncStatus == 'STOCK_CONFLICT') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF1F2),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFECACA)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
+            SizedBox(width: 6),
+            Text(
+              'Konflik Stok',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (isLocalOnly) {
       return Container(
@@ -1067,6 +1110,23 @@ class _ProcessOrderCard extends StatelessWidget {
   Widget _buildStatusActions() {
     final st = (data['order_status'] ?? '').toString();
     final processedByKitchen = _isProcessedByKitchen(data);
+    final syncStatus = (data['sync_status'] ?? '').toString();
+
+    if (syncStatus == 'STOCK_CONFLICT') {
+      return Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: ElevatedButton(
+          onPressed: null,
+          style: ElevatedButton.styleFrom(
+            disabledBackgroundColor: const Color(0xFFFECACA),
+            disabledForegroundColor: const Color(0xFF991B1B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          child: const Text('Stok Habis', style: TextStyle(fontWeight: FontWeight.w900)),
+        ),
+      );
+    }
 
     if (processedByKitchen) {
       return Padding(
@@ -1146,6 +1206,24 @@ class _ProcessOrderCard extends StatelessWidget {
   Widget _buildLandscapeStatusActions() {
     final st = (data['order_status'] ?? '').toString();
     final processedByKitchen = _isProcessedByKitchen(data);
+    final syncStatus = (data['sync_status'] ?? '').toString();
+
+    if (syncStatus == 'STOCK_CONFLICT') {
+      return Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: ElevatedButton(
+          onPressed: null,
+          style: ElevatedButton.styleFrom(
+            disabledBackgroundColor: const Color(0xFFFECACA),
+            disabledForegroundColor: const Color(0xFF991B1B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            minimumSize: const Size(0, 40),
+          ),
+          child: const Text('Stok Habis', style: TextStyle(fontWeight: FontWeight.w900)),
+        ),
+      );
+    }
 
     if (processedByKitchen) {
       return Padding(

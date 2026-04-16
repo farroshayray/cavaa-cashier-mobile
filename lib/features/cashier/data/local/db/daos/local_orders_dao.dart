@@ -70,6 +70,7 @@ class LocalOrdersDao {
                 'PENDING_FINISH',
                 'FAILED',
                 'SYNCING',
+                'STOCK_CONFLICT',
               ]))
           ..orderBy([
             (tbl) => OrderingTerm.asc(tbl.createdAtLocal),
@@ -104,7 +105,8 @@ class LocalOrdersDao {
                 tbl.syncStatus.equals('SYNCING') |
                 tbl.syncStatus.equals('PENDING_PAYMENT') |
                 tbl.syncStatus.equals('PENDING_PROCESS') |
-                tbl.syncStatus.equals('PENDING_FINISH')
+                tbl.syncStatus.equals('PENDING_FINISH') |
+                tbl.syncStatus.equals('STOCK_CONFLICT')
               ))
           ..orderBy([(tbl) => OrderingTerm.desc(tbl.createdAtLocal)]))
         .get();
@@ -522,6 +524,7 @@ class LocalOrdersDao {
                 'PENDING_PROCESS',
                 'FAILED',
                 'SYNCING',
+                'STOCK_CONFLICT',
               ]))
           ..orderBy([
             (t) => OrderingTerm.asc(t.createdAtLocal),
@@ -675,6 +678,7 @@ class LocalOrdersDao {
                 'PENDING_FINISH',
                 'FAILED',
                 'SYNCING',
+                'STOCK_CONFLICT',
               ]))
           ..orderBy([
             (t) => OrderingTerm.asc(t.createdAtLocal),

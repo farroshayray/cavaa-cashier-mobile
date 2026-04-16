@@ -17,6 +17,12 @@ class CachedPaymentOrdersDao {
     required List<CachedPaymentOrdersCompanion> orders,
   }) async {
     await db.transaction(() async {
+      final incomingServerIds = orders
+          .map((row) => row.serverId.value)
+          .whereType<int>()
+          .where((id) => id > 0)
+          .toSet();
+
       for (final row in orders) {
         final serverId = row.serverId.value;
         if (serverId == null) continue;
@@ -57,6 +63,17 @@ class CachedPaymentOrdersDao {
           mode: InsertMode.insertOrReplace,
         );
       }
+
+      final staleRows = await (db.select(db.cachedPaymentOrders)
+            ..where((tbl) => tbl.isPendingDelete.equals(false)))
+          .get();
+
+      for (final row in staleRows) {
+        if (incomingServerIds.contains(row.serverId)) continue;
+
+        await _deleteCachedOrderByServerIdInTransaction(row.serverId);
+        debugPrint('removed stale payment cache serverId=${row.serverId}');
+      }
     });
   }
 
@@ -83,22 +100,26 @@ class CachedPaymentOrdersDao {
 
   Future<void> deleteCachedOrderByServerId(int serverId) async {
     await db.transaction(() async {
-      await (db.delete(db.cachedPaymentOrderItemOptions)
-            ..where((tbl) => tbl.orderDetailServerId.isInQuery(
-                  db.selectOnly(db.cachedPaymentOrderItems)
-                    ..addColumns([db.cachedPaymentOrderItems.serverDetailId])
-                    ..where(db.cachedPaymentOrderItems.orderServerId.equals(serverId)),
-                )))
-          .go();
-
-      await (db.delete(db.cachedPaymentOrderItems)
-            ..where((tbl) => tbl.orderServerId.equals(serverId)))
-          .go();
-
-      await (db.delete(db.cachedPaymentOrders)
-            ..where((tbl) => tbl.serverId.equals(serverId)))
-          .go();
+      await _deleteCachedOrderByServerIdInTransaction(serverId);
     });
+  }
+
+  Future<void> _deleteCachedOrderByServerIdInTransaction(int serverId) async {
+    await (db.delete(db.cachedPaymentOrderItemOptions)
+          ..where((tbl) => tbl.orderDetailServerId.isInQuery(
+                db.selectOnly(db.cachedPaymentOrderItems)
+                  ..addColumns([db.cachedPaymentOrderItems.serverDetailId])
+                  ..where(db.cachedPaymentOrderItems.orderServerId.equals(serverId)),
+              )))
+        .go();
+
+    await (db.delete(db.cachedPaymentOrderItems)
+          ..where((tbl) => tbl.orderServerId.equals(serverId)))
+        .go();
+
+    await (db.delete(db.cachedPaymentOrders)
+          ..where((tbl) => tbl.serverId.equals(serverId)))
+        .go();
   }
 
   Future<void> deleteByServerId(int serverId) async {
