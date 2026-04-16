@@ -196,6 +196,19 @@ class Product {
     required this.optionGroups,
   });
 
+  bool get hasRequiredOptionsAvailable {
+    for (final group in optionGroups) {
+      if (!group.required && group.min <= 0) continue;
+      if (group.availableItems.length < group.min) return false;
+    }
+    return true;
+  }
+
+  bool get isAvailableForSale {
+    if (!isActive) return false;
+    if (!alwaysAvailable && quantityAvailable <= 0) return false;
+    return hasRequiredOptionsAvailable;
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) {
     // image
@@ -263,6 +276,7 @@ class OptionItem {
     required this.alwaysAvailable,
   });
 
+  bool get isAvailableForSale => alwaysAvailable || quantityAvailable > 0;
 
   factory OptionItem.fromJson(Map<String, dynamic> json) {
     final stockType = (json['stock_type'] ?? '').toString();
@@ -313,6 +327,8 @@ class OptionGroup {
   });
 
   bool get multiple => max != 1;
+  List<OptionItem> get availableItems =>
+      items.where((item) => item.isAvailableForSale).toList();
 
   factory OptionGroup.fromJson(Map<String, dynamic> json) {
     final prov = (json['provision'] ?? '').toString().toUpperCase();

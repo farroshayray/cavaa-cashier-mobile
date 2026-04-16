@@ -591,8 +591,22 @@ class _ProductCard extends StatelessWidget {
 
     final qty = vm.qtyOf(product.id);
 
-    final isOut = !product.alwaysAvailable && product.quantityAvailable <= 0;
-    final lowStock = !product.alwaysAvailable && product.quantityAvailable > 0 && product.quantityAvailable <= 3;
+    final hasRequiredOptionsAvailable = product.optionGroups.every((group) {
+      if (!group.required && group.min <= 0) return true;
+      final availableCount = group.items
+          .where((item) => vm.availableQtyForOption(item) > 0)
+          .length;
+      return availableCount >= group.min;
+    });
+    final productStockOut =
+        !product.alwaysAvailable && qty >= product.quantityAvailable;
+    final isOut = !product.isActive ||
+        productStockOut ||
+        !hasRequiredOptionsAvailable;
+    final lowStock = !isOut &&
+        !product.alwaysAvailable &&
+        (product.quantityAvailable - qty) > 0 &&
+        (product.quantityAvailable - qty) <= 3;
 
     // promo calc (mirip web)
     final basePrice = product.price.toDouble();

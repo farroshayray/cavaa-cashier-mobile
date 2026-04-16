@@ -317,6 +317,62 @@ class PurchaseProvider extends ChangeNotifier {
   int qtyOf(int productId) =>
       cart.where((e) => e.product.id == productId).fold<int>(0, (a, b) => a + b.qty);
 
+  int qtyOfOption(int optionId) {
+    return cart
+        .where((item) => item.selected.values.any((ids) => ids.contains(optionId)))
+        .fold<int>(0, (sum, item) => sum + item.qty);
+  }
+
+  int availableQtyForOption(OptionItem option) {
+    if (option.alwaysAvailable) return 999999;
+    final remaining = option.quantityAvailable - qtyOfOption(option.id);
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  bool canAddWithOptions({
+    required Product product,
+    required int qty,
+    required Map<int, Set<int>> selected,
+    CartItem? excludingItem,
+  }) {
+    if (!product.isAvailableForSale) return false;
+
+    final currentProductQty = cart
+        .where((item) => item.product.id == product.id && item != excludingItem)
+        .fold<int>(0, (sum, item) => sum + item.qty);
+
+    if (!product.alwaysAvailable &&
+        (currentProductQty + qty) > product.quantityAvailable) {
+      return false;
+    }
+
+    for (final group in product.optionGroups) {
+      final picked = selected[group.id] ?? <int>{};
+      if (picked.length < group.min) return false;
+      if (group.max > 0 && picked.length > group.max) return false;
+
+      for (final optId in picked) {
+        final option = group.items.cast<OptionItem?>().firstWhere(
+              (item) => item?.id == optId,
+              orElse: () => null,
+            );
+
+        if (option == null || !option.isAvailableForSale) return false;
+        if (!option.alwaysAvailable) {
+          final currentOptionQty = cart
+              .where((item) =>
+                  item != excludingItem &&
+                  item.selected.values.any((ids) => ids.contains(optId)))
+              .fold<int>(0, (sum, item) => sum + item.qty);
+
+          if ((currentOptionQty + qty) > option.quantityAvailable) return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
   num get cartTotal => cart.fold<num>(0, (a, b) => a + b.lineTotal);
 
   // Tambah item (dengan options)
@@ -326,11 +382,13 @@ class PurchaseProvider extends ChangeNotifier {
     required Map<int, Set<int>> selected, // groupId -> set<optionId>
     required String note,
   }) {
-    if (!product.alwaysAvailable && product.quantityAvailable <= 0) return;
-
-    // stok limit: total existing qty untuk product ini
-    final currentTotal = qtyOf(product.id);
-    if (!product.alwaysAvailable && (currentTotal + qty) > product.quantityAvailable) return;
+    if (!canAddWithOptions(
+      product: product,
+      qty: qty,
+      selected: selected,
+    )) {
+      return;
+    }
 
     // hitung extra dari opsi
     num optionExtra = 0;
@@ -374,10 +432,13 @@ class PurchaseProvider extends ChangeNotifier {
   // tombol + simple (tanpa modal/options)
   // jika product punya optionGroups, seharusnya di UI kamu panggil open modal, bukan panggil add()
   void add(Product p) {
-    if (!p.alwaysAvailable && p.quantityAvailable <= 0) return;
-
-    final currentTotal = qtyOf(p.id);
-    if (!p.alwaysAvailable && currentTotal >= p.quantityAvailable) return;
+    if (!canAddWithOptions(
+      product: p,
+      qty: 1,
+      selected: const {},
+    )) {
+      return;
+    }
 
     // item simple = selected kosong, note kosong, unitFinal = price
     addWithOptions(product: p, qty: 1, selected: {}, note: '');
@@ -466,9 +527,13 @@ class PurchaseProvider extends ChangeNotifier {
     final item = cart[index];
     final p = item.product;
 
-    if (!p.alwaysAvailable) {
-      final currentTotal = qtyOf(p.id);
-      if (currentTotal >= p.quantityAvailable) return; // stop kalau stok habis
+    if (!canAddWithOptions(
+      product: p,
+      qty: item.qty + 1,
+      selected: item.selected,
+      excludingItem: item,
+    )) {
+      return;
     }
 
     cart[index].qty += 1;
