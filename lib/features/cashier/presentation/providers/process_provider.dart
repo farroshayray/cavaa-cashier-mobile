@@ -105,6 +105,7 @@ class ProcessProvider extends ChangeNotifier {
           'pending_action': 'LOCAL_ONLY',
           'pending_sync': true,
           'sync_status': e.syncStatus,
+          'last_error': e.lastError,
           'sort_time': item['created_at']?.toString() ?? e.createdAtLocal.toIso8601String(),
         };
       }).toList();
@@ -477,6 +478,8 @@ class ProcessProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> actionProcess(Map<String, dynamic> row) async {
     final isLocalOnly = row['is_local_only'] == true;
+    final isStockConflict =
+        (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
     final id = _toId(row['id']);
     final actionKey = _actionKey(row);
 
@@ -491,6 +494,7 @@ class ProcessProvider extends ChangeNotifier {
         await localOrdersDao.updateOrderStatusLocal(
           localId: localId,
           status: 'PROCESSED',
+          preserveStockConflict: isStockConflict,
         );
 
         final idx = items.indexWhere((e) => e['local_id'] == localId);
@@ -501,7 +505,7 @@ class ProcessProvider extends ChangeNotifier {
             'is_synced': false,
             'pending_action': 'LOCAL_ONLY',
             'pending_sync': true,
-            'sync_status': 'PENDING',
+            'sync_status': isStockConflict ? 'STOCK_CONFLICT' : 'PENDING',
           };
           notifyListeners();
         }
@@ -514,8 +518,9 @@ class ProcessProvider extends ChangeNotifier {
       }
 
       final cached = await cachedProcessOrdersDao.findByServerId(id);
+      final forceOffline = isStockConflict;
 
-      if (connectivity.isOnline) {
+      if (connectivity.isOnline && !forceOffline) {
         final res = await repo.processOrder(id);
 
         final status = (res['status'] ?? '').toString();
@@ -557,6 +562,8 @@ class ProcessProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> actionCancelProcess(Map<String, dynamic> row) async {
     final isLocalOnly = row['is_local_only'] == true;
+    final isStockConflict =
+        (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
     final id = _toId(row['id']);
     final actionKey = _actionKey(row);
 
@@ -571,6 +578,7 @@ class ProcessProvider extends ChangeNotifier {
         await localOrdersDao.updateOrderStatusLocal(
           localId: localId,
           status: 'PAID',
+          preserveStockConflict: isStockConflict,
         );
 
         final idx = items.indexWhere((e) => e['local_id'] == localId);
@@ -581,7 +589,7 @@ class ProcessProvider extends ChangeNotifier {
             'is_synced': false,
             'pending_action': 'LOCAL_ONLY',
             'pending_sync': true,
-            'sync_status': 'PENDING',
+            'sync_status': isStockConflict ? 'STOCK_CONFLICT' : 'PENDING',
           };
           notifyListeners();
         }
@@ -594,8 +602,9 @@ class ProcessProvider extends ChangeNotifier {
       }
 
       final cached = await cachedProcessOrdersDao.findByServerId(id);
+      final forceOffline = isStockConflict;
 
-      if (connectivity.isOnline) {
+      if (connectivity.isOnline && !forceOffline) {
         final res = await repo.cancelProcessOrder(id);
 
         await cachedProcessOrdersDao.markCancelProcessOnline(
@@ -631,6 +640,8 @@ class ProcessProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> actionFinish(Map<String, dynamic> row) async {
     final isLocalOnly = row['is_local_only'] == true;
+    final isStockConflict =
+        (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
     final id = _toId(row['id']);
     final actionKey = _actionKey(row);
 
@@ -645,6 +656,7 @@ class ProcessProvider extends ChangeNotifier {
         await localOrdersDao.updateOrderStatusLocal(
           localId: localId,
           status: 'SERVED',
+          preserveStockConflict: isStockConflict,
         );
 
         final idx = items.indexWhere((e) => e['local_id'] == localId);
@@ -655,7 +667,7 @@ class ProcessProvider extends ChangeNotifier {
             'is_synced': false,
             'pending_action': 'LOCAL_ONLY',
             'pending_sync': true,
-            'sync_status': 'PENDING',
+            'sync_status': isStockConflict ? 'STOCK_CONFLICT' : 'PENDING',
           };
           notifyListeners();
         }
@@ -668,8 +680,9 @@ class ProcessProvider extends ChangeNotifier {
       }
 
       final cached = await cachedProcessOrdersDao.findByServerId(id);
+      final forceOffline = isStockConflict;
 
-      if (connectivity.isOnline) {
+      if (connectivity.isOnline && !forceOffline) {
         final res = await repo.finishOrder(id);
 
         await cachedProcessOrdersDao.deleteByServerId(id);

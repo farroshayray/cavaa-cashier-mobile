@@ -68,6 +68,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   StreamSubscription<Map<String, dynamic>>? _fcmMessageSub;
   StreamSubscription<Map<String, dynamic>>? _fcmTapSub;
 
+  Future<void> _reloadNotificationsFromStorage() async {
+    if (!mounted) return;
+    await context.read<NotificationsProvider>().loadFromStorage();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -101,6 +106,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      Future.microtask(_reloadNotificationsFromStorage);
       context.read<PrinterManager>().connectDefault(silent: true);
       _refreshAfterResume();
 

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import '../../data/models/checkout_exceptions.dart';
 import '../../data/models/purchase_models.dart';
 import '/features/cashier/data/models/purchase_repository.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
@@ -27,6 +29,7 @@ class PurchaseProvider extends ChangeNotifier {
   List<PaymentOption> paymentOptions = [];
   PartnerData? partnerData;
 
+  List<LocalPendingStockLine> _pendingStockLines = [];
 
   // UI state
   int selectedCategoryId = -1; // -1 = All
@@ -97,6 +100,12 @@ class PurchaseProvider extends ChangeNotifier {
       paymentOptions = payload.paymentOptions;
       tables = payload.tables;
       partnerData = payload.partnerData;
+      try {
+        _pendingStockLines = await localOrdersDao.getPendingStockLines();
+      } catch (e) {
+        debugPrint('Failed to load local pending stock usage: $e');
+        _pendingStockLines = [];
+      }
 
       // ... logic lain (hot products, grouping, dst)
     } catch (e) {
@@ -157,6 +166,27 @@ class PurchaseProvider extends ChangeNotifier {
         ...resp,
         'local_order_id': localOrderId,
         'saved_local': true,
+      };
+    } on StockInsufficientException {
+      await localOrdersDao.deleteOrderByLocalId(localOrderId);
+      rethrow;
+    } on DioException catch (e) {
+      if (e.response != null) {
+        await localOrdersDao.deleteOrderByLocalId(localOrderId);
+        rethrow;
+      }
+
+      debugPrint('checkout network failed, saved locally only: $e');
+
+      cart.clear();
+      notifyListeners();
+
+      return {
+        'status': true,
+        'message': 'Order disimpan lokal, menunggu sinkronisasi',
+        'local_order_id': localOrderId,
+        'saved_local': true,
+        'offline': true,
       };
     } catch (e) {
       debugPrint('checkout online failed, saved locally only: $e');
@@ -317,6 +347,251 @@ class PurchaseProvider extends ChangeNotifier {
   int qtyOf(int productId) =>
       cart.where((e) => e.product.id == productId).fold<int>(0, (a, b) => a + b.qty);
 
+  int _qtyOfProduct(int productId, {CartItem? excludingItem}) => cart
+      .where((e) => e.product.id == productId && e != excludingItem)
+      .fold<int>(0, (sum, item) => sum + item.qty);
+
+  int _pendingQtyOfProduct(int productId) => _pendingStockLines
+      .where((line) => line.productId == productId)
+      .fold<int>(0, (sum, line) => sum + line.qty);
+
+  int qtyOfOption(int optionId) {
+    return cart
+        .where((item) => item.selected.values.any((ids) => ids.contains(optionId)))
+        .fold<int>(0, (sum, item) => sum + item.qty);
+  }
+
+  int _qtyOfOption(int optionId, {CartItem? excludingItem}) {
+    return cart
+        .where((item) =>
+            item != excludingItem &&
+            item.selected.values.any((ids) => ids.contains(optionId)))
+        .fold<int>(0, (sum, item) => sum + item.qty);
+  }
+
+  int _pendingQtyOfOption(int optionId) => _pendingStockLines
+      .where((line) => line.optionIds.contains(optionId))
+      .fold<int>(0, (sum, line) => sum + line.qty);
+
+  Product? _productById(int productId) {
+    for (final product in products) {
+      if (product.id == productId) return product;
+    }
+    return null;
+  }
+
+  OptionItem? _optionById(Product product, int optionId) {
+    for (final group in product.optionGroups) {
+      for (final option in group.items) {
+        if (option.id == optionId) return option;
+      }
+    }
+    return null;
+  }
+
+  Map<int, double> _rawUsage({
+    CartItem? excludingItem,
+    bool includePendingLocal = true,
+  }) {
+    final usage = <int, double>{};
+
+    void addRecipes(List<StockRecipe> recipes, int qty) {
+      for (final recipe in recipes) {
+        if (recipe.stockId <= 0 || recipe.quantityUsed <= 0) continue;
+        usage[recipe.stockId] =
+            (usage[recipe.stockId] ?? 0) + (recipe.quantityUsed * qty);
+      }
+    }
+
+    for (final item in cart) {
+      if (item == excludingItem) continue;
+
+      if (!item.product.alwaysAvailable &&
+          item.product.stockType == 'linked') {
+        addRecipes(item.product.recipes, item.qty);
+      }
+
+      for (final group in item.product.optionGroups) {
+        final picked = item.selected[group.id] ?? <int>{};
+        for (final option in group.items) {
+          if (!picked.contains(option.id)) continue;
+          if (option.alwaysAvailable || option.stockType != 'linked') continue;
+          addRecipes(option.recipes, item.qty);
+        }
+      }
+    }
+
+    if (includePendingLocal) {
+      for (final line in _pendingStockLines) {
+        final product = _productById(line.productId);
+        if (product == null) continue;
+
+        if (!product.alwaysAvailable && product.stockType == 'linked') {
+          addRecipes(product.recipes, line.qty);
+        }
+
+        for (final optionId in line.optionIds) {
+          final option = _optionById(product, optionId);
+          if (option == null) continue;
+          if (option.alwaysAvailable || option.stockType != 'linked') continue;
+          addRecipes(option.recipes, line.qty);
+        }
+      }
+    }
+
+    return usage;
+  }
+
+  int _availableQtyFromRecipes(
+    List<StockRecipe> recipes, {
+    CartItem? excludingItem,
+  }) {
+    if (recipes.isEmpty) return 999999;
+
+    final usage = _rawUsage(excludingItem: excludingItem);
+    var maxQty = 999999;
+
+    for (final recipe in recipes) {
+      if (recipe.stockId <= 0 || recipe.quantityUsed <= 0) continue;
+      final remaining =
+          recipe.availableQuantity - (usage[recipe.stockId] ?? 0);
+      final portions = (remaining / recipe.quantityUsed).floor();
+      if (portions < maxQty) maxQty = portions;
+    }
+
+    return maxQty < 0 ? 0 : maxQty;
+  }
+
+  int availableQtyForProduct(Product product, {CartItem? excludingItem}) {
+    if (product.alwaysAvailable) return 999999;
+    if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
+      return _availableQtyFromRecipes(
+        product.recipes,
+        excludingItem: excludingItem,
+      );
+    }
+
+    final remaining =
+        product.quantityAvailable -
+            _qtyOfProduct(product.id, excludingItem: excludingItem) -
+            _pendingQtyOfProduct(product.id);
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  int availableQtyForOption(OptionItem option, {CartItem? excludingItem}) {
+    if (option.alwaysAvailable) return 999999;
+    if (option.stockType == 'linked' && option.recipes.isNotEmpty) {
+      return _availableQtyFromRecipes(
+        option.recipes,
+        excludingItem: excludingItem,
+      );
+    }
+
+    final remaining =
+        option.quantityAvailable -
+            _qtyOfOption(option.id, excludingItem: excludingItem) -
+            _pendingQtyOfOption(option.id);
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  int maxAddableQtyWithOptions({
+    required Product product,
+    required Map<int, Set<int>> selected,
+    CartItem? excludingItem,
+  }) {
+    var maxQty = 999999;
+
+    if (!product.alwaysAvailable) {
+      if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
+        // Linked products are handled together with linked options below,
+        // because they may consume the same raw stock in one cart line.
+      } else {
+        final available = product.quantityAvailable -
+            _qtyOfProduct(product.id, excludingItem: excludingItem) -
+            _pendingQtyOfProduct(product.id);
+        if (available < maxQty) maxQty = available;
+      }
+    }
+
+    final rawPerUnit = <int, double>{};
+    final rawAvailable = <int, double>{};
+    final rawUsed = _rawUsage(excludingItem: excludingItem);
+
+    void addRawRecipes(List<StockRecipe> recipes) {
+      for (final recipe in recipes) {
+        if (recipe.stockId <= 0 || recipe.quantityUsed <= 0) continue;
+        rawPerUnit[recipe.stockId] =
+            (rawPerUnit[recipe.stockId] ?? 0) + recipe.quantityUsed;
+        rawAvailable[recipe.stockId] = recipe.availableQuantity;
+      }
+    }
+
+    if (!product.alwaysAvailable &&
+        product.stockType == 'linked' &&
+        product.recipes.isNotEmpty) {
+      addRawRecipes(product.recipes);
+    }
+
+    for (final group in product.optionGroups) {
+      final picked = selected[group.id] ?? <int>{};
+      for (final optId in picked) {
+        final option = group.items.cast<OptionItem?>().firstWhere(
+              (item) => item?.id == optId,
+              orElse: () => null,
+            );
+        if (option == null || option.alwaysAvailable) continue;
+
+        if (option.stockType == 'linked' && option.recipes.isNotEmpty) {
+          addRawRecipes(option.recipes);
+        } else {
+          final available = option.quantityAvailable -
+              _qtyOfOption(option.id, excludingItem: excludingItem) -
+              _pendingQtyOfOption(option.id);
+          if (available < maxQty) maxQty = available;
+        }
+      }
+    }
+
+    rawPerUnit.forEach((stockId, requiredPerUnit) {
+      if (requiredPerUnit <= 0) return;
+      final remaining = (rawAvailable[stockId] ?? 0) - (rawUsed[stockId] ?? 0);
+      final availableQty = (remaining / requiredPerUnit).floor();
+      if (availableQty < maxQty) maxQty = availableQty;
+    });
+
+    return maxQty < 0 ? 0 : maxQty;
+  }
+
+  bool canAddWithOptions({
+    required Product product,
+    required int qty,
+    required Map<int, Set<int>> selected,
+    CartItem? excludingItem,
+  }) {
+    if (!product.isAvailableForSale) return false;
+
+    for (final group in product.optionGroups) {
+      final picked = selected[group.id] ?? <int>{};
+      if (picked.length < group.min) return false;
+      if (group.max > 0 && picked.length > group.max) return false;
+
+      for (final optId in picked) {
+        final option = group.items.cast<OptionItem?>().firstWhere(
+              (item) => item?.id == optId,
+              orElse: () => null,
+            );
+
+        if (option == null || !option.isAvailableForSale) return false;
+      }
+    }
+
+    return qty <= maxAddableQtyWithOptions(
+      product: product,
+      selected: selected,
+      excludingItem: excludingItem,
+    );
+  }
+
   num get cartTotal => cart.fold<num>(0, (a, b) => a + b.lineTotal);
 
   // Tambah item (dengan options)
@@ -326,11 +601,13 @@ class PurchaseProvider extends ChangeNotifier {
     required Map<int, Set<int>> selected, // groupId -> set<optionId>
     required String note,
   }) {
-    if (!product.alwaysAvailable && product.quantityAvailable <= 0) return;
-
-    // stok limit: total existing qty untuk product ini
-    final currentTotal = qtyOf(product.id);
-    if (!product.alwaysAvailable && (currentTotal + qty) > product.quantityAvailable) return;
+    if (!canAddWithOptions(
+      product: product,
+      qty: qty,
+      selected: selected,
+    )) {
+      return;
+    }
 
     // hitung extra dari opsi
     num optionExtra = 0;
@@ -374,10 +651,13 @@ class PurchaseProvider extends ChangeNotifier {
   // tombol + simple (tanpa modal/options)
   // jika product punya optionGroups, seharusnya di UI kamu panggil open modal, bukan panggil add()
   void add(Product p) {
-    if (!p.alwaysAvailable && p.quantityAvailable <= 0) return;
-
-    final currentTotal = qtyOf(p.id);
-    if (!p.alwaysAvailable && currentTotal >= p.quantityAvailable) return;
+    if (!canAddWithOptions(
+      product: p,
+      qty: 1,
+      selected: const {},
+    )) {
+      return;
+    }
 
     // item simple = selected kosong, note kosong, unitFinal = price
     addWithOptions(product: p, qty: 1, selected: {}, note: '');
@@ -466,9 +746,13 @@ class PurchaseProvider extends ChangeNotifier {
     final item = cart[index];
     final p = item.product;
 
-    if (!p.alwaysAvailable) {
-      final currentTotal = qtyOf(p.id);
-      if (currentTotal >= p.quantityAvailable) return; // stop kalau stok habis
+    if (!canAddWithOptions(
+      product: p,
+      qty: item.qty + 1,
+      selected: item.selected,
+      excludingItem: item,
+    )) {
+      return;
     }
 
     cart[index].qty += 1;

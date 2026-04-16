@@ -6,6 +6,7 @@ import 'dart:async';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
 
 import '../../providers/done_provider.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
@@ -59,11 +60,14 @@ class _DoneView extends StatefulWidget {
 }
 
 class _DoneViewState extends State<_DoneView> {
+  static const Duration _searchDebounceDelay = Duration(milliseconds: 500);
+
   final _searchCtrl = TextEditingController();
   final ScrollController _listCtrl = ScrollController();
   double _lastOffset = 0;
   int? _blinkOrderId;
   Timer? _blinkTimer;
+  Timer? _searchDebounce;
 
   final Set<int> _printingIds = <int>{};
 
@@ -77,10 +81,25 @@ class _DoneViewState extends State<_DoneView> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     _listCtrl.dispose();
     _blinkTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _runSearch() async {
+    final provider = context.read<DoneProvider>();
+    provider.setQuery(_searchCtrl.text.trim());
+    await provider.load();
+  }
+
+  void _scheduleSearch() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDebounceDelay, () {
+      if (!mounted) return;
+      unawaited(_runSearch());
+    });
   }
 
   @override
@@ -103,14 +122,15 @@ class _DoneViewState extends State<_DoneView> {
           child: _SearchBar(
             compact: isMobileLandscape,
             controller: _searchCtrl,
+            onChanged: (_) => _scheduleSearch(),
             onSubmit: () {
-              context.read<DoneProvider>().setQuery(_searchCtrl.text);
-              context.read<DoneProvider>().load();
+              _searchDebounce?.cancel();
+              unawaited(_runSearch());
             },
             onClear: () {
+              _searchDebounce?.cancel();
               _searchCtrl.clear();
-              context.read<DoneProvider>().setQuery('');
-              context.read<DoneProvider>().load();
+              unawaited(_runSearch());
               setState(() {});
             },
           ),
@@ -151,7 +171,10 @@ class _DoneViewState extends State<_DoneView> {
 
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () => context.read<DoneProvider>().load(),
+            onRefresh: () async {
+              await context.read<SyncService>().syncPendingOrders();
+              await context.read<DoneProvider>().load();
+            },
             child: Builder(
               builder: (_) {
                 if (vm.isLoading) {
@@ -233,6 +256,7 @@ class _DoneViewState extends State<_DoneView> {
                               height: MediaQuery.of(context).size.height * 0.92,
                               child: DetailOrderSheet(
                                 orderId: id > 0 ? id : -1,
+                                stockConflictMessage: row['last_error']?.toString(),
                                 loadDetail: (_) =>
                                     context.read<DoneProvider>().getOrderDetailFromListItem(row),
                               ),
@@ -373,12 +397,14 @@ num _num(dynamic v) => (v is num) ? v : num.tryParse(v?.toString() ?? '') ?? 0;
 class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
+    required this.onChanged,
     required this.onSubmit,
     required this.onClear,
     this.compact = false,
   });
 
   final TextEditingController controller;
+  final ValueChanged<String> onChanged;
   final VoidCallback onSubmit;
   final VoidCallback onClear;
   final bool compact;
@@ -421,6 +447,7 @@ class _SearchBar extends StatelessWidget {
               controller: controller,
               textInputAction: TextInputAction.search,
               style: TextStyle(fontSize: compact ? 13 : 14),
+              onChanged: onChanged,
               onSubmitted: (_) => onSubmit(),
               decoration: InputDecoration(
                 isDense: true,
@@ -513,6 +540,7 @@ class _DoneOrderCard extends StatelessWidget {
     final customer = (data['customer_name'] ?? '-').toString();
     final total = _calcGrandTotalFromMap(data);
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
+    final orderDateTime = _formatOrderDateTime(data);
 
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
@@ -541,12 +569,14 @@ class _DoneOrderCard extends StatelessWidget {
               customer: customer,
               table: table,
               total: total,
+              orderDateTime: orderDateTime,
             )
           : _buildDefaultLayout(
               code: code,
               customer: customer,
               table: table,
               total: total,
+              orderDateTime: orderDateTime,
             ),
     );
   }
@@ -556,6 +586,7 @@ class _DoneOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required String? orderDateTime,
   }) {
     return Column(
       children: [
@@ -590,16 +621,22 @@ class _DoneOrderCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Meja: $table',
+                    orderDateTime != null
+                        ? 'Meja: $table  |  $orderDateTime'
+                        : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
                   if (data['is_local_only'] == true || data['is_synced'] == false) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'Perubahan lokal belum tersinkron',
+                      (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                          ? 'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}'
+                          : 'Perubahan lokal belum tersinkron',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.orange.shade800,
+                        color: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                            ? const Color(0xFFB91C1C)
+                            : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -659,6 +696,7 @@ class _DoneOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required String? orderDateTime,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -700,16 +738,24 @@ class _DoneOrderCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Meja: $table',
+                orderDateTime != null
+                    ? 'Meja: $table  |  $orderDateTime'
+                    : 'Meja: $table',
                 style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
               ),
               if (data['is_local_only'] == true || data['is_synced'] == false) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Perubahan lokal belum tersinkron',
+                  (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                      ? 'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}'
+                      : 'Perubahan lokal belum tersinkron',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
-                    color: Colors.orange.shade800,
+                    color: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                        ? const Color(0xFFB91C1C)
+                        : Colors.orange.shade800,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -773,6 +819,28 @@ class _DoneOrderCard extends StatelessWidget {
     final isLocalOnly = data['is_local_only'] == true;
     final isSynced = data['is_synced'] == true;
     final syncStatus = (data['sync_status'] ?? '').toString();
+
+    if (syncStatus == 'STOCK_CONFLICT') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF1F2),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFECACA)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
+            SizedBox(width: 6),
+            Text(
+              'Konflik Stok',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (isLocalOnly || !isSynced || syncStatus == 'PENDING_FINISH') {
       return Container(
@@ -883,3 +951,23 @@ num _orderGrandTotal(Map<String, dynamic> order) {
 
   return total.ceil();
 }
+
+String? _formatOrderDateTime(Map<String, dynamic> data) {
+  final raw = (data['created_at'] ??
+          data['sort_time'] ??
+          data['updated_at_local'] ??
+          data['cached_at'])
+      ?.toString();
+  if (raw == null || raw.trim().isEmpty) return null;
+
+  final dateTime = DateTime.tryParse(raw)?.toLocal();
+  if (dateTime == null) return null;
+
+  final date =
+      '${_twoDigits(dateTime.day)}/${_twoDigits(dateTime.month)}/${dateTime.year}';
+  final time =
+      '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+  return '$date $time';
+}
+
+String _twoDigits(int value) => value.toString().padLeft(2, '0');

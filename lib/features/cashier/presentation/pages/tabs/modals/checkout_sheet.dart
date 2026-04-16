@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '/features/cashier/data/models/checkout_exceptions.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/data/models/purchase_models.dart';
 import '/core/utils/open_url.dart';
@@ -46,6 +47,17 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     return _nameCtrl.text.trim().isNotEmpty &&
         _selectedTable != null &&
         _selectedPay != null;
+  }
+
+  StoreTable? _currentSelectedTable(List<StoreTable> availableTables) {
+    final selected = _selectedTable;
+    if (selected == null) return null;
+
+    for (final table in availableTables) {
+      if (table.id == selected.id) return table;
+    }
+
+    return null;
   }
 
   Future<bool> _showSubmitConfirmation() async {
@@ -96,6 +108,16 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
         if (classCompare != 0) return classCompare;
         return a.label.compareTo(b.label);
       });
+
+    final currentSelectedTable = _currentSelectedTable(availableTables);
+
+    if (_selectedTable != null && currentSelectedTable == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedTable != null) {
+          setState(() => _selectedTable = null);
+        }
+      });
+    }
 
     final Map<String, List<StoreTable>> groupedTables = {};
     for (final table in availableTables) {
@@ -254,7 +276,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<StoreTable>(
-                      value: _selectedTable,
+                      value: currentSelectedTable,
                       items: groupedTables.entries.expand((entry) {
                         final groupName = entry.key;
                         final tables = entry.value;
@@ -448,9 +470,15 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                             try {
                               final selectedPay = _selectedPay!;
 
+                              final selectedTable = currentSelectedTable;
+                              if (selectedTable == null) {
+                                setState(() => _selectedTable = null);
+                                return;
+                              }
+
                               final resp = await widget.onSubmit!(
                                 customerName: _nameCtrl.text.trim(),
-                                table: _selectedTable!,
+                                table: selectedTable,
                                 payment: selectedPay,
                               );
 
@@ -475,6 +503,12 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                                   'success': true,
                                   'refresh_target': refreshTarget,
                                 });
+                              }
+                            } on StockInsufficientException catch (e) {
+                              if (!mounted) return;
+                              await _showStockConflictDialog(e);
+                              if (mounted) {
+                                await context.read<PurchaseProvider>().load();
                               }
                             } catch (_) {
                               if (!mounted) return;
@@ -515,6 +549,44 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _showStockConflictDialog(
+    StockInsufficientException exception,
+  ) async {
+    final items = exception.allItems;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Stok tidak mencukupi'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: items.isEmpty
+                ? Text(exception.message)
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const Divider(height: 16),
+                    itemBuilder: (_, index) {
+                      final item = items[index];
+                      return Text(
+                        item.label,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Mengerti'),
+            ),
+          ],
+        );
+      },
     );
   }
 

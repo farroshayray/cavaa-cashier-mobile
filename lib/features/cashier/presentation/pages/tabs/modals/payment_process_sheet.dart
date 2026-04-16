@@ -20,11 +20,13 @@ class PaymentProcessSheet extends StatefulWidget {
     required this.orderId,
     required this.loadDetail,
     required this.ordersRepo,
+    this.forceOffline = false,
   });
 
   final int orderId;
   final Future<Map<String, dynamic>> Function(int id) loadDetail;
   final OrdersRepository ordersRepo;
+  final bool forceOffline;
 
   @override
   State<PaymentProcessSheet> createState() => _PaymentProcessSheetState();
@@ -365,7 +367,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final paid = _num(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
-    final ok = await showDialog<bool>(
+    final action = await showDialog<_PaymentCompletionAction>(
       context: context,
       useRootNavigator: true,
       builder: (_) => AlertDialog(
@@ -378,24 +380,47 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(
+              context,
+              _PaymentCompletionAction.cancel,
+            ),
             child: const Text('Batal'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Ya, lanjutkan'),
+            onPressed: () => Navigator.pop(
+              context,
+              _PaymentCompletionAction.withoutPrint,
+            ),
+            child: const Text('Simpan'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(
+              context,
+              _PaymentCompletionAction.withPrint,
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.print_rounded, size: 18),
+                SizedBox(width: 8),
+                Text('Simpan & Print'),
+              ],
+            ),
           ),
         ],
       ),
     );
 
-    if (ok != true) return;
+    if (action == null || action == _PaymentCompletionAction.cancel) return;
+
+    final shouldPrint = action == _PaymentCompletionAction.withPrint;
 
     setState(() => _paying = true);
 
     try {
       final repo = widget.ordersRepo;
-      final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
+      final isOnline =
+          context.read<ConnectivityStatusProvider>().isOnline && !widget.forceOffline;
 
       if (isOnline) {
         await widget.ordersRepo.paymentOrder(
@@ -406,8 +431,12 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
         ).timeout(const Duration(seconds: 15));
       } else {
+        final offlineOrder = Map<String, dynamic>.from(_order!);
+        if (widget.forceOffline) {
+          offlineOrder['sync_status'] = 'STOCK_CONFLICT';
+        }
         await context.read<PaymentProvider>().confirmPaymentOffline(
-          order: _order!,
+          order: offlineOrder,
           paidAmount: paid,
           changeAmount: change,
           cashierProofImagePath: _cashierProofImage?.path,
@@ -416,28 +445,30 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       }
 
       String? printError;
-      try {
-        Map<String, dynamic> printOrder;
+      if (shouldPrint) {
+        try {
+          Map<String, dynamic> printOrder;
 
-        if (isOnline) {
-          printOrder = await repo
-              .fetchPrintDetail(widget.orderId)
-              .timeout(const Duration(seconds: 15));
-        } else {
-          printOrder = _buildOfflinePrintableOrder(
-            _order!,
+          if (isOnline) {
+            printOrder = await repo
+                .fetchPrintDetail(widget.orderId)
+                .timeout(const Duration(seconds: 15));
+          } else {
+            printOrder = _buildOfflinePrintableOrder(
+              _order!,
+              paid: paid,
+              change: change,
+            );
+          }
+
+          await _printReceiptWithOrder(
+            printOrder,
             paid: paid,
             change: change,
           );
+        } catch (e) {
+          printError = e.toString();
         }
-
-        await _printReceiptWithOrder(
-          printOrder,
-          paid: paid,
-          change: change,
-        );
-      } catch (e) {
-        printError = e.toString();
       }
 
       if (!mounted) return;
@@ -447,12 +478,16 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         useRootNavigator: true,
         builder: (_) => AlertDialog(
           title: Text(
-            printError == null
+            !shouldPrint
+                ? 'Pembayaran berhasil'
+                : printError == null
                 ? 'Pembayaran berhasil'
                 : 'Pembayaran berhasil, print gagal',
           ),
           content: Text(
-            printError == null
+            !shouldPrint
+                ? 'Pembayaran berhasil disimpan tanpa mencetak struk.'
+                : printError == null
                 ? 'Pembayaran berhasil disimpan dan struk sedang diprint.'
                 : 'Pembayaran berhasil disimpan, tetapi struk gagal diprint.\n\nError: $printError',
           ),
@@ -603,6 +638,12 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
     await pm.write(bytes);
   }
+}
+
+enum _PaymentCompletionAction {
+  withPrint,
+  withoutPrint,
+  cancel,
 }
 
 class _Header extends StatelessWidget {

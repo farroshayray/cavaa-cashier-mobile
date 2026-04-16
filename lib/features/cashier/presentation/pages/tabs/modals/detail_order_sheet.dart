@@ -9,10 +9,12 @@ class DetailOrderSheet extends StatefulWidget {
     super.key,
     required this.orderId,
     required this.loadDetail,
+    this.stockConflictMessage,
   });
 
   final int orderId;
   final Future<Map<String, dynamic>> Function(int id) loadDetail;
+  final String? stockConflictMessage;
 
   @override
   State<DetailOrderSheet> createState() => _DetailOrderSheetState();
@@ -109,7 +111,10 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
                       ? const Center(child: CircularProgressIndicator())
                       : _error != null
                           ? _ErrorView(message: _error!, onRetry: _fetch)
-                          : _Body(order: _order!),
+                          : _Body(
+                              order: _order!,
+                              stockConflictMessage: widget.stockConflictMessage,
+                            ),
                 ),
               ],
             ),
@@ -179,8 +184,13 @@ class _Header extends StatelessWidget {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.order});
+  const _Body({
+    required this.order,
+    this.stockConflictMessage,
+  });
+
   final Map<String, dynamic> order;
+  final String? stockConflictMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -191,6 +201,9 @@ class _Body extends StatelessWidget {
     final ppnPercent = _num(order['ppn']);
     final total = _calcGrandTotalFromMap(order);
     final status = (order['order_status'] ?? '-').toString();
+    final conflictMessage = (stockConflictMessage ?? order['last_error'] ?? '')
+        .toString()
+        .trim();
 
     // mirip web: ambil payment.note (jika ada)
     final paymentNote = ((order['payment'] is Map) ? (order['payment']['note'] ?? '') : '').toString().trim();
@@ -211,6 +224,11 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
+          if (conflictMessage.isNotEmpty) ...[
+            _StockConflictCard(message: conflictMessage),
+            const SizedBox(height: 12),
+          ],
+
           if (paymentNote.isNotEmpty) ...[
             _PaymentNoteCard(note: paymentNote),
             const SizedBox(height: 12),
@@ -230,6 +248,93 @@ class _Body extends StatelessWidget {
     return isPpnActive
         ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
         : subtotal.ceil();
+  }
+}
+
+class _StockConflictCard extends StatelessWidget {
+  const _StockConflictCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = message
+        .split(RegExp(r'[\r\n]+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.error_outline_rounded, size: 18, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Konflik Stok',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF991B1B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (lines.length <= 1)
+            Text(
+              lines.isEmpty ? message : lines.first,
+              style: const TextStyle(
+                color: Color(0xFF7F1D1D),
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            ...lines.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 7),
+                      child: SizedBox(
+                        width: 5,
+                        height: 5,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Color(0xFFDC2626),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        line,
+                        style: const TextStyle(
+                          color: Color(0xFF7F1D1D),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

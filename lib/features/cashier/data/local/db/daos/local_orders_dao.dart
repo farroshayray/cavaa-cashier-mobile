@@ -16,6 +16,18 @@ class LocalOrderBundle {
   });
 }
 
+class LocalPendingStockLine {
+  final int productId;
+  final int qty;
+  final List<int> optionIds;
+
+  const LocalPendingStockLine({
+    required this.productId,
+    required this.qty,
+    required this.optionIds,
+  });
+}
+
 class LocalOrdersDao {
   final CashierDb db;
 
@@ -70,6 +82,7 @@ class LocalOrdersDao {
                 'PENDING_FINISH',
                 'FAILED',
                 'SYNCING',
+                'STOCK_CONFLICT',
               ]))
           ..orderBy([
             (tbl) => OrderingTerm.asc(tbl.createdAtLocal),
@@ -92,6 +105,39 @@ class LocalOrdersDao {
     return rows;
   }
 
+  Future<List<LocalPendingStockLine>> getPendingStockLines() async {
+    final orders = await (db.select(db.localOrders)
+          ..where((tbl) =>
+              tbl.serverId.isNull() &
+              tbl.syncStatus.isIn([
+                'PENDING',
+                'PENDING_PAYMENT',
+                'PENDING_PROCESS',
+                'PENDING_FINISH',
+                'FAILED',
+                'SYNCING',
+                'STOCK_CONFLICT',
+              ])))
+        .get();
+
+    final lines = <LocalPendingStockLine>[];
+    for (final order in orders) {
+      final items = await getItemsByOrderLocalId(order.localId);
+      for (final item in items) {
+        final options = await getOptionsByOrderItemLocalId(item.localId);
+        lines.add(
+          LocalPendingStockLine(
+            productId: item.productServerId,
+            qty: item.qty,
+            optionIds: options.map((option) => option.optionServerId).toList(),
+          ),
+        );
+      }
+    }
+
+    return lines;
+  }
+
   Future<List<LocalOrder>> getUnpaidOrders({
     String? query,
   }) async {
@@ -104,7 +150,8 @@ class LocalOrdersDao {
                 tbl.syncStatus.equals('SYNCING') |
                 tbl.syncStatus.equals('PENDING_PAYMENT') |
                 tbl.syncStatus.equals('PENDING_PROCESS') |
-                tbl.syncStatus.equals('PENDING_FINISH')
+                tbl.syncStatus.equals('PENDING_FINISH') |
+                tbl.syncStatus.equals('STOCK_CONFLICT')
               ))
           ..orderBy([(tbl) => OrderingTerm.desc(tbl.createdAtLocal)]))
         .get();
@@ -176,6 +223,17 @@ class LocalOrdersDao {
         syncStatus: Value(
           current.syncStatus == 'SYNCING' ? 'FAILED' : current.syncStatus,
         ),
+        lastError: Value(error),
+        updatedAtLocal: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> markOrderStockConflict(String localId, {String? error}) async {
+    await (db.update(db.localOrders)..where((tbl) => tbl.localId.equals(localId)))
+        .write(
+      LocalOrdersCompanion(
+        syncStatus: const Value('STOCK_CONFLICT'),
         lastError: Value(error),
         updatedAtLocal: Value(DateTime.now()),
       ),
@@ -511,6 +569,7 @@ class LocalOrdersDao {
                 'PENDING_PROCESS',
                 'FAILED',
                 'SYNCING',
+                'STOCK_CONFLICT',
               ]))
           ..orderBy([
             (t) => OrderingTerm.asc(t.createdAtLocal),
@@ -580,7 +639,12 @@ class LocalOrdersDao {
     DateTime? paymentConfirmedAtLocal,
     int? latestPaymentServerId,
     String? orderSnapshotJson,
+    bool preserveStockConflict = false,
   }) async {
+    final current = await getOrderByLocalId(localId);
+    final keepStockConflict =
+        preserveStockConflict && current?.syncStatus == 'STOCK_CONFLICT';
+
     await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
       LocalOrdersCompanion(
         paidAmountLocal: Value(paidAmount),
@@ -590,9 +654,9 @@ class LocalOrdersDao {
         latestPaymentServerId: Value(latestPaymentServerId),
         orderSnapshotJson: Value(orderSnapshotJson),
         orderStatusLocal: const Value('PAID'),
-        syncStatus: const Value('PENDING_PAYMENT'),
+        syncStatus: Value(keepStockConflict ? 'STOCK_CONFLICT' : 'PENDING_PAYMENT'),
         updatedAtLocal: Value(DateTime.now()),
-        lastError: const Value(null),
+        lastError: keepStockConflict ? const Value.absent() : const Value(null),
       ),
     );
   }
@@ -635,6 +699,7 @@ class LocalOrdersDao {
   Future<void> updateOrderStatusLocal({
     required String localId,
     required String status,
+    bool preserveStockConflict = false,
   }) {
     String syncStatus = 'PENDING';
 
@@ -646,14 +711,19 @@ class LocalOrdersDao {
       syncStatus = 'PENDING_FINISH';
     }
 
-    return (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
-      LocalOrdersCompanion(
-        orderStatusLocal: Value(status),
-        syncStatus: Value(syncStatus),
-        updatedAtLocal: Value(DateTime.now()),
-        lastError: const Value(null),
-      ),
-    );
+    return getOrderByLocalId(localId).then((current) {
+      final keepStockConflict =
+          preserveStockConflict && current?.syncStatus == 'STOCK_CONFLICT';
+
+      return (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
+        LocalOrdersCompanion(
+          orderStatusLocal: Value(status),
+          syncStatus: Value(keepStockConflict ? 'STOCK_CONFLICT' : syncStatus),
+          updatedAtLocal: Value(DateTime.now()),
+          lastError: keepStockConflict ? const Value.absent() : const Value(null),
+        ),
+      );
+    });
   }
 
   Future<List<LocalOrder>> getLocalDoneOrders() {
@@ -664,6 +734,7 @@ class LocalOrdersDao {
                 'PENDING_FINISH',
                 'FAILED',
                 'SYNCING',
+                'STOCK_CONFLICT',
               ]))
           ..orderBy([
             (t) => OrderingTerm.asc(t.createdAtLocal),

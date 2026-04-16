@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
+import '/features/cashier/data/models/checkout_exceptions.dart';
 import '/features/cashier/data/purchase_api.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
@@ -359,6 +360,13 @@ class SyncService {
           'backendStage=${after?.backendSyncStage}',
         );
       }
+    } on StockInsufficientException catch (e) {
+      debugPrint('stock conflict while syncing $localOrderId: ${e.message}');
+      final details = e.allItems.map((item) => item.label).join('\n');
+      await localOrdersDao.markOrderStockConflict(
+        localOrderId,
+        error: details.isNotEmpty ? details : e.message,
+      );
     } catch (e) {
       debugPrint('❌ universal lifecycle sync failed for $localOrderId: $e');
       await localOrdersDao.markOrderPending(

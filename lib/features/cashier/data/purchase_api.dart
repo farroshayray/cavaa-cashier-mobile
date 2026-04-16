@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'models/checkout_exceptions.dart';
 
 class PurchaseApi {
   final Dio dio;
@@ -32,7 +33,19 @@ class PurchaseApi {
 
     print('payload checkout: $payload');
 
-    final resp = await dio.post('/api/v1/mobile/cashier/checkout', data: payload);
+    late final Response resp;
+    try {
+      resp = await dio.post('/api/v1/mobile/cashier/checkout', data: payload);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        final map = Map<String, dynamic>.from(data);
+        if (map['code'] == 'STOCK_INSUFFICIENT') {
+          throw StockInsufficientException.fromResponse(map);
+        }
+      }
+      rethrow;
+    }
 
     final data = resp.data;
     if (data is Map<String, dynamic>) return data;

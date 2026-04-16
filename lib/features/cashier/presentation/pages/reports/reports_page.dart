@@ -348,36 +348,26 @@ class _ReportsPageState extends State<ReportsPage> {
 
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
-    final initialRange = _customRange ?? _activeRange;
-
-    final picked = await showDateRangePicker(
+    final today = DateTime(now.year, now.month, now.day);
+    final pickedRange = await showModalBottomSheet<DateTimeRange>(
       context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime(now.year + 2),
-      initialDateRange: initialRange,
-      saveText: 'Tampilkan Laporan',
-      cancelText: 'Kembali',
-      helpText: 'Pilih Periode Transaksi',
-      fieldStartHintText: 'Tanggal awal',
-      fieldEndHintText: 'Tanggal akhir',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(
-              context,
-            ).colorScheme.copyWith(primary: const Color(0xFFAE1504)),
-          ),
-          child: child ?? const SizedBox.shrink(),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return _CustomRangePickerSheet(
+          initialRange: _customRange ?? _activeRange,
+          firstDate: DateTime(2023),
+          lastDate: today,
         );
       },
     );
 
-    if (!mounted || picked == null) return;
+    if (!mounted || pickedRange == null) return;
 
     setState(() {
-      _customRange = picked;
+      _customRange = pickedRange;
       _selectedPeriod = _ReportPeriodType.custom;
-      _activeRange = picked;
+      _activeRange = pickedRange;
     });
     await _loadSummary();
   }

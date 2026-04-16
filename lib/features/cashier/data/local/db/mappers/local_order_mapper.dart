@@ -133,6 +133,7 @@ Map<String, dynamic> mapLocalOrderToProcessItem(LocalOrder row) {
     'created_at': snapshot['created_at'] ?? row.createdAtLocal.toIso8601String(),
     'updated_at_local': row.updatedAtLocal.toIso8601String(),
     'sync_status': row.syncStatus,
+    'last_error': row.lastError,
     'pending_sync': row.syncStatus != 'SYNCED',
   };
 

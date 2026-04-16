@@ -24,7 +24,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
     super.dispose();
   }
 
-  bool get isValid {
+  bool _isValid(PurchaseProvider vm) {
     for (final g in widget.product.optionGroups) {
       final count = selected[g.id]?.length ?? 0;
 
@@ -34,8 +34,28 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
 
       if (count < g.min) return false;
       if (g.max > 0 && count > g.max) return false;
+
+      final picked = selected[g.id] ?? <int>{};
+      for (final optId in picked) {
+        final item = firstWhereOrNull<OptionItem>(g.items, (x) => x.id == optId);
+        if (item == null ||
+            vm.availableQtyForOption(item) < qty) {
+          return false;
+        }
+      }
     }
-    return true;
+    return vm.canAddWithOptions(
+      product: widget.product,
+      qty: qty,
+      selected: selected,
+    );
+  }
+
+  int _maxSelectableQty(PurchaseProvider vm) {
+    return vm.maxAddableQtyWithOptions(
+      product: widget.product,
+      selected: selected,
+    );
   }
 
   num get optionExtra {
@@ -56,6 +76,12 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
+    final vm = context.watch<PurchaseProvider>();
+    final maxQty = _maxSelectableQty(vm);
+    final canSave = _isValid(vm);
+    final productRemaining = widget.product.alwaysAvailable
+        ? null
+        : vm.availableQtyForProduct(widget.product);
 
     return SafeArea(
       child: Container(
@@ -119,6 +145,22 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                               color: Colors.black.withOpacity(0.7),
                             ),
                           ),
+                          if (productRemaining != null &&
+                              productRemaining <= 3) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              productRemaining <= 0
+                                  ? 'Stok produk habis'
+                                  : 'Sisa stok produk $productRemaining',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: productRemaining <= 0
+                                    ? Colors.redAccent
+                                    : Colors.orange,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -171,30 +213,45 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                       ...g.items.map((it) {
                         final picked = selected[g.id] ?? {};
                         final checked = picked.contains(it.id);
+                        final remaining = vm.availableQtyForOption(it);
+                        final isOptionOut =
+                            !it.alwaysAvailable && remaining <= 0;
 
                         return InkWell(
-                          onTap: () {
-                            setState(() {
-                              selected.putIfAbsent(g.id, () => <int>{});
-                              if (g.multiple) {
-                                if (checked) {
-                                  selected[g.id]!.remove(it.id);
-                                } else {
-                                  selected[g.id]!.add(it.id);
-                                }
-                              } else {
-                                // radio
-                                selected[g.id] = {it.id};
-                              }
-                            });
-                          },
+                          onTap: isOptionOut
+                              ? null
+                              : () {
+                                  setState(() {
+                                    selected.putIfAbsent(g.id, () => <int>{});
+                                    if (g.multiple) {
+                                      if (checked) {
+                                        selected[g.id]!.remove(it.id);
+                                      } else {
+                                        selected[g.id]!.add(it.id);
+                                      }
+                                    } else {
+                                      // radio
+                                      selected[g.id] = {it.id};
+                                    }
+                                  });
+                                },
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: checked ? brand : Colors.black.withOpacity(0.10)),
-                              color: checked ? brand.withOpacity(0.06) : Colors.white,
+                              border: Border.all(
+                                color: checked
+                                    ? brand
+                                    : isOptionOut
+                                        ? Colors.black.withOpacity(0.06)
+                                        : Colors.black.withOpacity(0.10),
+                              ),
+                              color: isOptionOut
+                                  ? const Color(0xFFF3F4F6)
+                                  : checked
+                                      ? brand.withOpacity(0.06)
+                                      : Colors.white,
                             ),
                             child: Row(
                               children: [
@@ -202,19 +259,60 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                                   g.multiple
                                       ? (checked ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded)
                                       : (checked ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded),
-                                  color: checked ? brand : Colors.black54,
+                                  color: isOptionOut
+                                      ? Colors.black26
+                                      : checked
+                                          ? brand
+                                          : Colors.black54,
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: Text(
-                                    it.name,
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        it.name,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: isOptionOut ? Colors.black38 : Colors.black87,
+                                        ),
+                                      ),
+                                      if (isOptionOut)
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            'Habis',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.black38,
+                                            ),
+                                          ),
+                                        )
+                                      else if (!it.alwaysAvailable && remaining <= 3)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            'Sisa $remaining',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.orange,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
                                 if (it.price > 0)
                                   Text(
                                     '+Rp ${it.price.toString()}',
-                                    style: TextStyle(color: Colors.black.withOpacity(0.65), fontWeight: FontWeight.w700),
+                                    style: TextStyle(
+                                      color: isOptionOut
+                                          ? Colors.black38
+                                          : Colors.black.withOpacity(0.65),
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                               ],
                             ),
@@ -269,7 +367,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                           ),
                           Text('$qty', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                           IconButton(
-                            onPressed: () => setState(() => qty++),
+                            onPressed: qty >= maxQty ? null : () => setState(() => qty++),
                             icon: const Icon(Icons.add_rounded),
                           ),
                         ],
@@ -289,7 +387,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
 
-                        onPressed: isValid
+                        onPressed: canSave
                             ? () {
                                 context.read<PurchaseProvider>().addWithOptions(
                                       product: widget.product,

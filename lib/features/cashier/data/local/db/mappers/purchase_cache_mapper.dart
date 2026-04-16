@@ -22,6 +22,7 @@ class PurchaseCacheMapper {
       rawJson: jsonEncode({
         'id': p.id,
         'name': p.name,
+        'recipes': p.recipes.map((e) => e.toJson()).toList(),
       }),
       cachedAt: DateTime.now(),
     );
@@ -62,6 +63,7 @@ class PurchaseCacheMapper {
             rawJson: jsonEncode({
               'id': item.id,
               'name': item.name,
+              'recipes': item.recipes.map((e) => e.toJson()).toList(),
             }),
             cachedAt: DateTime.now(),
           ),
@@ -125,19 +127,24 @@ class PurchaseCacheMapper {
     required List<CachedOptionGroup> groups,
     required List<CachedOptionItem> items,
   }) {
+    final productRaw = _decodeRawMap(row.rawJson);
     final productGroups = groups
         .where((g) => g.productServerId == row.serverId)
         .map((g) {
           final groupItems = items
               .where((i) => i.groupServerId == g.serverId)
-              .map((i) => OptionItem(
+              .map((i) {
+                final itemRaw = _decodeRawMap(i.rawJson);
+                return OptionItem(
                     id: i.serverId,
                     name: i.name,
                     price: i.price,
                     stockType: i.stockType,
                     quantityAvailable: i.quantityAvailable,
                     alwaysAvailable: i.alwaysAvailable,
-                  ))
+                    recipes: StockRecipe.listFromJson(itemRaw['recipes']),
+                  );
+              })
               .toList();
 
           return OptionGroup(
@@ -173,8 +180,17 @@ class PurchaseCacheMapper {
       imagePath: row.imagePath,
       promotion: promo,
       stockType: row.stockType,
+      recipes: StockRecipe.listFromJson(productRaw['recipes']),
       optionGroups: productGroups,
     );
+  }
+
+  static Map<String, dynamic> _decodeRawMap(String rawJson) {
+    try {
+      final decoded = jsonDecode(rawJson);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return <String, dynamic>{};
   }
 
   static StoreTable fromCachedTable(CachedTable row) {

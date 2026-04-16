@@ -84,6 +84,7 @@ class DoneProvider extends ChangeNotifier {
           'pending_action': 'LOCAL_ONLY',
           'pending_sync': true,
           'sync_status': e.syncStatus,
+          'last_error': e.lastError,
           'sort_time':
               item['created_at']?.toString() ?? e.createdAtLocal.toIso8601String(),
         };

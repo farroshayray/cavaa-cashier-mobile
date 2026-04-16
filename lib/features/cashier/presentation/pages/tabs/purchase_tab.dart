@@ -590,9 +590,23 @@ class _ProductCard extends StatelessWidget {
     final isTablet = shortestSide >= 600;
 
     final qty = vm.qtyOf(product.id);
+    final productRemaining = vm.availableQtyForProduct(product);
 
-    final isOut = !product.alwaysAvailable && product.quantityAvailable <= 0;
-    final lowStock = !product.alwaysAvailable && product.quantityAvailable > 0 && product.quantityAvailable <= 3;
+    final hasRequiredOptionsAvailable = product.optionGroups.every((group) {
+      if (!group.required && group.min <= 0) return true;
+      final availableCount = group.items
+          .where((item) => vm.availableQtyForOption(item) > 0)
+          .length;
+      return availableCount >= group.min;
+    });
+    final productStockOut = !product.alwaysAvailable && productRemaining <= 0;
+    final isOut = !product.isActive ||
+        productStockOut ||
+        !hasRequiredOptionsAvailable;
+    final lowStock = !isOut &&
+        !product.alwaysAvailable &&
+        productRemaining > 0 &&
+        productRemaining <= 3;
 
     // promo calc (mirip web)
     final basePrice = product.price.toDouble();
