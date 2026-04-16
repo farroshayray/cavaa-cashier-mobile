@@ -340,16 +340,168 @@ class PurchaseProvider extends ChangeNotifier {
   int qtyOf(int productId) =>
       cart.where((e) => e.product.id == productId).fold<int>(0, (a, b) => a + b.qty);
 
+  int _qtyOfProduct(int productId, {CartItem? excludingItem}) => cart
+      .where((e) => e.product.id == productId && e != excludingItem)
+      .fold<int>(0, (sum, item) => sum + item.qty);
+
   int qtyOfOption(int optionId) {
     return cart
         .where((item) => item.selected.values.any((ids) => ids.contains(optionId)))
         .fold<int>(0, (sum, item) => sum + item.qty);
   }
 
-  int availableQtyForOption(OptionItem option) {
-    if (option.alwaysAvailable) return 999999;
-    final remaining = option.quantityAvailable - qtyOfOption(option.id);
+  int _qtyOfOption(int optionId, {CartItem? excludingItem}) {
+    return cart
+        .where((item) =>
+            item != excludingItem &&
+            item.selected.values.any((ids) => ids.contains(optionId)))
+        .fold<int>(0, (sum, item) => sum + item.qty);
+  }
+
+  Map<int, double> _rawUsageInCart({CartItem? excludingItem}) {
+    final usage = <int, double>{};
+
+    void addRecipes(List<StockRecipe> recipes, int qty) {
+      for (final recipe in recipes) {
+        if (recipe.stockId <= 0 || recipe.quantityUsed <= 0) continue;
+        usage[recipe.stockId] =
+            (usage[recipe.stockId] ?? 0) + (recipe.quantityUsed * qty);
+      }
+    }
+
+    for (final item in cart) {
+      if (item == excludingItem) continue;
+
+      if (!item.product.alwaysAvailable &&
+          item.product.stockType == 'linked') {
+        addRecipes(item.product.recipes, item.qty);
+      }
+
+      for (final group in item.product.optionGroups) {
+        final picked = item.selected[group.id] ?? <int>{};
+        for (final option in group.items) {
+          if (!picked.contains(option.id)) continue;
+          if (option.alwaysAvailable || option.stockType != 'linked') continue;
+          addRecipes(option.recipes, item.qty);
+        }
+      }
+    }
+
+    return usage;
+  }
+
+  int _availableQtyFromRecipes(
+    List<StockRecipe> recipes, {
+    CartItem? excludingItem,
+  }) {
+    if (recipes.isEmpty) return 999999;
+
+    final usage = _rawUsageInCart(excludingItem: excludingItem);
+    var maxQty = 999999;
+
+    for (final recipe in recipes) {
+      if (recipe.stockId <= 0 || recipe.quantityUsed <= 0) continue;
+      final remaining =
+          recipe.availableQuantity - (usage[recipe.stockId] ?? 0);
+      final portions = (remaining / recipe.quantityUsed).floor();
+      if (portions < maxQty) maxQty = portions;
+    }
+
+    return maxQty < 0 ? 0 : maxQty;
+  }
+
+  int availableQtyForProduct(Product product, {CartItem? excludingItem}) {
+    if (product.alwaysAvailable) return 999999;
+    if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
+      return _availableQtyFromRecipes(
+        product.recipes,
+        excludingItem: excludingItem,
+      );
+    }
+
+    final remaining =
+        product.quantityAvailable - _qtyOfProduct(product.id, excludingItem: excludingItem);
     return remaining < 0 ? 0 : remaining;
+  }
+
+  int availableQtyForOption(OptionItem option, {CartItem? excludingItem}) {
+    if (option.alwaysAvailable) return 999999;
+    if (option.stockType == 'linked' && option.recipes.isNotEmpty) {
+      return _availableQtyFromRecipes(
+        option.recipes,
+        excludingItem: excludingItem,
+      );
+    }
+
+    final remaining =
+        option.quantityAvailable - _qtyOfOption(option.id, excludingItem: excludingItem);
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  int maxAddableQtyWithOptions({
+    required Product product,
+    required Map<int, Set<int>> selected,
+    CartItem? excludingItem,
+  }) {
+    var maxQty = 999999;
+
+    if (!product.alwaysAvailable) {
+      if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
+        // Linked products are handled together with linked options below,
+        // because they may consume the same raw stock in one cart line.
+      } else {
+        final available = product.quantityAvailable -
+            _qtyOfProduct(product.id, excludingItem: excludingItem);
+        if (available < maxQty) maxQty = available;
+      }
+    }
+
+    final rawPerUnit = <int, double>{};
+    final rawAvailable = <int, double>{};
+    final rawUsed = _rawUsageInCart(excludingItem: excludingItem);
+
+    void addRawRecipes(List<StockRecipe> recipes) {
+      for (final recipe in recipes) {
+        if (recipe.stockId <= 0 || recipe.quantityUsed <= 0) continue;
+        rawPerUnit[recipe.stockId] =
+            (rawPerUnit[recipe.stockId] ?? 0) + recipe.quantityUsed;
+        rawAvailable[recipe.stockId] = recipe.availableQuantity;
+      }
+    }
+
+    if (!product.alwaysAvailable &&
+        product.stockType == 'linked' &&
+        product.recipes.isNotEmpty) {
+      addRawRecipes(product.recipes);
+    }
+
+    for (final group in product.optionGroups) {
+      final picked = selected[group.id] ?? <int>{};
+      for (final optId in picked) {
+        final option = group.items.cast<OptionItem?>().firstWhere(
+              (item) => item?.id == optId,
+              orElse: () => null,
+            );
+        if (option == null || option.alwaysAvailable) continue;
+
+        if (option.stockType == 'linked' && option.recipes.isNotEmpty) {
+          addRawRecipes(option.recipes);
+        } else {
+          final available = option.quantityAvailable -
+              _qtyOfOption(option.id, excludingItem: excludingItem);
+          if (available < maxQty) maxQty = available;
+        }
+      }
+    }
+
+    rawPerUnit.forEach((stockId, requiredPerUnit) {
+      if (requiredPerUnit <= 0) return;
+      final remaining = (rawAvailable[stockId] ?? 0) - (rawUsed[stockId] ?? 0);
+      final availableQty = (remaining / requiredPerUnit).floor();
+      if (availableQty < maxQty) maxQty = availableQty;
+    });
+
+    return maxQty < 0 ? 0 : maxQty;
   }
 
   bool canAddWithOptions({
@@ -359,15 +511,6 @@ class PurchaseProvider extends ChangeNotifier {
     CartItem? excludingItem,
   }) {
     if (!product.isAvailableForSale) return false;
-
-    final currentProductQty = cart
-        .where((item) => item.product.id == product.id && item != excludingItem)
-        .fold<int>(0, (sum, item) => sum + item.qty);
-
-    if (!product.alwaysAvailable &&
-        (currentProductQty + qty) > product.quantityAvailable) {
-      return false;
-    }
 
     for (final group in product.optionGroups) {
       final picked = selected[group.id] ?? <int>{};
@@ -381,19 +524,14 @@ class PurchaseProvider extends ChangeNotifier {
             );
 
         if (option == null || !option.isAvailableForSale) return false;
-        if (!option.alwaysAvailable) {
-          final currentOptionQty = cart
-              .where((item) =>
-                  item != excludingItem &&
-                  item.selected.values.any((ids) => ids.contains(optId)))
-              .fold<int>(0, (sum, item) => sum + item.qty);
-
-          if ((currentOptionQty + qty) > option.quantityAvailable) return false;
-        }
       }
     }
 
-    return true;
+    return qty <= maxAddableQtyWithOptions(
+      product: product,
+      selected: selected,
+      excludingItem: excludingItem,
+    );
   }
 
   num get cartTotal => cart.fold<num>(0, (a, b) => a + b.lineTotal);

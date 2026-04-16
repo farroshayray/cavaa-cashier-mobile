@@ -177,6 +177,7 @@ class Product {
   final Promotion? promotion;
 
   final String stockType;
+  final List<StockRecipe> recipes;
 
   final List<OptionGroup> optionGroups;
 
@@ -193,6 +194,7 @@ class Product {
     required this.imagePath,
     required this.promotion,
     required this.stockType,
+    required this.recipes,
     required this.optionGroups,
   });
 
@@ -239,6 +241,7 @@ class Product {
 
     final stockType = (json['stock_type'] ?? '').toString(); // direct | linked
     final qty = _computeAvailableQty(json);
+    final recipes = StockRecipe.listFromJson(json['recipes']);
 
     return Product(
       id: parseInt(json['id']),
@@ -253,11 +256,75 @@ class Product {
       imagePath: image,
       promotion: promo,
       stockType: stockType,
+      recipes: recipes,
       optionGroups: optionGroups,
     );
   }
 }
 
+class StockRecipe {
+  final int stockId;
+  final String stockName;
+  final double quantityUsed;
+  final double availableQuantity;
+  final String? unit;
+
+  StockRecipe({
+    required this.stockId,
+    required this.stockName,
+    required this.quantityUsed,
+    required this.availableQuantity,
+    required this.unit,
+  });
+
+  factory StockRecipe.fromJson(Map<String, dynamic> json) {
+    final stockRaw = json['stock'];
+    final stock = stockRaw is Map
+        ? Map<String, dynamic>.from(stockRaw)
+        : <String, dynamic>{};
+    final displayUnitRaw = stock['display_unit'] ?? stock['displayUnit'];
+    final displayUnit = displayUnitRaw is Map
+        ? Map<String, dynamic>.from(displayUnitRaw)
+        : <String, dynamic>{};
+    final quantity = parseNum(stock['quantity'], defaultValue: 0).toDouble();
+    final reserved =
+        parseNum(stock['quantity_reserved'], defaultValue: 0).toDouble();
+    final available = quantity - reserved;
+
+    return StockRecipe(
+      stockId: parseInt(json['stock_id'] ?? stock['id']),
+      stockName: (stock['stock_name'] ?? json['stock_name'] ?? '').toString(),
+      quantityUsed: parseNum(json['quantity_used'], defaultValue: 0).toDouble(),
+      availableQuantity: available.isNaN || available < 0 ? 0 : available,
+      unit: (displayUnit['unit_name'] ?? json['unit'])?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'stock_id': stockId,
+      'quantity_used': quantityUsed,
+      'stock': {
+        'id': stockId,
+        'stock_name': stockName,
+        'quantity': availableQuantity,
+        'quantity_reserved': 0,
+        'display_unit': {
+          'unit_name': unit,
+        },
+      },
+    };
+  }
+
+  static List<StockRecipe> listFromJson(dynamic raw) {
+    if (raw is! List) return const <StockRecipe>[];
+    return raw
+        .whereType<Map>()
+        .map((e) => StockRecipe.fromJson(Map<String, dynamic>.from(e)))
+        .where((e) => e.stockId > 0 && e.quantityUsed > 0)
+        .toList();
+  }
+}
 
 class OptionItem {
   final int id;
@@ -266,6 +333,7 @@ class OptionItem {
   final String stockType;
   final int quantityAvailable;
   final bool alwaysAvailable;
+  final List<StockRecipe> recipes;
 
   OptionItem({
     required this.id,
@@ -274,6 +342,7 @@ class OptionItem {
     required this.stockType,
     required this.quantityAvailable,
     required this.alwaysAvailable,
+    required this.recipes,
   });
 
   bool get isAvailableForSale => alwaysAvailable || quantityAvailable > 0;
@@ -303,6 +372,7 @@ class OptionItem {
       stockType: stockType,
       quantityAvailable: qty,
       alwaysAvailable: parseBool(json['always_available_flag']),
+      recipes: StockRecipe.listFromJson(json['recipes']),
     );
   }
 }

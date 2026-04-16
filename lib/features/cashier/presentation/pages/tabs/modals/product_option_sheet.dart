@@ -38,7 +38,8 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
       final picked = selected[g.id] ?? <int>{};
       for (final optId in picked) {
         final item = firstWhereOrNull<OptionItem>(g.items, (x) => x.id == optId);
-        if (item == null || vm.availableQtyForOption(item) < qty) {
+        if (item == null ||
+            vm.availableQtyForOption(item) < qty) {
           return false;
         }
       }
@@ -51,21 +52,10 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
   }
 
   int _maxSelectableQty(PurchaseProvider vm) {
-    var maxQty = widget.product.alwaysAvailable
-        ? 999999
-        : widget.product.quantityAvailable - vm.qtyOf(widget.product.id);
-
-    for (final g in widget.product.optionGroups) {
-      final picked = selected[g.id] ?? <int>{};
-      for (final optId in picked) {
-        final item = firstWhereOrNull<OptionItem>(g.items, (x) => x.id == optId);
-        if (item == null) return 0;
-        final optionQty = vm.availableQtyForOption(item);
-        if (optionQty < maxQty) maxQty = optionQty;
-      }
-    }
-
-    return maxQty < 0 ? 0 : maxQty;
+    return vm.maxAddableQtyWithOptions(
+      product: widget.product,
+      selected: selected,
+    );
   }
 
   num get optionExtra {
@@ -91,7 +81,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
     final canSave = _isValid(vm);
     final productRemaining = widget.product.alwaysAvailable
         ? null
-        : widget.product.quantityAvailable - vm.qtyOf(widget.product.id);
+        : vm.availableQtyForProduct(widget.product);
 
     return SafeArea(
       child: Container(

@@ -347,9 +347,8 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
   if (!product.isActive) {
     notices.add(const _StockNotice('Produk tidak aktif', blocking: true));
   } else if (!product.alwaysAvailable) {
-    final productQtyInCart = vm.qtyOf(product.id);
     final availableForThisLine =
-        product.quantityAvailable - (productQtyInCart - item.qty);
+        vm.availableQtyForProduct(product, excludingItem: item);
     final remainingAfterThisLine = availableForThisLine - item.qty;
 
     if (availableForThisLine <= 0) {
@@ -376,7 +375,7 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
         if (option == null) return false;
         final availableForThisLine = option.alwaysAvailable
             ? item.qty
-            : option.quantityAvailable - (vm.qtyOfOption(option.id) - item.qty);
+            : vm.availableQtyForOption(option, excludingItem: item);
         return availableForThisLine > 0;
       }).length;
 
@@ -401,7 +400,7 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
       if (option.alwaysAvailable) continue;
 
       final availableForThisLine =
-          option.quantityAvailable - (vm.qtyOfOption(option.id) - item.qty);
+          vm.availableQtyForOption(option, excludingItem: item);
       if (availableForThisLine <= 0) {
         notices.add(_StockNotice('Opsi ${option.name} habis', blocking: true));
       } else if (item.qty > availableForThisLine) {
@@ -411,6 +410,19 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
         ));
       }
     }
+  }
+
+  final maxForLine = vm.maxAddableQtyWithOptions(
+    product: product,
+    selected: item.selected,
+    excludingItem: item,
+  );
+  if (item.qty > maxForLine &&
+      !notices.any((notice) => notice.blocking)) {
+    notices.add(_StockNotice(
+      'Stok bahan/produk kurang: diminta ${item.qty}, tersedia $maxForLine',
+      blocking: true,
+    ));
   }
 
   return notices;
