@@ -17,6 +17,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
   int qty = 1;
   final noteC = TextEditingController();
   final Map<int, Set<int>> selected = {}; // groupId -> set<optionId>
+  String? qtyAdjustmentNotice;
 
   @override
   void dispose() {
@@ -78,6 +79,106 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
 
   num get unitFinal => promoUnitPrice(widget.product) + optionExtra;
   num get total => unitFinal * qty;
+
+  void _toggleOption({
+    required PurchaseProvider vm,
+    required OptionGroup group,
+    required OptionItem option,
+    required bool checked,
+  }) {
+    final previousQty = qty;
+
+    setState(() {
+      qtyAdjustmentNotice = null;
+      selected.putIfAbsent(group.id, () => <int>{});
+
+      if (group.multiple) {
+        if (checked) {
+          selected[group.id]!.remove(option.id);
+        } else {
+          selected[group.id]!.add(option.id);
+        }
+      } else {
+        selected[group.id] = {option.id};
+      }
+
+      final maxAfterSelection = vm.maxAddableQtyWithOptions(
+        product: widget.product,
+        selected: selected,
+      );
+
+      if (maxAfterSelection > 0 && qty > maxAfterSelection) {
+        qty = maxAfterSelection;
+        qtyAdjustmentNotice = _qtyAdjustmentText(
+          option: option,
+          previousQty: previousQty,
+          newQty: qty,
+        );
+      }
+    });
+  }
+
+  String _qtyAdjustmentText({
+    required OptionItem option,
+    required int previousQty,
+    required int newQty,
+  }) {
+    final productName = widget.product.name;
+    final optionName = option.name;
+    final sameRawNames = _sameRawStockNames(widget.product, option);
+
+    if (sameRawNames.isEmpty) {
+      return 'Qty disesuaikan dari $previousQty ke $newQty karena stok '
+          '"$optionName" tidak cukup untuk qty sebelumnya. Dengan kombinasi '
+          'pilihan saat ini, stok hanya cukup untuk $newQty porsi.';
+    }
+
+    return 'Qty disesuaikan dari $previousQty ke $newQty karena "$optionName" '
+        'ikut memakai stok ${sameRawNames.join(', ')} bersama "$productName". '
+        'Dengan kombinasi ini, stok hanya cukup untuk $newQty porsi.';
+  }
+
+  List<String> _sameRawStockNames(Product product, OptionItem option) {
+    if (!product.consumesLinkedStock || !option.consumesLinkedStock) {
+      return const <String>[];
+    }
+
+    final productStockIds =
+        product.recipes.map((recipe) => recipe.stockId).toSet();
+    final names = <String>[];
+
+    for (final recipe in option.recipes) {
+      if (!productStockIds.contains(recipe.stockId)) continue;
+      final name = recipe.stockName.trim();
+      if (name.isNotEmpty && !names.contains(name)) names.add(name);
+    }
+
+    return names;
+  }
+
+  Map<int, Set<int>> _selectedAfterToggle({
+    required OptionGroup group,
+    required OptionItem option,
+    required bool checked,
+  }) {
+    final next = <int, Set<int>>{
+      for (final entry in selected.entries) entry.key: {...entry.value},
+    };
+
+    next.putIfAbsent(group.id, () => <int>{});
+
+    if (group.multiple) {
+      if (checked) {
+        next[group.id]!.remove(option.id);
+      } else {
+        next[group.id]!.add(option.id);
+      }
+    } else {
+      next[group.id] = {option.id};
+    }
+
+    return next;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -194,6 +295,11 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                       const SizedBox(height: 12),
                     ],
 
+                    if (qtyAdjustmentNotice != null) ...[
+                      _QtyAdjustmentNotice(text: qtyAdjustmentNotice!),
+                      const SizedBox(height: 12),
+                    ],
+
                     // option groups
                     for (final g in widget.product.optionGroups) ...[
                       Row(
@@ -229,26 +335,34 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                         );
                         final tracksOptionStock =
                             !it.alwaysAvailable || it.consumesLinkedStock;
-                        final isOptionOut = tracksOptionStock && remaining < qty;
+                        final selectedAfterToggle = _selectedAfterToggle(
+                          group: g,
+                          option: it,
+                          checked: checked,
+                        );
+                        final maxQtyAfterToggle = checked
+                            ? maxQty
+                            : vm.maxAddableQtyWithOptions(
+                                product: widget.product,
+                                selected: selectedAfterToggle,
+                              );
+                        final isOptionOut =
+                            !checked && tracksOptionStock && maxQtyAfterToggle <= 0;
+                        final needsQtyAdjustment =
+                            !checked &&
+                            tracksOptionStock &&
+                            maxQtyAfterToggle > 0 &&
+                            maxQtyAfterToggle < qty;
 
                         return InkWell(
                           onTap: isOptionOut && !checked
                               ? null
-                              : () {
-                                  setState(() {
-                                    selected.putIfAbsent(g.id, () => <int>{});
-                                    if (g.multiple) {
-                                      if (checked) {
-                                        selected[g.id]!.remove(it.id);
-                                      } else {
-                                        selected[g.id]!.add(it.id);
-                                      }
-                                    } else {
-                                      // radio
-                                      selected[g.id] = {it.id};
-                                    }
-                                  });
-                                },
+                              : () => _toggleOption(
+                                    vm: vm,
+                                    group: g,
+                                    option: it,
+                                    checked: checked,
+                                  ),
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -295,13 +409,23 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                                         Padding(
                                           padding: const EdgeInsets.only(top: 2),
                                           child: Text(
-                                            remaining <= 0
-                                                ? 'Habis'
-                                                : 'Sisa $remaining',
+                                            'Habis',
                                             style: const TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w800,
                                               color: Colors.black38,
+                                            ),
+                                          ),
+                                        )
+                                      else if (needsQtyAdjustment)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            'Bisa dipilih, qty akan menjadi $maxQtyAfterToggle',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.orange,
                                             ),
                                           ),
                                         )
@@ -480,6 +604,46 @@ class _ProductImage extends StatelessWidget {
         Icons.broken_image_outlined,
         size: 32,
         color: Colors.black45,
+      ),
+    );
+  }
+}
+
+class _QtyAdjustmentNotice extends StatelessWidget {
+  const _QtyAdjustmentNotice({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            size: 18,
+            color: Colors.orange,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
