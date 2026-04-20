@@ -39,7 +39,13 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
       for (final optId in picked) {
         final item = firstWhereOrNull<OptionItem>(g.items, (x) => x.id == optId);
         if (item == null ||
-            vm.availableQtyForOption(item) < qty) {
+            vm.availableQtyForOptionOnProductLine(
+                  product: widget.product,
+                  option: item,
+                  qty: qty,
+                  selected: selected,
+                ) <
+                qty) {
           return false;
         }
       }
@@ -214,13 +220,19 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                       ...g.items.map((it) {
                         final picked = selected[g.id] ?? {};
                         final checked = picked.contains(it.id);
-                        final remaining = vm.availableQtyForOption(it);
+                        final remaining =
+                            vm.availableQtyForOptionOnProductLine(
+                          product: widget.product,
+                          option: it,
+                          qty: qty,
+                          selected: selected,
+                        );
                         final tracksOptionStock =
                             !it.alwaysAvailable || it.consumesLinkedStock;
-                        final isOptionOut = tracksOptionStock && remaining <= 0;
+                        final isOptionOut = tracksOptionStock && remaining < qty;
 
                         return InkWell(
-                          onTap: isOptionOut
+                          onTap: isOptionOut && !checked
                               ? null
                               : () {
                                   setState(() {
@@ -280,11 +292,13 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                                         ),
                                       ),
                                       if (isOptionOut)
-                                        const Padding(
-                                          padding: EdgeInsets.only(top: 2),
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2),
                                           child: Text(
-                                            'Habis',
-                                            style: TextStyle(
+                                            remaining <= 0
+                                                ? 'Habis'
+                                                : 'Sisa $remaining',
+                                            style: const TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w800,
                                               color: Colors.black38,

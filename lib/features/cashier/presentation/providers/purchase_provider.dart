@@ -494,6 +494,60 @@ class PurchaseProvider extends ChangeNotifier {
     return remaining < 0 ? 0 : remaining;
   }
 
+  int availableQtyForOptionOnProductLine({
+    required Product product,
+    required OptionItem option,
+    required int qty,
+    required Map<int, Set<int>> selected,
+    CartItem? excludingItem,
+  }) {
+    if (option.stockType == 'linked' && option.recipes.isNotEmpty) {
+      final usage = _rawUsage(excludingItem: excludingItem);
+
+      void reserveRecipes(List<StockRecipe> recipes) {
+        for (final recipe in recipes) {
+          if (recipe.stockId <= 0 || recipe.quantityUsed <= 0) continue;
+          usage[recipe.stockId] =
+              (usage[recipe.stockId] ?? 0) + (recipe.quantityUsed * qty);
+        }
+      }
+
+      if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
+        reserveRecipes(product.recipes);
+      }
+
+      for (final group in product.optionGroups) {
+        final picked = selected[group.id] ?? <int>{};
+        final sameSingleChoiceGroup =
+            !group.multiple && group.items.any((item) => item.id == option.id);
+        if (sameSingleChoiceGroup) continue;
+
+        for (final selectedOption in group.items) {
+          if (selectedOption.id == option.id) continue;
+          if (!picked.contains(selectedOption.id)) continue;
+          if (selectedOption.stockType != 'linked' ||
+              selectedOption.recipes.isEmpty) {
+            continue;
+          }
+          reserveRecipes(selectedOption.recipes);
+        }
+      }
+
+      var maxQty = 999999;
+      for (final recipe in option.recipes) {
+        if (recipe.stockId <= 0 || recipe.quantityUsed <= 0) continue;
+        final remaining =
+            recipe.availableQuantity - (usage[recipe.stockId] ?? 0);
+        final portions = (remaining / recipe.quantityUsed).floor();
+        if (portions < maxQty) maxQty = portions;
+      }
+
+      return maxQty < 0 ? 0 : maxQty;
+    }
+
+    return availableQtyForOption(option, excludingItem: excludingItem);
+  }
+
   int maxAddableQtyWithOptions({
     required Product product,
     required Map<int, Set<int>> selected,
