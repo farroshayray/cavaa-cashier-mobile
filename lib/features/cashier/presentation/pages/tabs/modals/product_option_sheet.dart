@@ -79,7 +79,8 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
     final vm = context.watch<PurchaseProvider>();
     final maxQty = _maxSelectableQty(vm);
     final canSave = _isValid(vm);
-    final productRemaining = widget.product.alwaysAvailable
+    final productRemaining =
+        widget.product.alwaysAvailable && !widget.product.consumesLinkedStock
         ? null
         : vm.availableQtyForProduct(widget.product);
 
@@ -214,8 +215,9 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                         final picked = selected[g.id] ?? {};
                         final checked = picked.contains(it.id);
                         final remaining = vm.availableQtyForOption(it);
-                        final isOptionOut =
-                            !it.alwaysAvailable && remaining <= 0;
+                        final tracksOptionStock =
+                            !it.alwaysAvailable || it.consumesLinkedStock;
+                        final isOptionOut = tracksOptionStock && remaining <= 0;
 
                         return InkWell(
                           onTap: isOptionOut
@@ -289,7 +291,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                                             ),
                                           ),
                                         )
-                                      else if (!it.alwaysAvailable && remaining <= 3)
+                                      else if (tracksOptionStock && remaining <= 3)
                                         Padding(
                                           padding: const EdgeInsets.only(top: 2),
                                           child: Text(

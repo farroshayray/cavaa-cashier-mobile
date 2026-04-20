@@ -406,8 +406,8 @@ class PurchaseProvider extends ChangeNotifier {
     for (final item in cart) {
       if (item == excludingItem) continue;
 
-      if (!item.product.alwaysAvailable &&
-          item.product.stockType == 'linked') {
+      if (item.product.stockType == 'linked' &&
+          item.product.recipes.isNotEmpty) {
         addRecipes(item.product.recipes, item.qty);
       }
 
@@ -415,7 +415,7 @@ class PurchaseProvider extends ChangeNotifier {
         final picked = item.selected[group.id] ?? <int>{};
         for (final option in group.items) {
           if (!picked.contains(option.id)) continue;
-          if (option.alwaysAvailable || option.stockType != 'linked') continue;
+          if (option.stockType != 'linked' || option.recipes.isEmpty) continue;
           addRecipes(option.recipes, item.qty);
         }
       }
@@ -426,14 +426,14 @@ class PurchaseProvider extends ChangeNotifier {
         final product = _productById(line.productId);
         if (product == null) continue;
 
-        if (!product.alwaysAvailable && product.stockType == 'linked') {
+        if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
           addRecipes(product.recipes, line.qty);
         }
 
         for (final optionId in line.optionIds) {
           final option = _optionById(product, optionId);
           if (option == null) continue;
-          if (option.alwaysAvailable || option.stockType != 'linked') continue;
+          if (option.stockType != 'linked' || option.recipes.isEmpty) continue;
           addRecipes(option.recipes, line.qty);
         }
       }
@@ -463,13 +463,13 @@ class PurchaseProvider extends ChangeNotifier {
   }
 
   int availableQtyForProduct(Product product, {CartItem? excludingItem}) {
-    if (product.alwaysAvailable) return 999999;
     if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
       return _availableQtyFromRecipes(
         product.recipes,
         excludingItem: excludingItem,
       );
     }
+    if (product.alwaysAvailable) return 999999;
 
     final remaining =
         product.quantityAvailable -
@@ -479,13 +479,13 @@ class PurchaseProvider extends ChangeNotifier {
   }
 
   int availableQtyForOption(OptionItem option, {CartItem? excludingItem}) {
-    if (option.alwaysAvailable) return 999999;
     if (option.stockType == 'linked' && option.recipes.isNotEmpty) {
       return _availableQtyFromRecipes(
         option.recipes,
         excludingItem: excludingItem,
       );
     }
+    if (option.alwaysAvailable) return 999999;
 
     final remaining =
         option.quantityAvailable -
@@ -501,11 +501,11 @@ class PurchaseProvider extends ChangeNotifier {
   }) {
     var maxQty = 999999;
 
-    if (!product.alwaysAvailable) {
-      if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
-        // Linked products are handled together with linked options below,
-        // because they may consume the same raw stock in one cart line.
-      } else {
+    if (product.stockType == 'linked' && product.recipes.isNotEmpty) {
+      // Linked products are handled together with linked options below,
+      // because they may consume the same raw stock in one cart line.
+    } else {
+      if (!product.alwaysAvailable) {
         final available = product.quantityAvailable -
             _qtyOfProduct(product.id, excludingItem: excludingItem) -
             _pendingQtyOfProduct(product.id);
@@ -526,8 +526,7 @@ class PurchaseProvider extends ChangeNotifier {
       }
     }
 
-    if (!product.alwaysAvailable &&
-        product.stockType == 'linked' &&
+    if (product.stockType == 'linked' &&
         product.recipes.isNotEmpty) {
       addRawRecipes(product.recipes);
     }
@@ -539,11 +538,11 @@ class PurchaseProvider extends ChangeNotifier {
               (item) => item?.id == optId,
               orElse: () => null,
             );
-        if (option == null || option.alwaysAvailable) continue;
+        if (option == null) continue;
 
         if (option.stockType == 'linked' && option.recipes.isNotEmpty) {
           addRawRecipes(option.recipes);
-        } else {
+        } else if (!option.alwaysAvailable) {
           final available = option.quantityAvailable -
               _qtyOfOption(option.id, excludingItem: excludingItem) -
               _pendingQtyOfOption(option.id);

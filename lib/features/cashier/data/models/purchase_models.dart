@@ -206,9 +206,13 @@ class Product {
     return true;
   }
 
+  bool get consumesLinkedStock => stockType == 'linked' && recipes.isNotEmpty;
+
   bool get isAvailableForSale {
     if (!isActive) return false;
-    if (!alwaysAvailable && quantityAvailable <= 0) return false;
+    if ((!alwaysAvailable || consumesLinkedStock) && quantityAvailable <= 0) {
+      return false;
+    }
     return hasRequiredOptionsAvailable;
   }
 
@@ -345,7 +349,9 @@ class OptionItem {
     required this.recipes,
   });
 
-  bool get isAvailableForSale => alwaysAvailable || quantityAvailable > 0;
+  bool get consumesLinkedStock => stockType == 'linked' && recipes.isNotEmpty;
+  bool get isAvailableForSale =>
+      (alwaysAvailable && !consumesLinkedStock) || quantityAvailable > 0;
 
   factory OptionItem.fromJson(Map<String, dynamic> json) {
     final stockType = (json['stock_type'] ?? '').toString();
