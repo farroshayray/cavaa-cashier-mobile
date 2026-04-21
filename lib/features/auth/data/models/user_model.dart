@@ -1,3 +1,27 @@
+class WorkScheduleRange {
+  final String start;
+  final String end;
+
+  const WorkScheduleRange({required this.start, required this.end});
+
+  factory WorkScheduleRange.fromJson(Map<String, dynamic> json) {
+    return WorkScheduleRange(
+      start: (json['start'] ?? '').toString(),
+      end: (json['end'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'start': start, 'end': end};
+  }
+
+  bool get isValid => _validTime(start) && _validTime(end) && start != end;
+
+  static bool _validTime(String value) {
+    return RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(value);
+  }
+}
+
 class UserModel {
   final int id;
   final String name;
@@ -8,6 +32,7 @@ class UserModel {
   final bool isActive;
   final bool isActiveAdmin;
   final bool enforceWorkSchedule;
+  final Map<String, List<WorkScheduleRange>> workSchedule;
 
   UserModel({
     required this.id,
@@ -19,6 +44,7 @@ class UserModel {
     this.isActive = true,
     this.isActiveAdmin = true,
     this.enforceWorkSchedule = false,
+    this.workSchedule = const {},
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -35,6 +61,7 @@ class UserModel {
         json['enforce_work_schedule'],
         defaultValue: false,
       ),
+      workSchedule: _parseWorkSchedule(json['work_schedule']),
     );
   }
 
@@ -49,7 +76,40 @@ class UserModel {
       'is_active': isActive,
       'is_active_admin': isActiveAdmin,
       'enforce_work_schedule': enforceWorkSchedule,
+      'work_schedule': workSchedule.map(
+        (day, ranges) =>
+            MapEntry(day, ranges.map((range) => range.toJson()).toList()),
+      ),
     };
+  }
+
+  static Map<String, List<WorkScheduleRange>> _parseWorkSchedule(
+    dynamic value,
+  ) {
+    if (value is! Map) return const {};
+
+    final result = <String, List<WorkScheduleRange>>{};
+
+    for (final entry in value.entries) {
+      final day = entry.key.toString();
+      final rawRanges = entry.value;
+      if (rawRanges is! List) continue;
+
+      final ranges = rawRanges
+          .whereType<Map>()
+          .map(
+            (range) =>
+                WorkScheduleRange.fromJson(Map<String, dynamic>.from(range)),
+          )
+          .where((range) => range.isValid)
+          .toList();
+
+      if (ranges.isNotEmpty) {
+        result[day] = ranges;
+      }
+    }
+
+    return result;
   }
 
   static bool _parseBool(dynamic value, {required bool defaultValue}) {

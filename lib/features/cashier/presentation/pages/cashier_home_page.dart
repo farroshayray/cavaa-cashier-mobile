@@ -31,6 +31,7 @@ import 'tabs/done_tab.dart' as done_tab;
 
 import '/features/cashier/presentation/pages/printer/printer_settings_page.dart';
 import '/features/cashier/presentation/pages/reports/reports_page.dart';
+import '/features/cashier/presentation/pages/work_schedule_profile_page.dart';
 import '/core/services/connectivity_status_provider.dart';
 
 class CashierHomePage extends StatefulWidget {
@@ -40,12 +41,15 @@ class CashierHomePage extends StatefulWidget {
   State<CashierHomePage> createState() => _CashierHomePageState();
 }
 
-class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingObserver {
+class _CashierHomePageState extends State<CashierHomePage>
+    with WidgetsBindingObserver {
   // ===== Realtime =====
   final _pusherSvc = PusherOrdersService(SecureStorageService());
   bool _pusherStarted = false;
   final InAppApkUpdater _apkUpdater = InAppApkUpdater();
-  final ValueNotifier<double> _updateProgressNotifier = ValueNotifier<double>(0);
+  final ValueNotifier<double> _updateProgressNotifier = ValueNotifier<double>(
+    0,
+  );
 
   bool _isDownloadingUpdate = false;
   bool _activeUpdateIsForce = false;
@@ -80,8 +84,8 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     _listenFcmEvents();
 
     Future.microtask(() async {
-      final pendingTap =
-          await PushNotificationService.instance.consumePendingNotificationTap();
+      final pendingTap = await PushNotificationService.instance
+          .consumePendingNotificationTap();
 
       if (pendingTap != null && mounted) {
         await context.read<NotificationsProvider>().pushFromFcm(pendingTap);
@@ -95,8 +99,8 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     });
 
     Future.microtask(() async {
-      final pending =
-          await PushNotificationService.instance.consumePendingForceLogout();
+      final pending = await PushNotificationService.instance
+          .consumePendingForceLogout();
       if (pending != null && mounted) {
         await _handleForceLogout(pending);
       }
@@ -129,8 +133,8 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       });
 
       Future.microtask(() async {
-        final pending =
-            await PushNotificationService.instance.consumePendingForceLogout();
+        final pending = await PushNotificationService.instance
+            .consumePendingForceLogout();
         if (pending != null && mounted) {
           await _handleForceLogout(pending);
         }
@@ -151,11 +155,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
         payVm.setQuery('');
         procVm.setQuery('');
 
-        await Future.wait([
-          payVm.load(),
-          procVm.load(),
-          doneVm.load(),
-        ]);
+        await Future.wait([payVm.load(), procVm.load(), doneVm.load()]);
       } catch (e) {
         debugPrint('❌ refresh after resume failed: $e');
       }
@@ -179,7 +179,6 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       ]);
     };
   }
-
 
   @override
   void didChangeDependencies() {
@@ -298,9 +297,9 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       _activeUpdateIsForce = false;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Download update dibatalkan')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Download update dibatalkan')));
   }
 
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
@@ -314,11 +313,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     procVm.setQuery('');
     doneVm.setQuery('');
 
-    await Future.wait([
-      payVm.load(),
-      procVm.load(),
-      doneVm.load(),
-    ]);
+    await Future.wait([payVm.load(), procVm.load(), doneVm.load()]);
 
     final inPayment = payVm.items.any((e) => _toId(e['id']) == orderId);
     if (inPayment) return 1;
@@ -354,7 +349,6 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     super.dispose();
   }
 
-
   void _onTap(int i) => setState(() => _index = i);
 
   Future<void> _logout() async {
@@ -377,9 +371,9 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
     if (orderId == null || orderId <= 0) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ID order tidak valid')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ID order tidak valid')));
       return;
     }
 
@@ -395,7 +389,9 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
     if (targetIndex == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Order #$orderId tidak ditemukan di tab mana pun')),
+        SnackBar(
+          content: Text('Order #$orderId tidak ditemukan di tab mana pun'),
+        ),
       );
       return;
     }
@@ -557,7 +553,8 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     if (data == null) return;
 
     final title = (data['title'] ?? 'Update Available').toString();
-    final message = (data['message'] ?? 'A new version is available.').toString();
+    final message = (data['message'] ?? 'A new version is available.')
+        .toString();
     final storeUrl = (data['store_url'] ?? '').toString();
     final force = data['force_update'] == true;
 
@@ -587,46 +584,48 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
   }
 
   void _listenFcmEvents() {
-    _fcmMessageSub = PushNotificationService.instance.onMessageReceived.listen(
-      (data) async {
-        // debugPrint('🔔 FCM received event: $data');
+    _fcmMessageSub = PushNotificationService.instance.onMessageReceived.listen((
+      data,
+    ) async {
+      // debugPrint('🔔 FCM received event: $data');
 
-        final type = (data['type'] ?? '').toString();
+      final type = (data['type'] ?? '').toString();
 
-        if (type == 'force_logout') {
-          await _handleForceLogout(data);
-          return;
-        }
+      if (type == 'force_logout') {
+        await _handleForceLogout(data);
+        return;
+      }
 
-        await context.read<NotificationsProvider>().pushFromFcm(data);
-        _refreshTabByRealtimeData(data);
-      },
-    );
+      await context.read<NotificationsProvider>().pushFromFcm(data);
+      _refreshTabByRealtimeData(data);
+    });
 
-    _fcmTapSub = PushNotificationService.instance.onMessageTapped.listen(
-      (data) async {
-        // debugPrint('👉 FCM tapped event: $data');
+    _fcmTapSub = PushNotificationService.instance.onMessageTapped.listen((
+      data,
+    ) async {
+      // debugPrint('👉 FCM tapped event: $data');
 
-        final type = (data['type'] ?? '').toString();
+      final type = (data['type'] ?? '').toString();
 
-        if (type == 'force_logout') {
-          await _handleForceLogout(data);
-          return;
-        }
+      if (type == 'force_logout') {
+        await _handleForceLogout(data);
+        return;
+      }
 
-        await context.read<NotificationsProvider>().pushFromFcm(data);
-        await _handleFcmTap(data);
-      },
-    );
+      await context.read<NotificationsProvider>().pushFromFcm(data);
+      await _handleFcmTap(data);
+    });
   }
 
   void _openBarcode() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sementara anda belum dapat menggunakan fitur ini...')),
+      const SnackBar(
+        content: Text('Sementara anda belum dapat menggunakan fitur ini...'),
+      ),
     );
   }
 
-    void _debouncedReloadPayment() {
+  void _debouncedReloadPayment() {
     _paymentReloadDebounce?.cancel();
     _paymentReloadDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
@@ -660,13 +659,14 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
         .toString()
         .toUpperCase();
 
-    final source = (data['source'] ??
-            data['from'] ??
-            data['payment_method'] ??
-            data['order_source'] ??
-            '')
-        .toString()
-        .toUpperCase();
+    final source =
+        (data['source'] ??
+                data['from'] ??
+                data['payment_method'] ??
+                data['order_source'] ??
+                '')
+            .toString()
+            .toUpperCase();
 
     // debugPrint('REALTIME status=$status source=$source');
 
@@ -742,9 +742,9 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
     if (orderId == null || orderId <= 0) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ID order tidak valid')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ID order tidak valid')));
       return;
     }
 
@@ -754,7 +754,9 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
     if (targetIndex == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Order #$orderId tidak ditemukan di tab mana pun')),
+        SnackBar(
+          content: Text('Order #$orderId tidak ditemukan di tab mana pun'),
+        ),
       );
       return;
     }
@@ -788,7 +790,8 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
 
       // ✅ kalau suatu saat notif berubah jadi Map
       if (n is Map) {
-        final v = n['id'] ?? n['orderId'] ?? n['order_id'] ?? n['booking_order_id'];
+        final v =
+            n['id'] ?? n['orderId'] ?? n['order_id'] ?? n['booking_order_id'];
         if (v == null) return null;
         if (v is int) return v;
         return int.tryParse(v.toString());
@@ -804,11 +807,11 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     }
   }
 
-
   // ======= BACK PRESS double-tap exit =======
   Future<void> _handleBack() async {
     final now = DateTime.now();
-    if (_lastBackPressed == null || now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
+    if (_lastBackPressed == null ||
+        now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
       _lastBackPressed = now;
 
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -828,7 +831,7 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
     final auth = context.watch<AuthProvider>();
     final appUpdateData = auth.appUpdate;
     final hasAppUpdate = appUpdateData?['update_available'] == true;
-    
+
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
     final shortestSide = media.size.shortestSide;
@@ -870,10 +873,17 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
       },
       child: Scaffold(
         drawer: _AppDrawer(
-          onOpenReports: () {
+          onOpenProfile: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ReportsPage()),
+              MaterialPageRoute(
+                builder: (_) => const WorkScheduleProfilePage(),
+              ),
             );
+          },
+          onOpenReports: () {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ReportsPage()));
           },
           onOpenPrinterSettings: () {
             Navigator.of(context).push(
@@ -930,74 +940,72 @@ class _CashierHomePageState extends State<CashierHomePage> with WidgetsBindingOb
           actions: [
             const OnlineStatusChip(),
             const PrinterStatusDot(),
-            NotifBellButton(
-              onTapItem: _handleNotifTap,
-            ),
+            NotifBellButton(onTapItem: _handleNotifTap),
           ],
         ),
         body: useSideNav
-          ? Row(
-              children: [
-                _SideNav(
-                  currentIndex: _index,
-                  onTap: _onTap,
-                  onBarcodeTap: _openBarcode,
-                  iconOnly: true,
-                  paymentCount: paymentCount,
-                  processCount: processCount,
-                  doneCount: doneCount,
-                ),
-                Expanded(child: content),
-              ],
-            )
-          : content,
+            ? Row(
+                children: [
+                  _SideNav(
+                    currentIndex: _index,
+                    onTap: _onTap,
+                    onBarcodeTap: _openBarcode,
+                    iconOnly: true,
+                    paymentCount: paymentCount,
+                    processCount: processCount,
+                    doneCount: doneCount,
+                  ),
+                  Expanded(child: content),
+                ],
+              )
+            : content,
         bottomNavigationBar: useSideNav
-          ? null
-          : BottomAppBar(
-              shape: const CircularNotchedRectangle(),
-              notchMargin: 8,
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Row(
-                    children: [
-                      _NavItem(
-                        icon: Icons.shopping_cart_outlined,
-                        label: 'Pembelian',
-                        active: _index == 0,
-                        onTap: () => _onTap(0),
-                      ),
-                      _NavItem(
-                        icon: Icons.payments_outlined,
-                        label: 'Pembayaran',
-                        active: _index == 1,
-                        onTap: () => _onTap(1),
-                        badge: paymentCount,
-                      ),
-                      // _BarcodeNavItem(
-                      //   active: false,
-                      //   onTap: _openBarcode,
-                      // ),
-                      _NavItem(
-                        icon: Icons.sync_rounded,
-                        label: 'Proses',
-                        active: _index == 2,
-                        onTap: () => _onTap(2),
-                        badge: processCount,
-                      ),
-                      _NavItem(
-                        icon: Icons.check_circle_outline_rounded,
-                        label: 'Selesai',
-                        active: _index == 3,
-                        onTap: () => _onTap(3),
-                        badge: doneCount,
-                      ),
-                    ],
+            ? null
+            : BottomAppBar(
+                shape: const CircularNotchedRectangle(),
+                notchMargin: 8,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      children: [
+                        _NavItem(
+                          icon: Icons.shopping_cart_outlined,
+                          label: 'Pembelian',
+                          active: _index == 0,
+                          onTap: () => _onTap(0),
+                        ),
+                        _NavItem(
+                          icon: Icons.payments_outlined,
+                          label: 'Pembayaran',
+                          active: _index == 1,
+                          onTap: () => _onTap(1),
+                          badge: paymentCount,
+                        ),
+                        // _BarcodeNavItem(
+                        //   active: false,
+                        //   onTap: _openBarcode,
+                        // ),
+                        _NavItem(
+                          icon: Icons.sync_rounded,
+                          label: 'Proses',
+                          active: _index == 2,
+                          onTap: () => _onTap(2),
+                          badge: processCount,
+                        ),
+                        _NavItem(
+                          icon: Icons.check_circle_outline_rounded,
+                          label: 'Selesai',
+                          active: _index == 3,
+                          onTap: () => _onTap(3),
+                          badge: doneCount,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
       ),
     );
   }
@@ -1032,9 +1040,7 @@ class _SideNav extends StatelessWidget {
     final shortestSide = media.size.shortestSide;
     final isTablet = shortestSide >= 600;
 
-    final baseWidth = iconOnly
-        ? (isTablet ? 72.0 : 90.0)
-        : 96.0;
+    final baseWidth = iconOnly ? (isTablet ? 72.0 : 90.0) : 96.0;
 
     final navWidth = baseWidth + leftInset.clamp(0.0, 24.0);
 
@@ -1154,10 +1160,7 @@ class _SideNavItem extends StatelessWidget {
     final bg = active ? brand.withOpacity(0.10) : Colors.transparent;
 
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: iconOnly ? 8 : 8,
-        vertical: 4,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: iconOnly ? 8 : 8, vertical: 4),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
@@ -1177,17 +1180,16 @@ class _SideNavItem extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(
-                    icon,
-                    color: color,
-                    size: iconOnly ? 22 : 24,
-                  ),
+                  Icon(icon, color: color, size: iconOnly ? 22 : 24),
                   if (badge != null && badge! > 0)
                     Positioned(
                       right: -8,
                       top: -6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: brand,
                           borderRadius: BorderRadius.circular(999),
@@ -1247,7 +1249,9 @@ class PrinterStatusDot extends StatelessWidget {
         return IconButton(
           tooltip: !hasDefault
               ? 'Default printer belum dipilih'
-              : (pm.isReady ? 'Printer siap' : (pm.connMessage ?? 'Printer belum connect')),
+              : (pm.isReady
+                    ? 'Printer siap'
+                    : (pm.connMessage ?? 'Printer belum connect')),
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
@@ -1413,10 +1417,7 @@ class _NavItem extends StatelessWidget {
 }
 
 class _BarcodeNavItem extends StatelessWidget {
-  const _BarcodeNavItem({
-    required this.onTap,
-    this.active = false,
-  });
+  const _BarcodeNavItem({required this.onTap, this.active = false});
 
   final VoidCallback onTap;
   final bool active;
@@ -1458,6 +1459,7 @@ class _BarcodeNavItem extends StatelessWidget {
 
 class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
+    required this.onOpenProfile,
     required this.onOpenReports,
     required this.onOpenPrinterSettings,
     required this.onLogout,
@@ -1465,6 +1467,7 @@ class _AppDrawer extends StatelessWidget {
     this.onTapUpdate,
   });
 
+  final VoidCallback onOpenProfile;
   final VoidCallback onOpenReports;
   final VoidCallback onOpenPrinterSettings;
   final VoidCallback onLogout;
@@ -1506,37 +1509,64 @@ class _AppDrawer extends StatelessWidget {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _UserAvatar(imageUrl: imageUrl),
-                        const SizedBox(height: 12),
-                        Text(
-                          fullName,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                  InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onOpenProfile();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _UserAvatar(imageUrl: imageUrl),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      fullName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 1),
+                                    Text(
+                                      userName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: Colors.black45,
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          userName,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.black,
+                          const SizedBox(height: 7),
+                          const Text(
+                            'Cashier Account',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.black54,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 7),
-                        const Text(
-                          'Cashier Account',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   const Divider(),
@@ -1624,11 +1654,7 @@ class _UserAvatar extends StatelessWidget {
       return const CircleAvatar(
         radius: 24,
         backgroundColor: brand,
-        child: Icon(
-          Icons.person,
-          color: Colors.white,
-          size: 28,
-        ),
+        child: Icon(Icons.person, color: Colors.white, size: 28),
       );
     }
 
@@ -1646,11 +1672,7 @@ class _UserAvatar extends StatelessWidget {
               width: 48,
               height: 48,
               color: brand,
-              child: const Icon(
-                Icons.person,
-                color: Colors.white,
-                size: 28,
-              ),
+              child: const Icon(Icons.person, color: Colors.white, size: 28),
             );
           },
           loadingBuilder: (context, child, loadingProgress) {
@@ -1694,10 +1716,7 @@ class _AppVersionText extends StatelessWidget {
           child: Text(
             'Version $version ($build)',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
           ),
         );
       },
