@@ -1,13 +1,13 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
-import 'package:http/http.dart' as http;
+import '/core/network/dio_client.dart';
 import '/core/config/env.dart';
-import '/core/storage/secure_storage_service.dart';
 
 class PusherOrdersService {
-  PusherOrdersService(this.storage);
+  PusherOrdersService(this.client);
 
-  final SecureStorageService storage;
+  final DioClient client;
   final PusherChannelsFlutter _pusher = PusherChannelsFlutter.getInstance();
 
   bool _started = false;
@@ -19,7 +19,7 @@ class PusherOrdersService {
     if (_started) return;
     _started = true;
 
-    final token = await storage.getToken();
+    final token = await client.storage.getToken();
     if (token == null || token.trim().isEmpty) {
       _started = false;
       throw Exception('Token kosong');
@@ -42,28 +42,25 @@ class PusherOrdersService {
       onAuthorizer: (channelName, socketId, options) async {
         // print('AUTH REQUEST: $channelName socket=$socketId');
 
-        final url = Uri.parse('${Env.baseUrl}/api/v1/mobile/cashier/broadcasting/auth');
-
-        final resp = await http.post(
-          url,
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': 'Bearer $token',
-          },
-          body: {
-            'socket_id': socketId,
-            'channel_name': channelName,
-          },
+        final resp = await client.dio.post(
+          '/api/v1/mobile/cashier/broadcasting/auth',
+          data: {'socket_id': socketId, 'channel_name': channelName},
+          options: Options(contentType: Headers.formUrlEncodedContentType),
         );
 
-        // print('AUTH RESPONSE ${resp.statusCode}: ${resp.body}');
+        // print('AUTH RESPONSE ${resp.statusCode}: ${resp.data}');
 
-        if (resp.statusCode < 200 || resp.statusCode >= 300) {
-          throw Exception('Auth failed ${resp.statusCode}: ${resp.body}');
+        final statusCode = resp.statusCode ?? 0;
+        if (statusCode < 200 || statusCode >= 300) {
+          throw Exception('Auth failed $statusCode: ${resp.data}');
         }
 
-        return jsonDecode(resp.body);
+        final data = resp.data;
+        if (data is Map<String, dynamic>) return data;
+        if (data is Map) return Map<String, dynamic>.from(data);
+        if (data is String) return jsonDecode(data);
+
+        throw Exception('Auth response tidak valid: $data');
       },
 
       // 📡 SUBSCRIBE DEBUG

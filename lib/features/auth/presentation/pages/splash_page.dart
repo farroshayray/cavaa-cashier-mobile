@@ -11,12 +11,10 @@ import 'login_page.dart';
 
 import '/core/network/version_api.dart';
 import '/core/network/dio_client.dart';
+import '/core/services/app_update_provider.dart';
 import '/core/services/in_app_apk_updater.dart';
 
-enum UpdateAction {
-  later,
-  update,
-}
+enum UpdateAction { later, update }
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -29,9 +27,7 @@ class _SplashPageState extends State<SplashPage> {
   final InAppApkUpdater _apkUpdater = InAppApkUpdater();
   final ValueNotifier<double> _progressNotifier = ValueNotifier<double>(0);
 
-  bool _isDownloadingUpdate = false;
   bool _activeUpdateIsForce = false;
-  double _downloadProgress = 0;
 
   @override
   void initState() {
@@ -46,6 +42,8 @@ class _SplashPageState extends State<SplashPage> {
   }
 
   Future<void> _boot() async {
+    final auth = context.read<AuthProvider>();
+
     try {
       final dioClient = context.read<DioClient>();
       final versionApi = VersionApi(dioClient);
@@ -66,14 +64,15 @@ class _SplashPageState extends State<SplashPage> {
         versionCode: versionCode,
         versionName: versionName,
       );
+      if (mounted) {
+        context.read<AppUpdateProvider>().setUpdate(versionData);
+      }
 
       if (!mounted) return;
 
       final forceUpdate = versionData['force_update'] == true;
       final updateAvailable = versionData['update_available'] == true;
       final storeUrl = (versionData['store_url'] ?? '').toString();
-
-      
 
       if (updateAvailable && !forceUpdate) {
         final action = await _showOptionalUpdateDialog(versionData);
@@ -94,16 +93,14 @@ class _SplashPageState extends State<SplashPage> {
       debugPrint('version check failed: $e');
     }
 
-    final auth = context.read<AuthProvider>();
     await auth.bootstrap();
 
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => auth.isLoggedIn
-            ? const CashierHomePage()
-            : const LoginPage(),
+        builder: (_) =>
+            auth.isLoggedIn ? const CashierHomePage() : const LoginPage(),
       ),
     );
   }
@@ -159,13 +156,12 @@ class _SplashPageState extends State<SplashPage> {
     if (!mounted) return;
 
     setState(() {
-      _isDownloadingUpdate = false;
       _activeUpdateIsForce = false;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Download update dibatalkan')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Download update dibatalkan')));
   }
 
   Future<void> _startApkUpdate(String apkUrl, {required bool force}) async {
@@ -180,9 +176,7 @@ class _SplashPageState extends State<SplashPage> {
     try {
       if (mounted) {
         setState(() {
-          _isDownloadingUpdate = true;
           _activeUpdateIsForce = force;
-          _downloadProgress = 0;
         });
       }
 
@@ -197,9 +191,6 @@ class _SplashPageState extends State<SplashPage> {
 
           if (total > 0) {
             final progress = received / total;
-            setState(() {
-              _downloadProgress = progress;
-            });
             _progressNotifier.value = progress;
           } else {
             _progressNotifier.value = -1;
@@ -251,17 +242,18 @@ class _SplashPageState extends State<SplashPage> {
     } finally {
       if (mounted) {
         setState(() {
-          _isDownloadingUpdate = false;
           _activeUpdateIsForce = false;
         });
       }
     }
   }
 
-  Future<UpdateAction?> _showForceUpdateDialog(Map<String, dynamic> data) async {
+  Future<UpdateAction?> _showForceUpdateDialog(
+    Map<String, dynamic> data,
+  ) async {
     final title = (data['title'] ?? 'Update Required').toString();
-    final message =
-        (data['message'] ?? 'Please update the app to continue.').toString();
+    final message = (data['message'] ?? 'Please update the app to continue.')
+        .toString();
 
     return showDialog<UpdateAction>(
       context: context,
@@ -285,7 +277,8 @@ class _SplashPageState extends State<SplashPage> {
     Map<String, dynamic> data,
   ) async {
     final title = (data['title'] ?? 'Update Available').toString();
-    final message = (data['message'] ?? 'A new version is available.').toString();
+    final message = (data['message'] ?? 'A new version is available.')
+        .toString();
 
     return showDialog<UpdateAction>(
       context: context,
@@ -312,8 +305,6 @@ class _SplashPageState extends State<SplashPage> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }

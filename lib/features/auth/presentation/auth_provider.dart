@@ -13,6 +13,8 @@ class AuthProvider extends ChangeNotifier {
   bool isLoggedIn = false;
   UserModel? user;
   Map<String, dynamic>? appUpdate;
+  Map<String, List<WorkScheduleRange>>? blockedWorkSchedule;
+  String? blockedWorkScheduleSummary;
 
   Future<void> bootstrap() async {
     final hasToken = await repo.hasToken();
@@ -36,8 +38,39 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await fetchMe();
+    } on DioException catch (e) {
+      debugPrint('bootstrap fetchMe dio failed: $e');
+
+      final data = e.response?.data;
+      final shouldLogoutWithMessage =
+          e.response?.statusCode == 403 &&
+          data is Map &&
+          data['message'] != null;
+
+      if (e.response?.statusCode == 401 || shouldLogoutWithMessage) {
+        errorMessage = shouldLogoutWithMessage
+            ? _messageFromErrorData(data)
+            : null;
+        await repo.logout();
+        isLoggedIn = false;
+        user = null;
+        appUpdate = null;
+        notifyListeners();
+        return;
+      }
+
+      if (cachedUser != null) {
+        user = cachedUser;
+        isLoggedIn = true;
+      } else {
+        isLoggedIn = true;
+      }
+
+      notifyListeners();
     } catch (e) {
-      debugPrint('bootstrap fetchMe failed, keep logged in with cached token: $e');
+      debugPrint(
+        'bootstrap fetchMe failed, keep logged in with cached token: $e',
+      );
 
       if (cachedUser != null) {
         user = cachedUser;
@@ -58,6 +91,8 @@ class AuthProvider extends ChangeNotifier {
     try {
       isLoading = true;
       errorMessage = null;
+      blockedWorkSchedule = null;
+      blockedWorkScheduleSummary = null;
       notifyListeners();
 
       await repo.login(username, password, rememberMe: rememberMe);
@@ -76,7 +111,15 @@ class AuthProvider extends ChangeNotifier {
 
       final data = e.response?.data;
       if (data is Map && data['message'] != null) {
-        errorMessage = data['message'].toString();
+        errorMessage = _messageFromErrorData(data);
+        if (data['code']?.toString() == 'outside_work_schedule') {
+          blockedWorkSchedule = UserModel.parseWorkSchedule(
+            data['work_schedule'],
+          );
+          blockedWorkScheduleSummary = data['work_schedule_summary']
+              ?.toString()
+              .trim();
+        }
       } else {
         errorMessage = 'Login gagal';
       }
@@ -112,5 +155,14 @@ class AuthProvider extends ChangeNotifier {
     appUpdate = null;
     isLoggedIn = false;
     notifyListeners();
+  }
+
+  String _messageFromErrorData(Map<dynamic, dynamic> data) {
+    final message = data['message']?.toString() ?? 'Login gagal';
+    final reason = data['deactivation_reason']?.toString().trim();
+
+    return reason != null && reason.isNotEmpty
+        ? '$message\nAlasan: $reason'
+        : message;
   }
 }

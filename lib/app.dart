@@ -35,6 +35,8 @@ import 'features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import '/features/cashier/data/local/db/sync/local_reconciliation_service.dart';
+import 'core/services/app_update_provider.dart';
+import '/core/services/push_notification_service.dart';
 
 class CavaaApp extends StatefulWidget {
   const CavaaApp({super.key});
@@ -49,6 +51,7 @@ class _CavaaAppState extends State<CavaaApp> {
 
   late final SecureStorageService storage;
   late final DioClient dioClient;
+  late final AppUpdateProvider appUpdateProvider;
   late final CashierDb cashierDb;
 
   late final AuthApi authApi;
@@ -71,7 +74,9 @@ class _CavaaAppState extends State<CavaaApp> {
     super.initState();
 
     storage = SecureStorageService();
-    dioClient = DioClient(storage);
+    appUpdateProvider = AppUpdateProvider();
+    dioClient = DioClient(storage, appUpdateProvider: appUpdateProvider);
+    PushNotificationService.instance.configure(dioClient: dioClient);
     cashierDb = CashierDb();
     localOrdersDao = LocalOrdersDao(cashierDb);
     cachedPaymentOrdersDao = CachedPaymentOrdersDao(cashierDb);
@@ -89,10 +94,7 @@ class _CavaaAppState extends State<CavaaApp> {
     authRepo = AuthRepository(api: authApi, storage: storage);
 
     purchaseApi = PurchaseApi(dioClient.dio);
-    purchaseRepo = PurchaseRepository(
-      api: purchaseApi,
-      db: cashierDb,
-    );
+    purchaseRepo = PurchaseRepository(api: purchaseApi, db: cashierDb);
 
     ordersApi = OrdersApi(dioClient.dio);
     ordersRepo = OrdersRepository(api: ordersApi);
@@ -103,21 +105,20 @@ class _CavaaAppState extends State<CavaaApp> {
       if (initial != null) _handleUri(initial);
     }();
 
-    _sub = _appLinks.uriLinkStream.listen(
-      (uri) {
-        if (uri != null) _handleUri(uri);
-      },
-      onError: (e) {},
-    );
+    _sub = _appLinks.uriLinkStream.listen((uri) {
+      _handleUri(uri);
+    }, onError: (e) {});
   }
 
   Future<void> _refreshAfterPayment(BuildContext ctx) async {
     try {
-      await ctx.read<PaymentProvider>().load();
+      final paymentProvider = ctx.read<PaymentProvider>();
+      final processProvider = ctx.read<ProcessProvider>();
+
+      await paymentProvider.load();
 
       // coba langsung
-      await ctx.read<ProcessProvider>().load();
-
+      await processProvider.load();
     } catch (e) {
       debugPrint('❌ refresh after payment failed: $e');
     }
@@ -152,10 +153,12 @@ class _CavaaAppState extends State<CavaaApp> {
 
   @override
   Widget build(BuildContext context) {
-
     return MultiProvider(
       providers: [
         Provider<DioClient>.value(value: dioClient),
+        ChangeNotifierProvider<AppUpdateProvider>.value(
+          value: appUpdateProvider,
+        ),
         ChangeNotifierProvider(
           create: (_) => ConnectivityStatusProvider()..init(),
         ),
@@ -213,7 +216,8 @@ class _CavaaAppState extends State<CavaaApp> {
           ),
         ),
         ChangeNotifierProvider(
-          create: (_) => PrinterManager(PrinterPrefs())..init(autoConnect: true),
+          create: (_) =>
+              PrinterManager(PrinterPrefs())..init(autoConnect: true),
         ),
       ],
       child: MaterialApp(

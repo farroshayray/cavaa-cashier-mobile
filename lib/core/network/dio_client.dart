@@ -1,17 +1,23 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/env.dart';
 import '../config/app_config.dart';
 import '../storage/secure_storage_service.dart';
 import '../navigation/app_navigator.dart';
+import '../services/app_update_provider.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+
+const _forcedLogoutMessageKey = 'forced_logout_message';
 
 class DioClient {
   final Dio dio;
   final SecureStorageService storage;
+  final AppUpdateProvider? appUpdateProvider;
 
   bool _isHandlingUnauthorized = false;
 
@@ -20,17 +26,15 @@ class DioClient {
   String? _versionName;
   bool _appInfoLoaded = false;
 
-  DioClient(this.storage)
-      : dio = Dio(
-          BaseOptions(
-            baseUrl: Env.baseUrl,
-            connectTimeout: AppConfig.connectTimeout,
-            receiveTimeout: AppConfig.receiveTimeout,
-            headers: {
-              'Accept': 'application/json',
-            },
-          ),
-        ) {
+  DioClient(this.storage, {this.appUpdateProvider})
+    : dio = Dio(
+        BaseOptions(
+          baseUrl: Env.baseUrl,
+          connectTimeout: AppConfig.connectTimeout,
+          receiveTimeout: AppConfig.receiveTimeout,
+          headers: {'Accept': 'application/json'},
+        ),
+      ) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -63,6 +67,7 @@ class DioClient {
           handler.next(options);
         },
         onResponse: (response, handler) {
+          _captureAppUpdate(response);
           // debugPrint('✅ [RES] ${response.requestOptions.path}');
           // debugPrint('✅ [RES DATA] ${response.data}');
           handler.next(response);
@@ -70,8 +75,9 @@ class DioClient {
         onError: (e, handler) async {
           final path = e.requestOptions.path;
           final isLogin = path.contains('/api/v1/mobile/cashier/login');
-          final isVersionCheck =
-              path.contains('/api/v1/mobile/cashier/version-check');
+          final isVersionCheck = path.contains(
+            '/api/v1/mobile/cashier/version-check',
+          );
           final statusCode = e.response?.statusCode;
 
           debugPrint('❌ DIO ERROR path=$path status=$statusCode');
@@ -80,11 +86,31 @@ class DioClient {
             return handler.next(e);
           }
 
-          if (statusCode == 401 && !_isHandlingUnauthorized) {
+          final data = e.response?.data;
+          final isInactiveAccount =
+              statusCode == 403 &&
+              data is Map &&
+              data['code']?.toString() == 'account_inactive';
+          final forcedLogoutMessage = data is Map
+              ? _buildForcedLogoutMessage(data)
+              : null;
+          final shouldShowForcedLogoutMessage =
+              isInactiveAccount ||
+              (statusCode == 403 &&
+                  forcedLogoutMessage != null &&
+                  forcedLogoutMessage.isNotEmpty);
+
+          if ((statusCode == 401 || shouldShowForcedLogoutMessage) &&
+              !_isHandlingUnauthorized) {
             _isHandlingUnauthorized = true;
 
             try {
               debugPrint('🚨 401 detected -> force logout');
+
+              if (shouldShowForcedLogoutMessage &&
+                  forcedLogoutMessage != null) {
+                await _saveForcedLogoutMessage(forcedLogoutMessage);
+              }
 
               await storage.deleteToken();
               await storage.deleteCachedUser();
@@ -94,7 +120,13 @@ class DioClient {
               if (nav != null) {
                 Future.microtask(() {
                   nav.pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    MaterialPageRoute(
+                      builder: (_) => LoginPage(
+                        initialErrorMessage: shouldShowForcedLogoutMessage
+                            ? forcedLogoutMessage
+                            : null,
+                      ),
+                    ),
                     (_) => false,
                   );
                 });
@@ -147,4 +179,43 @@ class DioClient {
   String? get platform => _platform;
   int? get versionCode => _versionCode;
   String? get versionName => _versionName;
+
+  void _captureAppUpdate(Response response) {
+    final provider = appUpdateProvider;
+    if (provider == null) return;
+
+    final headerValue = response.headers.value('x-app-update');
+    if (headerValue == null || headerValue.trim().isEmpty) return;
+
+    try {
+      final decoded = utf8.decode(base64Decode(headerValue.trim()));
+      final data = jsonDecode(decoded);
+      if (data is Map) {
+        provider.setUpdate(Map<String, dynamic>.from(data));
+      }
+    } catch (e) {
+      debugPrint('Failed to parse X-App-Update header: $e');
+    }
+  }
+
+  String? _buildForcedLogoutMessage(Map<dynamic, dynamic> data) {
+    final message = data['message']?.toString().trim();
+    final reason = data['deactivation_reason']?.toString().trim();
+
+    final parts = <String>[
+      if (message != null && message.isNotEmpty) message,
+      if (reason != null && reason.isNotEmpty) 'Alasan: $reason',
+    ];
+
+    if (parts.isEmpty) return null;
+
+    return parts.join('\n');
+  }
+
+  Future<void> _saveForcedLogoutMessage(String message) async {
+    if (message.trim().isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_forcedLogoutMessageKey, message);
+  }
 }

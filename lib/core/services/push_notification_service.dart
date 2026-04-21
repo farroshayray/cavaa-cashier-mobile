@@ -3,23 +3,19 @@ import 'dart:async';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import '/core/config/env.dart';
-import '/core/storage/secure_storage_service.dart';
+import '/core/network/dio_client.dart';
 import '/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // debugPrint('📩 Background message: ${message.messageId}');
   // debugPrint('📦 Background data: ${jsonEncode(message.data)}');
@@ -88,46 +84,47 @@ class PushNotificationService {
       _messageTapController.stream;
 
   bool _initialized = false;
+  DioClient? _dioClient;
 
   static const AndroidNotificationChannel orderChannel =
       AndroidNotificationChannel(
-    'cavaa_order_channel_v2',
-    'Cavaa Order Notifications',
-    description: 'Heads-up notifications for incoming cashier orders',
-    importance: Importance.max,
-    playSound: true,
-    sound: RawResourceAndroidNotificationSound('buzzer'),
-  );
+        'cavaa_order_channel_v2',
+        'Cavaa Order Notifications',
+        description: 'Heads-up notifications for incoming cashier orders',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('buzzer'),
+      );
 
   static const AndroidNotificationChannel paymentChannel =
       AndroidNotificationChannel(
-    'cavaa_payment_channel',
-    'Cavaa Payment Notifications',
-    description: 'Payment notifications',
-    importance: Importance.max,
-    playSound: true,
-    sound: RawResourceAndroidNotificationSound('buzzer'),
-  );
+        'cavaa_payment_channel',
+        'Cavaa Payment Notifications',
+        description: 'Payment notifications',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('buzzer'),
+      );
 
   static const AndroidNotificationChannel promoChannel =
       AndroidNotificationChannel(
-    'cavaa_promo_channel',
-    'Cavaa Promo Notifications',
-    description: 'Promo notifications',
-    importance: Importance.defaultImportance,
-    playSound: true,
-    sound: RawResourceAndroidNotificationSound('notify'),
-  );
+        'cavaa_promo_channel',
+        'Cavaa Promo Notifications',
+        description: 'Promo notifications',
+        importance: Importance.defaultImportance,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('notify'),
+      );
 
   static const AndroidNotificationChannel generalChannel =
       AndroidNotificationChannel(
-    'cavaa_general_channel',
-    'Cavaa General Notifications',
-    description: 'General notifications',
-    importance: Importance.max,
-    playSound: true,
-    sound: RawResourceAndroidNotificationSound('notify'),
-  );
+        'cavaa_general_channel',
+        'Cavaa General Notifications',
+        description: 'General notifications',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('notify'),
+      );
 
   Future<void> init() async {
     if (_initialized) return;
@@ -145,8 +142,12 @@ class PushNotificationService {
     _initialized = true;
   }
 
+  void configure({required DioClient dioClient}) {
+    _dioClient = dioClient;
+  }
+
   Future<void> _requestPermission() async {
-    final settings = await _messaging.requestPermission(
+    await _messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -160,7 +161,9 @@ class PushNotificationService {
   }
 
   Future<void> _initLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const initSettings = InitializationSettings(android: androidSettings);
 
     await _localNotifications.initialize(
@@ -180,9 +183,10 @@ class PushNotificationService {
       },
     );
 
-    final androidPlugin =
-        _localNotifications.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
 
     await androidPlugin?.createNotificationChannel(orderChannel);
     await androidPlugin?.createNotificationChannel(paymentChannel);
@@ -191,8 +195,7 @@ class PushNotificationService {
   }
 
   Future<void> _setupInitialNotificationTap() async {
-    final details =
-        await _localNotifications.getNotificationAppLaunchDetails();
+    final details = await _localNotifications.getNotificationAppLaunchDetails();
 
     if (details?.didNotificationLaunchApp ?? false) {
       // debugPrint(
@@ -351,7 +354,7 @@ class PushNotificationService {
   }
 
   Future<void> _printInitialToken() async {
-    final token = await _messaging.getToken();
+    await _messaging.getToken();
     // debugPrint('✅ FCM TOKEN ASLI: $token');
   }
 
@@ -378,26 +381,16 @@ class PushNotificationService {
 
   Future<void> sendTokenToBackend(String token) async {
     try {
-      final authToken = await SecureStorageService().getToken();
+      final dioClient = _dioClient;
 
-      if (authToken == null || authToken.isEmpty) {
-        // debugPrint('⚠️ Auth token kosong. Skip sync FCM token.');
+      if (dioClient == null) {
+        debugPrint('FCM sync skipped: DioClient belum siap.');
         return;
       }
 
-      final dio = Dio(
-        BaseOptions(
-          baseUrl: Env.baseUrl,
-          headers: {
-            'Accept': 'application/json',
-            'Authorization': 'Bearer $authToken',
-          },
-        ),
-      );
-
       final deviceName = await getDeviceName();
 
-      final response = await dio.post(
+      final response = await dioClient.dio.post(
         '/api/v1/mobile/cashier/device-token',
         data: {
           'token': token,
