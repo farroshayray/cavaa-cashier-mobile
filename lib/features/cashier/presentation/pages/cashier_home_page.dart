@@ -1,5 +1,6 @@
 import 'dart:async';
 import '/core/config/env.dart';
+import '/core/network/dio_client.dart';
 import 'package:dio/dio.dart';
 
 import 'package:flutter/material.dart';
@@ -13,7 +14,6 @@ import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
 import '/features/cashier/presentation/realtime/pusher_orders_service.dart';
-import '/core/storage/secure_storage_service.dart';
 
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
@@ -44,7 +44,7 @@ class CashierHomePage extends StatefulWidget {
 class _CashierHomePageState extends State<CashierHomePage>
     with WidgetsBindingObserver {
   // ===== Realtime =====
-  final _pusherSvc = PusherOrdersService(SecureStorageService());
+  late final PusherOrdersService _pusherSvc;
   bool _pusherStarted = false;
   final InAppApkUpdater _apkUpdater = InAppApkUpdater();
   final ValueNotifier<double> _updateProgressNotifier = ValueNotifier<double>(
@@ -80,6 +80,7 @@ class _CashierHomePageState extends State<CashierHomePage>
   @override
   void initState() {
     super.initState();
+    _pusherSvc = PusherOrdersService(context.read<DioClient>());
     WidgetsBinding.instance.addObserver(this);
     _listenFcmEvents();
 
