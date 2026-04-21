@@ -63,8 +63,9 @@ class _WorkScheduleProfilePageState extends State<WorkScheduleProfilePage> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
-    final activeShift =
-        user == null ? null : _activeShiftFor(user.workSchedule, _now);
+    final activeShift = user == null
+        ? null
+        : _activeShiftFor(user.workSchedule, _now);
 
     return Scaffold(
       appBar: AppBar(
@@ -95,10 +96,7 @@ class _WorkScheduleProfilePageState extends State<WorkScheduleProfilePage> {
                   const SizedBox(height: 18),
                   const Text(
                     'Jam Kerja Minggu Ini',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 10),
                   ..._days.map((day) {
@@ -107,7 +105,7 @@ class _WorkScheduleProfilePageState extends State<WorkScheduleProfilePage> {
                       label: _dayLabels[day] ?? day,
                       ranges: ranges,
                       isToday: day == _dayKey(_now),
-                      isActiveDay: activeShift?.day == day,
+                      activeShift: activeShift,
                     );
                   }),
                 ],
@@ -153,12 +151,7 @@ class _WorkScheduleProfilePageState extends State<WorkScheduleProfilePage> {
       }
 
       if (!now.isBefore(start) && now.isBefore(end)) {
-        return _ActiveShift(
-          day: day,
-          range: range,
-          startAt: start,
-          endAt: end,
-        );
+        return _ActiveShift(day: day, range: range, startAt: start, endAt: end);
       }
     }
 
@@ -189,7 +182,7 @@ class _ProfileHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
       ),
       child: Row(
         children: [
@@ -276,19 +269,19 @@ class _CurrentShiftPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final shift = activeShift;
     final isActive = shift != null;
-    final remaining = shift == null ? Duration.zero : shift.endAt.difference(now);
+    final remaining = shift == null
+        ? Duration.zero
+        : shift.endAt.difference(now);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isActive
-            ? const Color(0xFFEAF7EE)
-            : const Color(0xFFFFF4E5),
+        color: isActive ? const Color(0xFFEAF7EE) : const Color(0xFFFFF4E5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isActive
-              ? const Color(0xFF2E7D32).withOpacity(0.25)
-              : const Color(0xFFEF6C00).withOpacity(0.25),
+              ? const Color(0xFF2E7D32).withValues(alpha: 0.25)
+              : const Color(0xFFEF6C00).withValues(alpha: 0.25),
         ),
       ),
       child: Column(
@@ -320,10 +313,7 @@ class _CurrentShiftPanel extends StatelessWidget {
           if (isActive) ...[
             Text(
               '${shift.range.start} - ${shift.range.end}',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-              ),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
             Text(
@@ -336,10 +326,7 @@ class _CurrentShiftPanel extends StatelessWidget {
           ] else
             Text(
               _inactiveMessage,
-              style: const TextStyle(
-                color: Colors.black87,
-                height: 1.35,
-              ),
+              style: const TextStyle(color: Colors.black87, height: 1.35),
             ),
         ],
       ),
@@ -381,19 +368,20 @@ class _ScheduleDayTile extends StatelessWidget {
     required this.label,
     required this.ranges,
     required this.isToday,
-    required this.isActiveDay,
+    required this.activeShift,
   });
 
   final String label;
   final List<WorkScheduleRange> ranges;
   final bool isToday;
-  final bool isActiveDay;
+  final _ActiveShift? activeShift;
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = isActiveDay
-        ? _WorkScheduleProfilePageState._brand
-        : Colors.black.withOpacity(0.08);
+    final hasActiveRange = ranges.any(_isActiveRange);
+    final borderColor = hasActiveRange
+        ? const Color(0xFF2E7D32)
+        : Colors.black.withValues(alpha: 0.08);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -436,55 +424,57 @@ class _ScheduleDayTile extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: ranges.isEmpty
-                ? const Text(
-                    'Libur',
-                    style: TextStyle(color: Colors.black45),
-                  )
+                ? const Text('Libur', style: TextStyle(color: Colors.black45))
                 : Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: ranges
-                        .map(
-                          (range) => _TimeBadge(
-                            label: '${range.start} - ${range.end}',
-                            active: isActiveDay,
-                          ),
-                        )
-                        .toList(),
+                    children: ranges.map((range) {
+                      return _TimeBadge(
+                        label: '${range.start} - ${range.end}',
+                        active: _isActiveRange(range),
+                      );
+                    }).toList(),
                   ),
           ),
         ],
       ),
     );
   }
+
+  bool _isActiveRange(WorkScheduleRange range) {
+    final shift = activeShift;
+    if (shift == null) return false;
+    return shift.range.start == range.start && shift.range.end == range.end;
+  }
 }
 
 class _TimeBadge extends StatelessWidget {
-  const _TimeBadge({
-    required this.label,
-    required this.active,
-  });
+  const _TimeBadge({required this.label, required this.active});
 
   final String label;
   final bool active;
 
   @override
   Widget build(BuildContext context) {
-    const brand = _WorkScheduleProfilePageState._brand;
+    const activeColor = Color(0xFF2E7D32);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: active ? brand.withOpacity(0.10) : Colors.black.withOpacity(0.04),
+        color: active
+            ? const Color(0xFFEAF7EE)
+            : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: active ? brand.withOpacity(0.25) : Colors.black.withOpacity(0.06),
+          color: active
+              ? activeColor.withValues(alpha: 0.25)
+              : Colors.black.withValues(alpha: 0.06),
         ),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: active ? brand : Colors.black87,
+          color: active ? activeColor : Colors.black87,
           fontSize: 12,
           fontWeight: FontWeight.w800,
         ),
@@ -494,10 +484,7 @@ class _TimeBadge extends StatelessWidget {
 }
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-  });
+  const _InfoChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -507,7 +494,7 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.04),
+        color: Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -517,10 +504,7 @@ class _InfoChip extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -547,14 +531,14 @@ class _Avatar extends StatelessWidget {
 
     return CircleAvatar(
       radius: 30,
-      backgroundColor: brand.withOpacity(0.12),
+      backgroundColor: brand.withValues(alpha: 0.12),
       child: ClipOval(
         child: Image.network(
           imageUrl!,
           width: 60,
           height: 60,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) {
+          errorBuilder: (_, error, stackTrace) {
             return Container(
               width: 60,
               height: 60,
