@@ -103,6 +103,7 @@ class PartnerData {
 
   final num ppn;
   final bool isPpnActive;
+  final int cashRoundingUnit;
 
   PartnerData({
     required this.id,
@@ -111,6 +112,7 @@ class PartnerData {
     required this.isCashierActive,
     required this.ppn,
     required this.isPpnActive,
+    required this.cashRoundingUnit,
   });
 
   factory PartnerData.fromJson(Map<String, dynamic> json) {
@@ -121,6 +123,7 @@ class PartnerData {
       isCashierActive: parseBool(json['is_cashier_active']),
       ppn: parseNum(json['ppn']),
       isPpnActive: parseBool(json['is_ppn_active']),
+      cashRoundingUnit: parseInt(json['cash_rounding_unit']),
     );
   }
 }
@@ -206,9 +209,13 @@ class Product {
     return true;
   }
 
+  bool get consumesLinkedStock => stockType == 'linked' && recipes.isNotEmpty;
+
   bool get isAvailableForSale {
     if (!isActive) return false;
-    if (!alwaysAvailable && quantityAvailable <= 0) return false;
+    if ((!alwaysAvailable || consumesLinkedStock) && quantityAvailable <= 0) {
+      return false;
+    }
     return hasRequiredOptionsAvailable;
   }
 
@@ -345,7 +352,9 @@ class OptionItem {
     required this.recipes,
   });
 
-  bool get isAvailableForSale => alwaysAvailable || quantityAvailable > 0;
+  bool get consumesLinkedStock => stockType == 'linked' && recipes.isNotEmpty;
+  bool get isAvailableForSale =>
+      (alwaysAvailable && !consumesLinkedStock) || quantityAvailable > 0;
 
   factory OptionItem.fromJson(Map<String, dynamic> json) {
     final stockType = (json['stock_type'] ?? '').toString();

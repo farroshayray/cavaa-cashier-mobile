@@ -37,9 +37,17 @@ class ReceiptPrinter {
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
     final ppnAmount = isPpnActive ? (subtotal * ppnPercent / 100) : 0;
-    final grandTotal = isPpnActive
+    final baseGrandTotal = isPpnActive
         ? (subtotal + ppnAmount).ceil()
         : subtotal.ceil();
+    final payment = order['payment'] is Map ? order['payment'] as Map : null;
+    final latestPayment = order['latest_payment'] is Map ? order['latest_payment'] as Map : null;
+    final roundingAmount = _num(
+      order['cash_rounding_amount'] ??
+          payment?['rounding_amount'] ??
+          latestPayment?['rounding_amount'],
+    );
+    final grandTotal = baseGrandTotal + roundingAmount;
 
     bytes.addAll(gen.reset());
     final storeName = (order['store_name'] ?? 'CAVAA').toString().trim();
@@ -162,6 +170,17 @@ class ReceiptPrinter {
         PosColumn(text: 'PPN (${_formatPercent(ppnPercent)}%)', width: 8),
         PosColumn(
           text: _rupiah(ppnAmount.ceil()),
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]));
+    }
+
+    if (roundingAmount > 0) {
+      bytes.addAll(gen.row([
+        PosColumn(text: 'PEMBULATAN', width: 8),
+        PosColumn(
+          text: _rupiah(roundingAmount),
           width: 4,
           styles: const PosStyles(align: PosAlign.right),
         ),

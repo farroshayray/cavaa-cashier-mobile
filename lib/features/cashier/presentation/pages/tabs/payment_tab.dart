@@ -647,11 +647,10 @@ class _PaymentOrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const brand = Color(0xFFAE1504);
-
     final code = (data['booking_order_code'] ?? '-').toString();
     final customer = (data['customer_name'] ?? '-').toString();
     final total = _calcDisplayGrandTotal(data);
+    final roundingAmount = _calcCashRoundingAmount(data);
     final status = (data['order_status'] ?? '').toString();
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
     final orderDateTime = _formatOrderDateTime(data);
@@ -670,37 +669,46 @@ class _PaymentOrderCard extends StatelessWidget {
     // khusus mobile landscape
     final isMobileLandscape = isLandscape && shortestSide < 600;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onDetail,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(0.04),
-          )
-        ],
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.black.withOpacity(0.08)),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+                color: Colors.black.withOpacity(0.04),
+              )
+            ],
+          ),
+          child: isMobileLandscape
+              ? _buildMobileLandscapeLayout(
+                  code: code,
+                  customer: customer,
+                  table: table,
+                  total: total,
+                  roundingAmount: roundingAmount,
+                  orderDateTime: orderDateTime,
+                  badge: badge,
+                )
+              : _buildDefaultLayout(
+                  code: code,
+                  customer: customer,
+                  table: table,
+                  total: total,
+                  roundingAmount: roundingAmount,
+                  orderDateTime: orderDateTime,
+                  badge: badge,
+                ),
+        ),
       ),
-      child: isMobileLandscape
-          ? _buildMobileLandscapeLayout(
-              code: code,
-              customer: customer,
-              table: table,
-              total: total,
-              orderDateTime: orderDateTime,
-              badge: badge,
-            )
-          : _buildDefaultLayout(
-              code: code,
-              customer: customer,
-              table: table,
-              total: total,
-              orderDateTime: orderDateTime,
-              badge: badge,
-            ),
     );
   }
 
@@ -709,9 +717,12 @@ class _PaymentOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required num roundingAmount,
     required String? orderDateTime,
     required Widget badge,
   }) {
+    const brand = Color(0xFFAE1504);
+
     return Column(
       children: [
         Row(
@@ -785,13 +796,19 @@ class _PaymentOrderCard extends StatelessWidget {
                     'Rp ${_rupiah(total)}',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
                   ),
+                  if (roundingAmount > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '+ Pembulatan Cash Rp ${_rupiah(roundingAmount)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: brand,
+                      ),
+                    ),
+                  ],
                 ],
               ),
-            ),
-            IconButton(
-              onPressed: onDetail,
-              icon: const Icon(Icons.visibility_outlined),
-              tooltip: 'Detail',
             ),
             IconButton(
               onPressed: onDelete,
@@ -820,9 +837,12 @@ class _PaymentOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required num roundingAmount,
     required String? orderDateTime,
     required Widget badge,
   }) {
+    const brand = Color(0xFFAE1504);
+
     return Column(
       children: [
         Row(
@@ -906,16 +926,20 @@ class _PaymentOrderCard extends StatelessWidget {
                         'Rp ${_rupiah(total)}',
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
                       ),
+                      if (roundingAmount > 0) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '+ Pembulatan Rp ${_rupiah(roundingAmount)}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: brand,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(width: 8),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    onPressed: onDetail,
-                    icon: const Icon(Icons.visibility_outlined),
-                    tooltip: 'Detail',
-                  ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -1102,9 +1126,47 @@ num _calcDisplayGrandTotal(Map<String, dynamic> data) {
   final subtotal = _toNum(data['total_order_value']);
   final isPpnActive = _toBool(data['is_ppn_active']);
   final ppnPercent = _toNum(data['ppn']);
+  final baseTotal = isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+      : subtotal.ceil();
+  return baseTotal + _calcCashRoundingAmount(data, baseTotal: baseTotal);
+}
+
+num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
+  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+      _pickNum(data, ['rounding_amount']) ??
+      _pickNum(data, ['payment', 'rounding_amount']) ??
+      _pickNum(data, ['latest_payment', 'rounding_amount']);
+  if (stored != null && stored > 0) return stored.ceil();
+
+  final method = (data['payment_method'] ?? '').toString().toUpperCase();
+  if (method != 'CASH') return 0;
+
+  final effectiveBaseTotal = baseTotal ?? _baseGrandTotal(data);
+  final snap = _toNum(data['grand_total_local'] ?? data['grand_total']);
+  final diff = snap.ceil() - effectiveBaseTotal.ceil();
+  return diff > 0 ? diff : 0;
+}
+
+num _baseGrandTotal(Map<String, dynamic> data) {
+  final subtotal = _toNum(data['total_order_value'] ?? data['subtotal']);
+  final isPpnActive = _toBool(data['is_ppn_active']);
+  final ppnPercent = _toNum(data['ppn']);
   return isPpnActive
       ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
       : subtotal.ceil();
+}
+
+num? _pickNum(Map<String, dynamic> root, List<String> path) {
+  dynamic cur = root;
+  for (final k in path) {
+    if (cur is Map && cur[k] != null) {
+      cur = cur[k];
+    } else {
+      return null;
+    }
+  }
+  return (cur is num) ? cur : num.tryParse(cur.toString());
 }
 
 String? _formatOrderDateTime(Map<String, dynamic> data) {

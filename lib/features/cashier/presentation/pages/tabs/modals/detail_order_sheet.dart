@@ -200,6 +200,7 @@ class _Body extends StatelessWidget {
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
     final total = _calcGrandTotalFromMap(order);
+    final roundingAmount = _calcCashRoundingAmount(order);
     final status = (order['order_status'] ?? '-').toString();
     final conflictMessage = (stockConflictMessage ?? order['last_error'] ?? '')
         .toString()
@@ -219,6 +220,7 @@ class _Body extends StatelessWidget {
             table: table,
             status: status,
             total: total,
+            roundingAmount: roundingAmount,
             isPpnActive: isPpnActive,
             ppnPercent: ppnPercent,
           ),
@@ -241,13 +243,18 @@ class _Body extends StatelessWidget {
   }
 
   num _calcGrandTotalFromMap(Map<String, dynamic> order) {
+    if (order['grand_total_local'] != null) {
+      return _num(order['grand_total_local']).ceil();
+    }
+
     final subtotal = _num(order['total_order_value']);
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
 
-    return isPpnActive
+    final baseTotal = isPpnActive
         ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
         : subtotal.ceil();
+    return baseTotal + _calcCashRoundingAmount(order, baseTotal: baseTotal);
   }
 }
 
@@ -345,6 +352,7 @@ class _InfoCard extends StatelessWidget {
     required this.table,
     required this.status,
     required this.total,
+    required this.roundingAmount,
     required this.isPpnActive,
     required this.ppnPercent,
   });
@@ -354,6 +362,7 @@ class _InfoCard extends StatelessWidget {
   final String table;
   final String status;
   final num total;
+  final num roundingAmount;
   final bool isPpnActive;
   final num ppnPercent;
 
@@ -413,6 +422,23 @@ class _InfoCard extends StatelessWidget {
                 const Spacer(),
                 Text(
                   '${_formatPercent(ppnPercent)}%',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          if (roundingAmount > 0) ...[
+            Row(
+              children: [
+                Text(
+                  'Pembulatan Cash',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                ),
+                const Spacer(),
+                Text(
+                  'Rp ${_rupiah(roundingAmount)}',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
                 ),
               ],
@@ -602,6 +628,43 @@ bool _toBool(dynamic v) {
   if (v is bool) return v;
   final s = v.toString().toLowerCase();
   return s == '1' || s == 'true';
+}
+
+num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
+  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+      _pickNum(data, ['rounding_amount']) ??
+      _pickNum(data, ['payment', 'rounding_amount']) ??
+      _pickNum(data, ['latest_payment', 'rounding_amount']);
+  if (stored != null && stored > 0) return stored.ceil();
+
+  final method = (data['payment_method'] ?? '').toString().toUpperCase();
+  if (method != 'CASH') return 0;
+
+  final effectiveBaseTotal = baseTotal ?? _baseGrandTotal(data);
+  final snap = _num(data['grand_total_local'] ?? data['grand_total']);
+  final diff = snap.ceil() - effectiveBaseTotal.ceil();
+  return diff > 0 ? diff : 0;
+}
+
+num _baseGrandTotal(Map<String, dynamic> data) {
+  final subtotal = _num(data['total_order_value'] ?? data['subtotal']);
+  final isPpnActive = _toBool(data['is_ppn_active']);
+  final ppnPercent = _num(data['ppn']);
+  return isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+      : subtotal.ceil();
+}
+
+num? _pickNum(Map<String, dynamic> root, List<String> path) {
+  dynamic cur = root;
+  for (final k in path) {
+    if (cur is Map && cur[k] != null) {
+      cur = cur[k];
+    } else {
+      return null;
+    }
+  }
+  return (cur is num) ? cur : num.tryParse(cur.toString());
 }
 
 String _formatPercent(num n) {

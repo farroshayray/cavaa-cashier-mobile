@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
@@ -113,6 +114,15 @@ class SyncService {
 
       debugPrint('✅ local pending delete synced: localId=$localOrderId serverId=$serverId');
     } catch (e) {
+      if (_isRemoteOrderGone(e)) {
+        await _discardRemoteOrder(
+          serverId: serverId,
+          localOrderId: localOrderId,
+          reason: 'pending local delete target already gone',
+        );
+        return;
+      }
+
       debugPrint('❌ local pending delete failed for $localOrderId: $e');
     }
   }
@@ -124,6 +134,14 @@ class SyncService {
 
       debugPrint('✅ cached pending delete synced: serverId=$serverId');
     } catch (e) {
+      if (_isRemoteOrderGone(e)) {
+        await _discardRemoteOrder(
+          serverId: serverId,
+          reason: 'pending cached delete target already gone',
+        );
+        return;
+      }
+
       debugPrint('❌ cached pending delete failed for serverId=$serverId: $e');
     }
   }
@@ -368,7 +386,19 @@ class SyncService {
         error: details.isNotEmpty ? details : e.message,
       );
     } catch (e) {
-      debugPrint('❌ universal lifecycle sync failed for $localOrderId: $e');
+      final current = await localOrdersDao.getOrderByLocalId(localOrderId);
+      final serverId = current?.serverId ?? initialOrder.serverId;
+
+      if (serverId != null && serverId > 0 && _isRemoteOrderGone(e)) {
+        await _discardRemoteOrder(
+          serverId: serverId,
+          localOrderId: localOrderId,
+          reason: 'pending lifecycle target already gone',
+        );
+        return;
+      }
+
+      debugPrint('sync lifecycle failed for $localOrderId: $e');
       await localOrdersDao.markOrderPending(
         localOrderId,
         error: e.toString(),
@@ -410,6 +440,14 @@ class SyncService {
             break;
         }
       } catch (e) {
+        if (_isRemoteOrderGone(e)) {
+          await _discardRemoteOrder(
+            serverId: row.serverId,
+            reason: 'pending process action target already gone',
+          );
+          continue;
+        }
+
         debugPrint('syncPendingProcessOrders failed for ${row.serverId}: $e');
       }
     }
@@ -524,5 +562,50 @@ class SyncService {
     }
 
     return null;
+  }
+
+  bool _isRemoteOrderGone(Object error) {
+    if (error is DioException) {
+      final code = error.response?.statusCode;
+      if (code == 404 || code == 410) return true;
+
+      final data = error.response?.data;
+      final message = data is Map
+          ? (data['message'] ?? data['error'] ?? '').toString().toLowerCase()
+          : data?.toString().toLowerCase() ?? '';
+
+      return message.contains('not found') ||
+          message.contains('tidak ditemukan') ||
+          message.contains('no query results');
+    }
+
+    final message = error.toString().toLowerCase();
+    return message.contains('404') &&
+        (message.contains('not found') ||
+            message.contains('tidak ditemukan') ||
+            message.contains('no query results'));
+  }
+
+  Future<void> _discardRemoteOrder({
+    required int serverId,
+    String? localOrderId,
+    required String reason,
+  }) async {
+    debugPrint(
+      'discard remote-gone order '
+      'serverId=$serverId '
+      'localId=$localOrderId '
+      'reason=$reason',
+    );
+
+    await cachedPaymentOrdersDao.deleteCachedOrderByServerId(serverId);
+    await cachedProcessOrdersDao.deleteByServerId(serverId);
+    await cachedDoneOrdersDao.deleteByServerId(serverId);
+
+    if (localOrderId != null && localOrderId.trim().isNotEmpty) {
+      await localOrdersDao.deleteOrderByLocalId(localOrderId);
+    } else {
+      await localOrdersDao.deleteOrderByServerId(serverId);
+    }
   }
 }

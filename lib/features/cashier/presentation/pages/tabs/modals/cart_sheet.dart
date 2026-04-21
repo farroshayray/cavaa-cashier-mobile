@@ -346,7 +346,7 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
 
   if (!product.isActive) {
     notices.add(const _StockNotice('Produk tidak aktif', blocking: true));
-  } else if (!product.alwaysAvailable) {
+  } else if (!product.alwaysAvailable || product.consumesLinkedStock) {
     final availableForThisLine =
         vm.availableQtyForProduct(product, excludingItem: item);
     final remainingAfterThisLine = availableForThisLine - item.qty;
@@ -373,7 +373,8 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
       final availableSelected = selectedIds.where((optionId) {
         final option = _findOption(group, optionId);
         if (option == null) return false;
-        final availableForThisLine = option.alwaysAvailable
+        final availableForThisLine =
+            option.alwaysAvailable && !option.consumesLinkedStock
             ? item.qty
             : vm.availableQtyForOption(option, excludingItem: item);
         return availableForThisLine > 0;
@@ -397,7 +398,7 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
         continue;
       }
 
-      if (option.alwaysAvailable) continue;
+      if (option.alwaysAvailable && !option.consumesLinkedStock) continue;
 
       final availableForThisLine =
           vm.availableQtyForOption(option, excludingItem: item);

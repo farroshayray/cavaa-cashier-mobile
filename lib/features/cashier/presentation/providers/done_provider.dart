@@ -45,7 +45,13 @@ class DoneProvider extends ChangeNotifier {
       final cachedRows = await cachedDoneOrdersDao.getAllActive();
 
       final remoteItems = cachedRows.map((row) {
+        final cached = _decodeCachedJson(row.detailJson) ??
+            _decodeCachedJson(row.latestDoneJson) ??
+            _decodeCachedJson(row.doneRequestJson) ??
+            <String, dynamic>{};
+
         return <String, dynamic>{
+          ..._normalizeCachedOrderMap(cached),
           'id': row.serverId,
           'booking_order_code': row.bookingOrderCode,
           'customer_name': row.customerName,

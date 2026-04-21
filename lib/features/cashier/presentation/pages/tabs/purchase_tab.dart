@@ -599,12 +599,14 @@ class _ProductCard extends StatelessWidget {
           .length;
       return availableCount >= group.min;
     });
-    final productStockOut = !product.alwaysAvailable && productRemaining <= 0;
+    final tracksProductStock =
+        !product.alwaysAvailable || product.consumesLinkedStock;
+    final productStockOut = tracksProductStock && productRemaining <= 0;
     final isOut = !product.isActive ||
         productStockOut ||
         !hasRequiredOptionsAvailable;
     final lowStock = !isOut &&
-        !product.alwaysAvailable &&
+        tracksProductStock &&
         productRemaining > 0 &&
         productRemaining <= 3;
 
