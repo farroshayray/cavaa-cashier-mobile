@@ -61,7 +61,7 @@ class UserModel {
         json['enforce_work_schedule'],
         defaultValue: false,
       ),
-      workSchedule: _parseWorkSchedule(json['work_schedule']),
+      workSchedule: UserModel.parseWorkSchedule(json['work_schedule']),
     );
   }
 
@@ -83,9 +83,7 @@ class UserModel {
     };
   }
 
-  static Map<String, List<WorkScheduleRange>> _parseWorkSchedule(
-    dynamic value,
-  ) {
+  static Map<String, List<WorkScheduleRange>> parseWorkSchedule(dynamic value) {
     if (value is! Map) return const {};
 
     final result = <String, List<WorkScheduleRange>>{};
