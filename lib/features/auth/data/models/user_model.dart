@@ -7,6 +7,7 @@ class UserModel {
   final String? image;
   final bool isActive;
   final bool isActiveAdmin;
+  final bool enforceWorkSchedule;
 
   UserModel({
     required this.id,
@@ -17,6 +18,7 @@ class UserModel {
     this.image,
     this.isActive = true,
     this.isActiveAdmin = true,
+    this.enforceWorkSchedule = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,10 @@ class UserModel {
       image: json['image']?.toString(),
       isActive: _parseBool(json['is_active'], defaultValue: true),
       isActiveAdmin: _parseBool(json['is_active_admin'], defaultValue: true),
+      enforceWorkSchedule: _parseBool(
+        json['enforce_work_schedule'],
+        defaultValue: false,
+      ),
     );
   }
 
@@ -42,6 +48,7 @@ class UserModel {
       'image': image,
       'is_active': isActive,
       'is_active_admin': isActiveAdmin,
+      'enforce_work_schedule': enforceWorkSchedule,
     };
   }
 

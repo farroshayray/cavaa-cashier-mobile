@@ -40,12 +40,12 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('bootstrap fetchMe dio failed: $e');
 
       final data = e.response?.data;
-      final isInactiveAccount = e.response?.statusCode == 403 &&
+      final shouldLogoutWithMessage = e.response?.statusCode == 403 &&
           data is Map &&
-          data['code']?.toString() == 'account_inactive';
+          data['message'] != null;
 
-      if (e.response?.statusCode == 401 || isInactiveAccount) {
-        errorMessage = isInactiveAccount && data is Map
+      if (e.response?.statusCode == 401 || shouldLogoutWithMessage) {
+        errorMessage = shouldLogoutWithMessage && data is Map
             ? _messageFromErrorData(data)
             : null;
         await repo.logout();
