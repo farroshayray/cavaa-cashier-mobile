@@ -1,6 +1,7 @@
 import 'dart:async';
 import '/core/config/env.dart';
 import '/core/network/dio_client.dart';
+import '/core/services/app_update_provider.dart';
 import 'package:dio/dio.dart';
 
 import 'package:flutter/material.dart';
@@ -549,7 +550,7 @@ class _CashierHomePageState extends State<CashierHomePage>
 
   Future<void> _handleManualUpdateTap() async {
     final auth = context.read<AuthProvider>();
-    final data = auth.appUpdate;
+    final data = context.read<AppUpdateProvider>().data ?? auth.appUpdate;
 
     if (data == null) return;
 
@@ -830,7 +831,8 @@ class _CashierHomePageState extends State<CashierHomePage>
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final appUpdateData = auth.appUpdate;
+    final liveAppUpdate = context.watch<AppUpdateProvider>().data;
+    final appUpdateData = liveAppUpdate ?? auth.appUpdate;
     final hasAppUpdate = appUpdateData?['update_available'] == true;
 
     final media = MediaQuery.of(context);
