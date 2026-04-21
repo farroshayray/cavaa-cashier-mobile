@@ -539,6 +539,7 @@ class _DoneOrderCard extends StatelessWidget {
     final code = (data['booking_order_code'] ?? '-').toString();
     final customer = (data['customer_name'] ?? '-').toString();
     final total = _calcGrandTotalFromMap(data);
+    final roundingAmount = _calcCashRoundingAmount(data);
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
     final orderDateTime = _formatOrderDateTime(data);
 
@@ -569,6 +570,7 @@ class _DoneOrderCard extends StatelessWidget {
               customer: customer,
               table: table,
               total: total,
+              roundingAmount: roundingAmount,
               orderDateTime: orderDateTime,
             )
           : _buildDefaultLayout(
@@ -576,6 +578,7 @@ class _DoneOrderCard extends StatelessWidget {
               customer: customer,
               table: table,
               total: total,
+              roundingAmount: roundingAmount,
               orderDateTime: orderDateTime,
             ),
     );
@@ -586,8 +589,11 @@ class _DoneOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required num roundingAmount,
     required String? orderDateTime,
   }) {
+    const brand = Color(0xFFAE1504);
+
     return Column(
       children: [
         Row(
@@ -666,6 +672,17 @@ class _DoneOrderCard extends StatelessWidget {
                     'Rp ${_rupiah(total)}',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
                   ),
+                  if (roundingAmount > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '+ Pembulatan Cash Rp ${_rupiah(roundingAmount)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: brand,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -696,8 +713,11 @@ class _DoneOrderCard extends StatelessWidget {
     required String customer,
     required String table,
     required num total,
+    required num roundingAmount,
     required String? orderDateTime,
   }) {
+    const brand = Color(0xFFAE1504);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -784,6 +804,17 @@ class _DoneOrderCard extends StatelessWidget {
                       'Rp ${_rupiah(total)}',
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
                     ),
+                    if (roundingAmount > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '+ Pembulatan Rp ${_rupiah(roundingAmount)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: brand,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(width: 8),
@@ -931,25 +962,71 @@ bool _toBool(dynamic v) {
 }
 
 num _calcGrandTotalFromMap(Map<String, dynamic> data) {
+  if (data['grand_total_local'] != null) {
+    return _toNum(data['grand_total_local']).ceil();
+  }
+
   final subtotal = _toNum(data['total_order_value']);
   final isPpnActive = _toBool(data['is_ppn_active']);
   final ppnPercent = _toNum(data['ppn']);
 
+  final baseTotal = isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+      : subtotal.ceil();
+  return baseTotal + _calcCashRoundingAmount(data, baseTotal: baseTotal);
+}
+
+num _orderGrandTotal(Map<String, dynamic> order) {
+  if (order['grand_total_local'] != null) {
+    return _toNum(order['grand_total_local']).ceil();
+  }
+
+  final subtotal = _toNum(order['total_order_value']);
+  final isPpnActive = _toBool(order['is_ppn_active']);
+  final ppnPercent = _toNum(order['ppn']);
+
+  final baseTotal = isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100))
+      : subtotal;
+
+  return baseTotal.ceil() + _calcCashRoundingAmount(order, baseTotal: baseTotal.ceil());
+}
+
+num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
+  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+      _pickNum(data, ['rounding_amount']) ??
+      _pickNum(data, ['payment', 'rounding_amount']) ??
+      _pickNum(data, ['latest_payment', 'rounding_amount']);
+  if (stored != null && stored > 0) return stored.ceil();
+
+  final method = (data['payment_method'] ?? '').toString().toUpperCase();
+  if (method != 'CASH') return 0;
+
+  final effectiveBaseTotal = baseTotal ?? _baseGrandTotal(data);
+  final snap = _toNum(data['grand_total_local'] ?? data['grand_total']);
+  final diff = snap.ceil() - effectiveBaseTotal.ceil();
+  return diff > 0 ? diff : 0;
+}
+
+num _baseGrandTotal(Map<String, dynamic> data) {
+  final subtotal = _toNum(data['total_order_value'] ?? data['subtotal']);
+  final isPpnActive = _toBool(data['is_ppn_active']);
+  final ppnPercent = _toNum(data['ppn']);
   return isPpnActive
       ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
       : subtotal.ceil();
 }
 
-num _orderGrandTotal(Map<String, dynamic> order) {
-  final subtotal = _toNum(order['total_order_value']);
-  final isPpnActive = _toBool(order['is_ppn_active']);
-  final ppnPercent = _toNum(order['ppn']);
-
-  final total = isPpnActive
-      ? (subtotal + (subtotal * ppnPercent / 100))
-      : subtotal;
-
-  return total.ceil();
+num? _pickNum(Map<String, dynamic> root, List<String> path) {
+  dynamic cur = root;
+  for (final k in path) {
+    if (cur is Map && cur[k] != null) {
+      cur = cur[k];
+    } else {
+      return null;
+    }
+  }
+  return (cur is num) ? cur : num.tryParse(cur.toString());
 }
 
 String? _formatOrderDateTime(Map<String, dynamic> data) {

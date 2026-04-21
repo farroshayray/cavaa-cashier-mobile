@@ -82,6 +82,18 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
     cloned['latest_payment'] ??= cloned['payment'];
 
+    final localGrand = _num(cloned['grand_total_local']);
+    if (localGrand > 0 && cloned['cash_rounding_amount'] == null) {
+      final subtotal = _num(cloned['total_order_value']);
+      final isPpnActive = _toBool(cloned['is_ppn_active']);
+      final ppnPercent = _num(cloned['ppn']);
+      final baseTotal = isPpnActive
+          ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+          : subtotal.ceil();
+      final rounding = localGrand - baseTotal;
+      if (rounding > 0) cloned['cash_rounding_amount'] = rounding;
+    }
+
     cloned['booking_order_code'] ??= cloned['client_order_code'] ?? '-';
     cloned['customer_name'] ??= 'Guest';
     cloned['employee_name'] ??= '-';
@@ -707,6 +719,7 @@ class _Body extends StatelessWidget {
     final total = _calcGrandTotalFromMap(order);
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
+    final roundingAmount = _num(order['cash_rounding_amount']);
     
 
     // ✅ TARUH DI SINI (bukan di dalam children)
@@ -736,6 +749,7 @@ class _Body extends StatelessWidget {
             total: total,
             isPpnActive: isPpnActive,
             ppnPercent: ppnPercent,
+            roundingAmount: roundingAmount,
           ),
           const SizedBox(height: 12),
 
@@ -778,13 +792,18 @@ class _Body extends StatelessWidget {
   }
 
   num _calcGrandTotalFromMap(Map<String, dynamic> order) {
+    if (order['grand_total_local'] != null) {
+      return _num(order['grand_total_local']).ceil();
+    }
     final subtotal = _num(order['total_order_value']);
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
+    final roundingAmount = _num(order['cash_rounding_amount']);
 
-    return isPpnActive
+    final baseTotal = isPpnActive
         ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
         : subtotal.ceil();
+    return baseTotal + roundingAmount;
   }
 
 }
@@ -798,6 +817,7 @@ class _OrderInfoCard extends StatelessWidget {
     required this.total,
     required this.isPpnActive,
     required this.ppnPercent,
+    required this.roundingAmount,
   });
 
   final String code;
@@ -807,6 +827,7 @@ class _OrderInfoCard extends StatelessWidget {
   final num total;
   final bool isPpnActive;
   final num ppnPercent;
+  final num roundingAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -842,6 +863,23 @@ class _OrderInfoCard extends StatelessWidget {
                 const Spacer(),
                 Text(
                   '${_formatPercent(ppnPercent)}%',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          if (roundingAmount > 0) ...[
+            Row(
+              children: [
+                Text(
+                  'Pembulatan Cash',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                ),
+                const Spacer(),
+                Text(
+                  'Rp ${_rupiah(roundingAmount)}',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
                 ),
               ],
@@ -1841,13 +1879,18 @@ String _paymentMethodMessage(Map<String, dynamic> order) {
 }
 
 num _grandTotalFromOrder(Map<String, dynamic> order) {
+  if (order['grand_total_local'] != null) {
+    return _num(order['grand_total_local']).ceil();
+  }
   final subtotal = _num(order['total_order_value']);
   final isPpnActive = _toBool(order['is_ppn_active']);
   final ppnPercent = _num(order['ppn']);
+  final roundingAmount = _num(order['cash_rounding_amount']);
 
-  return isPpnActive
+  final baseTotal = isPpnActive
       ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
       : subtotal.ceil();
+  return baseTotal + roundingAmount;
 }
 
 String _manualTypeLabel(String type) {

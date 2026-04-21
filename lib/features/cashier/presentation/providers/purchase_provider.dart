@@ -65,6 +65,34 @@ class PurchaseProvider extends ChangeNotifier {
   num get cartGrandTotalRounded =>
     cartGrandTotalWithPpn.toDouble().ceil();
 
+  int get cashRoundingUnit => partnerData?.cashRoundingUnit ?? 0;
+
+  num get cartCashRoundingAmount =>
+      _roundingAmount(cartGrandTotalRounded, cashRoundingUnit);
+
+  num get cartCashPayableTotal =>
+      cartGrandTotalRounded + cartCashRoundingAmount;
+
+  num payableTotalForPayment(PaymentOption? payment) {
+    if (payment?.kind == PayKind.cashierCash) {
+      return cartCashPayableTotal;
+    }
+    return cartGrandTotalRounded;
+  }
+
+  num roundingAmountForPayment(PaymentOption? payment) {
+    if (payment?.kind == PayKind.cashierCash) {
+      return cartCashRoundingAmount;
+    }
+    return 0;
+  }
+
+  num _roundingAmount(num amount, int unit) {
+    if (unit <= 0 || amount <= 0) return 0;
+    final rounded = ((amount / unit).ceil() * unit);
+    return rounded - amount.ceil();
+  }
+
   String _buildClientOrderCode() {
     final now = DateTime.now();
     final y = now.year.toString();
@@ -215,7 +243,7 @@ class PurchaseProvider extends ChangeNotifier {
 
     final subtotal = cartSubtotal.toDouble();
     final ppn = ppnPercent.toDouble();
-    final grandTotal = cartGrandTotalWithPpn.toDouble();
+    final grandTotal = payableTotalForPayment(payment).toDouble();
 
     final selectedPaymentMethod = paymentMethod;
     final effectivePaymentMethod =

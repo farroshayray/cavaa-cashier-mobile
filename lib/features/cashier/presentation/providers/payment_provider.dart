@@ -259,7 +259,11 @@ class PaymentProvider extends ChangeNotifier {
     final isPpnActive = _toBool(item['is_ppn_active']);
     final grandTotal = isPpnActive
         ? (subtotal + (subtotal * ppnPercent / 100)).ceilToDouble()
-        : subtotal.toDouble();
+        : subtotal.ceilToDouble();
+    final roundingAmount = _toNum(item['cash_rounding_amount'] ??
+        item['rounding_amount'] ??
+        (item['payment'] is Map ? item['payment']['rounding_amount'] : null) ??
+        (item['latest_payment'] is Map ? item['latest_payment']['rounding_amount'] : null));
 
     final createdAt = DateTime.tryParse((item['created_at'] ?? '').toString());
     final updatedAt = DateTime.tryParse((item['updated_at'] ?? '').toString());
@@ -285,7 +289,7 @@ class PaymentProvider extends ChangeNotifier {
       subtotal: Value(subtotal.toDouble()),
       ppnPercent: Value(ppnPercent.toDouble()),
       isPpnActive: Value(isPpnActive),
-      grandTotal: Value(grandTotal),
+      grandTotal: Value(grandTotal + roundingAmount.toDouble()),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
 
@@ -302,14 +306,19 @@ class PaymentProvider extends ChangeNotifier {
     final subtotal = _toNum(e['total_order_value']);
     final ppnPercent = _toNum(e['ppn']);
     final isPpnActive = _toBool(e['is_ppn_active']);
-    final grandTotal = isPpnActive
+    final baseTotal = isPpnActive
         ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
         : subtotal.ceil();
+    final roundingAmount = _toNum(e['cash_rounding_amount'] ??
+        e['rounding_amount'] ??
+        (e['payment'] is Map ? e['payment']['rounding_amount'] : null) ??
+        (e['latest_payment'] is Map ? e['latest_payment']['rounding_amount'] : null));
 
     return <String, dynamic>{
       ...e,
       'subtotal': subtotal,
-      'grand_total': grandTotal,
+      'grand_total': baseTotal + roundingAmount,
+      'cash_rounding_amount': roundingAmount,
       'is_local_only': false,
       'is_cached_server': false,
       'sync_status': 'SYNCED',
@@ -318,6 +327,17 @@ class PaymentProvider extends ChangeNotifier {
 
   Map<String, dynamic> _normalizeCachedServerItem(CachedPaymentOrder o) {
     final tableNo = o.tableNo ?? '-';
+    final detail = _decodeCachedJson(o.detailJson);
+    final latestPayment = _decodeCachedJson(o.latestPaymentJson);
+    final paymentRequest = _decodeCachedJson(o.paymentRequestJson);
+    final roundingAmount = _toNum(
+      detail?['cash_rounding_amount'] ??
+          detail?['rounding_amount'] ??
+          (detail?['payment'] is Map ? detail!['payment']['rounding_amount'] : null) ??
+          (detail?['latest_payment'] is Map ? detail!['latest_payment']['rounding_amount'] : null) ??
+          latestPayment?['rounding_amount'] ??
+          paymentRequest?['rounding_amount'],
+    );
 
     return <String, dynamic>{
       'id': o.serverId,
@@ -339,6 +359,10 @@ class PaymentProvider extends ChangeNotifier {
       'total_order_value': o.subtotal,
       'subtotal': o.subtotal,
       'grand_total': o.grandTotal,
+      'cash_rounding_amount': roundingAmount,
+      'payment': detail?['payment'],
+      'latest_payment': latestPayment ?? detail?['latest_payment'],
+      'payment_request': paymentRequest ?? detail?['payment_request'],
       'total_amount': o.grandTotal,
 
       'is_ppn_active': o.isPpnActive,
@@ -351,6 +375,17 @@ class PaymentProvider extends ChangeNotifier {
       'created_at': o.createdAt?.toIso8601String(),
       'cached_at': o.cachedAt.toIso8601String(),
     };
+  }
+
+  Map<String, dynamic>? _decodeCachedJson(String? rawJson) {
+    if (rawJson == null || rawJson.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(rawJson);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+    return null;
   }
 
   void setQuery(String q) {

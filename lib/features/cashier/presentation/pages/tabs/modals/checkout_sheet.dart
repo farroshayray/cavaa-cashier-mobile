@@ -137,7 +137,8 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     final ppnActive = vm.isPpnActive;
     final ppnPercent = vm.ppnPercent;
     final ppnAmount = vm.cartPpnAmount;
-    final grandTotal = vm.cartGrandTotalRounded;
+    final roundingAmount = vm.roundingAmountForPayment(_selectedPay);
+    final grandTotal = vm.payableTotalForPayment(_selectedPay);
 
     final instantPayments = payOptions.where((o) {
       return o.kind == PayKind.cashierCash || o.kind == PayKind.onlineQris;
@@ -213,6 +214,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                       ppnActive: ppnActive,
                       ppnPercent: ppnPercent,
                       ppnAmount: ppnAmount,
+                      roundingAmount: roundingAmount,
                       grandTotal: grandTotal,
                     ),
                     const SizedBox(height: 14),
@@ -855,6 +857,7 @@ class _TotalCard extends StatelessWidget {
     required this.ppnActive,
     required this.ppnPercent,
     required this.ppnAmount,
+    required this.roundingAmount,
     required this.grandTotal,
   });
 
@@ -862,6 +865,7 @@ class _TotalCard extends StatelessWidget {
   final bool ppnActive;
   final num ppnPercent;
   final num ppnAmount;
+  final num roundingAmount;
   final num grandTotal;
 
   @override
@@ -909,13 +913,14 @@ class _TotalCard extends StatelessWidget {
           if (ppnActive) ...[
             row('PPN (${ppnPercent.toStringAsFixed(ppnPercent % 1 == 0 ? 0 : 2)}%)',
                 'Rp ${_rupiah(ppnAmount)}'),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 6),
-              child: Divider(height: 1),
-            ),
-            row('Grand Total', 'Rp ${_rupiah(grandTotal)}', highlight: true),
-          ] else
-            row('Grand Total', 'Rp ${_rupiah(grandTotal)}', highlight: true),
+          ],
+          if (roundingAmount > 0)
+            row('Pembulatan Cash', 'Rp ${_rupiah(roundingAmount)}'),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: Divider(height: 1),
+          ),
+          row('Grand Total', 'Rp ${_rupiah(grandTotal)}', highlight: true),
         ],
       ),
     );

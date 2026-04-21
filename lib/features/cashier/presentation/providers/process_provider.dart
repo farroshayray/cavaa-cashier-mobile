@@ -63,7 +63,13 @@ class ProcessProvider extends ChangeNotifier {
           return true;
         })
         .map((row) {
+        final cached = _decodeCachedJson(row.detailJson) ??
+            _decodeCachedJson(row.latestProcessJson) ??
+            _decodeCachedJson(row.processRequestJson) ??
+            <String, dynamic>{};
+
         return <String, dynamic>{
+          ..._normalizeCachedOrderMap(cached),
           'id': row.serverId,
           'booking_order_code': row.bookingOrderCode,
           'customer_name': row.customerName,
