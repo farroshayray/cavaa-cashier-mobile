@@ -66,6 +66,9 @@ class _WorkScheduleProfilePageState extends State<WorkScheduleProfilePage> {
     final activeShift = user == null
         ? null
         : _activeShiftFor(user.workSchedule, _now);
+    final upcomingShift = user == null || activeShift != null
+        ? null
+        : _nextShiftFor(user.workSchedule, _now);
 
     return Scaffold(
       appBar: AppBar(
@@ -90,7 +93,7 @@ class _WorkScheduleProfilePageState extends State<WorkScheduleProfilePage> {
                   _CurrentShiftPanel(
                     now: _now,
                     activeShift: activeShift,
-                    enforceWorkSchedule: user.enforceWorkSchedule,
+                    upcomingShift: upcomingShift,
                     hasSchedule: user.workSchedule.isNotEmpty,
                   ),
                   const SizedBox(height: 18),
@@ -102,10 +105,12 @@ class _WorkScheduleProfilePageState extends State<WorkScheduleProfilePage> {
                   ..._days.map((day) {
                     final ranges = user.workSchedule[day] ?? const [];
                     return _ScheduleDayTile(
+                      day: day,
                       label: _dayLabels[day] ?? day,
                       ranges: ranges,
                       isToday: day == _dayKey(_now),
                       activeShift: activeShift,
+                      upcomingShift: upcomingShift,
                     );
                   }),
                 ],
@@ -156,6 +161,46 @@ class _WorkScheduleProfilePageState extends State<WorkScheduleProfilePage> {
     }
 
     return null;
+  }
+
+  _ActiveShift? _nextShiftFor(
+    Map<String, List<WorkScheduleRange>> schedule,
+    DateTime now,
+  ) {
+    _ActiveShift? nearest;
+
+    for (var dayOffset = 0; dayOffset <= 7; dayOffset++) {
+      final baseDate = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).add(Duration(days: dayOffset));
+      final day = _dayKey(baseDate);
+
+      for (final range in schedule[day] ?? const <WorkScheduleRange>[]) {
+        final startAt = _timeOnDate(baseDate, range.start);
+        var endAt = _timeOnDate(baseDate, range.end);
+
+        if (!endAt.isAfter(startAt)) {
+          endAt = endAt.add(const Duration(days: 1));
+        }
+
+        if (!startAt.isAfter(now)) continue;
+
+        final candidate = _ActiveShift(
+          day: day,
+          range: range,
+          startAt: startAt,
+          endAt: endAt,
+        );
+
+        if (nearest == null || candidate.startAt.isBefore(nearest.startAt)) {
+          nearest = candidate;
+        }
+      }
+    }
+
+    return nearest;
   }
 
   DateTime _timeOnDate(DateTime date, String hhmm) {
@@ -256,33 +301,44 @@ class _CurrentShiftPanel extends StatelessWidget {
   const _CurrentShiftPanel({
     required this.now,
     required this.activeShift,
-    required this.enforceWorkSchedule,
+    required this.upcomingShift,
     required this.hasSchedule,
   });
 
   final DateTime now;
   final _ActiveShift? activeShift;
-  final bool enforceWorkSchedule;
+  final _ActiveShift? upcomingShift;
   final bool hasSchedule;
 
   @override
   Widget build(BuildContext context) {
     final shift = activeShift;
     final isActive = shift != null;
+    final nextShift = upcomingShift;
     final remaining = shift == null
         ? Duration.zero
         : shift.endAt.difference(now);
+    final waiting = nextShift == null
+        ? Duration.zero
+        : nextShift.startAt.difference(now);
+    final isWaiting = !isActive && hasSchedule;
+    final accentColor = isActive
+        ? const Color(0xFF2E7D32)
+        : isWaiting
+        ? const Color(0xFFC62828)
+        : const Color(0xFFEF6C00);
+    final bgColor = isActive
+        ? const Color(0xFFEAF7EE)
+        : isWaiting
+        ? const Color(0xFFFFEBEE)
+        : const Color(0xFFFFF4E5);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFEAF7EE) : const Color(0xFFFFF4E5),
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isActive
-              ? const Color(0xFF2E7D32).withValues(alpha: 0.25)
-              : const Color(0xFFEF6C00).withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: accentColor.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,10 +348,10 @@ class _CurrentShiftPanel extends StatelessWidget {
               Icon(
                 isActive
                     ? Icons.play_circle_outline_rounded
+                    : isWaiting
+                    ? Icons.timer_outlined
                     : Icons.pause_circle_outline_rounded,
-                color: isActive
-                    ? const Color(0xFF2E7D32)
-                    : const Color(0xFFEF6C00),
+                color: accentColor,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -309,7 +365,7 @@ class _CurrentShiftPanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          if (hasSchedule) const SizedBox(height: 12),
           if (isActive) ...[
             Text(
               '${shift.range.start} - ${shift.range.end}',
@@ -323,10 +379,28 @@ class _CurrentShiftPanel extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-          ] else
+          ] else if (hasSchedule && nextShift != null) ...[
             Text(
-              _inactiveMessage,
-              style: const TextStyle(color: Colors.black87, height: 1.35),
+              '${_WorkScheduleProfilePageState._dayLabels[nextShift.day] ?? nextShift.day}, '
+              '${nextShift.range.start} - ${nextShift.range.end}',
+              style: const TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Mulai dalam: ${_formatDuration(waiting)}',
+              style: TextStyle(
+                color: accentColor,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ] else if (hasSchedule)
+            const Text(
+              'Belum ada jadwal kerja berikutnya.',
+              style: TextStyle(color: Colors.black87, height: 1.35),
             ),
         ],
       ),
@@ -334,18 +408,8 @@ class _CurrentShiftPanel extends StatelessWidget {
   }
 
   String get _inactiveTitle {
-    if (!hasSchedule) return 'Jadwal belum tersedia';
+    if (!hasSchedule) return 'Jadwal tidak diatur oleh pengelola';
     return 'Tidak ada jadwal berjalan';
-  }
-
-  String get _inactiveMessage {
-    if (!hasSchedule) {
-      return 'Backend belum mengirim jadwal kerja untuk akun ini.';
-    }
-    if (enforceWorkSchedule) {
-      return 'Saat ini tidak berada di rentang jam kerja yang aktif.';
-    }
-    return 'Tidak ada rentang jadwal aktif saat ini.';
   }
 
   String _formatDuration(Duration duration) {
@@ -365,22 +429,29 @@ class _CurrentShiftPanel extends StatelessWidget {
 
 class _ScheduleDayTile extends StatelessWidget {
   const _ScheduleDayTile({
+    required this.day,
     required this.label,
     required this.ranges,
     required this.isToday,
     required this.activeShift,
+    required this.upcomingShift,
   });
 
+  final String day;
   final String label;
   final List<WorkScheduleRange> ranges;
   final bool isToday;
   final _ActiveShift? activeShift;
+  final _ActiveShift? upcomingShift;
 
   @override
   Widget build(BuildContext context) {
     final hasActiveRange = ranges.any(_isActiveRange);
+    final hasUpcomingRange = ranges.any(_isUpcomingRange);
     final borderColor = hasActiveRange
         ? const Color(0xFF2E7D32)
+        : hasUpcomingRange
+        ? const Color(0xFFC62828)
         : Colors.black.withValues(alpha: 0.08);
 
     return Container(
@@ -431,7 +502,7 @@ class _ScheduleDayTile extends StatelessWidget {
                     children: ranges.map((range) {
                       return _TimeBadge(
                         label: '${range.start} - ${range.end}',
-                        active: _isActiveRange(range),
+                        status: _badgeStatus(range),
                       );
                     }).toList(),
                   ),
@@ -444,37 +515,63 @@ class _ScheduleDayTile extends StatelessWidget {
   bool _isActiveRange(WorkScheduleRange range) {
     final shift = activeShift;
     if (shift == null) return false;
+    if (shift.day != day) return false;
     return shift.range.start == range.start && shift.range.end == range.end;
+  }
+
+  bool _isUpcomingRange(WorkScheduleRange range) {
+    final shift = upcomingShift;
+    if (shift == null) return false;
+    if (shift.day != day) return false;
+    return shift.range.start == range.start && shift.range.end == range.end;
+  }
+
+  _ScheduleBadgeStatus _badgeStatus(WorkScheduleRange range) {
+    if (_isActiveRange(range)) return _ScheduleBadgeStatus.active;
+    if (_isUpcomingRange(range)) return _ScheduleBadgeStatus.upcoming;
+    return _ScheduleBadgeStatus.normal;
   }
 }
 
 class _TimeBadge extends StatelessWidget {
-  const _TimeBadge({required this.label, required this.active});
+  const _TimeBadge({required this.label, required this.status});
 
   final String label;
-  final bool active;
+  final _ScheduleBadgeStatus status;
 
   @override
   Widget build(BuildContext context) {
     const activeColor = Color(0xFF2E7D32);
+    const upcomingColor = Color(0xFFC62828);
+    final active = status == _ScheduleBadgeStatus.active;
+    final upcoming = status == _ScheduleBadgeStatus.upcoming;
+    final accent = active
+        ? activeColor
+        : upcoming
+        ? upcomingColor
+        : Colors.black87;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: active
             ? const Color(0xFFEAF7EE)
+            : upcoming
+            ? const Color(0xFFFFEBEE)
             : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
           color: active
               ? activeColor.withValues(alpha: 0.25)
+              : upcoming
+              ? upcomingColor.withValues(alpha: 0.25)
               : Colors.black.withValues(alpha: 0.06),
         ),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: active ? activeColor : Colors.black87,
+          color: accent,
           fontSize: 12,
           fontWeight: FontWeight.w800,
         ),
@@ -482,6 +579,8 @@ class _TimeBadge extends StatelessWidget {
     );
   }
 }
+
+enum _ScheduleBadgeStatus { normal, active, upcoming }
 
 class _InfoChip extends StatelessWidget {
   const _InfoChip({required this.icon, required this.label});
