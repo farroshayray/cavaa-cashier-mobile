@@ -669,39 +669,46 @@ class _PaymentOrderCard extends StatelessWidget {
     // khusus mobile landscape
     final isMobileLandscape = isLandscape && shortestSide < 600;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onDetail,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(0.04),
-          )
-        ],
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.black.withOpacity(0.08)),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+                color: Colors.black.withOpacity(0.04),
+              )
+            ],
+          ),
+          child: isMobileLandscape
+              ? _buildMobileLandscapeLayout(
+                  code: code,
+                  customer: customer,
+                  table: table,
+                  total: total,
+                  roundingAmount: roundingAmount,
+                  orderDateTime: orderDateTime,
+                  badge: badge,
+                )
+              : _buildDefaultLayout(
+                  code: code,
+                  customer: customer,
+                  table: table,
+                  total: total,
+                  roundingAmount: roundingAmount,
+                  orderDateTime: orderDateTime,
+                  badge: badge,
+                ),
+        ),
       ),
-      child: isMobileLandscape
-          ? _buildMobileLandscapeLayout(
-              code: code,
-              customer: customer,
-              table: table,
-              total: total,
-              roundingAmount: roundingAmount,
-              orderDateTime: orderDateTime,
-              badge: badge,
-            )
-          : _buildDefaultLayout(
-              code: code,
-              customer: customer,
-              table: table,
-              total: total,
-              roundingAmount: roundingAmount,
-              orderDateTime: orderDateTime,
-              badge: badge,
-            ),
     );
   }
 
@@ -802,11 +809,6 @@ class _PaymentOrderCard extends StatelessWidget {
                   ],
                 ],
               ),
-            ),
-            IconButton(
-              onPressed: onDetail,
-              icon: const Icon(Icons.visibility_outlined),
-              tooltip: 'Detail',
             ),
             IconButton(
               onPressed: onDelete,
@@ -938,13 +940,6 @@ class _PaymentOrderCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(width: 8),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    onPressed: onDetail,
-                    icon: const Icon(Icons.visibility_outlined),
-                    tooltip: 'Detail',
-                  ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
