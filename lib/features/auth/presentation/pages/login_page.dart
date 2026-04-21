@@ -4,9 +4,17 @@ import '../../data/remembered_login_storage.dart';
 import '../auth_provider.dart';
 import '../../../cashier/presentation/pages/cashier_home_page.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const _forcedLogoutMessageKey = 'forced_logout_message';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({
+    super.key,
+    this.initialErrorMessage,
+  });
+
+  final String? initialErrorMessage;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -20,6 +28,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _loadingRemembered = true;
   bool _rememberMe = true;
   bool _obscure = true;
+  String? _forcedLogoutMessage;
 
   @override
   void dispose() {
@@ -36,6 +45,8 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _loadRememberedLogin() async {
     final data = await _rememberedLoginStorage.load();
+    final forcedLogoutMessage =
+        widget.initialErrorMessage ?? await _takeForcedLogoutMessage();
 
     if (!mounted) return;
 
@@ -43,8 +54,16 @@ class _LoginPageState extends State<LoginPage> {
       _rememberMe = data['rememberMe'] as bool? ?? true;
       _username.text = data['username'] as String? ?? '';
       _pass.text = data['password'] as String? ?? '';
+      _forcedLogoutMessage = forcedLogoutMessage;
       _loadingRemembered = false;
     });
+  }
+
+  Future<String?> _takeForcedLogoutMessage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final message = prefs.getString(_forcedLogoutMessageKey);
+    await prefs.remove(_forcedLogoutMessageKey);
+    return message?.trim().isEmpty == true ? null : message;
   }
 
   Future<void> _submit() async {
@@ -52,6 +71,10 @@ class _LoginPageState extends State<LoginPage> {
 
     final username = _username.text.trim();
     final password = _pass.text;
+
+    if (_forcedLogoutMessage != null) {
+      setState(() => _forcedLogoutMessage = null);
+    }
 
     final ok = await auth.login(
       username,
@@ -111,7 +134,7 @@ class _LoginPageState extends State<LoginPage> {
                 obscure: _obscure,
                 onToggleObscure: () => setState(() => _obscure = !_obscure),
                 isLoading: auth.isLoading,
-                errorMessage: auth.errorMessage,
+                errorMessage: auth.errorMessage ?? _forcedLogoutMessage,
                 onSubmit: _submit,
               ),
             ),

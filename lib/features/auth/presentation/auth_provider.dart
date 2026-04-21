@@ -36,6 +36,34 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await fetchMe();
+    } on DioException catch (e) {
+      debugPrint('bootstrap fetchMe dio failed: $e');
+
+      final data = e.response?.data;
+      final isInactiveAccount = e.response?.statusCode == 403 &&
+          data is Map &&
+          data['code']?.toString() == 'account_inactive';
+
+      if (e.response?.statusCode == 401 || isInactiveAccount) {
+        errorMessage = isInactiveAccount && data is Map
+            ? _messageFromErrorData(data)
+            : null;
+        await repo.logout();
+        isLoggedIn = false;
+        user = null;
+        appUpdate = null;
+        notifyListeners();
+        return;
+      }
+
+      if (cachedUser != null) {
+        user = cachedUser;
+        isLoggedIn = true;
+      } else {
+        isLoggedIn = true;
+      }
+
+      notifyListeners();
     } catch (e) {
       debugPrint('bootstrap fetchMe failed, keep logged in with cached token: $e');
 
@@ -76,7 +104,7 @@ class AuthProvider extends ChangeNotifier {
 
       final data = e.response?.data;
       if (data is Map && data['message'] != null) {
-        errorMessage = data['message'].toString();
+        errorMessage = _messageFromErrorData(data);
       } else {
         errorMessage = 'Login gagal';
       }
@@ -112,5 +140,14 @@ class AuthProvider extends ChangeNotifier {
     appUpdate = null;
     isLoggedIn = false;
     notifyListeners();
+  }
+
+  String _messageFromErrorData(Map<dynamic, dynamic> data) {
+    final message = data['message']?.toString() ?? 'Login gagal';
+    final reason = data['deactivation_reason']?.toString().trim();
+
+    return reason != null && reason.isNotEmpty
+        ? '$message\nAlasan: $reason'
+        : message;
   }
 }

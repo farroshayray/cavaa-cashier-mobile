@@ -5,6 +5,8 @@ class UserModel {
   final String role;
   final int? partnerId;
   final String? image;
+  final bool isActive;
+  final bool isActiveAdmin;
 
   UserModel({
     required this.id,
@@ -13,6 +15,8 @@ class UserModel {
     required this.role,
     required this.partnerId,
     this.image,
+    this.isActive = true,
+    this.isActiveAdmin = true,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -23,6 +27,8 @@ class UserModel {
       role: (json['role'] ?? '') as String,
       partnerId: json['partner_id'] as int?,
       image: json['image']?.toString(),
+      isActive: _parseBool(json['is_active'], defaultValue: true),
+      isActiveAdmin: _parseBool(json['is_active_admin'], defaultValue: true),
     );
   }
 
@@ -34,6 +40,24 @@ class UserModel {
       'role': role,
       'partner_id': partnerId,
       'image': image,
+      'is_active': isActive,
+      'is_active_admin': isActiveAdmin,
     };
+  }
+
+  static bool _parseBool(dynamic value, {required bool defaultValue}) {
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+
+    final normalized = value.toString().trim().toLowerCase();
+    if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+      return false;
+    }
+
+    return defaultValue;
   }
 }
