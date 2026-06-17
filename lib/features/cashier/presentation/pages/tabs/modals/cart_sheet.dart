@@ -69,114 +69,10 @@ class CartSheet extends StatelessWidget {
                       itemCount: items.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (_, i) {
-                        final it = items[i];
-                        final stockNotices = _stockNoticesFor(it, vm);
-                        final hasBlockingWarning =
-                            stockNotices.any((notice) => notice.blocking);
-                        final hasNotice = stockNotices.isNotEmpty;
-
-                        return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: hasBlockingWarning
-                                  ? Colors.redAccent.withOpacity(0.55)
-                                  : hasNotice
-                                      ? Colors.orange.withOpacity(0.45)
-                                  : Colors.black.withOpacity(0.10),
-                            ),
-                            color: hasBlockingWarning
-                                ? Colors.redAccent.withOpacity(0.04)
-                                : hasNotice
-                                    ? Colors.orange.withOpacity(0.05)
-                                : Colors.white,
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      it.product.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.w900),
-                                    ),
-                                    const SizedBox(height: 4),
-
-                                    if (stockNotices.isNotEmpty) ...[
-                                      ...stockNotices.map(
-                                        (notice) => Padding(
-                                          padding: const EdgeInsets.only(bottom: 4),
-                                          child: _StockWarningPill(notice: notice),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                    ],
-
-                                    if ((it.note ?? '').toString().trim().isNotEmpty)
-                                      Text(
-                                        'Catatan: ${it.note}',
-                                        style: TextStyle(
-                                          color: Colors.black.withOpacity(0.60),
-                                          fontSize: 12,
-                                        ),
-                                      ),
-
-                                    // kalau kamu mau tampilkan opsi yg dipilih, bisa ditambah di sini (optional)
-                                    ..._selectedOptionTextLines(it, vm).map(
-                                      (line) => Padding(
-                                        padding: const EdgeInsets.only(top: 2),
-                                        child: Text(
-                                          line,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: Colors.black.withOpacity(0.60),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'Rp ${_rupiah(it.unitFinalPrice)}',
-                                      style: const TextStyle(fontWeight: FontWeight.w800),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-
-                              // stepper
-                              Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.black.withOpacity(0.10)),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      onPressed: () => context.read<PurchaseProvider>().decCartAt(i),
-                                      icon: const Icon(Icons.remove_rounded),
-                                    ),
-                                    Text('${it.qty}',
-                                        style: const TextStyle(fontWeight: FontWeight.w900)),
-                                    IconButton(
-                                      onPressed: () => context.read<PurchaseProvider>().incCartAt(i),
-                                      icon: const Icon(Icons.add_rounded),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                        return _CartItemRow(
+                          index: i,
+                          item: items[i],
+                          vm: vm,
                         );
                       },
                     ),
@@ -293,6 +189,193 @@ class CartSheet extends StatelessWidget {
   }
 }
 
+class _CartItemRow extends StatefulWidget {
+  const _CartItemRow({
+    required this.index,
+    required this.item,
+    required this.vm,
+  });
+
+  final int index;
+  final CartItem item;
+  final PurchaseProvider vm;
+
+  @override
+  State<_CartItemRow> createState() => _CartItemRowState();
+}
+
+class _CartItemRowState extends State<_CartItemRow> {
+  late final TextEditingController qtyC = TextEditingController(text: widget.item.qty.toString());
+
+  @override
+  void didUpdateWidget(covariant _CartItemRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.item.qty.toString() != qtyC.text) {
+      qtyC.text = widget.item.qty.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    qtyC.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final it = widget.item;
+    final vm = widget.vm;
+    final i = widget.index;
+    
+    final stockNotices = _stockNoticesFor(it, vm);
+    final hasBlockingWarning = stockNotices.any((notice) => notice.blocking);
+    final hasNotice = stockNotices.isNotEmpty;
+    
+    final maxForLine = vm.maxAddableQtyWithOptions(
+      product: it.product,
+      selected: it.selected,
+      excludingItem: it,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: hasBlockingWarning
+              ? Colors.redAccent.withOpacity(0.55)
+              : hasNotice
+                  ? Colors.orange.withOpacity(0.45)
+              : Colors.black.withOpacity(0.10),
+        ),
+        color: hasBlockingWarning
+            ? Colors.redAccent.withOpacity(0.04)
+            : hasNotice
+                ? Colors.orange.withOpacity(0.05)
+            : Colors.white,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  it.product.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+
+                if (stockNotices.isNotEmpty) ...[
+                  ...stockNotices.map(
+                    (notice) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: _StockWarningPill(notice: notice),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                ],
+
+                if ((it.note ?? '').toString().trim().isNotEmpty)
+                  Text(
+                    'Catatan: ${it.note}',
+                    style: TextStyle(
+                      color: Colors.black.withOpacity(0.60),
+                      fontSize: 12,
+                    ),
+                  ),
+
+                ..._selectedOptionTextLines(it, vm).map(
+                  (line) => Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      line,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.black.withOpacity(0.60),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+                Text(
+                  'Rp ${_rupiah(it.unitFinalPrice)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // stepper
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black.withOpacity(0.10)),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: () => context.read<PurchaseProvider>().decCartAt(i),
+                  icon: const Icon(Icons.remove_rounded),
+                ),
+                SizedBox(
+                  width: 40,
+                  child: TextField(
+                    controller: qtyC,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    onChanged: (val) {
+                      final parsed = int.tryParse(val) ?? 0;
+                      if (parsed > 0) {
+                        context.read<PurchaseProvider>().setCartQtyAt(i, parsed);
+                      }
+                    },
+                    onEditingComplete: () {
+                      FocusScope.of(context).unfocus();
+                      final parsed = int.tryParse(qtyC.text) ?? 0;
+                      if (parsed < 1) {
+                        context.read<PurchaseProvider>().setCartQtyAt(i, 1);
+                        qtyC.text = '1';
+                      }
+                    },
+                    onTapOutside: (_) {
+                      FocusScope.of(context).unfocus();
+                      final parsed = int.tryParse(qtyC.text) ?? 0;
+                      if (parsed < 1) {
+                        context.read<PurchaseProvider>().setCartQtyAt(i, 1);
+                        qtyC.text = '1';
+                      }
+                    },
+                  ),
+                ),
+                IconButton(
+                  onPressed: it.qty >= maxForLine && maxForLine > 0 ? null : () => context.read<PurchaseProvider>().incCartAt(i),
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StockWarningPill extends StatelessWidget {
   const _StockWarningPill({required this.notice});
 
@@ -358,9 +441,9 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
         'Produk kurang: diminta ${item.qty}, tersedia $availableForThisLine',
         blocking: true,
       ));
-    } else if (remainingAfterThisLine > 0 && remainingAfterThisLine <= 3) {
+    } else if (remainingAfterThisLine >= 0 && remainingAfterThisLine <= 3) {
       notices.add(_StockNotice(
-        'Stok produk tinggal $remainingAfterThisLine',
+        remainingAfterThisLine == 0 ? 'Mencapai batas maksimal' : 'Stok produk tinggal $remainingAfterThisLine',
         blocking: false,
       ));
     }
@@ -423,6 +506,12 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
     notices.add(_StockNotice(
       'Stok bahan/produk kurang: diminta ${item.qty}, tersedia $maxForLine',
       blocking: true,
+    ));
+  } else if (item.qty == maxForLine && maxForLine > 0 && maxForLine < 999999 &&
+             !notices.any((notice) => notice.blocking || notice.text.contains('Mencapai batas'))) {
+    notices.add(const _StockNotice(
+      'Mencapai batas stok maksimal',
+      blocking: false,
     ));
   }
 

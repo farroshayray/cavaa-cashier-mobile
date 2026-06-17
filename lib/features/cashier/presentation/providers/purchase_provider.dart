@@ -859,6 +859,74 @@ class PurchaseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// set qty secara spesifik untuk produk (hanya efektif untuk produk TANPA opsi)
+  void setCartQtyForProduct(Product product, int newQty) {
+    final index = cart.indexWhere((c) => c.product.id == product.id);
+    
+    if (index >= 0) {
+      // Jika produk sudah ada di cart
+      if (newQty < 1) {
+        cart.removeAt(index);
+        notifyListeners();
+        return;
+      }
+
+      final item = cart[index];
+      final max = maxAddableQtyWithOptions(
+        product: product,
+        selected: item.selected,
+        excludingItem: item,
+      );
+
+      var finalQty = newQty > max ? max : newQty;
+      if (finalQty < 1) finalQty = 1;
+
+      cart[index].qty = finalQty;
+      notifyListeners();
+    } else if (newQty > 0) {
+      // Jika belum ada di cart, kita tambahkan
+      // (asumsi: hanya dipanggil untuk produk tanpa opsi)
+      final max = maxAddableQtyWithOptions(
+        product: product,
+        selected: const {},
+      );
+
+      var finalQty = newQty > max ? max : newQty;
+      if (finalQty > 0) {
+        addWithOptions(
+          product: product,
+          qty: finalQty,
+          selected: const {},
+          note: '',
+        );
+      }
+    }
+  }
+
+  /// set qty untuk CartItem tertentu (by index)
+  void setCartQtyAt(int index, int newQty) {
+    if (index < 0 || index >= cart.length) return;
+
+    if (newQty < 1) {
+      cart.removeAt(index);
+      notifyListeners();
+      return;
+    }
+
+    final item = cart[index];
+    final max = maxAddableQtyWithOptions(
+      product: item.product,
+      selected: item.selected,
+      excludingItem: item,
+    );
+
+    var finalQty = newQty > max ? max : newQty;
+    if (finalQty < 1) finalQty = 1; // Jangan otomatis terhapus jika max < 1, cukup di-clamp ke 1 dan biarkan warning muncul
+
+    cart[index].qty = finalQty;
+    notifyListeners();
+  }
+
   void clearCartAndReset() {
     cart.clear();
     selectedCategoryId = -1;

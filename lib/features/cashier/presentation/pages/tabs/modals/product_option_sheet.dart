@@ -16,12 +16,14 @@ class ProductOptionsSheet extends StatefulWidget {
 class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
   int qty = 1;
   final noteC = TextEditingController();
+  late final qtyC = TextEditingController(text: qty.toString());
   final Map<int, Set<int>> selected = {}; // groupId -> set<optionId>
   String? qtyAdjustmentNotice;
 
   @override
   void dispose() {
     noteC.dispose();
+    qtyC.dispose();
     super.dispose();
   }
 
@@ -109,6 +111,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
 
       if (maxAfterSelection > 0 && qty > maxAfterSelection) {
         qty = maxAfterSelection;
+        qtyC.text = qty.toString();
         qtyAdjustmentNotice = _qtyAdjustmentText(
           option: option,
           previousQty: previousQty,
@@ -502,12 +505,71 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                       child: Row(
                         children: [
                           IconButton(
-                            onPressed: qty <= 1 ? null : () => setState(() => qty--),
+                            onPressed: qty <= 1 ? null : () {
+                              setState(() {
+                                qty--;
+                                qtyC.text = qty.toString();
+                              });
+                            },
                             icon: const Icon(Icons.remove_rounded),
                           ),
-                          Text('$qty', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                          SizedBox(
+                            width: 40,
+                            child: TextField(
+                              controller: qtyC,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onChanged: (val) {
+                                final parsed = int.tryParse(val) ?? 0;
+                                if (parsed > 0) {
+                                  setState(() {
+                                    if (maxQty > 0 && parsed > maxQty) {
+                                      qty = maxQty;
+                                    } else {
+                                      qty = parsed;
+                                    }
+                                    if (qty != parsed) {
+                                      qtyC.text = qty.toString();
+                                      qtyC.selection = TextSelection.fromPosition(TextPosition(offset: qtyC.text.length));
+                                    }
+                                  });
+                                }
+                              },
+                              onEditingComplete: () {
+                                FocusScope.of(context).unfocus();
+                                final parsed = int.tryParse(qtyC.text) ?? 0;
+                                if (parsed < 1) {
+                                  setState(() {
+                                    qty = 1;
+                                    qtyC.text = '1';
+                                  });
+                                }
+                              },
+                              onTapOutside: (_) {
+                                FocusScope.of(context).unfocus();
+                                final parsed = int.tryParse(qtyC.text) ?? 0;
+                                if (parsed < 1) {
+                                  setState(() {
+                                    qty = 1;
+                                    qtyC.text = '1';
+                                  });
+                                }
+                              },
+                            ),
+                          ),
                           IconButton(
-                            onPressed: qty >= maxQty ? null : () => setState(() => qty++),
+                            onPressed: qty >= maxQty ? null : () {
+                              setState(() {
+                                qty++;
+                                qtyC.text = qty.toString();
+                              });
+                            },
                             icon: const Icon(Icons.add_rounded),
                           ),
                         ],

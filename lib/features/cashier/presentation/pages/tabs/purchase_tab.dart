@@ -791,46 +791,10 @@ class _ProductCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
 
-                        // qty controls
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (qty > 0)
-                              _CircleButton(
-                                onTap: () => context.read<PurchaseProvider>().minus(product),
-                                outline: true,
-                                child: const Icon(Icons.remove_rounded, size: 18),
-                              ),
-                            if (qty > 0) ...[
-                              const SizedBox(width: 6),
-                              Text('$qty', style: const TextStyle(fontWeight: FontWeight.w900)),
-                              const SizedBox(width: 6),
-                            ],
-                            _CircleButton(
-                              onTap: isOut
-                                  ? null
-                                  : () async {
-                                      if (product.optionGroups.isNotEmpty) {
-                                        final purchaseVm = context.read<PurchaseProvider>();
-                                        await showModalBottomSheet(
-                                          context: context,
-                                          useRootNavigator: true,
-                                          isScrollControlled: true,
-                                          backgroundColor: Colors.transparent,
-                                          builder: (_) => ChangeNotifierProvider.value(
-                                            value: purchaseVm,
-                                            child: ProductOptionsSheet(product: product),
-                                          ),
-                                        );
-
-                                      } else {
-                                        context.read<PurchaseProvider>().add(product);
-                                      }
-                                    },
-                              child: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                              filled: true,
-                            ),
-                          ],
+                        _ProductQtyControl(
+                          product: product,
+                          qty: qty,
+                          isOut: isOut,
                         ),
                       ],
                     ),
@@ -841,6 +805,125 @@ class _ProductCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProductQtyControl extends StatefulWidget {
+  const _ProductQtyControl({
+    required this.product,
+    required this.qty,
+    required this.isOut,
+  });
+
+  final Product product;
+  final int qty;
+  final bool isOut;
+
+  @override
+  State<_ProductQtyControl> createState() => _ProductQtyControlState();
+}
+
+class _ProductQtyControlState extends State<_ProductQtyControl> {
+  late final TextEditingController qtyC = TextEditingController(text: widget.qty.toString());
+
+  @override
+  void didUpdateWidget(covariant _ProductQtyControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.qty.toString() != qtyC.text) {
+      qtyC.text = widget.qty.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    qtyC.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.product;
+    final qty = widget.qty;
+    final isOut = widget.isOut;
+    final hasOptions = product.optionGroups.isNotEmpty;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (qty > 0)
+          _CircleButton(
+            onTap: () => context.read<PurchaseProvider>().minus(product),
+            outline: true,
+            child: const Icon(Icons.remove_rounded, size: 18),
+          ),
+        if (qty > 0) ...[
+          const SizedBox(width: 6),
+          if (hasOptions)
+            Text('$qty', style: const TextStyle(fontWeight: FontWeight.w900))
+          else
+            SizedBox(
+              width: 36,
+              child: TextField(
+                controller: qtyC,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onChanged: (val) {
+                  final parsed = int.tryParse(val) ?? 0;
+                  if (parsed > 0) {
+                    context.read<PurchaseProvider>().setCartQtyForProduct(product, parsed);
+                  }
+                },
+                onEditingComplete: () {
+                  FocusScope.of(context).unfocus();
+                  final parsed = int.tryParse(qtyC.text) ?? 0;
+                  if (parsed < 1) {
+                    context.read<PurchaseProvider>().setCartQtyForProduct(product, 1);
+                    qtyC.text = '1';
+                  }
+                },
+                onTapOutside: (_) {
+                  FocusScope.of(context).unfocus();
+                  final parsed = int.tryParse(qtyC.text) ?? 0;
+                  if (parsed < 1) {
+                    context.read<PurchaseProvider>().setCartQtyForProduct(product, 1);
+                    qtyC.text = '1';
+                  }
+                },
+              ),
+            ),
+          const SizedBox(width: 6),
+        ],
+        _CircleButton(
+          onTap: isOut
+              ? null
+              : () async {
+                  if (hasOptions) {
+                    final purchaseVm = context.read<PurchaseProvider>();
+                    await showModalBottomSheet(
+                      context: context,
+                      useRootNavigator: true,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => ChangeNotifierProvider.value(
+                        value: purchaseVm,
+                        child: ProductOptionsSheet(product: product),
+                      ),
+                    );
+                  } else {
+                    context.read<PurchaseProvider>().add(product);
+                  }
+                },
+          child: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+          filled: true,
+        ),
+      ],
     );
   }
 }
