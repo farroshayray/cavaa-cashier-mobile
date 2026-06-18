@@ -138,6 +138,7 @@ class CartSheet extends StatelessWidget {
                                     // - manual      => biasanya kirim manualId (string) ATAU "MANUAL" tergantung backend
                                     final String paymentMethod = switch (payment.kind) {
                                       PayKind.cashierCash => 'CASH',
+                                      PayKind.paylater    => 'PAYLATER',
                                       PayKind.onlineQris  => 'QRIS',
                                       PayKind.manual      => payment.value, // default: kirim manualId string
                                     };

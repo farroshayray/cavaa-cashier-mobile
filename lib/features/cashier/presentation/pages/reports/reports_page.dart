@@ -1354,6 +1354,13 @@ class _ReportPaymentFilterOption {
           groupOrder: 0,
           icon: Icons.payments_outlined,
         );
+      case PayKind.paylater:
+        return const _ReportPaymentFilterOption(
+          key: 'paylater',
+          label: 'PAYLATER',
+          groupOrder: 0,
+          icon: Icons.payments_outlined,
+        );
       case PayKind.onlineQris:
         return const _ReportPaymentFilterOption(
           key: 'qris',

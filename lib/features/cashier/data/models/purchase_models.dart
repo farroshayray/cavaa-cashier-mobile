@@ -82,6 +82,17 @@ class PurchasePayload {
       );
     }
 
+    // ✅ tampilkan PAYLATER hanya jika aktif
+    if (partnerData?.isPaylaterActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.paylater,
+          value: 'PAYLATER',
+          label: 'Bayar Nanti',
+        ),
+      );
+    }
+
     // manual payments tetap ditambahkan
     paymentOptions.addAll(manualPayments);
 
@@ -100,6 +111,7 @@ class PartnerData {
   final String name;
   final bool isQrisActive;
   final bool isCashierActive;
+  final bool isPaylaterActive;
 
   final num ppn;
   final bool isPpnActive;
@@ -110,6 +122,7 @@ class PartnerData {
     required this.name,
     required this.isQrisActive,
     required this.isCashierActive,
+    required this.isPaylaterActive,
     required this.ppn,
     required this.isPpnActive,
     required this.cashRoundingUnit,
@@ -121,6 +134,7 @@ class PartnerData {
       name: (json['name'] ?? '').toString(),
       isQrisActive: parseBool(json['is_qr_active']),
       isCashierActive: parseBool(json['is_cashier_active']),
+      isPaylaterActive: parseBool(json['is_paylater']),
       ppn: parseNum(json['ppn']),
       isPpnActive: parseBool(json['is_ppn_active']),
       cashRoundingUnit: parseInt(json['cash_rounding_unit']),
@@ -509,7 +523,7 @@ class StoreTable {
   }
 }
 
-enum PayKind { cashierCash, onlineQris, manual }
+enum PayKind { cashierCash, onlineQris, manual, paylater }
 
 class PaymentOption {
   final PayKind kind;
