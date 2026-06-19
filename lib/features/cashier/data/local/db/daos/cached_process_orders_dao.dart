@@ -88,6 +88,18 @@ class CachedProcessOrdersDao extends DatabaseAccessor<CashierDb>
 
   Future<void> mergeServerRows(List<CachedProcessOrdersCompanion> rows) async {
     await transaction(() async {
+      final remoteIds = rows.map((e) => e.serverId.value).whereType<int>().toList();
+
+      if (remoteIds.isEmpty) {
+        await (delete(cachedProcessOrders)
+              ..where((t) => t.isSynced.equals(true)))
+            .go();
+      } else {
+        await (delete(cachedProcessOrders)
+              ..where((t) => t.isSynced.equals(true) & t.serverId.isNotIn(remoteIds)))
+            .go();
+      }
+
       for (final row in rows) {
         final serverIdValue = row.serverId.value;
         if (serverIdValue == null) continue;
