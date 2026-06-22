@@ -64,12 +64,24 @@ class CachedPaymentOrdersDao {
         );
       }
 
+      final pendingFinishServerIds = (await (db.select(db.cachedProcessOrders)
+            ..where((tbl) =>
+                tbl.pendingAction.equals('FINISH') &
+                tbl.isSynced.equals(false)))
+          .get())
+          .map((e) => e.serverId)
+          .toSet();
+
       final staleRows = await (db.select(db.cachedPaymentOrders)
             ..where((tbl) => tbl.isPendingDelete.equals(false)))
           .get();
 
       for (final row in staleRows) {
         if (incomingServerIds.contains(row.serverId)) continue;
+        if (pendingFinishServerIds.contains(row.serverId)) {
+          debugPrint('keeping pending finish payment cache serverId=${row.serverId}');
+          continue;
+        }
 
         await _deleteCachedOrderByServerIdInTransaction(row.serverId);
         debugPrint('removed stale payment cache serverId=${row.serverId}');

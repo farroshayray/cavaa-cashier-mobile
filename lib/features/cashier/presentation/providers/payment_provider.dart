@@ -69,6 +69,13 @@ class PaymentProvider extends ChangeNotifier {
       final doneRows = await cachedDoneOrdersDao.getAllActive();
 
       final processServerIds = processRows
+          .where((e) {
+            if (e.paymentMethod == 'PAYLATER' &&
+                (e.pendingAction == 'FINISH' || e.orderStatus == 'SERVED')) {
+              return false;
+            }
+            return true;
+          })
           .map((e) => e.serverId)
           .toSet();
 

@@ -429,14 +429,29 @@ class SyncService {
             break;
 
           case 'FINISH':
+            debugPrint('🔄 [SYNC] Started FINISH action for serverId=${row.serverId}, paymentMethod=${row.paymentMethod}');
             await ordersRepo.finishOrder(row.serverId);
+            debugPrint('✅ [SYNC] finishOrder api success for serverId=${row.serverId}');
 
-            await cachedDoneOrdersDao.markSyncedByServerId(
-              row.serverId,
-              latestDoneJson: row.latestProcessJson,
-            );
-
-            await cachedProcessOrdersDao.deleteByServerId(row.serverId);
+            final isPayLater = row.paymentMethod == 'PAYLATER';
+            if (isPayLater) {
+              debugPrint('🔄 [SYNC] Fetching updated PAYLATER order detail for serverId=${row.serverId}');
+              final detail = await ordersRepo.fetchOrderDetail(row.serverId);
+              debugPrint('🔄 [SYNC] Upserting detail to cachedPaymentOrdersDao for serverId=${row.serverId}');
+              await cachedPaymentOrdersDao.upsertDetailFromApi(detail);
+              debugPrint('🔄 [SYNC] Cleaning up process & done caches for serverId=${row.serverId}');
+              await cachedProcessOrdersDao.deleteByServerId(row.serverId);
+              await cachedDoneOrdersDao.deleteByServerId(row.serverId);
+              debugPrint('✅ [SYNC] Completed PAYLATER finish sync for serverId=${row.serverId}');
+            } else {
+              debugPrint('🔄 [SYNC] Marking non-PAYLATER order as synced in done cache for serverId=${row.serverId}');
+              await cachedDoneOrdersDao.markSyncedByServerId(
+                row.serverId,
+                latestDoneJson: row.latestProcessJson,
+              );
+              await cachedProcessOrdersDao.deleteByServerId(row.serverId);
+              debugPrint('✅ [SYNC] Completed non-PAYLATER finish sync for serverId=${row.serverId}');
+            }
             break;
         }
       } catch (e) {

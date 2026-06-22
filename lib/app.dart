@@ -204,6 +204,7 @@ class _CavaaAppState extends State<CavaaApp> {
             localOrdersDao,
             cachedProcessOrdersDao,
             cachedDoneOrdersDao,
+            cachedPaymentOrdersDao,
             ctx.read<ConnectivityStatusProvider>(),
           ),
         ),

@@ -10,6 +10,7 @@ import '/features/cashier/presentation/providers/done_provider.dart';
 
 // ✅ bikin provider khusus proses (contoh)
 import '../../providers/process_provider.dart';
+import '../../providers/payment_provider.dart';
 
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
 // kalau nanti ada modal khusus proses/selesai, import juga
@@ -358,6 +359,7 @@ class _ProcessViewState extends State<_ProcessView> {
 
                             await _refreshKeepScroll();
                             await context.read<DoneProvider>().load();
+                            await context.read<PaymentProvider>().load();
 
                             if (!mounted) return;
 
