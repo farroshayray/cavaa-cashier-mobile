@@ -734,7 +734,7 @@ class _Body extends StatelessWidget {
     final hasCashierPaymentInstruction =
         (order['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
 
-    final showCashInput = method == 'CASH' || method == 'PAYLATER' || hasPaymentRequest || hasCashierPaymentInstruction;
+    final showCashInput = method == 'CASH' || method == 'OPENBILL' || hasPaymentRequest || hasCashierPaymentInstruction;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),

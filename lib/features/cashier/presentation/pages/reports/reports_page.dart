@@ -1354,10 +1354,10 @@ class _ReportPaymentFilterOption {
           groupOrder: 0,
           icon: Icons.payments_outlined,
         );
-      case PayKind.paylater:
+      case PayKind.openbill:
         return const _ReportPaymentFilterOption(
-          key: 'paylater',
-          label: 'PAYLATER',
+          key: 'openbill',
+          label: 'OPENBILL',
           groupOrder: 0,
           icon: Icons.payments_outlined,
         );

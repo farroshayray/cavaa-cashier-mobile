@@ -141,7 +141,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     final grandTotal = vm.payableTotalForPayment(_selectedPay);
 
     final instantPayments = payOptions.where((o) {
-      return o.kind == PayKind.cashierCash || o.kind == PayKind.onlineQris || o.kind == PayKind.paylater;
+      return o.kind == PayKind.cashierCash || o.kind == PayKind.onlineQris || o.kind == PayKind.openbill;
     }).toList();
 
     final manualTfPayments = payOptions.where((o) {
@@ -599,7 +599,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     IconData icon;
     switch (opt.kind) {
       case PayKind.cashierCash:
-      case PayKind.paylater:
+      case PayKind.openbill:
         icon = Icons.payments_outlined;
         break;
       case PayKind.onlineQris:

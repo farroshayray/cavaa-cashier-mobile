@@ -211,8 +211,8 @@ class PurchaseCacheMapper {
       case 'cashierCash':
         kind = PayKind.cashierCash;
         break;
-      case 'paylater':
-        kind = PayKind.paylater;
+      case 'openbill':
+        kind = PayKind.openbill;
         break;
       case 'onlineQris':
         kind = PayKind.onlineQris;

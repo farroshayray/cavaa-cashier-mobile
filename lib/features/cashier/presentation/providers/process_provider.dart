@@ -710,9 +710,9 @@ class ProcessProvider extends ChangeNotifier {
           rawJson,
         );
 
-        final isPayLater = row['payment_method']?.toString() == 'PAYLATER';
+        final isOpenbill = row['payment_method']?.toString() == 'OPENBILL';
 
-        if (isPayLater) {
+        if (isOpenbill) {
           Map<String, dynamic> detailMap = {};
           if (cached?.detailJson != null && cached!.detailJson!.trim().isNotEmpty) {
             try {
@@ -729,7 +729,7 @@ class ProcessProvider extends ChangeNotifier {
           detailMap['booking_order_code'] ??= row['booking_order_code'];
           detailMap['customer_name'] ??= row['customer_name'];
           detailMap['table'] ??= row['table'] ?? {'table_no': row['table_no_snapshot'] ?? '-'};
-          detailMap['payment_method'] = 'PAYLATER';
+          detailMap['payment_method'] = 'OPENBILL';
           detailMap['order_status'] = 'UNPAID';
           detailMap['total_order_value'] ??= row['total_order_value'] ?? 0;
           detailMap['ppn'] ??= row['ppn'] ?? 0;

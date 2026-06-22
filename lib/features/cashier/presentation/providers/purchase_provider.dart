@@ -74,14 +74,14 @@ class PurchaseProvider extends ChangeNotifier {
       cartGrandTotalRounded + cartCashRoundingAmount;
 
   num payableTotalForPayment(PaymentOption? payment) {
-    if (payment?.kind == PayKind.cashierCash || payment?.kind == PayKind.paylater) {
+    if (payment?.kind == PayKind.cashierCash || payment?.kind == PayKind.openbill) {
       return cartCashPayableTotal;
     }
     return cartGrandTotalRounded;
   }
 
   num roundingAmountForPayment(PaymentOption? payment) {
-    if (payment?.kind == PayKind.cashierCash || payment?.kind == PayKind.paylater) {
+    if (payment?.kind == PayKind.cashierCash || payment?.kind == PayKind.openbill) {
       return cartCashRoundingAmount;
     }
     return 0;

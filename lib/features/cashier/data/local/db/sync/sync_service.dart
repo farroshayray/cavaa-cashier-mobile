@@ -433,24 +433,24 @@ class SyncService {
             await ordersRepo.finishOrder(row.serverId);
             debugPrint('✅ [SYNC] finishOrder api success for serverId=${row.serverId}');
 
-            final isPayLater = row.paymentMethod == 'PAYLATER';
-            if (isPayLater) {
-              debugPrint('🔄 [SYNC] Fetching updated PAYLATER order detail for serverId=${row.serverId}');
+            final isOpenbill = row.paymentMethod == 'OPENBILL';
+            if (isOpenbill) {
+              debugPrint('🔄 [SYNC] Fetching updated OPENBILL order detail for serverId=${row.serverId}');
               final detail = await ordersRepo.fetchOrderDetail(row.serverId);
               debugPrint('🔄 [SYNC] Upserting detail to cachedPaymentOrdersDao for serverId=${row.serverId}');
               await cachedPaymentOrdersDao.upsertDetailFromApi(detail);
               debugPrint('🔄 [SYNC] Cleaning up process & done caches for serverId=${row.serverId}');
               await cachedProcessOrdersDao.deleteByServerId(row.serverId);
               await cachedDoneOrdersDao.deleteByServerId(row.serverId);
-              debugPrint('✅ [SYNC] Completed PAYLATER finish sync for serverId=${row.serverId}');
+              debugPrint('✅ [SYNC] Completed OPENBILL finish sync for serverId=${row.serverId}');
             } else {
-              debugPrint('🔄 [SYNC] Marking non-PAYLATER order as synced in done cache for serverId=${row.serverId}');
+              debugPrint('🔄 [SYNC] Marking non-OPENBILL order as synced in done cache for serverId=${row.serverId}');
               await cachedDoneOrdersDao.markSyncedByServerId(
                 row.serverId,
                 latestDoneJson: row.latestProcessJson,
               );
               await cachedProcessOrdersDao.deleteByServerId(row.serverId);
-              debugPrint('✅ [SYNC] Completed non-PAYLATER finish sync for serverId=${row.serverId}');
+              debugPrint('✅ [SYNC] Completed non-OPENBILL finish sync for serverId=${row.serverId}');
             }
             break;
         }

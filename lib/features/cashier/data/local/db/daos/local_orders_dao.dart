@@ -517,12 +517,12 @@ class LocalOrdersDao {
     String? lastPaymentId,
   }) async {
     final current = await getOrderByLocalId(localId);
-    final isPayLater = current?.paymentMethodEffective == 'PAYLATER';
+    final isOpenbill = current?.paymentMethodEffective == 'OPENBILL';
     await (db.update(db.localOrders)
           ..where((tbl) => tbl.localId.equals(localId)))
         .write(
       LocalOrdersCompanion(
-        orderStatusLocal: Value(isPayLater ? 'SERVED' : 'PAID'),
+        orderStatusLocal: Value(isOpenbill ? 'SERVED' : 'PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
         backendSyncStage: const Value('PURCHASED'),
         updatedAtLocal: Value(DateTime.now()),
@@ -608,7 +608,7 @@ class LocalOrdersDao {
       return;
     }
 
-    final isPayLater = paymentMethodEffective == 'PAYLATER';
+    final isOpenbill = paymentMethodEffective == 'OPENBILL';
 
     await createOrder(
       LocalOrdersCompanion(
@@ -624,7 +624,7 @@ class LocalOrdersDao {
         grandTotal: Value(grandTotal),
         isPpnActive: Value(isPpnActive),
         ppnPercent: Value(ppnPercent),
-        orderStatusLocal: Value(isPayLater ? 'SERVED' : 'PAID'),
+        orderStatusLocal: Value(isOpenbill ? 'SERVED' : 'PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
         backendSyncStage: const Value('PURCHASED'),
         createdAtLocal: Value(DateTime.now()),
@@ -649,7 +649,7 @@ class LocalOrdersDao {
     final keepStockConflict =
         preserveStockConflict && current?.syncStatus == 'STOCK_CONFLICT';
 
-    final isPayLater = current?.paymentMethodEffective == 'PAYLATER';
+    final isOpenbill = current?.paymentMethodEffective == 'OPENBILL';
 
     await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
       LocalOrdersCompanion(
@@ -659,7 +659,7 @@ class LocalOrdersDao {
         paymentConfirmedAtLocal: Value(paymentConfirmedAtLocal ?? DateTime.now()),
         latestPaymentServerId: Value(latestPaymentServerId),
         orderSnapshotJson: Value(orderSnapshotJson),
-        orderStatusLocal: Value(isPayLater ? 'SERVED' : 'PAID'),
+        orderStatusLocal: Value(isOpenbill ? 'SERVED' : 'PAID'),
         syncStatus: Value(keepStockConflict ? 'STOCK_CONFLICT' : 'PENDING_PAYMENT'),
         updatedAtLocal: Value(DateTime.now()),
         lastError: keepStockConflict ? const Value.absent() : const Value(null),

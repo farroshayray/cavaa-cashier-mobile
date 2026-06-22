@@ -75,7 +75,7 @@ class PaymentProvider extends ChangeNotifier {
 
       final processServerIds = processRows
           .where((e) {
-            if (e.paymentMethod == 'PAYLATER' &&
+            if (e.paymentMethod == 'OPENBILL' &&
                 (e.pendingAction == 'FINISH' || e.orderStatus == 'SERVED')) {
               return false;
             }
