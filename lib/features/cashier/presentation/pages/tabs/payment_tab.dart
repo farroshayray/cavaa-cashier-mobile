@@ -1021,7 +1021,7 @@ class _PaymentOrderCard extends StatelessWidget {
       );
     }
 
-    if (isLocalOnly) {
+    if (isLocalOnly || syncStatus == 'PENDING' || syncStatus == 'PENDING_FINISH') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
