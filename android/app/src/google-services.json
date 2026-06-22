@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "599856970241",
+    "project_id": "cavaa-e0406",
+    "storage_bucket": "cavaa-e0406.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:599856970241:android:5a6ca9d2249e0e8f265e00",
+        "android_client_info": {
+          "package_name": "com.example.cavaa_cashier"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBG79gH1lTDHmji_fNdSTM0a0gO2ZMVdfw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
