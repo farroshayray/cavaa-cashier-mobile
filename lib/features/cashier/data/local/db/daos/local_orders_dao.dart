@@ -516,11 +516,13 @@ class LocalOrdersDao {
     String? cashierProofImagePath,
     String? lastPaymentId,
   }) async {
+    final current = await getOrderByLocalId(localId);
+    final isPayLater = current?.paymentMethodEffective == 'PAYLATER';
     await (db.update(db.localOrders)
           ..where((tbl) => tbl.localId.equals(localId)))
         .write(
       LocalOrdersCompanion(
-        orderStatusLocal: const Value('PAID'),
+        orderStatusLocal: Value(isPayLater ? 'SERVED' : 'PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
         backendSyncStage: const Value('PURCHASED'),
         updatedAtLocal: Value(DateTime.now()),
@@ -606,6 +608,8 @@ class LocalOrdersDao {
       return;
     }
 
+    final isPayLater = paymentMethodEffective == 'PAYLATER';
+
     await createOrder(
       LocalOrdersCompanion(
         localId: Value(localId),
@@ -620,7 +624,7 @@ class LocalOrdersDao {
         grandTotal: Value(grandTotal),
         isPpnActive: Value(isPpnActive),
         ppnPercent: Value(ppnPercent),
-        orderStatusLocal: const Value('PAID'),
+        orderStatusLocal: Value(isPayLater ? 'SERVED' : 'PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
         backendSyncStage: const Value('PURCHASED'),
         createdAtLocal: Value(DateTime.now()),
@@ -645,6 +649,8 @@ class LocalOrdersDao {
     final keepStockConflict =
         preserveStockConflict && current?.syncStatus == 'STOCK_CONFLICT';
 
+    final isPayLater = current?.paymentMethodEffective == 'PAYLATER';
+
     await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
       LocalOrdersCompanion(
         paidAmountLocal: Value(paidAmount),
@@ -653,7 +659,7 @@ class LocalOrdersDao {
         paymentConfirmedAtLocal: Value(paymentConfirmedAtLocal ?? DateTime.now()),
         latestPaymentServerId: Value(latestPaymentServerId),
         orderSnapshotJson: Value(orderSnapshotJson),
-        orderStatusLocal: const Value('PAID'),
+        orderStatusLocal: Value(isPayLater ? 'SERVED' : 'PAID'),
         syncStatus: Value(keepStockConflict ? 'STOCK_CONFLICT' : 'PENDING_PAYMENT'),
         updatedAtLocal: Value(DateTime.now()),
         lastError: keepStockConflict ? const Value.absent() : const Value(null),
@@ -732,6 +738,7 @@ class LocalOrdersDao {
               t.orderStatusLocal.equals('SERVED') &
               t.syncStatus.isIn([
                 'PENDING_FINISH',
+                'PENDING_PAYMENT',
                 'FAILED',
                 'SYNCING',
                 'STOCK_CONFLICT',
