@@ -275,9 +275,14 @@ class SyncService {
               order.orderStatusLocal == 'PROCESSED' ||
               order.orderStatusLocal == 'SERVED') &&
           stage == 'PURCHASED') {
-        await _syncPayment(order, serverId!);
-        await localOrdersDao.updateBackendSyncStage(localOrderId, 'PAID');
-        stage = 'PAID';
+        if (order.paymentMethodEffective == 'OPENBILL') {
+          await localOrdersDao.updateBackendSyncStage(localOrderId, 'PAID');
+          stage = 'PAID';
+        } else {
+          await _syncPayment(order, serverId!);
+          await localOrdersDao.updateBackendSyncStage(localOrderId, 'PAID');
+          stage = 'PAID';
+        }
 
         debugPrint(
           '✅ STEP PAYMENT done '
@@ -348,6 +353,7 @@ class SyncService {
       // final
       final completed =
           (order.orderStatusLocal == 'UNPAID' && stage == 'PURCHASED') ||
+          (order.orderStatusLocal == 'OPENBILL_WAITING_ORDER' && stage == 'PURCHASED') ||
           (order.orderStatusLocal == 'PAID' && stage == 'PAID') ||
           (order.orderStatusLocal == 'PROCESSED' && stage == 'PROCESSED') ||
           (order.orderStatusLocal == 'SERVED' && stage == 'SERVED');

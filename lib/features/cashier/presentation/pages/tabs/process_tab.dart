@@ -1093,7 +1093,7 @@ class _ProcessOrderCard extends StatelessWidget {
     Color dot = const Color(0xFF22C55E);
     String label = 'Proses';
 
-    if (st == 'PAID') {
+    if (st == 'PAID' || st == 'OPENBILL_WAITING_ORDER') {
       bg = const Color(0xFFFFF7ED);
       border = const Color(0xFFFED7AA);
       dot = const Color(0xFFEA580C);
@@ -1162,7 +1162,7 @@ class _ProcessOrderCard extends StatelessWidget {
       );
     }
 
-    if (st == 'PAID') {
+    if (st == 'PAID' || st == 'OPENBILL_WAITING_ORDER') {
       return Padding(
         padding: const EdgeInsets.only(right: 6),
         child: ElevatedButton(
@@ -1240,7 +1240,7 @@ class _ProcessOrderCard extends StatelessWidget {
       );
     }
 
-    if (st == 'PAID') {
+    if (st == 'PAID' || st == 'OPENBILL_WAITING_ORDER') {
       return Padding(
         padding: const EdgeInsets.only(right: 4),
         child: ElevatedButton(
