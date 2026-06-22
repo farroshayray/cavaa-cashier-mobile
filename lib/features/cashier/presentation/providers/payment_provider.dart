@@ -68,7 +68,19 @@ class PaymentProvider extends ChangeNotifier {
       final processRows = await cachedProcessOrdersDao.getAllActive();
       final doneRows = await cachedDoneOrdersDao.getAllActive();
 
+      final pendingFinishServerIds = processRows
+          .where((e) => e.pendingAction == 'FINISH' && e.isSynced == false)
+          .map((e) => e.serverId)
+          .toSet();
+
       final processServerIds = processRows
+          .where((e) {
+            if (e.paymentMethod == 'PAYLATER' &&
+                (e.pendingAction == 'FINISH' || e.orderStatus == 'SERVED')) {
+              return false;
+            }
+            return true;
+          })
           .map((e) => e.serverId)
           .toSet();
 
@@ -110,13 +122,25 @@ class PaymentProvider extends ChangeNotifier {
         debugPrint('PaymentProvider server load failed: $e');
       }
 
-      if (!gotServer) {
+      if (gotServer) {
+        final cachedOrders = await cachedPaymentOrdersDao.getCachedOrders(
+          query: query.isEmpty ? null : query,
+        );
+        for (final o in cachedOrders) {
+          if (pendingFinishServerIds.contains(o.serverId)) {
+            final alreadyAdded = mergedItems.any((item) => _toInt(item['server_id'] ?? item['id']) == o.serverId);
+            if (!alreadyAdded) {
+              mergedItems.add(_normalizeCachedServerItem(o, pendingFinishServerIds));
+            }
+          }
+        }
+      } else {
         final cachedOrders = await cachedPaymentOrdersDao.getCachedOrders(
           query: query.isEmpty ? null : query,
         );
 
         mergedItems.addAll(
-          cachedOrders.map(_normalizeCachedServerItem),
+          cachedOrders.map((o) => _normalizeCachedServerItem(o, pendingFinishServerIds)),
         );
       }
 
@@ -325,7 +349,10 @@ class PaymentProvider extends ChangeNotifier {
     };
   }
 
-  Map<String, dynamic> _normalizeCachedServerItem(CachedPaymentOrder o) {
+  Map<String, dynamic> _normalizeCachedServerItem(
+    CachedPaymentOrder o,
+    Set<int> pendingFinishServerIds,
+  ) {
     final tableNo = o.tableNo ?? '-';
     final detail = _decodeCachedJson(o.detailJson);
     final latestPayment = _decodeCachedJson(o.latestPaymentJson);
@@ -338,6 +365,8 @@ class PaymentProvider extends ChangeNotifier {
           latestPayment?['rounding_amount'] ??
           paymentRequest?['rounding_amount'],
     );
+
+    final isPendingFinish = pendingFinishServerIds.contains(o.serverId);
 
     return <String, dynamic>{
       'id': o.serverId,
@@ -370,7 +399,9 @@ class PaymentProvider extends ChangeNotifier {
 
       'is_local_only': false,
       'is_cached_server': true,
-      'sync_status': o.isPendingDelete ? 'PENDING_DELETE' : 'SYNCED',
+      'sync_status': o.isPendingDelete
+          ? 'PENDING_DELETE'
+          : (isPendingFinish ? 'PENDING_FINISH' : 'SYNCED'),
 
       'created_at': o.createdAt?.toIso8601String(),
       'cached_at': o.cachedAt.toIso8601String(),

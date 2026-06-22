@@ -3,6 +3,7 @@ import '../../data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
 import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
+import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import '/core/services/connectivity_status_provider.dart';
@@ -15,12 +16,14 @@ class ProcessProvider extends ChangeNotifier {
   final CachedProcessOrdersDao cachedProcessOrdersDao;
   final ConnectivityStatusProvider connectivity;
   final CachedDoneOrdersDao cachedDoneOrdersDao;
+  final CachedPaymentOrdersDao cachedPaymentOrdersDao;
 
   ProcessProvider(
     this.repo,
     this.localOrdersDao,
     this.cachedProcessOrdersDao,
     this.cachedDoneOrdersDao,
+    this.cachedPaymentOrdersDao,
     this.connectivity,
   );
 
@@ -707,19 +710,48 @@ class ProcessProvider extends ChangeNotifier {
           rawJson,
         );
 
-        await cachedDoneOrdersDao.upsertPendingFinishFromProcess(
-          serverId: id,
-          bookingOrderCode: (row['booking_order_code'] ?? '').toString(),
-          customerName: (row['customer_name'] ?? '').toString(),
-          tableNo: row['table'] is Map
-              ? row['table']['table_no']?.toString()
-              : row['table_no_snapshot']?.toString(),
-          paymentMethod: row['payment_method']?.toString(),
-          subtotal: _toDouble(row['total_order_value']),
-          ppnPercent: _toDouble(row['ppn']),
-          isPpnActive: _toBool(row['is_ppn_active']),
-          rawJson: rawJson,
-        );
+        final isPayLater = row['payment_method']?.toString() == 'PAYLATER';
+
+        if (isPayLater) {
+          Map<String, dynamic> detailMap = {};
+          if (cached?.detailJson != null && cached!.detailJson!.trim().isNotEmpty) {
+            try {
+              detailMap = Map<String, dynamic>.from(jsonDecode(cached.detailJson!));
+            } catch (_) {}
+          }
+          if (detailMap.isEmpty) {
+            try {
+              detailMap = Map<String, dynamic>.from(jsonDecode(rawJson));
+            } catch (_) {}
+          }
+
+          detailMap['id'] ??= id;
+          detailMap['booking_order_code'] ??= row['booking_order_code'];
+          detailMap['customer_name'] ??= row['customer_name'];
+          detailMap['table'] ??= row['table'] ?? {'table_no': row['table_no_snapshot'] ?? '-'};
+          detailMap['payment_method'] = 'PAYLATER';
+          detailMap['order_status'] = 'UNPAID';
+          detailMap['total_order_value'] ??= row['total_order_value'] ?? 0;
+          detailMap['ppn'] ??= row['ppn'] ?? 0;
+          detailMap['is_ppn_active'] ??= row['is_ppn_active'] ?? 0;
+          detailMap['created_at'] ??= row['created_at'] ?? row['sort_time'] ?? row['cached_at'] ?? DateTime.now().toIso8601String();
+
+          await cachedPaymentOrdersDao.upsertDetailFromApi(detailMap);
+        } else {
+          await cachedDoneOrdersDao.upsertPendingFinishFromProcess(
+            serverId: id,
+            bookingOrderCode: (row['booking_order_code'] ?? '').toString(),
+            customerName: (row['customer_name'] ?? '').toString(),
+            tableNo: row['table'] is Map
+                ? row['table']['table_no']?.toString()
+                : row['table_no_snapshot']?.toString(),
+            paymentMethod: row['payment_method']?.toString(),
+            subtotal: _toDouble(row['total_order_value']),
+            ppnPercent: _toDouble(row['ppn']),
+            isPpnActive: _toBool(row['is_ppn_active']),
+            rawJson: rawJson,
+          );
+        }
 
         _setStatusLocal(id, 'SERVED');
 

@@ -4,6 +4,7 @@ import 'dart:async';
 
 import '../../providers/payment_provider.dart';
 import '../../providers/process_provider.dart';
+import '../../providers/done_provider.dart';
 import '../../../../scanner/pages/barcode_scanner_page.dart';
 import '/features/cashier/presentation/pages/tabs/modals/payment_process_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
@@ -477,8 +478,12 @@ class _PaymentViewState extends State<_PaymentView> {
                           );
 
                           if (result == true && context.mounted) {
-                            await context.read<PaymentProvider>().load();
-                            unawaited(context.read<ProcessProvider>().load());
+                            final paymentVM = context.read<PaymentProvider>();
+                            final processVM = context.read<ProcessProvider>();
+                            final doneVM = context.read<DoneProvider>();
+                            await paymentVM.load();
+                            unawaited(processVM.load());
+                            unawaited(doneVM.load());
                           }
                         },
                       ),
@@ -1016,7 +1021,7 @@ class _PaymentOrderCard extends StatelessWidget {
       );
     }
 
-    if (isLocalOnly) {
+    if (isLocalOnly || syncStatus == 'PENDING' || syncStatus == 'PENDING_FINISH') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
