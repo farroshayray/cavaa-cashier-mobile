@@ -701,7 +701,7 @@ class PaymentProvider extends ChangeNotifier {
 
       // ✅ TARUH DI SINI
       if (localDetail != null) {
-        return _enrichOfflinePaymentMethod(localDetail);
+        return _enrichOrderDetailPaymentData(localDetail);
       }
 
       throw Exception('Detail order lokal tidak ditemukan');
@@ -723,11 +723,11 @@ class PaymentProvider extends ChangeNotifier {
         await cachedPaymentOrdersDao.upsertDetailFromApi(detail);
         await _cacheManualPaymentMethodFromDetail(detail);
 
-        return detail;
+        return _enrichOrderDetailPaymentData(detail);
       } catch (_) {
         final cached = await cachedPaymentOrdersDao.getCachedOrderDetailMap(serverId);
         if (cached != null) {
-          return _enrichOfflinePaymentMethod(cached);
+          return _enrichOrderDetailPaymentData(cached);
         }
         rethrow;
       }
@@ -735,27 +735,25 @@ class PaymentProvider extends ChangeNotifier {
 
     final cached = await cachedPaymentOrdersDao.getCachedOrderDetailMap(serverId);
 
-    // ✅ TARUH DI SINI
     if (cached != null) {
-      return _enrichOfflinePaymentMethod(cached);
+      return _enrichOrderDetailPaymentData(cached);
     }
 
     throw Exception('Detail order offline tidak tersedia');
   }
 
-  Future<Map<String, dynamic>> _enrichOfflinePaymentMethod(
+  /// Order detail dari API tetap dipakai untuk status/items,
+  /// tapi daftar metode pembayaran + gambar QRIS diambil dari cache lokal
+  /// (hasil sync `GET /products` di tab Pembelian).
+  Future<Map<String, dynamic>> _enrichOrderDetailPaymentData(
     Map<String, dynamic> detail,
   ) async {
     final cloned = Map<String, dynamic>.from(detail);
 
-    final rawMethods = cloned['available_payment_methods'];
-    final hasMethods = rawMethods is List && rawMethods.isNotEmpty;
-    if (!hasMethods) {
-      final cachedMethods =
-          await cachedPaymentMethodsDao.buildAvailablePaymentMethodsList();
-      if (cachedMethods.isNotEmpty) {
-        cloned['available_payment_methods'] = cachedMethods;
-      }
+    final cachedMethods =
+        await cachedPaymentMethodsDao.buildAvailablePaymentMethodsList();
+    if (cachedMethods.isNotEmpty) {
+      cloned['available_payment_methods'] = cachedMethods;
     }
 
     final method = (cloned['payment_method'] ?? '').toString();
@@ -806,6 +804,52 @@ class PaymentProvider extends ChangeNotifier {
     cloned['latest_payment'] = latest;
 
     return cloned;
+  }
+
+  Future<Map<String, dynamic>> enrichPaymentMethodInstruction(
+    Map<String, dynamic> raw,
+  ) async {
+    final type = (raw['payment_type'] ?? raw['type'] ?? '').toString();
+    final normalized = <String, dynamic>{
+      'payment_type': type,
+      'provider_name': raw['provider_name'],
+      'provider_account_name': raw['provider_account_name'],
+      'provider_account_no': raw['provider_account_no'],
+      'qris_image_url': raw['qris_image_url'],
+      'qris_image_local_path': raw['qris_image_local_path'],
+      'additional_info': raw['additional_info'],
+      'value': raw['value'],
+      'label': raw['label'],
+    };
+
+    final manualId = _toInt(raw['value']);
+    if (manualId == null || manualId <= 0) return normalized;
+
+    final cached = await cachedPaymentMethodsDao.buildManualPaymentMap(
+      serverManualPaymentId: manualId,
+    );
+    if (cached == null) return normalized;
+
+    String? pickString(dynamic primary, dynamic fallback) {
+      final p = primary?.toString().trim();
+      if (p != null && p.isNotEmpty) return p;
+      final f = fallback?.toString().trim();
+      if (f != null && f.isNotEmpty) return f;
+      return null;
+    }
+
+    normalized['payment_type'] = pickString(normalized['payment_type'], cached['payment_type']) ?? type;
+    normalized['provider_name'] = pickString(normalized['provider_name'], cached['provider_name']);
+    normalized['provider_account_name'] =
+        pickString(normalized['provider_account_name'], cached['provider_account_name']);
+    normalized['provider_account_no'] =
+        pickString(normalized['provider_account_no'], cached['provider_account_no']);
+    normalized['qris_image_url'] =
+        pickString(normalized['qris_image_url'], cached['qris_image_url']);
+    normalized['qris_image_local_path'] =
+        pickString(cached['qris_image_local_path'], normalized['qris_image_local_path']);
+
+    return normalized;
   }
 
   String _manualTypeLabelForCache(String method) {

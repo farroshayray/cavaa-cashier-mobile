@@ -66,6 +66,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   String? _cashierProofError;
   String _lastPaymentId = '';
   String? _selectedPaymentMethod;
+  Map<String, dynamic>? _enrichedSelectedInstruction;
 
   @override
   void initState() {
@@ -241,12 +242,80 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 
   bool get _cashInputValid {
-    if (!_needsCashValidation) return true;
+    if (!_needsCashValidation) {
+      final paid = _num(_paidCtrl.text);
+      return paid > 0;
+    }
 
     final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
     final paid = _num(_paidCtrl.text);
 
     return paid > 0 && paid >= total;
+  }
+
+  String? _paymentTypeForValue(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['value']?.toString() == value,
+          orElse: () => null,
+        );
+    return (selected?['type'] ?? value).toString();
+  }
+
+  void _applyPaidAmountForMethodType(String? type) {
+    if (_order == null) return;
+    final total = _grandTotalFromOrder(_order!);
+    if (type == 'CASH') {
+      _paidCtrl.text = '';
+      _change = 0;
+      return;
+    }
+    _paidCtrl.text = total.toStringAsFixed(0);
+    _change = 0;
+  }
+
+  Future<void> _syncEnrichedSelectedInstruction() async {
+    if (_selectedPaymentMethod == null || _order == null) {
+      _enrichedSelectedInstruction = null;
+      return;
+    }
+
+    final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['value']?.toString() == _selectedPaymentMethod,
+          orElse: () => null,
+        );
+    if (selected == null) {
+      _enrichedSelectedInstruction = null;
+      return;
+    }
+
+    try {
+      final enriched = await context
+          .read<PaymentProvider>()
+          .enrichPaymentMethodInstruction(Map<String, dynamic>.from(selected));
+      if (!mounted) return;
+      setState(() => _enrichedSelectedInstruction = enriched);
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _enrichedSelectedInstruction =
+            _normalizePaymentInstruction(Map<String, dynamic>.from(selected)),
+      );
+    }
+  }
+
+  Future<void> _onPaymentMethodChanged(String? value) async {
+    final type = _paymentTypeForValue(value);
+    setState(() {
+      _selectedPaymentMethod = value;
+      _cashierProofImage = null;
+      _cashierProofError = null;
+      _enrichedSelectedInstruction = null;
+      _applyPaidAmountForMethodType(type);
+    });
+    if (value != null) {
+      await _syncEnrichedSelectedInstruction();
+    }
   }
 
   bool get _canConfirm {
@@ -400,6 +469,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       _cashierProofError = null;
       _lastPaymentId = '';
       _selectedPaymentMethod = null;
+      _enrichedSelectedInstruction = null;
 
       final latestPayment = o['latest_payment'];
       if (latestPayment is Map && latestPayment['id'] != null) {
@@ -426,12 +496,24 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         } else {
           _selectedPaymentMethod = null;
         }
+
+        if (_selectedPaymentMethod != null) {
+          _applyPaidAmountForMethodType(_paymentTypeForValue(_selectedPaymentMethod));
+        }
       }
 
       final hasManual = pr != null;
-      if ((method == 'CASH' || hasManual) && status == 'PAYMENT REQUEST') {
+      if (status == 'PAYMENT REQUEST' && (method == 'CASH' || hasManual)) {
         _paidCtrl.text = total.toStringAsFixed(0);
-        _recalcChange(); // biar kembalian langsung ke-update
+        _recalcChange();
+      } else if (_isCaseB) {
+        _applyPaidAmountForMethodType(
+          (latestPayment is Map ? latestPayment['payment_type'] : null)?.toString(),
+        );
+      }
+
+      if (_selectedPaymentMethod != null) {
+        await _syncEnrichedSelectedInstruction();
       }
 
     } catch (e) {
@@ -479,16 +561,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                           : _Body(
                             order: _order!,
                             selectedPaymentMethod: _selectedPaymentMethod,
+                            enrichedSelectedInstruction: _enrichedSelectedInstruction,
                             availablePaymentMethods: _availablePaymentMethods,
-                            onPaymentMethodChanged: (value) {
-                              setState(() {
-                                _selectedPaymentMethod = value;
-                                if (_effectivePaymentType != 'CASH') {
-                                  _paidCtrl.text = '';
-                                  _change = 0;
-                                }
-                              });
-                            },
+                            onPaymentMethodChanged: _onPaymentMethodChanged,
                             paidCtrl: _paidCtrl,
                             change: _change,
                             cashierProofImage: _cashierProofImage,
@@ -886,6 +961,7 @@ class _Body extends StatelessWidget {
   const _Body({
     required this.order,
     required this.selectedPaymentMethod,
+    required this.enrichedSelectedInstruction,
     required this.availablePaymentMethods,
     required this.onPaymentMethodChanged,
     required this.paidCtrl,
@@ -900,8 +976,9 @@ class _Body extends StatelessWidget {
 
   final Map<String, dynamic> order;
   final String? selectedPaymentMethod;
+  final Map<String, dynamic>? enrichedSelectedInstruction;
   final List<Map<String, dynamic>> availablePaymentMethods;
-  final ValueChanged<String?> onPaymentMethodChanged;
+  final Future<void> Function(String?) onPaymentMethodChanged;
   final TextEditingController paidCtrl;
   final num change;
   final XFile? cashierProofImage;
@@ -956,14 +1033,21 @@ class _Body extends StatelessWidget {
             ? ((latestPayment is Map ? latestPayment['payment_type'] : null) ?? method).toString()
             : (canChooseFinalPaymentMethod ? (selectedPaymentType ?? '') : method);
 
-    final selectedPaymentInstruction = availablePaymentMethods
-        .cast<Map<String, dynamic>?>()
-        .firstWhere(
-          (item) => item?['value']?.toString() == selectedPaymentMethod,
-          orElse: () => null,
-        );
+    final selectedPaymentInstruction = enrichedSelectedInstruction ??
+        availablePaymentMethods
+            .cast<Map<String, dynamic>?>()
+            .firstWhere(
+              (item) => item?['value']?.toString() == selectedPaymentMethod,
+              orElse: () => null,
+            );
 
-    final showCashInput = effectiveMethodType == 'CASH' || hasPaymentRequest || hasCashierPaymentInstruction;
+    final isCashPayment = effectiveMethodType == 'CASH';
+    final showAmountInput = hasPaymentRequest ||
+        hasCashierPaymentInstruction ||
+        isCashPayment ||
+        (canChooseFinalPaymentMethod &&
+            selectedPaymentMethod != null &&
+            selectedPaymentMethod!.trim().isNotEmpty);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
@@ -987,8 +1071,7 @@ class _Body extends StatelessWidget {
           const SizedBox(height: 12),
 
           if (canChooseFinalPaymentMethod && !hasPaymentRequest && !hasCashierPaymentInstruction) ...[
-            _OpenbillPaymentMethodCard(
-              title: 'Pilih Metode Pembayaran',
+            _GroupedPaymentMethodPicker(
               items: availablePaymentMethods,
               selectedValue: selectedPaymentMethod,
               onChanged: onPaymentMethodChanged,
@@ -1040,19 +1123,14 @@ class _Body extends StatelessWidget {
           _ItemsCard(order: order),
           const SizedBox(height: 12),
 
-          if (showCashInput)
-            _CashInputCard(
+          if (showAmountInput)
+            _PaidAmountCard(
               total: total,
               paidCtrl: paidCtrl,
               change: change,
+              isCash: isCashPayment,
               invalid: paidInvalid,
               insufficient: paidInsufficient,
-            )
-          else
-            _HintCard(
-              icon: Icons.info_outline_rounded,
-              title: 'Pembayaran non-cash',
-              message: _paymentMethodMessage(order),
             ),
         ],
       ),
@@ -1076,21 +1154,113 @@ class _Body extends StatelessWidget {
 
 }
 
-class _OpenbillPaymentMethodCard extends StatelessWidget {
-  const _OpenbillPaymentMethodCard({
+class _PaymentMethodGroupData {
+  const _PaymentMethodGroupData({
     required this.title,
+    required this.icon,
+    required this.items,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<Map<String, dynamic>> items;
+}
+
+List<_PaymentMethodGroupData> _groupPaymentMethods(List<Map<String, dynamic>> items) {
+  final cash = <Map<String, dynamic>>[];
+  final qrisOnline = <Map<String, dynamic>>[];
+  final transfer = <Map<String, dynamic>>[];
+  final ewallet = <Map<String, dynamic>>[];
+  final qrisManual = <Map<String, dynamic>>[];
+
+  for (final item in items) {
+    final type = (item['type'] ?? '').toString();
+    switch (type) {
+      case 'CASH':
+        cash.add(item);
+        break;
+      case 'QRIS':
+        qrisOnline.add(item);
+        break;
+      case 'manual_tf':
+        transfer.add(item);
+        break;
+      case 'manual_ewallet':
+        ewallet.add(item);
+        break;
+      case 'manual_qris':
+        qrisManual.add(item);
+        break;
+    }
+  }
+
+  return [
+    if (cash.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'Cash',
+        icon: Icons.payments_outlined,
+        items: cash,
+      ),
+    if (qrisOnline.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'QRIS Online (Xendit)',
+        icon: Icons.qr_code_scanner_rounded,
+        items: qrisOnline,
+      ),
+    if (transfer.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'Transfer Bank',
+        icon: Icons.account_balance_outlined,
+        items: transfer,
+      ),
+    if (ewallet.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'E-Wallet',
+        icon: Icons.account_balance_wallet_outlined,
+        items: ewallet,
+      ),
+    if (qrisManual.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'QRIS Statis',
+        icon: Icons.qr_code_2_rounded,
+        items: qrisManual,
+      ),
+  ];
+}
+
+IconData _paymentMethodIcon(String type) {
+  switch (type) {
+    case 'CASH':
+      return Icons.payments_outlined;
+    case 'QRIS':
+      return Icons.qr_code_scanner_rounded;
+    case 'manual_tf':
+      return Icons.account_balance_outlined;
+    case 'manual_ewallet':
+      return Icons.account_balance_wallet_outlined;
+    case 'manual_qris':
+      return Icons.qr_code_2_rounded;
+    default:
+      return Icons.payments_outlined;
+  }
+}
+
+class _GroupedPaymentMethodPicker extends StatelessWidget {
+  const _GroupedPaymentMethodPicker({
     required this.items,
     required this.selectedValue,
     required this.onChanged,
   });
 
-  final String title;
   final List<Map<String, dynamic>> items;
   final String? selectedValue;
-  final ValueChanged<String?> onChanged;
+  final Future<void> Function(String?) onChanged;
 
   @override
   Widget build(BuildContext context) {
+    const brand = Color(0xFFAE1504);
+    final groups = _groupPaymentMethods(items);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1099,31 +1269,184 @@ class _OpenbillPaymentMethodCard extends StatelessWidget {
         border: Border.all(color: Colors.black.withOpacity(0.08)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: brand.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.credit_card_rounded, color: brand, size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Pilih Metode Pembayaran',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            value: selectedValue,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              hintText: 'Pilih metode pembayaran',
-              isDense: true,
+          const SizedBox(height: 14),
+          for (var gi = 0; gi < groups.length; gi++) ...[
+            if (gi > 0) const SizedBox(height: 12),
+            _PaymentMethodGroupSection(
+              brand: brand,
+              group: groups[gi],
+              selectedValue: selectedValue,
+              onChanged: onChanged,
             ),
-            items: items
-                .map(
-                  (item) => DropdownMenuItem<String>(
-                    value: item['value']?.toString(),
-                    child: Text((item['label'] ?? item['type'] ?? '-').toString()),
-                  ),
-                )
-                .toList(),
-            onChanged: onChanged,
-          ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _PaymentMethodGroupSection extends StatelessWidget {
+  const _PaymentMethodGroupSection({
+    required this.brand,
+    required this.group,
+    required this.selectedValue,
+    required this.onChanged,
+  });
+
+  final Color brand;
+  final _PaymentMethodGroupData group;
+  final String? selectedValue;
+  final Future<void> Function(String?) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(group.icon, size: 16, color: Colors.black.withOpacity(0.55)),
+            const SizedBox(width: 6),
+            Text(
+              group.title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.black.withOpacity(0.65),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...group.items.map((item) {
+          final value = item['value']?.toString();
+          final label = (item['label'] ?? item['type'] ?? '-').toString();
+          final type = (item['type'] ?? '').toString();
+          final active = value != null && value == selectedValue;
+          final subtitle = type == 'manual_tf' || type == 'manual_ewallet'
+              ? (item['provider_account_no'] ?? '').toString().trim()
+              : null;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _PaymentMethodOptionCard(
+              brand: brand,
+              title: label,
+              subtitle: subtitle != null && subtitle.isNotEmpty ? subtitle : null,
+              icon: _paymentMethodIcon(type),
+              active: active,
+              onTap: value == null ? null : () => onChanged(value),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _PaymentMethodOptionCard extends StatelessWidget {
+  const _PaymentMethodOptionCard({
+    required this.brand,
+    required this.title,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final Color brand;
+  final String title;
+  final IconData icon;
+  final bool active;
+  final VoidCallback? onTap;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: active ? brand : Colors.black.withOpacity(0.10),
+            width: active ? 1.5 : 1,
+          ),
+          color: active ? brand.withOpacity(0.06) : Colors.white,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: active ? brand.withOpacity(0.12) : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: active ? brand : Colors.black.withOpacity(0.55),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: active ? brand : Colors.black87,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.58),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(
+              active
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: active ? brand : Colors.black.withOpacity(0.35),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1737,6 +2060,125 @@ class _ItemsCard extends StatelessWidget {
   }
 }
 
+class _PaidAmountCard extends StatelessWidget {
+  const _PaidAmountCard({
+    required this.total,
+    required this.paidCtrl,
+    required this.change,
+    required this.isCash,
+    required this.invalid,
+    required this.insufficient,
+  });
+
+  final num total;
+  final TextEditingController paidCtrl;
+  final num change;
+  final bool isCash;
+  final bool invalid;
+  final bool insufficient;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasError = isCash && (invalid || insufficient);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFD),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasError ? Colors.red : Colors.black.withOpacity(0.08),
+          width: hasError ? 1.3 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            isCash ? 'Pembayaran Cash' : 'Nominal Pembayaran',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                isCash ? 'Uang Diterima' : 'Jumlah Bayar',
+                style: const TextStyle(fontSize: 12),
+              ),
+              if (isCash) ...[
+                const SizedBox(width: 4),
+                const Text(
+                  '*',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: paidCtrl,
+            readOnly: !isCash,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: isCash ? 'cth: 100000' : null,
+              prefixText: 'Rp ',
+              helperText: isCash
+                  ? (invalid
+                      ? 'Uang diterima wajib diisi'
+                      : insufficient
+                          ? 'Nominal uang diterima kurang dari total tagihan'
+                          : null)
+                  : 'Nominal sudah disesuaikan dengan total tagihan',
+              helperStyle: TextStyle(
+                color: hasError ? Colors.red : Colors.black54,
+              ),
+              filled: true,
+              fillColor: isCash ? const Color(0xFFF7F8FA) : const Color(0xFFF0FDF4),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: hasError ? Colors.red : Colors.black.withOpacity(0.10),
+                  width: hasError ? 1.4 : 1.0,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: hasError ? Colors.red : const Color(0xFFAE1504),
+                  width: 1.4,
+                ),
+              ),
+            ),
+          ),
+          if (isCash) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  'Kembalian',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                ),
+                const Spacer(),
+                Text(
+                  'Rp ${_rupiah(change)}',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _CashInputCard extends StatelessWidget {
   const _CashInputCard({
     required this.total,
@@ -2226,7 +2668,15 @@ String _manualTypeLabel(String type) {
 
 String _normalizeProofUrl(String proof) {
   if (proof.isEmpty) return '';
-  if (proof.startsWith('http')) return proof;
+  if (proof.startsWith('http')) {
+    final uri = Uri.tryParse(proof);
+    if (uri != null &&
+        !uri.path.contains('/storage/') &&
+        uri.path.contains('owner_manual_payments')) {
+      return '${uri.origin}/storage${uri.path.startsWith('/') ? uri.path : '/${uri.path}'}';
+    }
+    return proof;
+  }
 
   final cleaned = proof.replaceFirst(RegExp(r'^\/?storage\/?'), '');
   return '${Env.baseUrl}/storage/$cleaned';
