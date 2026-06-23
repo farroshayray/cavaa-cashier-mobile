@@ -52,6 +52,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   XFile? _cashierProofImage;
   String? _cashierProofError;
   String _lastPaymentId = '';
+  String? _selectedPaymentMethod;
 
   @override
   void initState() {
@@ -125,9 +126,60 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   bool get _isCaseC => !_isCaseA && !_isCaseB;
 
+  bool get _isOpenbillOrder {
+    if (_order == null) return false;
+    final status = (_order!['order_status'] ?? '').toString();
+    return _toBool(_order!['openbill_flag']) ||
+        (_order!['payment_method'] ?? '').toString() == 'OPENBILL' ||
+        status.startsWith('OPENBILL');
+  }
+
+  List<Map<String, dynamic>> get _availablePaymentMethods {
+    if (_order == null) return const [];
+    final raw = _order!['available_payment_methods'];
+    if (raw is! List) return const [];
+
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  String get _effectivePaymentType {
+    if (_isCaseA) {
+      final paymentRequest = _order?['payment_request'];
+      if (paymentRequest is Map) {
+        return (paymentRequest['payment_type'] ?? 'CASH').toString();
+      }
+    }
+
+    if (_isCaseB) {
+      final latestPayment = _order?['latest_payment'];
+      if (latestPayment is Map) {
+        return (latestPayment['payment_type'] ?? _order?['payment_method'] ?? 'CASH')
+            .toString();
+      }
+    }
+
+    if (_isOpenbillOrder) {
+      if (_selectedPaymentMethod == null || _selectedPaymentMethod!.trim().isEmpty) {
+        return '';
+      }
+
+      final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+            (item) => item?['value']?.toString() == _selectedPaymentMethod,
+            orElse: () => null,
+          );
+
+      return (selected?['type'] ?? _selectedPaymentMethod ?? '').toString();
+    }
+
+    return (_order?['payment_method'] ?? 'CASH').toString();
+  }
+
   bool get _needsCashValidation {
     if (_order == null) return false;
-    return _isCaseA || _isCaseB || ((_order!['payment_method'] ?? '').toString() == 'CASH');
+    return _isCaseA || _isCaseB || _effectivePaymentType == 'CASH';
   }
 
   bool get _paidInvalid {
@@ -283,6 +335,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       _cashierProofImage = null;
       _cashierProofError = null;
       _lastPaymentId = '';
+      _selectedPaymentMethod = null;
 
       final latestPayment = o['latest_payment'];
       if (latestPayment is Map && latestPayment['id'] != null) {
@@ -294,6 +347,15 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       final pr = o['payment_request'];
       final total = _grandTotalFromOrder(o);
       final method = (o['payment_method'] ?? '').toString();
+      final availableMethods = _availablePaymentMethods;
+
+      if (_isOpenbillOrder) {
+        if (availableMethods.length == 1) {
+          _selectedPaymentMethod = availableMethods.first['value']?.toString();
+        } else {
+          _selectedPaymentMethod = null;
+        }
+      }
 
       final hasManual = pr != null;
       if ((method == 'CASH' || hasManual) && status == 'PAYMENT REQUEST') {
@@ -345,6 +407,17 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                           ? _ErrorView(message: _error!, onRetry: _fetch)
                           : _Body(
                             order: _order!,
+                            selectedPaymentMethod: _selectedPaymentMethod,
+                            availablePaymentMethods: _availablePaymentMethods,
+                            onPaymentMethodChanged: (value) {
+                              setState(() {
+                                _selectedPaymentMethod = value;
+                                if (_effectivePaymentType != 'CASH') {
+                                  _paidCtrl.text = '';
+                                  _change = 0;
+                                }
+                              });
+                            },
                             paidCtrl: _paidCtrl,
                             change: _change,
                             cashierProofImage: _cashierProofImage,
@@ -372,12 +445,27 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   Future<void> _confirmAndPay() async {
     if (_paying) return;
 
+    if (_isOpenbillOrder &&
+        !_isCaseA &&
+        !_isCaseB &&
+        (_selectedPaymentMethod == null || _selectedPaymentMethod!.trim().isEmpty)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Pilih metode pembayaran open bill terlebih dahulu'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+
     final valid = _validateCashInputBeforeConfirm();
     if (!valid) return;
 
     final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid = _num(_paidCtrl.text);
-    final change = (paid - total) > 0 ? (paid - total) : 0;
+    final paid = _needsCashValidation ? _num(_paidCtrl.text) : total;
+    final change = _needsCashValidation && (paid - total) > 0 ? (paid - total) : 0;
 
     final action = await showDialog<_PaymentCompletionAction>(
       context: context,
@@ -439,6 +527,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           id: widget.orderId,
           paidAmount: paid,
           changeAmount: change,
+          paymentMethod: _isOpenbillOrder ? _selectedPaymentMethod : null,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
           cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
         ).timeout(const Duration(seconds: 15));
@@ -451,6 +540,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           order: offlineOrder,
           paidAmount: paid,
           changeAmount: change,
+          selectedPaymentMethod: _isOpenbillOrder ? _selectedPaymentMethod : null,
           cashierProofImagePath: _cashierProofImage?.path,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
         );
@@ -690,6 +780,9 @@ class _Header extends StatelessWidget {
 class _Body extends StatelessWidget {
   const _Body({
     required this.order,
+    required this.selectedPaymentMethod,
+    required this.availablePaymentMethods,
+    required this.onPaymentMethodChanged,
     required this.paidCtrl,
     required this.change,
     required this.cashierProofImage,
@@ -701,6 +794,9 @@ class _Body extends StatelessWidget {
   });
 
   final Map<String, dynamic> order;
+  final String? selectedPaymentMethod;
+  final List<Map<String, dynamic>> availablePaymentMethods;
+  final ValueChanged<String?> onPaymentMethodChanged;
   final TextEditingController paidCtrl;
   final num change;
   final XFile? cashierProofImage;
@@ -716,6 +812,10 @@ class _Body extends StatelessWidget {
     final name = (order['customer_name'] ?? '-').toString();
     final status = (order['order_status'] ?? '-').toString();
     final method = (order['payment_method'] ?? '-').toString();
+    final isOpenbill =
+        _toBool(order['openbill_flag']) ||
+        method == 'OPENBILL' ||
+        status.startsWith('OPENBILL');
     final total = _calcGrandTotalFromMap(order);
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
@@ -734,7 +834,21 @@ class _Body extends StatelessWidget {
     final hasCashierPaymentInstruction =
         (order['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
 
-    final showCashInput = method == 'CASH' || method == 'OPENBILL' || hasPaymentRequest || hasCashierPaymentInstruction;
+    final selectedPaymentType = availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['value']?.toString() == selectedPaymentMethod,
+          orElse: () => null,
+        )?['type']
+        ?.toString();
+
+    final effectiveMethodType = hasPaymentRequest
+        ? ((paymentRequest is Map ? paymentRequest['payment_type'] : null) ?? method).toString()
+        : hasCashierPaymentInstruction
+            ? ((latestPayment is Map ? latestPayment['payment_type'] : null) ?? method).toString()
+            : (isOpenbill ? (selectedPaymentType ?? '') : method);
+
+    final showCashInput = effectiveMethodType == 'CASH' || hasPaymentRequest || hasCashierPaymentInstruction;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
@@ -745,13 +859,24 @@ class _Body extends StatelessWidget {
             code: code,
             name: name,
             status: status,
-            method: method,
+            method: isOpenbill && selectedPaymentType != null && selectedPaymentType.isNotEmpty
+                ? 'OPENBILL -> $selectedPaymentType'
+                : method,
             total: total,
             isPpnActive: isPpnActive,
             ppnPercent: ppnPercent,
             roundingAmount: roundingAmount,
           ),
           const SizedBox(height: 12),
+
+          if (isOpenbill && !hasPaymentRequest && !hasCashierPaymentInstruction) ...[
+            _OpenbillPaymentMethodCard(
+              items: availablePaymentMethods,
+              selectedValue: selectedPaymentMethod,
+              onChanged: onPaymentMethodChanged,
+            ),
+            const SizedBox(height: 12),
+          ],
 
           if (hasPaymentRequest) ...[
             _PaymentRequestCard(
@@ -806,6 +931,57 @@ class _Body extends StatelessWidget {
     return baseTotal + roundingAmount;
   }
 
+}
+
+class _OpenbillPaymentMethodCard extends StatelessWidget {
+  const _OpenbillPaymentMethodCard({
+    required this.items,
+    required this.selectedValue,
+    required this.onChanged,
+  });
+
+  final List<Map<String, dynamic>> items;
+  final String? selectedValue;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFD),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Metode pembayaran open bill',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: selectedValue,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'Pilih metode pembayaran',
+              isDense: true,
+            ),
+            items: items
+                .map(
+                  (item) => DropdownMenuItem<String>(
+                    value: item['value']?.toString(),
+                    child: Text((item['label'] ?? item['type'] ?? '-').toString()),
+                  ),
+                )
+                .toList(),
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _OrderInfoCard extends StatelessWidget {

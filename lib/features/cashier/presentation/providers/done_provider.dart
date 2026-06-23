@@ -302,8 +302,8 @@ class DoneProvider extends ChangeNotifier {
         normalized['customer_name'] ?? '-';
     normalized['order_status'] =
         normalized['order_status'] ?? 'SERVED';
-    normalized['payment_method'] =
-        normalized['payment_method'] ?? 'CASH';
+    normalized['payment_method'] = normalized['payment_method'] ??
+        (_toBool(normalized['openbill_flag']) ? 'OPENBILL' : 'CASH');
     normalized['total_order_value'] =
         normalized['total_order_value'] ?? 0;
     normalized['ppn'] = normalized['ppn'] ?? 0;
@@ -420,6 +420,13 @@ class DoneProvider extends ChangeNotifier {
   }
 
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
+
+  bool _toBool(dynamic v) {
+    if (v == null) return false;
+    if (v is bool) return v;
+    final s = v.toString().toLowerCase();
+    return s == '1' || s == 'true';
+  }
 
   String? _extractCreatedAtFromRawJson(String? rawJson) {
     if (rawJson == null || rawJson.trim().isEmpty) return null;

@@ -709,7 +709,10 @@ num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
       _pickNum(data, ['latest_payment', 'rounding_amount']);
   if (stored != null && stored > 0) return stored.ceil();
 
-  final method = (data['payment_method'] ?? '').toString().toUpperCase();
+  final method = (_toBool(data['openbill_flag']) &&
+          ((data['payment_method'] ?? '').toString().trim().isEmpty))
+      ? 'OPENBILL'
+      : (data['payment_method'] ?? '').toString().toUpperCase();
   if (method != 'CASH') return 0;
 
   final effectiveBaseTotal = baseTotal ?? _baseGrandTotal(data);

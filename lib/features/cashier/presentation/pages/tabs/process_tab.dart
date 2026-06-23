@@ -799,7 +799,9 @@ class _ProcessOrderCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (data['payment_method']?.toString() == 'OPENBILL') ...[
+                      if (_toBool(data['openbill_flag']) ||
+                          data['payment_method']?.toString() == 'OPENBILL' ||
+                          (data['order_status'] ?? '').toString().startsWith('OPENBILL')) ...[
                         const SizedBox(width: 6),
                         const _Badge(text: 'Openbill', compact: true),
                       ],
@@ -936,7 +938,9 @@ class _ProcessOrderCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (data['payment_method']?.toString() == 'OPENBILL') ...[
+                  if (_toBool(data['openbill_flag']) ||
+                      data['payment_method']?.toString() == 'OPENBILL' ||
+                      (data['order_status'] ?? '').toString().startsWith('OPENBILL')) ...[
                     const SizedBox(width: 6),
                     const _Badge(text: 'Openbill', compact: true),
                   ],

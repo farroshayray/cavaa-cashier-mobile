@@ -334,41 +334,11 @@ class LocalOrdersDao {
       final decoded = jsonDecode(order.orderSnapshotJson!);
       if (decoded is Map) {
         final snap = Map<String, dynamic>.from(decoded);
-
-        final rebuiltOrderDetails = bundle.items.map((item) {
-          final opts = bundle.optionsByItemId[item.localId] ?? const <LocalOrderItemOption>[];
-
-          return <String, dynamic>{
-            'id': null,
-            'product_id': item.productServerId,
-            'quantity': item.qty,
-            'base_price': item.basePrice,
-            'promo_amount': item.promoAmount ?? 0,
-            'product_name': item.productNameSnapshot,
-            'customer_note': item.customerNote,
-            'partner_product': {
-              'id': item.productServerId,
-              'name': item.productNameSnapshot,
-              'category': {
-                'id': item.categoryServerId,
-                'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
-              },
-            },
-            'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
-            'order_detail_options': opts.map((o) {
-              return <String, dynamic>{
-                'price': o.price,
-                'option': {
-                  'id': o.optionServerId,
-                  'name': o.optionNameSnapshot,
-                  'parent': {
-                    'name': o.parentNameSnapshot ?? 'Opsi',
-                  },
-                },
-              };
-            }).toList(),
-          };
-        }).toList();
+        final rebuiltOrderDetails = _buildLocalOrderDetails(
+          items: bundle.items,
+          optionsByItemId: bundle.optionsByItemId,
+          snapshotDetails: snap['order_details'] as List?,
+        );
 
         snap['id'] = order.serverId ?? snap['id'] ?? -1;
         snap['local_id'] = order.localId;
@@ -439,46 +409,10 @@ class LocalOrdersDao {
       }
     }
 
-    final orderDetails = bundle.items.map((item) {
-      final opts = bundle.optionsByItemId[item.localId] ?? const <LocalOrderItemOption>[];
-
-      return <String, dynamic>{
-        'id': null,
-        'product_id': item.productServerId,
-        'quantity': item.qty,
-        'base_price': item.basePrice,
-        'promo_amount': item.promoAmount ?? 0,
-        'product_name': item.productNameSnapshot,
-        'customer_note': item.customerNote,
-
-        // tambahkan struktur mirip API
-        'partner_product': {
-          'id': item.productServerId,
-          'name': item.productNameSnapshot,
-          'category': {
-            'id': item.categoryServerId,
-            'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
-          },
-        },
-        'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
-
-        // optional: cadangan kalau printer baca field datar
-        'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
-
-        'order_detail_options': opts.map((o) {
-          return <String, dynamic>{
-            'price': o.price,
-            'option': {
-              'id': o.optionServerId,
-              'name': o.optionNameSnapshot,
-              'parent': {
-                'name': o.parentNameSnapshot ?? 'Opsi',
-              },
-            },
-          };
-        }).toList(),
-      };
-    }).toList();
+    final orderDetails = _buildLocalOrderDetails(
+      items: bundle.items,
+      optionsByItemId: bundle.optionsByItemId,
+    );
 
     return <String, dynamic>{
       'id': order.serverId ?? -1,
@@ -509,6 +443,76 @@ class LocalOrdersDao {
     };
   }
 
+  Future<Map<String, dynamic>> markLocalOrderItemsServed({
+    required String localId,
+    required List<int> detailIds,
+  }) async {
+    final detail = await getOrderDetailMapByLocalId(localId);
+    final order = await getOrderByLocalId(localId);
+
+    if (detail == null || order == null) {
+      throw Exception('Detail order lokal tidak ditemukan');
+    }
+
+    final details = ((detail['order_details'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    var updatedCount = 0;
+
+    for (final item in details) {
+      final itemId = _toInt(item['id']);
+      if (itemId != null && detailIds.contains(itemId)) {
+        item['status'] = 'SERVED BY CASHIER';
+        item['cashier_process_id'] = item['cashier_process_id'] ?? -1;
+        updatedCount++;
+      }
+    }
+
+    if (updatedCount == 0) {
+      throw Exception('Item yang dipilih tidak ditemukan');
+    }
+
+    final allServed = details.every((item) {
+      final status = (item['status'] ?? '').toString();
+      return status == 'SERVED BY CASHIER' || status == 'SERVED BY KITCHEN';
+    });
+
+    final isOpenbill =
+        (order.paymentMethodSelected ?? order.paymentMethodEffective) == 'OPENBILL';
+    final nextStatus = allServed
+        ? (isOpenbill ? 'UNPAID' : 'SERVED')
+        : order.orderStatusLocal;
+    final nextSyncStatus = allServed
+        ? 'PENDING_FINISH'
+        : (order.syncStatus == 'STOCK_CONFLICT' ? 'STOCK_CONFLICT' : order.syncStatus);
+
+    final snapshot = Map<String, dynamic>.from(detail)
+      ..['order_details'] = details
+      ..['order_status'] = nextStatus
+      ..['sync_status'] = nextSyncStatus
+      ..['is_local_only'] = true;
+
+    await (db.update(db.localOrders)
+          ..where((t) => t.localId.equals(localId)))
+        .write(
+      LocalOrdersCompanion(
+        orderStatusLocal: Value(nextStatus),
+        syncStatus: Value(nextSyncStatus),
+        orderSnapshotJson: Value(jsonEncode(snapshot)),
+        updatedAtLocal: Value(DateTime.now()),
+        lastError: const Value(null),
+      ),
+    );
+
+    return {
+      'all_served': allServed,
+      'order_status': nextStatus,
+      'detail_count': updatedCount,
+    };
+  }
+
   Future<void> markOrderPaidOffline({
     required String localId,
     required num paidAmount,
@@ -517,7 +521,9 @@ class LocalOrdersDao {
     String? lastPaymentId,
   }) async {
     final current = await getOrderByLocalId(localId);
-    final isOpenbill = current?.paymentMethodEffective == 'OPENBILL';
+    final isOpenbill =
+        (current?.paymentMethodSelected ?? current?.paymentMethodEffective) ==
+            'OPENBILL';
     await (db.update(db.localOrders)
           ..where((tbl) => tbl.localId.equals(localId)))
         .write(
@@ -584,6 +590,7 @@ class LocalOrdersDao {
     required String bookingOrderCode,
     required String customerName,
     required String tableNoSnapshot,
+    String? paymentMethodSelected,
     required String paymentMethodEffective,
     required double subtotal,
     required double grandTotal,
@@ -608,7 +615,8 @@ class LocalOrdersDao {
       return;
     }
 
-    final isOpenbill = paymentMethodEffective == 'OPENBILL';
+    final selectedMethod = paymentMethodSelected ?? paymentMethodEffective;
+    final isOpenbill = selectedMethod == 'OPENBILL';
 
     await createOrder(
       LocalOrdersCompanion(
@@ -618,7 +626,7 @@ class LocalOrdersDao {
         partnerName: const Value(''),
         tableNoSnapshot: Value(tableNoSnapshot),
         tableServerId: const Value(null),
-        paymentMethodSelected: Value(paymentMethodEffective),
+        paymentMethodSelected: Value(selectedMethod),
         paymentMethodEffective: Value(paymentMethodEffective),
         subtotal: Value(subtotal),
         grandTotal: Value(grandTotal),
@@ -639,6 +647,7 @@ class LocalOrdersDao {
     required String localId,
     required double paidAmount,
     required double changeAmount,
+    String? selectedPaymentMethod,
     String? cashierProofImageLocalPath,
     DateTime? paymentConfirmedAtLocal,
     int? latestPaymentServerId,
@@ -649,10 +658,15 @@ class LocalOrdersDao {
     final keepStockConflict =
         preserveStockConflict && current?.syncStatus == 'STOCK_CONFLICT';
 
-    final isOpenbill = current?.paymentMethodEffective == 'OPENBILL';
+    final isOpenbill =
+        (current?.paymentMethodSelected ?? current?.paymentMethodEffective) ==
+            'OPENBILL';
 
     await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
       LocalOrdersCompanion(
+        paymentMethodEffective: selectedPaymentMethod == null
+            ? const Value.absent()
+            : Value(selectedPaymentMethod),
         paidAmountLocal: Value(paidAmount),
         changeAmountLocal: Value(changeAmount),
         cashierProofImageLocalPath: Value(cashierProofImageLocalPath),
@@ -829,9 +843,78 @@ class LocalOrdersDao {
   }
 }
 
+List<Map<String, dynamic>> _buildLocalOrderDetails({
+  required List<LocalOrderItem> items,
+  required Map<String, List<LocalOrderItemOption>> optionsByItemId,
+  List? snapshotDetails,
+}) {
+  final snapshotByLocalItemId = <String, Map<String, dynamic>>{};
+
+  for (final raw in snapshotDetails ?? const []) {
+    if (raw is! Map) continue;
+    final item = Map<String, dynamic>.from(raw);
+    final localItemId = (item['local_item_id'] ?? '').toString().trim();
+    if (localItemId.isEmpty) continue;
+    snapshotByLocalItemId[localItemId] = item;
+  }
+
+  return items.map((item) {
+    final opts = optionsByItemId[item.localId] ?? const <LocalOrderItemOption>[];
+    final snapshotItem = snapshotByLocalItemId[item.localId];
+
+    return <String, dynamic>{
+      'id': snapshotItem?['id'] ?? _toLocalDetailId(item.localId),
+      'local_item_id': item.localId,
+      'product_id': item.productServerId,
+      'quantity': item.qty,
+      'base_price': item.basePrice,
+      'promo_amount': item.promoAmount ?? 0,
+      'product_name': item.productNameSnapshot,
+      'customer_note': item.customerNote,
+      'status': snapshotItem?['status'],
+      'cashier_process_id': snapshotItem?['cashier_process_id'],
+      'kitchen_process_id': snapshotItem?['kitchen_process_id'],
+      'partner_product': {
+        'id': item.productServerId,
+        'name': item.productNameSnapshot,
+        'category': {
+          'id': item.categoryServerId,
+          'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
+        },
+      },
+      'category_name': item.categoryNameSnapshot ?? 'Tanpa Kategori',
+      'order_detail_options': opts.map((o) {
+        return <String, dynamic>{
+          'price': o.price,
+          'option': {
+            'id': o.optionServerId,
+            'name': o.optionNameSnapshot,
+            'parent': {
+              'name': o.parentNameSnapshot ?? 'Opsi',
+            },
+          },
+        };
+      }).toList(),
+    };
+  }).toList();
+}
+
 
 int? _toInt(dynamic v) {
   if (v == null) return null;
   if (v is int) return v;
   return int.tryParse(v.toString());
+}
+
+int _toLocalDetailId(String localItemId) {
+  var hash = 0;
+  for (final codeUnit in localItemId.codeUnits) {
+    hash = ((hash * 31) + codeUnit) & 0x7fffffff;
+  }
+
+  if (hash == 0) {
+    hash = localItemId.length + 1;
+  }
+
+  return -hash;
 }

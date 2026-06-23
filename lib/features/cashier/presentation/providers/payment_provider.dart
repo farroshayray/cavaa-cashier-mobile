@@ -193,6 +193,10 @@ class PaymentProvider extends ChangeNotifier {
           'total_amount': o.grandTotal,
           'is_ppn_active': o.isPpnActive,
           'ppn': o.ppnPercent,
+          'openbill_flag':
+              (o.paymentMethodSelected ?? o.paymentMethodEffective) ==
+                  'OPENBILL' ||
+              o.orderStatusLocal.startsWith('OPENBILL'),
           'payment_method': o.paymentMethodEffective,
           'order_status': o.orderStatusLocal,
           'sync_status': o.syncStatus,
@@ -343,6 +347,9 @@ class PaymentProvider extends ChangeNotifier {
       'subtotal': subtotal,
       'grand_total': baseTotal + roundingAmount,
       'cash_rounding_amount': roundingAmount,
+      'openbill_flag': _toBool(e['openbill_flag']) ||
+          (e['payment_method'] ?? '').toString() == 'OPENBILL' ||
+          (e['order_status'] ?? '').toString().startsWith('OPENBILL'),
       'is_local_only': false,
       'is_cached_server': false,
       'sync_status': 'SYNCED',
@@ -383,6 +390,10 @@ class PaymentProvider extends ChangeNotifier {
       'table_name': tableNo,
 
       'payment_method': o.paymentMethod,
+      'openbill_flag':
+          (detail?['openbill_flag'] == true) ||
+          o.paymentMethod == 'OPENBILL' ||
+          o.orderStatus.startsWith('OPENBILL'),
       'order_status': o.orderStatus,
 
       'total_order_value': o.subtotal,
@@ -432,6 +443,7 @@ class PaymentProvider extends ChangeNotifier {
     required Map<String, dynamic> row,
     required num paidAmount,
     required num changeAmount,
+    String? paymentMethod,
     String? cashierProofImagePath,
     String? lastPaymentId,
   }) async {
@@ -449,6 +461,7 @@ class PaymentProvider extends ChangeNotifier {
         id: serverId,
         paidAmount: paidAmount,
         changeAmount: changeAmount,
+        paymentMethod: paymentMethod,
         lastPaymentId: lastPaymentId,
         cashierProofImagePath: cashierProofImagePath,
       );
@@ -461,6 +474,7 @@ class PaymentProvider extends ChangeNotifier {
       order: row,
       paidAmount: paidAmount,
       changeAmount: changeAmount,
+      selectedPaymentMethod: paymentMethod,
       cashierProofImagePath: cashierProofImagePath,
       lastPaymentId: lastPaymentId,
     );
@@ -472,6 +486,7 @@ class PaymentProvider extends ChangeNotifier {
     required Map<String, dynamic> order,
     required num paidAmount,
     required num changeAmount,
+    String? selectedPaymentMethod,
     String? cashierProofImagePath,
     String? lastPaymentId,
   }) async {
@@ -503,7 +518,15 @@ class PaymentProvider extends ChangeNotifier {
           : ((order['table_no'] ?? '-').toString());
 
       final paymentMethodEffective =
-          (order['payment_method'] ?? 'CASH').toString();
+          (selectedPaymentMethod ??
+                  order['payment_method'] ??
+                  'CASH')
+              .toString();
+      final paymentMethodSelected =
+          (_toBool(order['openbill_flag']) ||
+                  (order['order_status'] ?? '').toString().startsWith('OPENBILL'))
+              ? 'OPENBILL'
+              : paymentMethodEffective;
 
       final subtotal = _toNum(order['total_order_value']).toDouble();
       final ppnPercent = _toNum(order['ppn']).toDouble();
@@ -517,6 +540,7 @@ class PaymentProvider extends ChangeNotifier {
         bookingOrderCode: bookingOrderCode,
         customerName: customerName,
         tableNoSnapshot: tableNoSnapshot,
+        paymentMethodSelected: paymentMethodSelected,
         paymentMethodEffective: paymentMethodEffective,
         subtotal: subtotal,
         grandTotal: grandTotal,
@@ -534,9 +558,14 @@ class PaymentProvider extends ChangeNotifier {
     // =========================
     // B. Simpan snapshot payment offline
     // =========================
-    final snapshot = Map<String, dynamic>.from(order);
+    final existingDetail = await localOrdersDao.getOrderDetailMapByLocalId(localId);
+    final snapshot = Map<String, dynamic>.from(existingDetail ?? order);
+    snapshot.addAll(Map<String, dynamic>.from(order));
     snapshot['is_local_only'] = true;
     snapshot['local_id'] = localId;
+    if (selectedPaymentMethod != null && selectedPaymentMethod.trim().isNotEmpty) {
+      snapshot['payment_method'] = selectedPaymentMethod.trim();
+    }
     snapshot['payment'] = {
       'updated_at': now.toIso8601String(),
       'paid_amount': paidAmount,
@@ -549,6 +578,7 @@ class PaymentProvider extends ChangeNotifier {
       localId: localId,
       paidAmount: paidAmount.toDouble(),
       changeAmount: changeAmount.toDouble(),
+      selectedPaymentMethod: selectedPaymentMethod,
       cashierProofImageLocalPath: cashierProofImagePath,
       paymentConfirmedAtLocal: now,
       latestPaymentServerId: int.tryParse(lastPaymentId ?? ''),

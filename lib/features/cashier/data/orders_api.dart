@@ -62,6 +62,7 @@ class OrdersApi {
     required int id,
     required num paidAmount,
     required num changeAmount,
+    String? paymentMethod,
     String? note,
     String? email,
     String? lastPaymentId,
@@ -70,6 +71,8 @@ class OrdersApi {
     final formData = FormData.fromMap({
       'paid_amount': paidAmount.toString(),
       'change_amount': changeAmount.toString(),
+      if (paymentMethod != null && paymentMethod.trim().isNotEmpty)
+        'payment_method': paymentMethod.trim(),
       if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
       if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
       if (lastPaymentId != null && lastPaymentId.trim().isNotEmpty)

@@ -421,8 +421,8 @@ class ProcessProvider extends ChangeNotifier {
         normalized['customer_name'] ?? '-';
     normalized['order_status'] =
         normalized['order_status'] ?? 'PROCESSED';
-    normalized['payment_method'] =
-        normalized['payment_method'] ?? 'CASH';
+    normalized['payment_method'] = normalized['payment_method'] ??
+        (_toBool(normalized['openbill_flag']) ? 'OPENBILL' : 'CASH');
     normalized['total_order_value'] =
         normalized['total_order_value'] ?? 0;
     normalized['ppn'] = normalized['ppn'] ?? 0;
@@ -671,7 +671,34 @@ class ProcessProvider extends ChangeNotifier {
       }
 
       if (isLocalOnly) {
-        throw Exception('Order lokal belum mendukung served per item');
+        final localId = (row['local_id'] ?? '').toString();
+        if (localId.isEmpty) {
+          throw Exception('Local ID tidak valid');
+        }
+
+        final result = await localOrdersDao.markLocalOrderItemsServed(
+          localId: localId,
+          detailIds: detailIds,
+        );
+
+        await load();
+
+        final allServed = result['all_served'] == true;
+        final isOpenbill =
+            _toBool(row['openbill_flag']) ||
+            row['payment_method']?.toString() == 'OPENBILL' ||
+            (row['order_status'] ?? '').toString().startsWith('OPENBILL');
+
+        return {
+          'status': 'offline_success',
+          'offline': true,
+          'all_served': allServed,
+          'message': allServed
+              ? (isOpenbill
+                  ? 'Semua item served, order dipindahkan ke pembayaran'
+                  : 'Semua item served')
+              : 'Item terpilih berhasil ditandai served',
+        };
       }
 
       if (isStockConflict) {
@@ -723,7 +750,10 @@ class ProcessProvider extends ChangeNotifier {
           throw Exception('Local ID tidak valid');
         }
 
-        final isOpenbill = row['payment_method']?.toString() == 'OPENBILL';
+        final isOpenbill =
+            _toBool(row['openbill_flag']) ||
+            row['payment_method']?.toString() == 'OPENBILL' ||
+            (row['order_status'] ?? '').toString().startsWith('OPENBILL');
 
         if (isOpenbill) {
           await localOrdersDao.updateOrderStatusByLocalId(
@@ -790,7 +820,10 @@ class ProcessProvider extends ChangeNotifier {
           rawJson,
         );
 
-        final isOpenbill = row['payment_method']?.toString() == 'OPENBILL';
+        final isOpenbill =
+            _toBool(row['openbill_flag']) ||
+            row['payment_method']?.toString() == 'OPENBILL' ||
+            (row['order_status'] ?? '').toString().startsWith('OPENBILL');
 
         if (isOpenbill) {
           Map<String, dynamic> detailMap = {};
@@ -810,6 +843,7 @@ class ProcessProvider extends ChangeNotifier {
           detailMap['customer_name'] ??= row['customer_name'];
           detailMap['table'] ??= row['table'] ?? {'table_no': row['table_no_snapshot'] ?? '-'};
           detailMap['payment_method'] = 'OPENBILL';
+          detailMap['openbill_flag'] = true;
           detailMap['order_status'] = 'UNPAID';
           detailMap['total_order_value'] ??= row['total_order_value'] ?? 0;
           detailMap['ppn'] ??= row['ppn'] ?? 0;

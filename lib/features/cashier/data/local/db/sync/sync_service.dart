@@ -270,7 +270,9 @@ class SyncService {
         'serverId=$serverId',
       );
 
-      final isOpenbill = order.paymentMethodEffective == 'OPENBILL';
+      final isOpenbill =
+          (order.paymentMethodSelected ?? order.paymentMethodEffective) ==
+          'OPENBILL';
 
       if (isOpenbill) {
         debugPrint(
@@ -505,7 +507,9 @@ class SyncService {
             await ordersRepo.finishOrder(row.serverId);
             debugPrint('✅ [SYNC] finishOrder api success for serverId=${row.serverId}');
 
-            final isOpenbill = row.paymentMethod == 'OPENBILL';
+            final isOpenbill =
+                row.paymentMethod == 'OPENBILL' ||
+                row.orderStatus.startsWith('OPENBILL');
             if (isOpenbill) {
               debugPrint('🔄 [SYNC] Fetching updated OPENBILL order detail for serverId=${row.serverId}');
               final detail = await ordersRepo.fetchOrderDetail(row.serverId);
@@ -620,6 +624,7 @@ class SyncService {
       id: serverId,
       paidAmount: order.paidAmountLocal ?? order.grandTotal,
       changeAmount: order.changeAmountLocal ?? 0,
+      paymentMethod: order.paymentMethodEffective,
       lastPaymentId: resolvedLatestPaymentId?.toString(),
       cashierProofImagePath: order.cashierProofImageLocalPath,
     );

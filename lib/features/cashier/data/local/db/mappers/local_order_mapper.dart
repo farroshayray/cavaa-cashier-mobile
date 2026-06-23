@@ -123,6 +123,7 @@ Map<String, dynamic> mapLocalOrderToProcessItem(LocalOrder row) {
         row.serverOrderCode ?? row.clientOrderCode ?? snapshot['booking_order_code'],
     'customer_name': row.customerName,
     'payment_method': row.paymentMethodEffective ?? row.paymentMethodSelected,
+    'openbill_flag': (row.paymentMethodSelected ?? row.paymentMethodEffective) == 'OPENBILL',
     'order_status': row.orderStatusLocal,
     'total_order_value': row.subtotal,
     'ppn': row.ppnPercent,
