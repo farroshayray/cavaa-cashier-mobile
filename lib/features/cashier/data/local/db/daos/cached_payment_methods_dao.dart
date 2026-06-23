@@ -94,4 +94,59 @@ class CachedPaymentMethodsDao {
 
     return rows.isEmpty ? null : rows.first;
   }
+
+  Future<List<CachedPaymentMethod>> getAllActive() async {
+    return (db.select(db.cachedPaymentMethods)
+          ..where((t) => t.isActive.equals(true))
+          ..orderBy([(t) => OrderingTerm.asc(t.label)]))
+        .get();
+  }
+
+  Future<List<Map<String, dynamic>>> buildAvailablePaymentMethodsList() async {
+    final rows = await getAllActive();
+    final methods = <Map<String, dynamic>>[];
+
+    for (final row in rows) {
+      if (row.kind == 'cashierCash') {
+        methods.add({
+          'value': 'CASH',
+          'label': row.label,
+          'type': 'CASH',
+          'requires_proof': false,
+        });
+        continue;
+      }
+
+      if (row.kind == 'onlineQris') {
+        methods.add({
+          'value': 'QRIS',
+          'label': row.label,
+          'type': 'QRIS',
+          'requires_proof': false,
+        });
+        continue;
+      }
+
+      if (row.kind == 'openbill') {
+        continue;
+      }
+
+      final manualId = row.serverManualPaymentId;
+      if (manualId == null) continue;
+
+      methods.add({
+        'value': manualId.toString(),
+        'label': row.label,
+        'type': row.kind,
+        'requires_proof': true,
+        'provider_name': row.providerName,
+        'provider_account_name': row.providerAccountName,
+        'provider_account_no': row.providerAccountNo,
+        'qris_image_url': row.qrisImageUrl,
+        'qris_image_local_path': row.qrisImageLocalPath,
+      });
+    }
+
+    return methods;
+  }
 }

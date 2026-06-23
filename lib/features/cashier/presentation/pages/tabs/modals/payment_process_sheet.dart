@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/core/config/env.dart';
+import '/core/utils/open_url.dart';
 import '/features/cashier/data/orders_api.dart';
 import '/core/storage/secure_storage_service.dart';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
@@ -13,6 +14,18 @@ import '/features/cashier/data/models/orders_repository.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
 
+Map<String, dynamic> _normalizePaymentInstruction(Map<String, dynamic> raw) {
+  final type = (raw['payment_type'] ?? raw['type'] ?? '').toString();
+  return {
+    'payment_type': type,
+    'provider_name': raw['provider_name'],
+    'provider_account_name': raw['provider_account_name'],
+    'provider_account_no': raw['provider_account_no'],
+    'qris_image_url': raw['qris_image_url'],
+    'qris_image_local_path': raw['qris_image_local_path'],
+    'additional_info': raw['additional_info'],
+  };
+}
 
 class PaymentProcessSheet extends StatefulWidget {
   const PaymentProcessSheet({
@@ -134,6 +147,18 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         status.startsWith('OPENBILL');
   }
 
+  bool get _canChooseFinalPaymentMethod {
+    if (_order == null) return false;
+    final status = (_order!['order_status'] ?? '').toString();
+    final latestPayment = _order!['latest_payment'];
+    final hasPendingManualInstruction =
+        status == 'UNPAID' &&
+        latestPayment is Map &&
+        latestPayment['owner_manual_payment'] is Map;
+
+    return status == 'UNPAID' && !hasPendingManualInstruction;
+  }
+
   List<Map<String, dynamic>> get _availablePaymentMethods {
     if (_order == null) return const [];
     final raw = _order!['available_payment_methods'];
@@ -161,7 +186,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       }
     }
 
-    if (_isOpenbillOrder) {
+    if (_canChooseFinalPaymentMethod) {
       if (_selectedPaymentMethod == null || _selectedPaymentMethod!.trim().isEmpty) {
         return '';
       }
@@ -175,6 +200,22 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     }
 
     return (_order?['payment_method'] ?? 'CASH').toString();
+  }
+
+  bool get _selectedMethodRequiresProof {
+    if (!_canChooseFinalPaymentMethod) return false;
+    final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['value']?.toString() == _selectedPaymentMethod,
+          orElse: () => null,
+        );
+
+    if (selected == null) return false;
+
+    final explicit = selected['requires_proof'];
+    if (explicit is bool) return explicit;
+
+    final type = (selected['type'] ?? '').toString();
+    return type.isNotEmpty && type != 'CASH';
   }
 
   bool get _needsCashValidation {
@@ -206,6 +247,29 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final paid = _num(_paidCtrl.text);
 
     return paid > 0 && paid >= total;
+  }
+
+  bool get _canConfirm {
+    if (_canChooseFinalPaymentMethod && !_isCaseA && !_isCaseB) {
+      if (_selectedPaymentMethod == null || _selectedPaymentMethod!.trim().isEmpty) {
+        return false;
+      }
+    }
+
+    if ((_isCaseB || _selectedMethodRequiresProof) && _cashierProofImage == null) {
+      return false;
+    }
+
+    return _cashInputValid;
+  }
+
+  String get _selectedPaymentMethodLabel {
+    if (_selectedPaymentMethod == null) return '-';
+    final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['value']?.toString() == _selectedPaymentMethod,
+          orElse: () => null,
+        );
+    return (selected?['label'] ?? _selectedPaymentMethod ?? '-').toString();
   }
 
   bool _validateCashInputBeforeConfirm() {
@@ -349,8 +413,15 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       final method = (o['payment_method'] ?? '').toString();
       final availableMethods = _availablePaymentMethods;
 
-      if (_isOpenbillOrder) {
-        if (availableMethods.length == 1) {
+      if (_canChooseFinalPaymentMethod) {
+        final currentMethod = (o['payment_method'] ?? '').toString().trim();
+        final matchedCurrent = availableMethods.any(
+          (item) => item['value']?.toString() == currentMethod,
+        );
+
+        if (matchedCurrent) {
+          _selectedPaymentMethod = currentMethod;
+        } else if (availableMethods.length == 1) {
           _selectedPaymentMethod = availableMethods.first['value']?.toString();
         } else {
           _selectedPaymentMethod = null;
@@ -430,7 +501,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                 ),
                 _Footer2(
                   paying: _paying,
-                  ready: _cashInputValid,
+                  ready: _canConfirm,
                   onBack: () => Navigator.of(context).pop(false),
                   onConfirm: () async => _confirmAndPay(),
                 ),
@@ -445,15 +516,27 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   Future<void> _confirmAndPay() async {
     if (_paying) return;
 
-    if (_isOpenbillOrder &&
+    if (_canChooseFinalPaymentMethod &&
         !_isCaseA &&
         !_isCaseB &&
         (_selectedPaymentMethod == null || _selectedPaymentMethod!.trim().isEmpty)) {
+        ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Pilih metode pembayaran terlebih dahulu'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+
+    if (_selectedMethodRequiresProof && _cashierProofImage == null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           const SnackBar(
-            content: Text('Pilih metode pembayaran open bill terlebih dahulu'),
+            content: Text('Upload bukti bayar terlebih dahulu'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -466,6 +549,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
     final paid = _needsCashValidation ? _num(_paidCtrl.text) : total;
     final change = _needsCashValidation && (paid - total) > 0 ? (paid - total) : 0;
+    final isCashPayment = _needsCashValidation;
+    final isQrisXendit = _effectivePaymentType == 'QRIS' && _canChooseFinalPaymentMethod;
 
     final action = await showDialog<_PaymentCompletionAction>(
       context: context,
@@ -473,10 +558,18 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       builder: (_) => AlertDialog(
         title: const Text('Konfirmasi Pembayaran'),
         content: Text(
-          'Uang diterima Rp ${_rupiah(paid)}\n'
-          'Total tagihan Rp ${_rupiah(total)}\n'
-          'Kembalian Rp ${_rupiah(change)}\n\n'
-          'Lanjutkan proses pembayaran?',
+          isQrisXendit
+              ? 'Metode: QRIS (Xendit)\n'
+                'Total tagihan Rp ${_rupiah(total)}\n\n'
+                'Invoice pembayaran akan dibuka. Lanjutkan?'
+              : isCashPayment
+                  ? 'Uang diterima Rp ${_rupiah(paid)}\n'
+                    'Total tagihan Rp ${_rupiah(total)}\n'
+                    'Kembalian Rp ${_rupiah(change)}\n\n'
+                    'Lanjutkan proses pembayaran?'
+                  : 'Metode: ${_selectedPaymentMethodLabel}\n'
+                    'Total tagihan Rp ${_rupiah(total)}\n\n'
+                    'Lanjutkan proses pembayaran?',
         ),
         actions: [
           TextButton(
@@ -523,14 +616,26 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           context.read<ConnectivityStatusProvider>().isOnline && !widget.forceOffline;
 
       if (isOnline) {
-        await widget.ordersRepo.paymentOrder(
+        final payResp = await widget.ordersRepo.paymentOrder(
           id: widget.orderId,
           paidAmount: paid,
           changeAmount: change,
-          paymentMethod: _isOpenbillOrder ? _selectedPaymentMethod : null,
+          paymentMethod: _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
-          cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
+          cashierProofImagePath: (_isCaseB || _selectedMethodRequiresProof)
+              ? _cashierProofImage?.path
+              : null,
         ).timeout(const Duration(seconds: 15));
+
+        final redirect = payResp['redirect'];
+        if (redirect is String && redirect.trim().isNotEmpty) {
+          if (!mounted) return;
+          setState(() => _paying = false);
+          await openExternalUrl(redirect);
+          if (!mounted) return;
+          Navigator.of(context).pop(true);
+          return;
+        }
       } else {
         final offlineOrder = Map<String, dynamic>.from(_order!);
         if (widget.forceOffline) {
@@ -540,7 +645,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           order: offlineOrder,
           paidAmount: paid,
           changeAmount: change,
-          selectedPaymentMethod: _isOpenbillOrder ? _selectedPaymentMethod : null,
+          selectedPaymentMethod: _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
           cashierProofImagePath: _cashierProofImage?.path,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
         );
@@ -830,6 +935,9 @@ class _Body extends StatelessWidget {
 
     final latestPayment = order['latest_payment'];
     final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+    final canChooseFinalPaymentMethod =
+        (order['order_status'] ?? '').toString() == 'UNPAID' &&
+        !(latestPayment is Map && latestPayment['owner_manual_payment'] is Map);
 
     final hasCashierPaymentInstruction =
         (order['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
@@ -846,7 +954,14 @@ class _Body extends StatelessWidget {
         ? ((paymentRequest is Map ? paymentRequest['payment_type'] : null) ?? method).toString()
         : hasCashierPaymentInstruction
             ? ((latestPayment is Map ? latestPayment['payment_type'] : null) ?? method).toString()
-            : (isOpenbill ? (selectedPaymentType ?? '') : method);
+            : (canChooseFinalPaymentMethod ? (selectedPaymentType ?? '') : method);
+
+    final selectedPaymentInstruction = availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['value']?.toString() == selectedPaymentMethod,
+          orElse: () => null,
+        );
 
     final showCashInput = effectiveMethodType == 'CASH' || hasPaymentRequest || hasCashierPaymentInstruction;
 
@@ -859,8 +974,10 @@ class _Body extends StatelessWidget {
             code: code,
             name: name,
             status: status,
-            method: isOpenbill && selectedPaymentType != null && selectedPaymentType.isNotEmpty
-                ? 'OPENBILL -> $selectedPaymentType'
+            method: canChooseFinalPaymentMethod &&
+                    selectedPaymentType != null &&
+                    selectedPaymentType.isNotEmpty
+                ? '${isOpenbill ? 'OPENBILL' : method} -> $selectedPaymentType'
                 : method,
             total: total,
             isPpnActive: isPpnActive,
@@ -869,8 +986,9 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          if (isOpenbill && !hasPaymentRequest && !hasCashierPaymentInstruction) ...[
+          if (canChooseFinalPaymentMethod && !hasPaymentRequest && !hasCashierPaymentInstruction) ...[
             _OpenbillPaymentMethodCard(
+              title: 'Pilih Metode Pembayaran',
               items: availablePaymentMethods,
               selectedValue: selectedPaymentMethod,
               onChanged: onPaymentMethodChanged,
@@ -885,12 +1003,37 @@ class _Body extends StatelessWidget {
             const SizedBox(height: 12),
           ] else if (hasCashierPaymentInstruction) ...[
             _CashierPaymentInstructionCard(
-              paymentInstruction: Map<String, dynamic>.from(cpi),
+              paymentInstruction: _normalizePaymentInstruction(
+                Map<String, dynamic>.from(cpi),
+              ),
               cashierProofImage: cashierProofImage,
               cashierProofError: cashierProofError,
               onPickImage: onPickImage,
               onRemoveImage: onRemoveImage,
             ),
+            const SizedBox(height: 12),
+          ] else if (canChooseFinalPaymentMethod &&
+              selectedPaymentInstruction != null &&
+              effectiveMethodType.isNotEmpty &&
+              effectiveMethodType != 'CASH') ...[
+            if (effectiveMethodType == 'QRIS')
+              _HintCard(
+                icon: Icons.qr_code_2_rounded,
+                title: 'QRIS (Xendit)',
+                message:
+                    'Invoice QRIS akan dibuka setelah Anda menekan Simpan. '
+                    'Minta customer scan dan bayar melalui halaman pembayaran.',
+              )
+            else
+              _CashierPaymentInstructionCard(
+                paymentInstruction: _normalizePaymentInstruction(
+                  Map<String, dynamic>.from(selectedPaymentInstruction),
+                ),
+                cashierProofImage: cashierProofImage,
+                cashierProofError: cashierProofError,
+                onPickImage: onPickImage,
+                onRemoveImage: onRemoveImage,
+              ),
             const SizedBox(height: 12),
           ],
 
@@ -935,11 +1078,13 @@ class _Body extends StatelessWidget {
 
 class _OpenbillPaymentMethodCard extends StatelessWidget {
   const _OpenbillPaymentMethodCard({
+    required this.title,
     required this.items,
     required this.selectedValue,
     required this.onChanged,
   });
 
+  final String title;
   final List<Map<String, dynamic>> items;
   final String? selectedValue;
   final ValueChanged<String?> onChanged;
@@ -956,8 +1101,8 @@ class _OpenbillPaymentMethodCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Metode pembayaran open bill',
+          Text(
+            title,
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
@@ -1316,6 +1461,8 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
     final showAccNo = type == 'manual_tf' || type == 'manual_ewallet';
     final showQris = type == 'manual_qris' &&
         (qrisLocalPath.isNotEmpty || qrisUrl.isNotEmpty);
+    final additionalInfo =
+        (paymentInstruction['additional_info'] ?? '').toString().trim();
 
     final localFile = qrisLocalPath.isNotEmpty ? File(qrisLocalPath) : null;
 
@@ -1335,6 +1482,7 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
           _row('Provider', provider),
           _row('Nama Akun', accName),
           if (showAccNo && accNo.isNotEmpty) _row('No Akun', accNo),
+          if (additionalInfo.isNotEmpty) _row('Catatan', additionalInfo),
 
           if (showQris) ...[
             const SizedBox(height: 10),

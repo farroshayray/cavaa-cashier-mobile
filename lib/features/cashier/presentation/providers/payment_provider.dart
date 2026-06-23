@@ -746,17 +746,29 @@ class PaymentProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> _enrichOfflinePaymentMethod(
     Map<String, dynamic> detail,
   ) async {
-    final method = (detail['payment_method'] ?? '').toString();
+    final cloned = Map<String, dynamic>.from(detail);
+
+    final rawMethods = cloned['available_payment_methods'];
+    final hasMethods = rawMethods is List && rawMethods.isNotEmpty;
+    if (!hasMethods) {
+      final cachedMethods =
+          await cachedPaymentMethodsDao.buildAvailablePaymentMethodsList();
+      if (cachedMethods.isNotEmpty) {
+        cloned['available_payment_methods'] = cachedMethods;
+      }
+    }
+
+    final method = (cloned['payment_method'] ?? '').toString();
 
     if (method != 'manual_qris' &&
         method != 'manual_tf' &&
         method != 'manual_ewallet') {
-      return detail;
+      return cloned;
     }
 
     int? serverManualPaymentId;
 
-    final latestRaw = detail['latest_payment'];
+    final latestRaw = cloned['latest_payment'];
     if (latestRaw is Map) {
       serverManualPaymentId = _toInt(
         latestRaw['owner_manual_payment_id'] ??
@@ -771,9 +783,7 @@ class PaymentProvider extends ChangeNotifier {
       paymentMethod: method,
     );
 
-    if (manual == null) return detail;
-
-    final cloned = Map<String, dynamic>.from(detail);
+    if (manual == null) return cloned;
 
     final latest = latestRaw is Map
         ? Map<String, dynamic>.from(latestRaw)
