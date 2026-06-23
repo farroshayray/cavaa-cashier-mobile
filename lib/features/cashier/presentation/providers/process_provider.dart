@@ -5,6 +5,7 @@ import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
 import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
@@ -681,16 +682,27 @@ class ProcessProvider extends ChangeNotifier {
         throw Exception('Butuh koneksi internet untuk update served per item');
       }
 
-      final res = await repo.serveOrderItems(id: id, detailIds: detailIds);
-      final status = (res['status'] ?? '').toString();
+      try {
+        final res = await repo.serveOrderItems(id: id, detailIds: detailIds);
+        final status = (res['status'] ?? '').toString();
 
-      if (status == 'warning' || res['already_processed'] == true) {
+        if (status == 'warning' || res['already_processed'] == true) {
+          await load();
+          return res;
+        }
+
         await load();
         return res;
-      }
+      } on DioException catch (e) {
+        final responseData = e.response?.data;
+        if (responseData is Map) {
+          final mapped = Map<String, dynamic>.from(responseData);
+          await load();
+          return mapped;
+        }
 
-      await load();
-      return res;
+        rethrow;
+      }
     } finally {
       _setActionLoading(actionKey, false);
     }
@@ -709,6 +721,25 @@ class ProcessProvider extends ChangeNotifier {
         final localId = (row['local_id'] ?? '').toString();
         if (localId.isEmpty) {
           throw Exception('Local ID tidak valid');
+        }
+
+        final isOpenbill = row['payment_method']?.toString() == 'OPENBILL';
+
+        if (isOpenbill) {
+          await localOrdersDao.updateOrderStatusByLocalId(
+            localId: localId,
+            status: 'UNPAID',
+            syncStatus: isStockConflict ? 'STOCK_CONFLICT' : 'PENDING_FINISH',
+          );
+
+          items.removeWhere((e) => e['local_id'] == localId);
+          notifyListeners();
+
+          return {
+            'status': 'offline_success',
+            'offline': true,
+            'message': 'Order open bill selesai dan dipindahkan ke pembayaran',
+          };
         }
 
         await localOrdersDao.updateOrderStatusLocal(

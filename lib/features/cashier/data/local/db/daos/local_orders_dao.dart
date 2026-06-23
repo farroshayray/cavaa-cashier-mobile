@@ -524,7 +524,7 @@ class LocalOrdersDao {
       LocalOrdersCompanion(
         orderStatusLocal: Value(isOpenbill ? 'SERVED' : 'PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
-        backendSyncStage: const Value('PURCHASED'),
+        backendSyncStage: Value(isOpenbill ? 'OPENBILL_SERVED' : 'PURCHASED'),
         updatedAtLocal: Value(DateTime.now()),
       ),
     );
@@ -626,7 +626,7 @@ class LocalOrdersDao {
         ppnPercent: Value(ppnPercent),
         orderStatusLocal: Value(isOpenbill ? 'SERVED' : 'PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
-        backendSyncStage: const Value('PURCHASED'),
+        backendSyncStage: Value(isOpenbill ? 'OPENBILL_SERVED' : 'PURCHASED'),
         createdAtLocal: Value(DateTime.now()),
         updatedAtLocal: Value(DateTime.now()),
         serverId: Value(serverId),
@@ -772,6 +772,8 @@ class LocalOrdersDao {
       backendStage = 'PROCESSED';
     } else if (status == 'SERVED') {
       backendStage = 'SERVED';
+    } else if (status == 'OPENBILL_SERVED') {
+      backendStage = 'OPENBILL_SERVED';
     }
 
     await (db.update(db.localOrders)

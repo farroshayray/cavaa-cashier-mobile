@@ -754,7 +754,7 @@ _KitchenItemState? _resolveKitchenItemState(
   final status = (item['status'] ?? '').toString();
   final orderStatus = (order['order_status'] ?? '').toString();
 
-  if (status == 'SERVED BY KITCHEN' || kitchenProcessId == 0 || orderStatus == 'SERVED') {
+  if (status == 'SERVED BY KITCHEN' || status == 'SERVED BY CASHIER' || orderStatus == 'SERVED') {
     return _KitchenItemState.served;
   }
 

@@ -8,6 +8,7 @@ import '/features/cashier/presentation/pages/tabs/modals/product_option_sheet.da
 import '/features/cashier/presentation/pages/tabs/modals/cart_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/checkout_sheet.dart';
 import '../../../presentation/providers/payment_provider.dart';
+import '../../../presentation/providers/process_provider.dart';
 
 class PurchaseTab extends StatefulWidget {
   const PurchaseTab({super.key});
@@ -320,6 +321,11 @@ class _MiniCartBar extends StatelessWidget {
                     if (isSuccess && refreshTarget == 'payment') {
                       await Future.wait([
                         context.read<PaymentProvider>().load(),
+                        context.read<PurchaseProvider>().load(),
+                      ]);
+                    } else if (isSuccess && refreshTarget == 'process') {
+                      await Future.wait([
+                        context.read<ProcessProvider>().load(),
                         context.read<PurchaseProvider>().load(),
                       ]);
                     }

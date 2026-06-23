@@ -1259,7 +1259,7 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
         .toList();
 
     final selectableItems = details.where((item) {
-      return _resolveProcessItemState(item, order) != _ProcessItemState.served;
+      return _resolveProcessItemState(item, order) == null;
     }).toList();
 
     return SafeArea(
@@ -1303,7 +1303,7 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                       ? Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(
-                            'Semua item pada order ini sudah served.',
+                            'Semua item pada order ini sudah diproses.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.black.withOpacity(0.65)),
                           ),
@@ -1495,7 +1495,7 @@ _ProcessItemState? _resolveProcessItemState(
   final status = (item['status'] ?? '').toString();
   final orderStatus = (order['order_status'] ?? '').toString();
 
-  if (status == 'SERVED BY KITCHEN' || kitchenProcessId == 0 || orderStatus == 'SERVED') {
+  if (status == 'SERVED BY KITCHEN' || status == 'SERVED BY CASHIER' || orderStatus == 'SERVED') {
     return _ProcessItemState.served;
   }
 

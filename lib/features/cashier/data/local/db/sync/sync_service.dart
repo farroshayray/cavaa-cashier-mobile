@@ -270,109 +270,156 @@ class SyncService {
         'serverId=$serverId',
       );
 
-      // STEP 2: payment
-      if ((order.orderStatusLocal == 'PAID' ||
-              order.orderStatusLocal == 'PROCESSED' ||
-              order.orderStatusLocal == 'SERVED') &&
-          stage == 'PURCHASED') {
-        if (order.paymentMethodEffective == 'OPENBILL') {
-          await localOrdersDao.updateBackendSyncStage(localOrderId, 'PAID');
-          stage = 'PAID';
-        } else {
+      final isOpenbill = order.paymentMethodEffective == 'OPENBILL';
+
+      if (isOpenbill) {
+        debugPrint(
+          '🔹 STEP OPENBILL check '
+          'localId=$localOrderId '
+          'orderStatus=${order.orderStatusLocal} '
+          'stage=$stage '
+          'serverId=$serverId',
+        );
+
+        if ((order.orderStatusLocal == 'OPENBILL_WAITING_ORDER' ||
+                order.orderStatusLocal == 'UNPAID' ||
+                order.orderStatusLocal == 'SERVED') &&
+            stage == 'PURCHASED') {
+          await ordersRepo.processOrder(serverId!);
+          await localOrdersDao.updateBackendSyncStage(localOrderId, 'CONFIRMED');
+          stage = 'CONFIRMED';
+
+          debugPrint(
+            '✅ STEP OPENBILL CONFIRM done '
+            'localId=$localOrderId '
+            'serverId=$serverId',
+          );
+
+          order = await localOrdersDao.getOrderByLocalId(localOrderId);
+          if (order == null) {
+            throw Exception('Order hilang setelah sync confirm');
+          }
+        }
+
+        if ((order.orderStatusLocal == 'UNPAID' ||
+                order.orderStatusLocal == 'SERVED') &&
+            stage == 'CONFIRMED') {
+          await ordersRepo.finishOrder(serverId!);
+          await localOrdersDao.updateBackendSyncStage(
+            localOrderId,
+            'OPENBILL_SERVED',
+          );
+          stage = 'OPENBILL_SERVED';
+
+          debugPrint(
+            '✅ STEP OPENBILL FINISH done '
+            'localId=$localOrderId '
+            'serverId=$serverId',
+          );
+
+          order = await localOrdersDao.getOrderByLocalId(localOrderId);
+          if (order == null) {
+            throw Exception('Order hilang setelah sync finish');
+          }
+        }
+
+        if (order.orderStatusLocal == 'SERVED' && stage == 'OPENBILL_SERVED') {
+          await _syncPayment(order, serverId!);
+          await localOrdersDao.updateBackendSyncStage(localOrderId, 'SERVED');
+          stage = 'SERVED';
+
+          debugPrint(
+            '✅ STEP OPENBILL PAYMENT done '
+            'localId=$localOrderId '
+            'serverId=$serverId',
+          );
+
+          order = await localOrdersDao.getOrderByLocalId(localOrderId);
+          if (order == null) {
+            throw Exception('Order hilang setelah sync payment');
+          }
+        }
+      } else {
+        // STEP 2: payment
+        if ((order.orderStatusLocal == 'PAID' ||
+                order.orderStatusLocal == 'PROCESSED' ||
+                order.orderStatusLocal == 'SERVED') &&
+            stage == 'PURCHASED') {
           await _syncPayment(order, serverId!);
           await localOrdersDao.updateBackendSyncStage(localOrderId, 'PAID');
           stage = 'PAID';
+
+          debugPrint(
+            '✅ STEP PAYMENT done '
+            'localId=$localOrderId '
+            'serverId=$serverId',
+          );
+
+          order = await localOrdersDao.getOrderByLocalId(localOrderId);
+          if (order == null) {
+            throw Exception('Order hilang setelah sync payment');
+          }
         }
 
         debugPrint(
-          '✅ STEP PAYMENT done '
+          '🔹 STEP PROCESS check '
           'localId=$localOrderId '
+          'orderStatus=${order.orderStatusLocal} '
+          'stage=$stage '
           'serverId=$serverId',
         );
 
-        order = await localOrdersDao.getOrderByLocalId(localOrderId);
-        if (order == null) {
-          throw Exception('Order hilang setelah sync payment');
+        if ((order.orderStatusLocal == 'PROCESSED' ||
+                order.orderStatusLocal == 'SERVED') &&
+            stage == 'PAID') {
+          await ordersRepo.processOrder(serverId!);
+          await localOrdersDao.updateBackendSyncStage(localOrderId, 'PROCESSED');
+          stage = 'PROCESSED';
+
+          debugPrint(
+            '✅ STEP PROCESS done '
+            'localId=$localOrderId '
+            'serverId=$serverId',
+          );
+
+          order = await localOrdersDao.getOrderByLocalId(localOrderId);
+          if (order == null) {
+            throw Exception('Order hilang setelah sync process');
+          }
         }
-      }
-
-      debugPrint(
-        '🔹 STEP PROCESS check '
-        'localId=$localOrderId '
-        'orderStatus=${order.orderStatusLocal} '
-        'stage=$stage '
-        'serverId=$serverId',
-      );
-
-      // STEP 3: process (confirm openbill first if needed)
-      if (order.orderStatusLocal == 'OPENBILL_WAITING_ORDER' && stage == 'PAID') {
-        await ordersRepo.processOrder(serverId!);
-        await localOrdersDao.updateBackendSyncStage(localOrderId, 'CONFIRMED');
-        stage = 'CONFIRMED';
 
         debugPrint(
-          '✅ STEP CONFIRM done '
+          '🔹 STEP FINISH check '
           'localId=$localOrderId '
+          'orderStatus=${order.orderStatusLocal} '
+          'stage=$stage '
           'serverId=$serverId',
         );
 
-        order = await localOrdersDao.getOrderByLocalId(localOrderId);
-        if (order == null) {
-          throw Exception('Order hilang setelah sync confirm');
-        }
-      }
+        if (order.orderStatusLocal == 'SERVED' && stage == 'PROCESSED') {
+          await ordersRepo.finishOrder(serverId!);
+          await localOrdersDao.updateBackendSyncStage(localOrderId, 'SERVED');
+          stage = 'SERVED';
 
-      // STEP 3b: process order (actual processing status transition)
-      if ((order.orderStatusLocal == 'PROCESSED' ||
-              order.orderStatusLocal == 'SERVED') &&
-          (stage == 'PAID' || stage == 'CONFIRMED')) {
-        await ordersRepo.processOrder(serverId!);
-        await localOrdersDao.updateBackendSyncStage(localOrderId, 'PROCESSED');
-        stage = 'PROCESSED';
+          debugPrint(
+            '✅ STEP FINISH done '
+            'localId=$localOrderId '
+            'serverId=$serverId',
+          );
 
-        debugPrint(
-          '✅ STEP PROCESS done '
-          'localId=$localOrderId '
-          'serverId=$serverId',
-        );
-
-        order = await localOrdersDao.getOrderByLocalId(localOrderId);
-        if (order == null) {
-          throw Exception('Order hilang setelah sync process');
-        }
-      }
-
-      debugPrint(
-        '🔹 STEP FINISH check '
-        'localId=$localOrderId '
-        'orderStatus=${order.orderStatusLocal} '
-        'stage=$stage '
-        'serverId=$serverId',
-      );
-
-      // STEP 4: finish
-      if (order.orderStatusLocal == 'SERVED' && stage == 'PROCESSED') {
-        await ordersRepo.finishOrder(serverId!);
-        await localOrdersDao.updateBackendSyncStage(localOrderId, 'SERVED');
-        stage = 'SERVED';
-
-        debugPrint(
-          '✅ STEP FINISH done '
-          'localId=$localOrderId '
-          'serverId=$serverId',
-        );
-
-        order = await localOrdersDao.getOrderByLocalId(localOrderId);
-        if (order == null) {
-          throw Exception('Order hilang setelah sync finish');
+          order = await localOrdersDao.getOrderByLocalId(localOrderId);
+          if (order == null) {
+            throw Exception('Order hilang setelah sync finish');
+          }
         }
       }
 
       // final
       final completed =
-          (order.orderStatusLocal == 'UNPAID' && stage == 'PURCHASED') ||
-          (order.orderStatusLocal == 'OPENBILL_CONFIRMATION' && stage == 'PAID') ||
+          (order.orderStatusLocal == 'UNPAID' && !isOpenbill && stage == 'PURCHASED') ||
+          (order.orderStatusLocal == 'OPENBILL_CONFIRMATION' && stage == 'PURCHASED') ||
           (order.orderStatusLocal == 'OPENBILL_WAITING_ORDER' && stage == 'CONFIRMED') ||
+          (order.orderStatusLocal == 'UNPAID' && isOpenbill && stage == 'OPENBILL_SERVED') ||
           (order.orderStatusLocal == 'PAID' && stage == 'PAID') ||
           (order.orderStatusLocal == 'PROCESSED' && stage == 'PROCESSED') ||
           (order.orderStatusLocal == 'SERVED' && stage == 'SERVED');

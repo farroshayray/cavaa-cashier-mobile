@@ -487,7 +487,10 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               final redirect = resp['redirect'];
                               final isXenditQris = selectedPay.kind == PayKind.onlineQris;
 
-                              final refreshTarget = isXenditQris ? '' : 'payment';
+                              final isOpenbill = selectedPay.kind == PayKind.openbill;
+                              final refreshTarget = isXenditQris
+                                  ? ''
+                                  : (isOpenbill ? 'process' : 'payment');
 
                               if (isXenditQris && redirect is String && redirect.isNotEmpty) {
                                 if (mounted) {
