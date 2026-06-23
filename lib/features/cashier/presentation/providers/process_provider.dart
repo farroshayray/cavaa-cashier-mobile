@@ -240,8 +240,10 @@ class ProcessProvider extends ChangeNotifier {
 
       try {
         final existing = await cachedProcessOrdersDao.findByServerId(serverId);
+        final status = item['order_status']?.toString();
 
-        if (existing?.detailJson != null &&
+        if (status != 'OPENBILL_CONFIRMATION' &&
+            existing?.detailJson != null &&
             existing!.detailJson!.trim().isNotEmpty) {
           continue;
         }
