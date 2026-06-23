@@ -203,29 +203,55 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     return (_order?['payment_method'] ?? 'CASH').toString();
   }
 
-  bool get _selectedMethodRequiresProof {
+  bool get _isQrisXenditFromPicker {
+    if (_order == null) return false;
+    if (_isCaseA || _isCaseB) return false;
     if (!_canChooseFinalPaymentMethod) return false;
-    final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
-          (item) => item?['value']?.toString() == _selectedPaymentMethod,
-          orElse: () => null,
-        );
-
-    if (selected == null) return false;
-
-    final explicit = selected['requires_proof'];
-    if (explicit is bool) return explicit;
-
-    final type = (selected['type'] ?? '').toString();
-    return type.isNotEmpty && type != 'CASH';
+    return _effectivePaymentType == 'QRIS';
   }
 
-  bool get _needsCashValidation {
-    if (_order == null) return false;
-    return _isCaseA || _isCaseB || _effectivePaymentType == 'CASH';
+  bool get _needsPaidAmountValidation {
+    if (_order == null || _isQrisXenditFromPicker) return false;
+
+    final status = (_order!['order_status'] ?? '').toString();
+    if (status == 'PAYMENT REQUEST' || _isCaseB) return true;
+
+    if (_canChooseFinalPaymentMethod) {
+      return _selectedPaymentMethod != null && _selectedPaymentMethod!.trim().isNotEmpty;
+    }
+
+    return (_order!['payment_method'] ?? 'CASH').toString() == 'CASH';
+  }
+
+  num _billTotalForPaymentType(String? paymentType) {
+    if (_order == null) return 0;
+    final order = _order!;
+
+    if (order['grand_total_local'] != null && paymentType == 'CASH') {
+      return _num(order['grand_total_local']).ceil();
+    }
+
+    final subtotal = _num(order['total_order_value']);
+    final isPpnActive = _toBool(order['is_ppn_active']);
+    final ppnPercent = _num(order['ppn']);
+    final baseTotal = isPpnActive
+        ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+        : subtotal.ceil();
+
+    if (paymentType == 'CASH') {
+      return baseTotal + _num(order['cash_rounding_amount']);
+    }
+
+    return baseTotal;
+  }
+
+  num get _currentBillTotal {
+    final type = _effectivePaymentType;
+    return _billTotalForPaymentType(type.isEmpty ? null : type);
   }
 
   bool get _paidInvalid {
-    if (!_needsCashValidation) return false;
+    if (!_needsPaidAmountValidation) return false;
     if (!_showCashValidation) return false;
 
     final paid = _num(_paidCtrl.text);
@@ -233,21 +259,18 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 
   bool get _paidInsufficient {
-    if (!_needsCashValidation) return false;
+    if (!_needsPaidAmountValidation) return false;
     if (!_showCashValidation) return false;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final total = _currentBillTotal;
     final paid = _num(_paidCtrl.text);
     return paid > 0 && paid < total;
   }
 
-  bool get _cashInputValid {
-    if (!_needsCashValidation) {
-      final paid = _num(_paidCtrl.text);
-      return paid > 0;
-    }
+  bool get _paidAmountValid {
+    if (!_needsPaidAmountValidation) return true;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final total = _currentBillTotal;
     final paid = _num(_paidCtrl.text);
 
     return paid > 0 && paid >= total;
@@ -264,14 +287,19 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   void _applyPaidAmountForMethodType(String? type) {
     if (_order == null) return;
-    final total = _grandTotalFromOrder(_order!);
+    if (type == 'QRIS' && _canChooseFinalPaymentMethod && !_isCaseA && !_isCaseB) {
+      _paidCtrl.text = '';
+      _change = 0;
+      return;
+    }
     if (type == 'CASH') {
       _paidCtrl.text = '';
       _change = 0;
       return;
     }
+    final total = _billTotalForPaymentType(type);
     _paidCtrl.text = total.toStringAsFixed(0);
-    _change = 0;
+    _recalcChange();
   }
 
   Future<void> _syncEnrichedSelectedInstruction() async {
@@ -325,11 +353,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       }
     }
 
-    if ((_isCaseB || _selectedMethodRequiresProof) && _cashierProofImage == null) {
-      return false;
-    }
-
-    return _cashInputValid;
+    return _paidAmountValid;
   }
 
   String get _selectedPaymentMethodLabel {
@@ -341,12 +365,12 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     return (selected?['label'] ?? _selectedPaymentMethod ?? '-').toString();
   }
 
-  bool _validateCashInputBeforeConfirm() {
-    if (!_needsCashValidation) return true;
+  bool _validatePaidAmountBeforeConfirm() {
+    if (!_needsPaidAmountValidation) return true;
 
     setState(() => _showCashValidation = true);
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final total = _currentBillTotal;
     final paid = _num(_paidCtrl.text);
 
     if (paid <= 0) {
@@ -354,7 +378,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           const SnackBar(
-            content: Text('Uang diterima belum diisi'),
+            content: Text('Nominal pembayaran belum diisi'),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -367,9 +391,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         context: context,
         useRootNavigator: true,
         builder: (_) => AlertDialog(
-          title: const Text('Uang tidak cukup'),
+          title: const Text('Nominal tidak cukup'),
           content: Text(
-            'Uang diterima Rp ${_rupiah(paid)}\n'
+            'Nominal diterima Rp ${_rupiah(paid)}\n'
             'Total tagihan Rp ${_rupiah(total)}\n\n'
             'Silakan periksa kembali nominal pembayaran.',
           ),
@@ -502,10 +526,11 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         }
       }
 
-      final hasManual = pr != null;
-      if (status == 'PAYMENT REQUEST' && (method == 'CASH' || hasManual)) {
-        _paidCtrl.text = total.toStringAsFixed(0);
-        _recalcChange();
+      if (status == 'PAYMENT REQUEST') {
+        final prType = pr is Map
+            ? (pr['payment_type'] ?? method).toString()
+            : method;
+        _applyPaidAmountForMethodType(prType);
       } else if (_isCaseB) {
         _applyPaidAmountForMethodType(
           (latestPayment is Map ? latestPayment['payment_type'] : null)?.toString(),
@@ -524,7 +549,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 
   void _recalcChange() {
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final total = _currentBillTotal;
     final paid = _num(_paidCtrl.text);
     final change = (paid - total);
 
@@ -606,26 +631,13 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       return;
     }
 
-    if (_selectedMethodRequiresProof && _cashierProofImage == null) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Upload bukti bayar terlebih dahulu'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      return;
-    }
-
-    final valid = _validateCashInputBeforeConfirm();
+    final valid = _validatePaidAmountBeforeConfirm();
     if (!valid) return;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid = _needsCashValidation ? _num(_paidCtrl.text) : total;
-    final change = _needsCashValidation && (paid - total) > 0 ? (paid - total) : 0;
-    final isCashPayment = _needsCashValidation;
-    final isQrisXendit = _effectivePaymentType == 'QRIS' && _canChooseFinalPaymentMethod;
+    final total = _currentBillTotal;
+    final paid = _needsPaidAmountValidation ? _num(_paidCtrl.text) : total;
+    final change = _needsPaidAmountValidation && (paid - total) > 0 ? (paid - total) : 0;
+    final isQrisXendit = _isQrisXenditFromPicker;
 
     final action = await showDialog<_PaymentCompletionAction>(
       context: context,
@@ -637,14 +649,11 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
               ? 'Metode: QRIS (Xendit)\n'
                 'Total tagihan Rp ${_rupiah(total)}\n\n'
                 'Invoice pembayaran akan dibuka. Lanjutkan?'
-              : isCashPayment
-                  ? 'Uang diterima Rp ${_rupiah(paid)}\n'
-                    'Total tagihan Rp ${_rupiah(total)}\n'
-                    'Kembalian Rp ${_rupiah(change)}\n\n'
-                    'Lanjutkan proses pembayaran?'
-                  : 'Metode: ${_selectedPaymentMethodLabel}\n'
-                    'Total tagihan Rp ${_rupiah(total)}\n\n'
-                    'Lanjutkan proses pembayaran?',
+              : 'Metode: ${_isCaseA || _isCaseB ? (_order?['payment_method'] ?? '-') : _selectedPaymentMethodLabel}\n'
+                'Nominal diterima Rp ${_rupiah(paid)}\n'
+                'Total tagihan Rp ${_rupiah(total)}\n'
+                'Kembalian Rp ${_rupiah(change)}\n\n'
+                'Lanjutkan proses pembayaran?',
         ),
         actions: [
           TextButton(
@@ -697,9 +706,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           changeAmount: change,
           paymentMethod: _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
-          cashierProofImagePath: (_isCaseB || _selectedMethodRequiresProof)
-              ? _cashierProofImage?.path
-              : null,
+          cashierProofImagePath: _cashierProofImage?.path,
         ).timeout(const Duration(seconds: 15));
 
         final redirect = payResp['redirect'];
@@ -1042,12 +1049,17 @@ class _Body extends StatelessWidget {
             );
 
     final isCashPayment = effectiveMethodType == 'CASH';
-    final showAmountInput = hasPaymentRequest ||
-        hasCashierPaymentInstruction ||
-        isCashPayment ||
-        (canChooseFinalPaymentMethod &&
-            selectedPaymentMethod != null &&
-            selectedPaymentMethod!.trim().isNotEmpty);
+    final isQrisXendit = effectiveMethodType == 'QRIS' &&
+        canChooseFinalPaymentMethod &&
+        !hasPaymentRequest &&
+        !hasCashierPaymentInstruction;
+    final showAmountInput = !isQrisXendit &&
+        (hasPaymentRequest ||
+            hasCashierPaymentInstruction ||
+            isCashPayment ||
+            (canChooseFinalPaymentMethod &&
+                selectedPaymentMethod != null &&
+                selectedPaymentMethod!.trim().isNotEmpty));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
@@ -1125,7 +1137,7 @@ class _Body extends StatelessWidget {
 
           if (showAmountInput)
             _PaidAmountCard(
-              total: total,
+              total: _calcBillTotalFromMap(order, effectiveMethodType),
               paidCtrl: paidCtrl,
               change: change,
               isCash: isCashPayment,
@@ -1150,6 +1162,25 @@ class _Body extends StatelessWidget {
         ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
         : subtotal.ceil();
     return baseTotal + roundingAmount;
+  }
+
+  num _calcBillTotalFromMap(Map<String, dynamic> order, String paymentType) {
+    if (order['grand_total_local'] != null && paymentType == 'CASH') {
+      return _num(order['grand_total_local']).ceil();
+    }
+
+    final subtotal = _num(order['total_order_value']);
+    final isPpnActive = _toBool(order['is_ppn_active']);
+    final ppnPercent = _num(order['ppn']);
+    final baseTotal = isPpnActive
+        ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+        : subtotal.ceil();
+
+    if (paymentType == 'CASH') {
+      return baseTotal + _num(order['cash_rounding_amount']);
+    }
+
+    return baseTotal;
   }
 
 }
@@ -1875,7 +1906,12 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
           const Divider(),
           const SizedBox(height: 10),
 
-          const Text('Upload Bukti Bayar', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text('Upload Bukti Bayar (Opsional)', style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(
+            'Bukti pembayaran boleh dikosongkan jika tidak diperlukan.',
+            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+          ),
           const SizedBox(height: 8),
 
           Row(
@@ -2079,7 +2115,7 @@ class _PaidAmountCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasError = isCash && (invalid || insufficient);
+    final hasError = invalid || insufficient;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -2099,45 +2135,40 @@ class _PaidAmountCard extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 12),
-          Row(
+          const Row(
             children: [
               Text(
-                isCash ? 'Uang Diterima' : 'Jumlah Bayar',
-                style: const TextStyle(fontSize: 12),
+                'Nominal Diterima',
+                style: TextStyle(fontSize: 12),
               ),
-              if (isCash) ...[
-                const SizedBox(width: 4),
-                const Text(
-                  '*',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
+              SizedBox(width: 4),
+              Text(
+                '*',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
+              ),
             ],
           ),
           const SizedBox(height: 6),
           TextField(
             controller: paidCtrl,
-            readOnly: !isCash,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              hintText: isCash ? 'cth: 100000' : null,
+              hintText: 'cth: ${_rupiah(total)}',
               prefixText: 'Rp ',
-              helperText: isCash
-                  ? (invalid
-                      ? 'Uang diterima wajib diisi'
-                      : insufficient
-                          ? 'Nominal uang diterima kurang dari total tagihan'
-                          : null)
-                  : 'Nominal sudah disesuaikan dengan total tagihan',
+              helperText: invalid
+                  ? 'Nominal pembayaran wajib diisi'
+                  : insufficient
+                      ? 'Nominal diterima kurang dari total tagihan'
+                      : 'Bisa disesuaikan jika customer membayar lebih',
               helperStyle: TextStyle(
                 color: hasError ? Colors.red : Colors.black54,
               ),
               filled: true,
-              fillColor: isCash ? const Color(0xFFF7F8FA) : const Color(0xFFF0FDF4),
+              fillColor: const Color(0xFFF7F8FA),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -2157,22 +2188,34 @@ class _PaidAmountCard extends StatelessWidget {
               ),
             ),
           ),
-          if (isCash) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Text(
-                  'Kembalian',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
-                ),
-                const Spacer(),
-                Text(
-                  'Rp ${_rupiah(change)}',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-                ),
-              ],
-            ),
-          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                'Total Tagihan',
+                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+              ),
+              const Spacer(),
+              Text(
+                'Rp ${_rupiah(total)}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'Kembalian',
+                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+              ),
+              const Spacer(),
+              Text(
+                'Rp ${_rupiah(change)}',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
         ],
       ),
     );
