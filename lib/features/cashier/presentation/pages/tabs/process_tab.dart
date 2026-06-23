@@ -744,20 +744,31 @@ class _ProcessOrderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      code,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            code,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      if (data['payment_method']?.toString() == 'OPENBILL') ...[
+                        const SizedBox(width: 6),
+                        const _Badge(text: 'Openbill', compact: true),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -890,6 +901,10 @@ class _ProcessOrderCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (data['payment_method']?.toString() == 'OPENBILL') ...[
+                    const SizedBox(width: 6),
+                    const _Badge(text: 'Openbill', compact: true),
+                  ],
                   const SizedBox(width: 8),
                   _statusChip(),
                 ],
@@ -1098,6 +1113,11 @@ class _ProcessOrderCard extends StatelessWidget {
       border = const Color(0xFFFED7AA);
       dot = const Color(0xFFEA580C);
       label = 'Siap proses';
+    } else if (st == 'OPENBILL_CONFIRMATION') {
+      bg = const Color(0xFFFEF3C7);
+      border = const Color(0xFFFDE68A);
+      dot = const Color(0xFFD97706);
+      label = 'Konfirmasi';
     } else if (st == 'PROCESSED') {
       label = 'Proses';
     } else if (st == 'SERVED') {
@@ -1162,7 +1182,8 @@ class _ProcessOrderCard extends StatelessWidget {
       );
     }
 
-    if (st == 'PAID' || st == 'OPENBILL_WAITING_ORDER') {
+    if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER') {
+      final buttonText = st == 'OPENBILL_CONFIRMATION' ? 'Konfirmasi' : 'Proses';
       return Padding(
         padding: const EdgeInsets.only(right: 6),
         child: ElevatedButton(
@@ -1173,7 +1194,7 @@ class _ProcessOrderCard extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
-          child: const Text('Proses', style: TextStyle(fontWeight: FontWeight.w900)),
+          child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.w900)),
         ),
       );
     }
@@ -1240,7 +1261,8 @@ class _ProcessOrderCard extends StatelessWidget {
       );
     }
 
-    if (st == 'PAID' || st == 'OPENBILL_WAITING_ORDER') {
+    if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER') {
+      final buttonText = st == 'OPENBILL_CONFIRMATION' ? 'Konfirmasi' : 'Proses';
       return Padding(
         padding: const EdgeInsets.only(right: 4),
         child: ElevatedButton(
@@ -1252,7 +1274,7 @@ class _ProcessOrderCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             minimumSize: const Size(0, 40),
           ),
-          child: const Text('Proses', style: TextStyle(fontWeight: FontWeight.w900)),
+          child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.w900)),
         ),
       );
     }

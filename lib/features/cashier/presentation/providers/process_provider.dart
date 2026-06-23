@@ -494,6 +494,10 @@ class ProcessProvider extends ChangeNotifier {
 
     _setActionLoading(actionKey, true);
     try {
+      final currentStatus = row['order_status']?.toString() ?? '';
+      final isConfirmingOpenbill = currentStatus == 'OPENBILL_CONFIRMATION';
+      final targetStatus = isConfirmingOpenbill ? 'OPENBILL_WAITING_ORDER' : 'PROCESSED';
+
       if (isLocalOnly) {
         final localId = (row['local_id'] ?? '').toString();
         if (localId.isEmpty) {
@@ -502,7 +506,7 @@ class ProcessProvider extends ChangeNotifier {
 
         await localOrdersDao.updateOrderStatusLocal(
           localId: localId,
-          status: 'PROCESSED',
+          status: targetStatus,
           preserveStockConflict: isStockConflict,
         );
 
@@ -510,7 +514,7 @@ class ProcessProvider extends ChangeNotifier {
         if (idx >= 0) {
           items[idx] = {
             ...items[idx],
-            'order_status': 'PROCESSED',
+            'order_status': targetStatus,
             'is_synced': false,
             'pending_action': 'LOCAL_ONLY',
             'pending_sync': true,
@@ -522,7 +526,7 @@ class ProcessProvider extends ChangeNotifier {
         return {
           'status': 'offline_success',
           'offline': true,
-          'message': 'Order lokal diubah ke PROCESSED dan tetap pending sync',
+          'message': 'Order lokal diubah ke $targetStatus dan tetap pending sync',
         };
       }
 
@@ -545,10 +549,10 @@ class ProcessProvider extends ChangeNotifier {
 
         await localOrdersDao.updateOrderStatusByServerId(
           serverId: id,
-          status: 'PROCESSED',
+          status: targetStatus,
         );
 
-        _setStatusLocal(id, 'PROCESSED');
+        _setStatusLocal(id, targetStatus);
         return res;
       } else {
         await cachedProcessOrdersDao.markProcessedOffline(
@@ -556,12 +560,12 @@ class ProcessProvider extends ChangeNotifier {
           cached?.latestProcessJson ?? cached?.processRequestJson ?? '{}',
         );
 
-        _setStatusLocal(id, 'PROCESSED');
+        _setStatusLocal(id, targetStatus);
 
         return {
           'status': 'offline_success',
           'offline': true,
-          'message': 'Order ditandai PROCESSED dan menunggu sinkronisasi',
+          'message': 'Order ditandai $targetStatus dan menunggu sinkronisasi',
         };
       }
     } finally {

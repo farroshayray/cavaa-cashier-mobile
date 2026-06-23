@@ -304,10 +304,28 @@ class SyncService {
         'serverId=$serverId',
       );
 
-      // STEP 3: process
+      // STEP 3: process (confirm openbill first if needed)
+      if (order.orderStatusLocal == 'OPENBILL_WAITING_ORDER' && stage == 'PAID') {
+        await ordersRepo.processOrder(serverId!);
+        await localOrdersDao.updateBackendSyncStage(localOrderId, 'CONFIRMED');
+        stage = 'CONFIRMED';
+
+        debugPrint(
+          '✅ STEP CONFIRM done '
+          'localId=$localOrderId '
+          'serverId=$serverId',
+        );
+
+        order = await localOrdersDao.getOrderByLocalId(localOrderId);
+        if (order == null) {
+          throw Exception('Order hilang setelah sync confirm');
+        }
+      }
+
+      // STEP 3b: process order (actual processing status transition)
       if ((order.orderStatusLocal == 'PROCESSED' ||
               order.orderStatusLocal == 'SERVED') &&
-          stage == 'PAID') {
+          (stage == 'PAID' || stage == 'CONFIRMED')) {
         await ordersRepo.processOrder(serverId!);
         await localOrdersDao.updateBackendSyncStage(localOrderId, 'PROCESSED');
         stage = 'PROCESSED';
@@ -353,7 +371,8 @@ class SyncService {
       // final
       final completed =
           (order.orderStatusLocal == 'UNPAID' && stage == 'PURCHASED') ||
-          (order.orderStatusLocal == 'OPENBILL_WAITING_ORDER' && stage == 'PURCHASED') ||
+          (order.orderStatusLocal == 'OPENBILL_CONFIRMATION' && stage == 'PAID') ||
+          (order.orderStatusLocal == 'OPENBILL_WAITING_ORDER' && stage == 'CONFIRMED') ||
           (order.orderStatusLocal == 'PAID' && stage == 'PAID') ||
           (order.orderStatusLocal == 'PROCESSED' && stage == 'PROCESSED') ||
           (order.orderStatusLocal == 'SERVED' && stage == 'SERVED');

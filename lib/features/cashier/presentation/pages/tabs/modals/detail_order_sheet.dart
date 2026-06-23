@@ -547,13 +547,32 @@ class _ItemsCard extends StatelessWidget {
               final lineTotal = (basePrice - promoAmount) * qty;
 
               final opts = (m['order_detail_options'] as List?) ?? [];
+              final isServed = m['status'] == 'SERVED BY KITCHEN' || order['order_status'] == 'SERVED';
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$name × $qty = Rp ${_rupiah(lineTotal)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$name × $qty = Rp ${_rupiah(lineTotal)}',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        if (isServed) ...[
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFF047857),
+                            size: 18,
+                          ),
+                        ],
+                      ],
+                    ),
                     if (note.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),

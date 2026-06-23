@@ -204,7 +204,7 @@ class LocalReconciliationService {
   String _normalizeStatus(String? raw, {required String source}) {
     final s = (raw ?? '').trim().toUpperCase();
 
-    if (s == 'UNPAID' || s == 'PAID' || s == 'PROCESSED' || s == 'SERVED' || s == 'OPENBILL_WAITING_ORDER') {
+    if (s == 'UNPAID' || s == 'PAID' || s == 'PROCESSED' || s == 'SERVED' || s == 'OPENBILL_WAITING_ORDER' || s == 'OPENBILL_CONFIRMATION') {
       return s;
     }
 
@@ -219,6 +219,8 @@ class LocalReconciliationService {
     switch (status) {
       case 'UNPAID':
         return 0;
+      case 'OPENBILL_CONFIRMATION':
+        return 1;
       case 'OPENBILL_WAITING_ORDER':
         return 1;
       case 'PAID':
@@ -236,8 +238,10 @@ class LocalReconciliationService {
     switch (status) {
       case 'UNPAID':
         return 'PURCHASED';
-      case 'OPENBILL_WAITING_ORDER':
+      case 'OPENBILL_CONFIRMATION':
         return 'PURCHASED';
+      case 'OPENBILL_WAITING_ORDER':
+        return 'CONFIRMED';
       case 'PAID':
         return 'PAID';
       case 'PROCESSED':

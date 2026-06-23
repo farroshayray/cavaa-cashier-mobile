@@ -284,7 +284,7 @@ class PurchaseProvider extends ChangeNotifier {
       ppnPercent: ppn,
       isPpnActive: isPpnActive,
       grandTotal: grandTotal,
-      orderStatusLocal: effectivePaymentMethod == 'OPENBILL' ? 'OPENBILL_WAITING_ORDER' : 'UNPAID',
+      orderStatusLocal: effectivePaymentMethod == 'OPENBILL' ? 'OPENBILL_CONFIRMATION' : 'UNPAID',
       syncStatus: 'PENDING',
     );
 

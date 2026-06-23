@@ -564,7 +564,7 @@ class LocalOrdersDao {
   Future<List<LocalOrder>> getLocalProcessOrders() {
     return (db.select(db.localOrders)
           ..where((t) =>
-              t.orderStatusLocal.isIn(['PAID', 'PROCESSED', 'OPENBILL_WAITING_ORDER']) &
+              t.orderStatusLocal.isIn(['PAID', 'PROCESSED', 'OPENBILL_WAITING_ORDER', 'OPENBILL_CONFIRMATION']) &
               t.syncStatus.isIn([
                 'PENDING',
                 'PENDING_PAYMENT',
@@ -762,8 +762,10 @@ class LocalOrdersDao {
     String syncStatus = 'SYNCED';
     String backendStage = 'NONE';
 
-    if (status == 'UNPAID' || status == 'OPENBILL_WAITING_ORDER') {
+    if (status == 'UNPAID' || status == 'OPENBILL_CONFIRMATION') {
       backendStage = 'PURCHASED';
+    } else if (status == 'OPENBILL_WAITING_ORDER') {
+      backendStage = 'CONFIRMED';
     } else if (status == 'PAID') {
       backendStage = 'PAID';
     } else if (status == 'PROCESSED') {
