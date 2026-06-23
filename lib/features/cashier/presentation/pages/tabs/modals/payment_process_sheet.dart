@@ -239,7 +239,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         : subtotal.ceil();
 
     if (paymentType == 'CASH') {
-      return baseTotal + _num(order['cash_rounding_amount']);
+      return baseTotal + _cashRoundingAmountForOrder(order, baseTotal);
     }
 
     return baseTotal;
@@ -1008,8 +1008,6 @@ class _Body extends StatelessWidget {
     final total = _calcGrandTotalFromMap(order);
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
-    final roundingAmount = _num(order['cash_rounding_amount']);
-    
 
     // ✅ TARUH DI SINI (bukan di dalam children)
     final paymentRequest = order['payment_request'];
@@ -1049,6 +1047,16 @@ class _Body extends StatelessWidget {
             );
 
     final isCashPayment = effectiveMethodType == 'CASH';
+
+    final basePayable = _basePayableFromOrder(order);
+    final cashRoundingUnit = _num(order['cash_rounding_unit']).toInt();
+    final effectiveCashRounding = isCashPayment
+        ? _cashRoundingAmountForOrder(order, basePayable)
+        : _num(order['cash_rounding_amount']);
+    final orderInfoTotal = isCashPayment
+        ? basePayable + effectiveCashRounding
+        : total;
+
     final isQrisXendit = effectiveMethodType == 'QRIS' &&
         canChooseFinalPaymentMethod &&
         !hasPaymentRequest &&
@@ -1075,10 +1083,13 @@ class _Body extends StatelessWidget {
                     selectedPaymentType.isNotEmpty
                 ? '${isOpenbill ? 'OPENBILL' : method} -> $selectedPaymentType'
                 : method,
-            total: total,
+            total: orderInfoTotal,
             isPpnActive: isPpnActive,
             ppnPercent: ppnPercent,
-            roundingAmount: roundingAmount,
+            showCashRoundingDetails: isCashPayment,
+            basePayable: basePayable,
+            roundingAmount: effectiveCashRounding,
+            cashRoundingUnit: cashRoundingUnit,
           ),
           const SizedBox(height: 12),
 
@@ -1138,6 +1149,9 @@ class _Body extends StatelessWidget {
           if (showAmountInput)
             _PaidAmountCard(
               total: _calcBillTotalFromMap(order, effectiveMethodType),
+              basePayable: basePayable,
+              roundingAmount: effectiveCashRounding,
+              cashRoundingUnit: cashRoundingUnit,
               paidCtrl: paidCtrl,
               change: change,
               isCash: isCashPayment,
@@ -1177,7 +1191,7 @@ class _Body extends StatelessWidget {
         : subtotal.ceil();
 
     if (paymentType == 'CASH') {
-      return baseTotal + _num(order['cash_rounding_amount']);
+      return baseTotal + _cashRoundingAmountForOrder(order, baseTotal);
     }
 
     return baseTotal;
@@ -1493,6 +1507,9 @@ class _OrderInfoCard extends StatelessWidget {
     required this.isPpnActive,
     required this.ppnPercent,
     required this.roundingAmount,
+    this.showCashRoundingDetails = false,
+    this.basePayable = 0,
+    this.cashRoundingUnit = 0,
   });
 
   final String code;
@@ -1503,6 +1520,9 @@ class _OrderInfoCard extends StatelessWidget {
   final bool isPpnActive;
   final num ppnPercent;
   final num roundingAmount;
+  final bool showCashRoundingDetails;
+  final num basePayable;
+  final int cashRoundingUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -1545,7 +1565,52 @@ class _OrderInfoCard extends StatelessWidget {
             const SizedBox(height: 8),
           ],
 
-          if (roundingAmount > 0) ...[
+          if (showCashRoundingDetails && roundingAmount > 0) ...[
+            Row(
+              children: [
+                Text(
+                  'Sebelum Pembulatan',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                ),
+                const Spacer(),
+                Text(
+                  'Rp ${_rupiah(basePayable)}',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'Pembulatan Cash',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                ),
+                const Spacer(),
+                Text(
+                  '+ Rp ${_rupiah(roundingAmount)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: brand,
+                  ),
+                ),
+              ],
+            ),
+            if (cashRoundingUnit > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                _cashRoundingDescription(cashRoundingUnit),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.black.withOpacity(0.45),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+          ] else if (roundingAmount > 0) ...[
             Row(
               children: [
                 Text(
@@ -2099,6 +2164,9 @@ class _ItemsCard extends StatelessWidget {
 class _PaidAmountCard extends StatelessWidget {
   const _PaidAmountCard({
     required this.total,
+    required this.basePayable,
+    required this.roundingAmount,
+    required this.cashRoundingUnit,
     required this.paidCtrl,
     required this.change,
     required this.isCash,
@@ -2107,6 +2175,9 @@ class _PaidAmountCard extends StatelessWidget {
   });
 
   final num total;
+  final num basePayable;
+  final num roundingAmount;
+  final int cashRoundingUnit;
   final TextEditingController paidCtrl;
   final num change;
   final bool isCash;
@@ -2188,6 +2259,83 @@ class _PaidAmountCard extends StatelessWidget {
               ),
             ),
           ),
+          if (isCash && roundingAmount > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8F6),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFAE1504).withOpacity(0.18)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 16,
+                        color: Color(0xFFAE1504),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Rincian Pembulatan Cash',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black.withOpacity(0.75),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        'Sebelum pembulatan',
+                        style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'Rp ${_rupiah(basePayable)}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        'Pembulatan cash',
+                        style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '+ Rp ${_rupiah(roundingAmount)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFAE1504),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (cashRoundingUnit > 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _cashRoundingDescription(cashRoundingUnit),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.black.withOpacity(0.5),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
@@ -2643,6 +2791,44 @@ bool _toBool(dynamic v) {
   if (v is bool) return v;
   final s = v.toString().toLowerCase();
   return s == '1' || s == 'true';
+}
+
+int _normalizeCashRoundingUnit(int unit) {
+  const allowed = [0, 100, 500, 1000];
+  return allowed.contains(unit) ? unit : 0;
+}
+
+int _roundedCashPayable(num baseTotal, int unit) {
+  final base = baseTotal.ceil();
+  final normalizedUnit = _normalizeCashRoundingUnit(unit);
+  if (normalizedUnit <= 0 || base <= 0) return base;
+  return ((base / normalizedUnit).ceil()) * normalizedUnit;
+}
+
+num _cashRoundingAmountForOrder(Map<String, dynamic> order, num baseTotal) {
+  final stored = _num(order['cash_rounding_amount']);
+  if (stored > 0) return stored;
+
+  final unit = _num(order['cash_rounding_unit']).toInt();
+  if (unit <= 0) return 0;
+
+  final rounded = _roundedCashPayable(baseTotal, unit);
+  return rounded - baseTotal.ceil();
+}
+
+num _basePayableFromOrder(Map<String, dynamic> order) {
+  final subtotal = _num(order['total_order_value']);
+  final isPpnActive = _toBool(order['is_ppn_active']);
+  final ppnPercent = _num(order['ppn']);
+  return isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+      : subtotal.ceil();
+}
+
+String _cashRoundingDescription(int unit) {
+  final normalized = _normalizeCashRoundingUnit(unit);
+  if (normalized <= 0) return '';
+  return 'Total dibulatkan ke atas sesuai kelipatan Rp ${_rupiah(normalized)}';
 }
 
 String _rupiah(num n) {
