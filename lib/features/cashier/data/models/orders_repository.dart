@@ -51,6 +51,13 @@ class OrdersRepository {
     return api.processOrder(id: id);
   }
 
+  Future<Map<String, dynamic>> serveOrderItems({
+    required int id,
+    required List<int> detailIds,
+  }) async {
+    return api.serveOrderItems(id: id, detailIds: detailIds);
+  }
+
   Future<Map<String, dynamic>> cancelProcessOrder(int id) async {
     return api.cancelProcessOrder(id: id);
   }

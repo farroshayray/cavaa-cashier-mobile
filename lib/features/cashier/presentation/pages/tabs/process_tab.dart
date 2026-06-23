@@ -126,6 +126,53 @@ class _ProcessViewState extends State<_ProcessView> {
     await provider.load();
   }
 
+  Future<void> _handleProcessAction(Map<String, dynamic> row) async {
+    final provider = context.read<ProcessProvider>();
+    final status = (row['order_status'] ?? '').toString();
+
+    if (status == 'OPENBILL_CONFIRMATION') {
+      final res = await provider.actionProcess(row);
+      if (!mounted) return;
+
+      final message = (res['message'] ?? 'Berhasil diproses').toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+
+      if ((res['status'] ?? '').toString() == 'warning') {
+        await provider.load();
+      }
+      return;
+    }
+
+    final detail = await provider.getOrderDetailFromListItem(row);
+    if (!mounted) return;
+
+    final selectedIds = await showModalBottomSheet<List<int>>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ServeItemsSheet(order: detail),
+    );
+
+    if (selectedIds == null || selectedIds.isEmpty) {
+      return;
+    }
+
+    final res = await provider.actionServeItems(row, detailIds: selectedIds);
+    await Future.wait([
+      context.read<DoneProvider>().load(),
+      context.read<PaymentProvider>().load(),
+    ]);
+
+    if (!mounted) return;
+    final message = (res['message'] ?? 'Item berhasil ditandai served').toString();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   void _scheduleSearch() {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(_searchDebounceDelay, () {
@@ -313,19 +360,7 @@ class _ProcessViewState extends State<_ProcessView> {
                         onProcess: () async {
                           final row = vm.items[i];
                           try {
-                            final res = await context.read<ProcessProvider>().actionProcess(row);
-                            if (!mounted) return;
-
-                            final status = (res['status'] ?? 'ok').toString();
-                            final message = (res['message'] ?? 'Berhasil diproses').toString();
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(message)),
-                            );
-
-                            if (status == 'warning') {
-                              await context.read<ProcessProvider>().load();
-                            }
+                            await _handleProcessAction(row);
                           } catch (e) {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1157,33 +1192,9 @@ class _ProcessOrderCard extends StatelessWidget {
 
   Widget _buildStatusActions() {
     final st = (data['order_status'] ?? '').toString();
-    final processedByKitchen = _isProcessedByKitchen(data);
 
-    if (processedByKitchen) {
-      return Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: ElevatedButton(
-          onPressed: null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.grey.shade400,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: Colors.grey.shade400,
-            disabledForegroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          child: const Text(
-            'Kitchen',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-        ),
-      );
-    }
-
-    if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER') {
-      final buttonText = st == 'OPENBILL_CONFIRMATION' ? 'Konfirmasi' : 'Proses';
+    if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER' || st == 'PROCESSED') {
+      final buttonText = st == 'OPENBILL_CONFIRMATION' ? 'Konfirmasi' : 'Pilih Served';
       return Padding(
         padding: const EdgeInsets.only(right: 6),
         child: ElevatedButton(
@@ -1196,39 +1207,6 @@ class _ProcessOrderCard extends StatelessWidget {
           ),
           child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.w900)),
         ),
-      );
-    }
-
-    if (st == 'PROCESSED') {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          OutlinedButton(
-            onPressed: isActing ? null : onCancelProcess,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFB45309),
-              side: const BorderSide(color: Color(0xFFF59E0B)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              minimumSize: const Size(40, 40),
-            ),
-            child: const Icon(Icons.undo_rounded, size: 18),
-          ),
-          const SizedBox(width: 2),
-          ElevatedButton(
-            onPressed: isActing ? null : onFinish,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7C3AED),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
-            child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.w900)),
-          ),
-          const SizedBox(width: 6),
-        ],
       );
     }
 
@@ -1237,32 +1215,9 @@ class _ProcessOrderCard extends StatelessWidget {
 
   Widget _buildLandscapeStatusActions() {
     final st = (data['order_status'] ?? '').toString();
-    final processedByKitchen = _isProcessedByKitchen(data);
 
-    if (processedByKitchen) {
-      return Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: ElevatedButton(
-          onPressed: null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.grey.shade400,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: Colors.grey.shade400,
-            disabledForegroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            minimumSize: const Size(0, 40),
-          ),
-          child: const Text(
-            'Kitchen',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-        ),
-      );
-    }
-
-    if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER') {
-      final buttonText = st == 'OPENBILL_CONFIRMATION' ? 'Konfirmasi' : 'Proses';
+    if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER' || st == 'PROCESSED') {
+      final buttonText = st == 'OPENBILL_CONFIRMATION' ? 'Konfirmasi' : 'Pilih Served';
       return Padding(
         padding: const EdgeInsets.only(right: 4),
         child: ElevatedButton(
@@ -1279,42 +1234,276 @@ class _ProcessOrderCard extends StatelessWidget {
       );
     }
 
-    if (st == 'PROCESSED') {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          OutlinedButton(
-            onPressed: isActing ? null : onCancelProcess,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFB45309),
-              side: const BorderSide(color: Color(0xFFF59E0B)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              minimumSize: const Size(40, 40),
-            ),
-            child: const Icon(Icons.undo_rounded, size: 16),
-          ),
-          const SizedBox(width: 2),
-          ElevatedButton(
-            onPressed: isActing ? null : onFinish,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7C3AED),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              minimumSize: const Size(0, 40),
-            ),
-            child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.w900)),
-          ),
-          const SizedBox(width: 4),
-        ],
-      );
-    }
-
     return const SizedBox.shrink();
   }
+}
+
+class _ServeItemsSheet extends StatefulWidget {
+  const _ServeItemsSheet({required this.order});
+
+  final Map<String, dynamic> order;
+
+  @override
+  State<_ServeItemsSheet> createState() => _ServeItemsSheetState();
+}
+
+class _ServeItemsSheetState extends State<_ServeItemsSheet> {
+  final Set<int> _selectedIds = <int>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
+    final details = ((order['order_details'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    final selectableItems = details.where((item) {
+      return _resolveProcessItemState(item, order) != _ProcessItemState.served;
+    }).toList();
+
+    return SafeArea(
+      top: false,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Material(
+          color: Colors.white,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F8FA),
+                    border: Border(
+                      bottom: BorderSide(color: Colors.black.withOpacity(0.08)),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Pilih Menu Served',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: selectableItems.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'Semua item pada order ini sudah served.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.black.withOpacity(0.65)),
+                          ),
+                        )
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                          itemBuilder: (_, index) {
+                            final item = selectableItems[index];
+                            final itemId = _toId(item['id']);
+                            final qty = _toNum(item['quantity']).toInt();
+                            final name = (item['product_name'] ?? 'Produk').toString();
+                            final note = (item['customer_note'] ?? '').toString().trim();
+                            final state = _resolveProcessItemState(item, order);
+                            final checked = _selectedIds.contains(itemId);
+
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                setState(() {
+                                  if (checked) {
+                                    _selectedIds.remove(itemId);
+                                  } else {
+                                    _selectedIds.add(itemId);
+                                  }
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.black.withOpacity(0.08)),
+                                  color: checked ? const Color(0xFFFFF7ED) : Colors.white,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Checkbox(
+                                      value: checked,
+                                      onChanged: (_) {
+                                        setState(() {
+                                          if (checked) {
+                                            _selectedIds.remove(itemId);
+                                          } else {
+                                            _selectedIds.add(itemId);
+                                          }
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '$name × $qty',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (state != null) _ProcessItemStateBadge(state: state),
+                                            ],
+                                          ),
+                                          if (note.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              note,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.black.withOpacity(0.55),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemCount: selectableItems.length,
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : () => Navigator.of(context).pop(_selectedIds.toList()),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF7C3AED),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        _selectedIds.isEmpty
+                            ? 'Pilih item dulu'
+                            : 'Tandai Served (${_selectedIds.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProcessItemStateBadge extends StatelessWidget {
+  const _ProcessItemStateBadge({required this.state});
+
+  final _ProcessItemState state;
+
+  @override
+  Widget build(BuildContext context) {
+    late final Color bg;
+    late final Color fg;
+    late final IconData icon;
+    late final String label;
+
+    switch (state) {
+      case _ProcessItemState.processing:
+        bg = const Color(0xFFDBEAFE);
+        fg = const Color(0xFF1D4ED8);
+        icon = Icons.timelapse_rounded;
+        label = 'Diproses';
+        break;
+      case _ProcessItemState.served:
+        bg = const Color(0xFFDCFCE7);
+        fg = const Color(0xFF047857);
+        icon = Icons.check_circle_rounded;
+        label = 'Served';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _ProcessItemState {
+  processing,
+  served,
+}
+
+_ProcessItemState? _resolveProcessItemState(
+  Map<String, dynamic> item,
+  Map<String, dynamic> order,
+) {
+  final rawKitchenProcessId = item['kitchen_process_id'];
+  final kitchenProcessId = rawKitchenProcessId == null
+      ? null
+      : num.tryParse(rawKitchenProcessId.toString())?.toInt();
+  final status = (item['status'] ?? '').toString();
+  final orderStatus = (order['order_status'] ?? '').toString();
+
+  if (status == 'SERVED BY KITCHEN' || kitchenProcessId == 0 || orderStatus == 'SERVED') {
+    return _ProcessItemState.served;
+  }
+
+  if (kitchenProcessId != null && kitchenProcessId > 0) {
+    return _ProcessItemState.processing;
+  }
+
+  return null;
 }
 
 String _rupiah(dynamic n) {

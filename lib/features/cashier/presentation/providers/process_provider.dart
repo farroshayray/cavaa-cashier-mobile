@@ -653,6 +653,49 @@ class ProcessProvider extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>> actionServeItems(
+    Map<String, dynamic> row, {
+    required List<int> detailIds,
+  }) async {
+    final isLocalOnly = row['is_local_only'] == true;
+    final isStockConflict =
+        (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
+    final id = _toId(row['id']);
+    final actionKey = _actionKey(row);
+
+    _setActionLoading(actionKey, true);
+    try {
+      if (detailIds.isEmpty) {
+        throw Exception('Pilih minimal satu item');
+      }
+
+      if (isLocalOnly) {
+        throw Exception('Order lokal belum mendukung served per item');
+      }
+
+      if (isStockConflict) {
+        throw Exception('Served per item tidak tersedia saat ada konflik stok');
+      }
+
+      if (!connectivity.isOnline) {
+        throw Exception('Butuh koneksi internet untuk update served per item');
+      }
+
+      final res = await repo.serveOrderItems(id: id, detailIds: detailIds);
+      final status = (res['status'] ?? '').toString();
+
+      if (status == 'warning' || res['already_processed'] == true) {
+        await load();
+        return res;
+      }
+
+      await load();
+      return res;
+    } finally {
+      _setActionLoading(actionKey, false);
+    }
+  }
+
   Future<Map<String, dynamic>> actionFinish(Map<String, dynamic> row) async {
     final isLocalOnly = row['is_local_only'] == true;
     final isStockConflict =

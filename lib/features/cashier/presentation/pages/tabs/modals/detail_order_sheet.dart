@@ -547,7 +547,7 @@ class _ItemsCard extends StatelessWidget {
               final lineTotal = (basePrice - promoAmount) * qty;
 
               final opts = (m['order_detail_options'] as List?) ?? [];
-              final isServed = m['status'] == 'SERVED BY KITCHEN' || order['order_status'] == 'SERVED';
+              final itemState = _resolveKitchenItemState(m, order);
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -563,13 +563,9 @@ class _ItemsCard extends StatelessWidget {
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ),
-                        if (isServed) ...[
+                        if (itemState != null) ...[
                           const SizedBox(width: 8),
-                          const Icon(
-                            Icons.check_circle_rounded,
-                            color: Color(0xFF047857),
-                            size: 18,
-                          ),
+                          _KitchenStateBadge(state: itemState),
                         ],
                       ],
                     ),
@@ -635,7 +631,64 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
+class _KitchenStateBadge extends StatelessWidget {
+  const _KitchenStateBadge({required this.state});
+
+  final _KitchenItemState state;
+
+  @override
+  Widget build(BuildContext context) {
+    late final Color bg;
+    late final Color fg;
+    late final IconData icon;
+    late final String label;
+
+    switch (state) {
+      case _KitchenItemState.processing:
+        bg = const Color(0xFFDBEAFE);
+        fg = const Color(0xFF1D4ED8);
+        icon = Icons.timelapse_rounded;
+        label = 'Diproses';
+        break;
+      case _KitchenItemState.served:
+        bg = const Color(0xFFDCFCE7);
+        fg = const Color(0xFF047857);
+        icon = Icons.check_circle_rounded;
+        label = 'Served';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ===== helpers =====
+enum _KitchenItemState {
+  processing,
+  served,
+}
+
 num _num(dynamic v) {
   if (v == null) return 0;
   if (v is num) return v;
@@ -688,6 +741,28 @@ num? _pickNum(Map<String, dynamic> root, List<String> path) {
 
 String _formatPercent(num n) {
   return n % 1 == 0 ? n.toInt().toString() : n.toString();
+}
+
+_KitchenItemState? _resolveKitchenItemState(
+  Map<String, dynamic> item,
+  Map<String, dynamic> order,
+) {
+  final rawKitchenProcessId = item['kitchen_process_id'];
+  final kitchenProcessId = rawKitchenProcessId == null
+      ? null
+      : num.tryParse(rawKitchenProcessId.toString())?.toInt();
+  final status = (item['status'] ?? '').toString();
+  final orderStatus = (order['order_status'] ?? '').toString();
+
+  if (status == 'SERVED BY KITCHEN' || kitchenProcessId == 0 || orderStatus == 'SERVED') {
+    return _KitchenItemState.served;
+  }
+
+  if (kitchenProcessId != null && kitchenProcessId > 0) {
+    return _KitchenItemState.processing;
+  }
+
+  return null;
 }
 
 String _rupiah(num n) {

@@ -101,6 +101,22 @@ class OrdersApi {
     return {'status': 'ok'};
   }
 
+  Future<Map<String, dynamic>> serveOrderItems({
+    required int id,
+    required List<int> detailIds,
+  }) async {
+    final resp = await dio.post(
+      '/api/v1/mobile/cashier/process-order/$id',
+      data: {
+        'detail_ids': detailIds,
+      },
+    );
+
+    final data = resp.data;
+    if (data is Map<String, dynamic>) return data;
+    return {'status': 'ok'};
+  }
+
   Future<Map<String, dynamic>> cancelProcessOrder({
     required int id,
   }) async {
