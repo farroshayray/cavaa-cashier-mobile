@@ -6,8 +6,23 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class ProductOptionsSheet extends StatefulWidget {
-  const ProductOptionsSheet({super.key, required this.product});
+  const ProductOptionsSheet({
+    super.key,
+    required this.product,
+    this.editingItem,
+    this.onConfirm,
+    this.confirmLabel,
+  });
+
   final Product product;
+  final CartItem? editingItem;
+  final void Function({
+    required int qty,
+    required Map<int, Set<int>> selected,
+    required String note,
+    required num unitFinalPrice,
+  })? onConfirm;
+  final String? confirmLabel;
 
   @override
   State<ProductOptionsSheet> createState() => _ProductOptionsSheetState();
@@ -19,6 +34,22 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
   late final qtyC = TextEditingController(text: qty.toString());
   final Map<int, Set<int>> selected = {}; // groupId -> set<optionId>
   String? qtyAdjustmentNotice;
+
+  CartItem? get _excludingItem => widget.editingItem;
+
+  @override
+  void initState() {
+    super.initState();
+    final editing = widget.editingItem;
+    if (editing != null) {
+      qty = editing.qty;
+      qtyC.text = qty.toString();
+      noteC.text = editing.note;
+      for (final entry in editing.selected.entries) {
+        selected[entry.key] = {...entry.value};
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -47,6 +78,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                   option: item,
                   qty: qty,
                   selected: selected,
+                  excludingItem: _excludingItem,
                 ) <
                 qty) {
           return false;
@@ -57,6 +89,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
       product: widget.product,
       qty: qty,
       selected: selected,
+      excludingItem: _excludingItem,
     );
   }
 
@@ -64,6 +97,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
     return vm.maxAddableQtyWithOptions(
       product: widget.product,
       selected: selected,
+      excludingItem: _excludingItem,
     );
   }
 
@@ -107,6 +141,7 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
       final maxAfterSelection = vm.maxAddableQtyWithOptions(
         product: widget.product,
         selected: selected,
+        excludingItem: _excludingItem,
       );
 
       if (maxAfterSelection > 0 && qty > maxAfterSelection) {
@@ -192,7 +227,10 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
     final productRemaining =
         widget.product.alwaysAvailable && !widget.product.consumesLinkedStock
         ? null
-        : vm.availableQtyForProduct(widget.product);
+        : vm.availableQtyForProduct(
+            widget.product,
+            excludingItem: _excludingItem,
+          );
 
     return SafeArea(
       child: Container(
@@ -591,17 +629,34 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
 
                         onPressed: canSave
                             ? () {
-                                context.read<PurchaseProvider>().addWithOptions(
-                                      product: widget.product,
-                                      qty: qty,
-                                      selected: selected,
-                                      note: noteC.text.trim(),
-                                    );
+                                final selectedCopy = <int, Set<int>>{
+                                  for (final entry in selected.entries)
+                                    entry.key: {...entry.value},
+                                };
+                                final note = noteC.text.trim();
+                                final unit = unitFinal;
+
+                                if (widget.onConfirm != null) {
+                                  widget.onConfirm!(
+                                    qty: qty,
+                                    selected: selectedCopy,
+                                    note: note,
+                                    unitFinalPrice: unit,
+                                  );
+                                } else {
+                                  context.read<PurchaseProvider>().addWithOptions(
+                                        product: widget.product,
+                                        qty: qty,
+                                        selected: selectedCopy,
+                                        note: note,
+                                      );
+                                }
                                 Navigator.pop(context);
                               }
                             : null,
                         child: Text(
-                          'Simpan • Rp ${_rupiah(total)}',
+                          widget.confirmLabel ??
+                              'Simpan • Rp ${_rupiah(total)}',
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                       ),

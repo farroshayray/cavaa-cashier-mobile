@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/models/checkout_exceptions.dart';
 import '/features/cashier/data/models/purchase_models.dart';
+import '/features/cashier/presentation/pages/tabs/modals/cart_sheet.dart';
+import '/features/cashier/presentation/pages/tabs/modals/edit_product_picker_sheet.dart';
+import '/features/cashier/presentation/pages/tabs/modals/product_option_sheet.dart';
 import '/features/cashier/presentation/providers/edit_order_provider.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 
@@ -22,10 +25,24 @@ class EditOrderSheet extends StatefulWidget {
 }
 
 class _EditOrderSheetState extends State<EditOrderSheet> {
+  EditOrderProvider? _editVm;
+
   @override
   void initState() {
     super.initState();
     Future.microtask(_load);
+  }
+
+  @override
+  void dispose() {
+    _editVm?.removeListener(_syncStockOverlay);
+    context.read<PurchaseProvider>().clearStockOverlay();
+    super.dispose();
+  }
+
+  void _syncStockOverlay() {
+    if (!mounted || _editVm == null) return;
+    context.read<PurchaseProvider>().setStockOverlay(_editVm!.stockOverlayLines);
   }
 
   Future<void> _load() async {
@@ -41,6 +58,10 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
       order: widget.order,
       catalog: purchaseVm.products,
     );
+
+    _editVm = editVm;
+    editVm.addListener(_syncStockOverlay);
+    _syncStockOverlay();
   }
 
   Future<void> _save() async {
@@ -56,7 +77,9 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isOnline ? 'Order berhasil diperbarui' : 'Perubahan disimpan, menunggu sinkronisasi',
+            isOnline
+                ? 'Order berhasil diperbarui'
+                : 'Perubahan disimpan, menunggu sinkronisasi',
           ),
         ),
       );
@@ -78,7 +101,6 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
     if (purchaseVm.products.isEmpty) {
       await purchaseVm.load();
     }
-
     if (!mounted) return;
 
     await showModalBottomSheet<void>(
@@ -86,58 +108,60 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
       useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return SafeArea(
-          child: Container(
-            height: MediaQuery.of(ctx).size.height * 0.75,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-            ),
-            child: Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'Tambah Menu',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: purchaseVm.products.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) {
-                      final product = purchaseVm.products[i];
-                      return ListTile(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Colors.black.withOpacity(0.08)),
-                        ),
-                        title: Text(
-                          product.name,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        subtitle: Text('Rp ${_rupiah(product.price)}'),
-                        trailing: const Icon(Icons.add_circle_outline_rounded),
-                        onTap: product.isAvailableForSale
-                            ? () {
-                                context.read<EditOrderProvider>().addProduct(product);
-                                Navigator.pop(ctx);
-                              }
-                            : null,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (_) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: purchaseVm),
+          ChangeNotifierProvider.value(value: context.read<EditOrderProvider>()),
+        ],
+        child: const EditProductPickerSheet(),
+      ),
     );
+    _syncStockOverlay();
+  }
+
+  Future<void> _openItemEditor(int index) async {
+    final editVm = context.read<EditOrderProvider>();
+    final purchaseVm = context.read<PurchaseProvider>();
+    final item = editVm.items[index];
+    if (item.isLocked) return;
+
+    Product product = item.product;
+    for (final candidate in purchaseVm.products) {
+      if (candidate.id == product.id) {
+        product = candidate;
+        break;
+      }
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ChangeNotifierProvider.value(
+        value: purchaseVm,
+        child: ProductOptionsSheet(
+          product: product,
+          editingItem: item.cart,
+          confirmLabel: 'Perbarui Item',
+          onConfirm: ({
+            required qty,
+            required selected,
+            required note,
+            required unitFinalPrice,
+          }) {
+            editVm.updateItemAt(
+              index,
+              qty: qty,
+              selected: selected,
+              note: note,
+              unitFinalPrice: unitFinalPrice,
+            );
+          },
+        ),
+      ),
+    );
+    _syncStockOverlay();
   }
 
   @override
@@ -190,9 +214,7 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
             if (editVm.isLoading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (editVm.error != null && editVm.items.isEmpty)
-              Expanded(
-                child: Center(child: Text(editVm.error!)),
-              )
+              Expanded(child: Center(child: Text(editVm.error!)))
             else
               Expanded(
                 child: editVm.items.isEmpty
@@ -201,7 +223,11 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
                         padding: const EdgeInsets.all(16),
                         itemCount: editVm.items.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) => _EditItemRow(index: i, item: editVm.items[i]),
+                        itemBuilder: (_, i) => _EditItemRow(
+                          index: i,
+                          item: editVm.items[i],
+                          onEdit: () => _openItemEditor(i),
+                        ),
                       ),
               ),
             const Divider(height: 1),
@@ -223,7 +249,10 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
                         const SizedBox(height: 2),
                         Text(
                           'Rp ${_rupiah(editVm.grandTotalWithPpn)}',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ],
                     ),
@@ -233,7 +262,10 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
                       backgroundColor: brand,
                       foregroundColor: Colors.white,
                       shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 14,
+                      ),
                     ),
                     onPressed: editVm.isSaving || !editVm.hasItems ? null : _save,
                     child: editVm.isSaving
@@ -245,7 +277,10 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Simpan', style: TextStyle(fontWeight: FontWeight.w900)),
+                        : const Text(
+                            'Simpan',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
                   ),
                 ],
               ),
@@ -258,10 +293,15 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
 }
 
 class _EditItemRow extends StatefulWidget {
-  const _EditItemRow({required this.index, required this.item});
+  const _EditItemRow({
+    required this.index,
+    required this.item,
+    required this.onEdit,
+  });
 
   final int index;
   final EditableCartItem item;
+  final VoidCallback onEdit;
 
   @override
   State<_EditItemRow> createState() => _EditItemRowState();
@@ -277,6 +317,14 @@ class _EditItemRowState extends State<_EditItemRow> {
   }
 
   @override
+  void didUpdateWidget(covariant _EditItemRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.item.note != _noteC.text) {
+      _noteC.text = widget.item.note;
+    }
+  }
+
+  @override
   void dispose() {
     _noteC.dispose();
     super.dispose();
@@ -285,81 +333,179 @@ class _EditItemRowState extends State<_EditItemRow> {
   @override
   Widget build(BuildContext context) {
     final editVm = context.read<EditOrderProvider>();
+    final purchaseVm = context.watch<PurchaseProvider>();
     final item = widget.item;
     final i = widget.index;
+    final cartLine = item.cart;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
+    final stockNotices = stockNoticesFor(cartLine, purchaseVm);
+    final hasBlockingWarning = stockNotices.any((notice) => notice.blocking);
+    final optionLines = selectedOptionTextLines(cartLine, purchaseVm);
+    final maxQty = purchaseVm.maxAddableQtyWithOptions(
+      product: item.product,
+      selected: item.selected,
+      excludingItem: cartLine,
+    );
+
+    final promo = item.product.promotion;
+    final hasPromo = promo != null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: item.isLocked
-              ? Colors.blue.withOpacity(0.35)
-              : Colors.black.withOpacity(0.10),
-        ),
-        color: item.isLocked ? Colors.blue.withOpacity(0.04) : Colors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.product.name,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-              if (item.isLocked)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Text(
-                    'Sudah diproses',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-                  ),
-                ),
-              if (!item.isLocked)
-                IconButton(
-                  onPressed: () => editVm.removeAt(i),
-                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              IconButton(
-                onPressed: item.isLocked || item.qty <= item.minQty
-                    ? null
-                    : () => editVm.setQty(i, item.qty - 1),
-                icon: const Icon(Icons.remove_circle_outline_rounded),
-              ),
-              Text('${item.qty}', style: const TextStyle(fontWeight: FontWeight.w900)),
-              IconButton(
-                onPressed: () => editVm.setQty(i, item.qty + 1),
-                icon: const Icon(Icons.add_circle_outline_rounded),
-              ),
-              const Spacer(),
-              Text(
-                'Rp ${_rupiah(item.lineTotal)}',
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-          TextField(
-            controller: _noteC,
-            decoration: const InputDecoration(
-              labelText: 'Keterangan',
-              isDense: true,
-              border: OutlineInputBorder(),
+        onTap: item.isLocked ? null : widget.onEdit,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: hasBlockingWarning
+                  ? Colors.redAccent.withOpacity(0.55)
+                  : item.isLocked
+                      ? Colors.blue.withOpacity(0.35)
+                      : Colors.black.withOpacity(0.10),
             ),
-            onChanged: (v) => editVm.setNote(i, v),
+            color: item.isLocked
+                ? Colors.blue.withOpacity(0.04)
+                : hasBlockingWarning
+                    ? Colors.redAccent.withOpacity(0.04)
+                    : Colors.white,
           ),
-        ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.product.name,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        if (hasPromo) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            promo.type == 'percentage'
+                                ? 'Diskon ${promo.value}%'
+                                : 'Potongan Rp ${_rupiah(promo.value)}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFAE1504),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (item.isLocked)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'Sudah diproses',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  if (!item.isLocked) ...[
+                    IconButton(
+                      onPressed: widget.onEdit,
+                      icon: const Icon(Icons.tune_rounded, size: 20),
+                      tooltip: 'Ubah opsi',
+                    ),
+                    IconButton(
+                      onPressed: () => editVm.removeAt(i),
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              if (stockNotices.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                ...stockNotices.map(
+                  (notice) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      notice.text,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: notice.blocking ? Colors.redAccent : Colors.orange,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              ...optionLines.map(
+                (line) => Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    line,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.62),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: item.isLocked || item.qty <= item.minQty
+                        ? null
+                        : () => editVm.setQty(i, item.qty - 1, maxQty: maxQty),
+                    icon: const Icon(Icons.remove_circle_outline_rounded),
+                  ),
+                  Text(
+                    '${item.qty}',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  IconButton(
+                    onPressed: item.qty >= maxQty
+                        ? null
+                        : () => editVm.setQty(i, item.qty + 1, maxQty: maxQty),
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Rp ${_rupiah(item.lineTotal)}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+              TextField(
+                controller: _noteC,
+                decoration: const InputDecoration(
+                  labelText: 'Keterangan',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) => editVm.setNote(i, v),
+              ),
+              if (!item.isLocked)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: widget.onEdit,
+                    child: const Text('Ubah opsi & qty'),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

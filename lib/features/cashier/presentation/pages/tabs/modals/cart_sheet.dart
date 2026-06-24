@@ -380,7 +380,7 @@ class _CartItemRowState extends State<_CartItemRow> {
 class _StockWarningPill extends StatelessWidget {
   const _StockWarningPill({required this.notice});
 
-  final _StockNotice notice;
+  final StockNotice notice;
 
   @override
   Widget build(BuildContext context) {
@@ -417,33 +417,41 @@ class _StockWarningPill extends StatelessWidget {
   }
 }
 
-class _StockNotice {
-  const _StockNotice(this.text, {required this.blocking});
+class StockNotice {
+  const StockNotice(this.text, {required this.blocking});
 
   final String text;
   final bool blocking;
 }
 
-List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
-  final notices = <_StockNotice>[];
+List<StockNotice> stockNoticesFor(CartItem item, PurchaseProvider vm) {
+  return _stockNoticesFor(item, vm);
+}
+
+List<String> selectedOptionTextLines(CartItem item, PurchaseProvider vm) {
+  return _selectedOptionTextLines(item, vm);
+}
+
+List<StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
+  final notices = <StockNotice>[];
   final product = _latestProductFor(item, vm);
 
   if (!product.isActive) {
-    notices.add(const _StockNotice('Produk tidak aktif', blocking: true));
+    notices.add(const StockNotice('Produk tidak aktif', blocking: true));
   } else if (!product.alwaysAvailable || product.consumesLinkedStock) {
     final availableForThisLine =
         vm.availableQtyForProduct(product, excludingItem: item);
     final remainingAfterThisLine = availableForThisLine - item.qty;
 
     if (availableForThisLine <= 0) {
-      notices.add(const _StockNotice('Produk habis', blocking: true));
+      notices.add(const StockNotice('Produk habis', blocking: true));
     } else if (item.qty > availableForThisLine) {
-      notices.add(_StockNotice(
+      notices.add(StockNotice(
         'Produk kurang: diminta ${item.qty}, tersedia $availableForThisLine',
         blocking: true,
       ));
     } else if (remainingAfterThisLine >= 0 && remainingAfterThisLine <= 3) {
-      notices.add(_StockNotice(
+      notices.add(StockNotice(
         remainingAfterThisLine == 0 ? 'Mencapai batas maksimal' : 'Stok produk tinggal $remainingAfterThisLine',
         blocking: false,
       ));
@@ -465,7 +473,7 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
       }).length;
 
       if (availableSelected < group.min) {
-        notices.add(_StockNotice(
+        notices.add(StockNotice(
           'Opsi wajib ${group.name} tidak cukup tersedia',
           blocking: true,
         ));
@@ -475,7 +483,7 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
     for (final optionId in selectedIds) {
       final option = _findOption(group, optionId);
       if (option == null) {
-        notices.add(_StockNotice(
+        notices.add(StockNotice(
           'Opsi ${group.name} tidak ditemukan',
           blocking: true,
         ));
@@ -487,9 +495,9 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
       final availableForThisLine =
           vm.availableQtyForOption(option, excludingItem: item);
       if (availableForThisLine <= 0) {
-        notices.add(_StockNotice('Opsi ${option.name} habis', blocking: true));
+        notices.add(StockNotice('Opsi ${option.name} habis', blocking: true));
       } else if (item.qty > availableForThisLine) {
-        notices.add(_StockNotice(
+        notices.add(StockNotice(
           'Opsi ${option.name} kurang: diminta ${item.qty}, tersedia $availableForThisLine',
           blocking: true,
         ));
@@ -504,13 +512,13 @@ List<_StockNotice> _stockNoticesFor(CartItem item, PurchaseProvider vm) {
   );
   if (item.qty > maxForLine &&
       !notices.any((notice) => notice.blocking)) {
-    notices.add(_StockNotice(
+    notices.add(StockNotice(
       'Stok bahan/produk kurang: diminta ${item.qty}, tersedia $maxForLine',
       blocking: true,
     ));
   } else if (item.qty == maxForLine && maxForLine > 0 && maxForLine < 999999 &&
              !notices.any((notice) => notice.blocking || notice.text.contains('Mencapai batas'))) {
-    notices.add(const _StockNotice(
+    notices.add(const StockNotice(
       'Mencapai batas stok maksimal',
       blocking: false,
     ));

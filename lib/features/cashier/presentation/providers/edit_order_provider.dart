@@ -13,34 +13,25 @@ import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class EditableCartItem {
   final int? detailId;
-  final Product product;
-  int qty;
-  final Map<int, Set<int>> selected;
-  String note;
-  final num unitFinalPrice;
   final bool isLocked;
   final int minQty;
+  CartItem cart;
 
   EditableCartItem({
     this.detailId,
-    required this.product,
-    required this.qty,
-    required this.selected,
-    required this.note,
-    required this.unitFinalPrice,
+    required this.cart,
     this.isLocked = false,
     this.minQty = 1,
   });
 
-  num get lineTotal => unitFinalPrice * qty;
-
-  CartItem toCartItem() => CartItem(
-        product: product,
-        qty: qty,
-        selected: selected,
-        note: note,
-        unitFinalPrice: unitFinalPrice,
-      );
+  Product get product => cart.product;
+  int get qty => cart.qty;
+  set qty(int value) => cart.qty = value;
+  Map<int, Set<int>> get selected => cart.selected;
+  String get note => cart.note;
+  set note(String value) => cart.note = value;
+  num get unitFinalPrice => cart.unitFinalPrice;
+  num get lineTotal => cart.lineTotal;
 }
 
 class EditOrderProvider extends ChangeNotifier {
@@ -81,6 +72,9 @@ class EditOrderProvider extends ChangeNotifier {
   }
 
   bool get hasItems => items.isNotEmpty;
+
+  List<CartItem> get stockOverlayLines =>
+      items.map((item) => item.cart).toList(growable: false);
 
   void reset() {
     isLoading = false;
@@ -144,22 +138,21 @@ class EditOrderProvider extends ChangeNotifier {
         product ??= _productFromDetailSnapshot(detail, productId);
 
         final selected = _selectedFromDetail(product, detail);
-        final basePrice = parseNum(detail['base_price']);
-        final optionsPrice = parseNum(detail['options_price']);
-        final promoAmount = parseNum(detail['promo_amount']);
-        final unitPrice = basePrice + optionsPrice - promoAmount;
+        final unitPrice = _unitPrice(product, selected);
         final qty = parseInt(detail['quantity'] ?? detail['qty'], defaultValue: 1);
 
         items.add(
           EditableCartItem(
             detailId: detailId,
-            product: product,
-            qty: qty,
-            selected: selected,
-            note: (detail['customer_note'] ?? '').toString(),
-            unitFinalPrice: unitPrice,
             isLocked: locked,
             minQty: locked ? qty : 1,
+            cart: CartItem(
+              product: product,
+              qty: qty,
+              selected: selected,
+              note: (detail['customer_note'] ?? '').toString(),
+              unitFinalPrice: unitPrice,
+            ),
           ),
         );
       }
@@ -171,19 +164,65 @@ class EditOrderProvider extends ChangeNotifier {
     }
   }
 
-  void addProduct(Product product, {Map<int, Set<int>>? selected}) {
-    final defaultSelected = selected ?? _defaultSelected(product);
-    final unitPrice = _unitPrice(product, defaultSelected);
+  void addWithOptions({
+    required Product product,
+    required int qty,
+    required Map<int, Set<int>> selected,
+    required String note,
+    required num unitFinalPrice,
+  }) {
+    final selectedCopy = <int, Set<int>>{
+      for (final entry in selected.entries) entry.key: {...entry.value},
+    };
 
-    items.add(
-      EditableCartItem(
-        product: product,
-        qty: 1,
-        selected: defaultSelected,
-        note: '',
-        unitFinalPrice: unitPrice,
-      ),
+    final same = items.indexWhere(
+      (item) =>
+          !item.isLocked &&
+          item.product.id == product.id &&
+          _sameSelected(item.selected, selectedCopy) &&
+          item.note == note,
     );
+
+    if (same >= 0) {
+      items[same].qty += qty;
+    } else {
+      items.add(
+        EditableCartItem(
+          cart: CartItem(
+            product: product,
+            qty: qty,
+            selected: selectedCopy,
+            note: note,
+            unitFinalPrice: unitFinalPrice,
+          ),
+        ),
+      );
+    }
+    notifyListeners();
+  }
+
+  void updateItemAt(
+    int index, {
+    required int qty,
+    required Map<int, Set<int>> selected,
+    required String note,
+    required num unitFinalPrice,
+  }) {
+    if (index < 0 || index >= items.length) return;
+    final item = items[index];
+    final selectedCopy = <int, Set<int>>{
+      for (final entry in selected.entries) entry.key: {...entry.value},
+    };
+    final nextQty = item.isLocked && qty < item.minQty ? item.minQty : qty;
+
+    item.cart = CartItem(
+      product: item.product,
+      qty: nextQty,
+      selected: selectedCopy,
+      note: note,
+      unitFinalPrice: unitFinalPrice,
+    );
+
     notifyListeners();
   }
 
@@ -194,10 +233,11 @@ class EditOrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setQty(int index, int qty) {
+  void setQty(int index, int qty, {required int maxQty}) {
     if (index < 0 || index >= items.length) return;
     final item = items[index];
-    final next = qty < item.minQty ? item.minQty : qty;
+    var next = qty < item.minQty ? item.minQty : qty;
+    if (next > maxQty) next = maxQty;
     if (item.isLocked && next < item.minQty) return;
     item.qty = next;
     notifyListeners();
@@ -483,18 +523,6 @@ class EditOrderProvider extends ChangeNotifier {
     return selected;
   }
 
-  Map<int, Set<int>> _defaultSelected(Product product) {
-    final selected = <int, Set<int>>{};
-    for (final group in product.optionGroups) {
-      if (group.required && group.items.isNotEmpty) {
-        selected[group.id] = {group.items.first.id};
-      } else {
-        selected[group.id] = {};
-      }
-    }
-    return selected;
-  }
-
   num _unitPrice(Product product, Map<int, Set<int>> selected) {
     num optionsPrice = 0;
     for (final group in product.optionGroups) {
@@ -515,6 +543,19 @@ class EditOrderProvider extends ChangeNotifier {
     }
 
     return product.price + optionsPrice - promoAmount;
+  }
+
+  bool _sameSelected(Map<int, Set<int>> a, Map<int, Set<int>> b) {
+    if (a.length != b.length) return false;
+    for (final key in a.keys) {
+      final setA = a[key] ?? {};
+      final setB = b[key] ?? {};
+      if (setA.length != setB.length) return false;
+      for (final id in setA) {
+        if (!setB.contains(id)) return false;
+      }
+    }
+    return true;
   }
 
   int? _toInt(dynamic v) {

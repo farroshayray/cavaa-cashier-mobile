@@ -30,6 +30,26 @@ class PurchaseProvider extends ChangeNotifier {
   PartnerData? partnerData;
 
   List<LocalPendingStockLine> _pendingStockLines = [];
+  List<CartItem> _stockOverlayLines = [];
+
+  /// Lines from edit-order sheet counted toward stock validation.
+  void setStockOverlay(List<CartItem> lines) {
+    _stockOverlayLines = List<CartItem>.from(lines);
+  }
+
+  void clearStockOverlay() {
+    if (_stockOverlayLines.isEmpty) return;
+    _stockOverlayLines = [];
+  }
+
+  Iterable<CartItem> _stockItems({CartItem? excludingItem}) sync* {
+    for (final item in cart) {
+      if (!identical(item, excludingItem)) yield item;
+    }
+    for (final item in _stockOverlayLines) {
+      if (!identical(item, excludingItem)) yield item;
+    }
+  }
 
   // UI state
   int selectedCategoryId = -1; // -1 = All
@@ -375,8 +395,10 @@ class PurchaseProvider extends ChangeNotifier {
   int qtyOf(int productId) =>
       cart.where((e) => e.product.id == productId).fold<int>(0, (a, b) => a + b.qty);
 
-  int _qtyOfProduct(int productId, {CartItem? excludingItem}) => cart
-      .where((e) => e.product.id == productId && e != excludingItem)
+  int _qtyOfProduct(int productId, {CartItem? excludingItem}) => _stockItems(
+        excludingItem: excludingItem,
+      )
+      .where((e) => e.product.id == productId)
       .fold<int>(0, (sum, item) => sum + item.qty);
 
   int _pendingQtyOfProduct(int productId) => _pendingStockLines
@@ -390,9 +412,8 @@ class PurchaseProvider extends ChangeNotifier {
   }
 
   int _qtyOfOption(int optionId, {CartItem? excludingItem}) {
-    return cart
+    return _stockItems(excludingItem: excludingItem)
         .where((item) =>
-            item != excludingItem &&
             item.selected.values.any((ids) => ids.contains(optionId)))
         .fold<int>(0, (sum, item) => sum + item.qty);
   }
@@ -431,8 +452,7 @@ class PurchaseProvider extends ChangeNotifier {
       }
     }
 
-    for (final item in cart) {
-      if (item == excludingItem) continue;
+    for (final item in _stockItems(excludingItem: excludingItem)) {
 
       if (item.product.stockType == 'linked' &&
           item.product.recipes.isNotEmpty) {
