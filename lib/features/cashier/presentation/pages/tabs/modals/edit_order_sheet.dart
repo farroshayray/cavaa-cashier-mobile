@@ -73,7 +73,10 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
       builder: (ctx) => AlertDialog(
         title: const Text('Simpan Perubahan'),
         content: const Text(
-          'Kirim order ke tab Proses untuk ditindaklanjuti kitchen?',
+          'Pilih tindakan setelah menyimpan:\n\n'
+          '• Kirim ke Proses Kitchen — order masuk tab Proses dan langsung terkonfirmasi, '
+          'sehingga kitchen dapat melihat pesanan.\n\n'
+          '• Tetap di Stage Ini — hanya memperbarui menu, status order tidak berubah.',
         ),
         actions: [
           TextButton(
@@ -82,11 +85,11 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Simpan Saja'),
+            child: const Text('Tetap di Stage Ini'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Kirim ke Proses'),
+            child: const Text('Kirim ke Proses Kitchen'),
           ),
         ],
       ),
@@ -105,8 +108,8 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
           content: Text(
             sendToProcess
                 ? (isOnline
-                    ? 'Order diperbarui dan dikirim ke Proses'
-                    : 'Perubahan disimpan, order akan dikirim ke Proses saat online')
+                    ? 'Order diperbarui dan dikirim ke Proses Kitchen'
+                    : 'Perubahan disimpan, order akan dikirim ke kitchen saat online')
                 : (isOnline
                     ? 'Order berhasil diperbarui'
                     : 'Perubahan disimpan, menunggu sinkronisasi'),

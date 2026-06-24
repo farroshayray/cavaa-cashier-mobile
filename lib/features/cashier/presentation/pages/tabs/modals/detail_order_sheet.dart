@@ -109,7 +109,7 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
       await _fetch();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Item ditandai served oleh kitchen')),
+        const SnackBar(content: Text('Status item berhasil diperbarui')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -658,7 +658,8 @@ class _ItemsCard extends StatelessWidget {
               final canMarkThis = canMarkKitchenServed &&
                   onMarkKitchenServed != null &&
                   detailId != null &&
-                  isKitchenItemAwaitingServe(m);
+                  isItemAwaitingServe(m);
+              final serveLabel = serveButtonLabelForItem(m);
               final isMarking = detailId != null && markingDetailId == detailId;
 
               return Padding(
@@ -722,7 +723,7 @@ class _ItemsCard extends StatelessWidget {
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.restaurant_rounded, size: 18),
-                          label: const Text('Tandai Served Kitchen'),
+                          label: Text(serveLabel),
                         ),
                       ),
                     ],

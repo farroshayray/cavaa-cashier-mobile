@@ -588,7 +588,19 @@ class LocalOrdersDao {
     for (final item in details) {
       final itemId = _toInt(item['id']);
       if (itemId != null && detailIds.contains(itemId)) {
-        item['status'] = 'SERVED BY KITCHEN';
+        final status = (item['status'] ?? '').toString();
+        final rawKitchen = item['kitchen_process_id'];
+        final kitchenId = rawKitchen == null
+            ? null
+            : int.tryParse(rawKitchen.toString());
+        final inKitchen = status == 'PROCESSED_BY_CASHIER' ||
+            (kitchenId != null && kitchenId > 0);
+
+        item['status'] =
+            inKitchen ? 'SERVED BY KITCHEN' : 'SERVED BY CASHIER';
+        if (!inKitchen) {
+          item['cashier_process_id'] = item['cashier_process_id'] ?? -1;
+        }
         updatedCount++;
       }
     }

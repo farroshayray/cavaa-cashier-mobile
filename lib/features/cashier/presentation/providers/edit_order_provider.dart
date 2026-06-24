@@ -582,6 +582,10 @@ class EditOrderProvider extends ChangeNotifier {
     required Map<String, dynamic> currentSnapshot,
     String? snapshotJson,
   }) async {
+    final targetStatus = orderStatus == 'OPENBILL_CONFIRMATION'
+        ? 'OPENBILL_WAITING_ORDER'
+        : 'PROCESSED';
+
     if (serverId != null && serverId! > 0) {
       if (isOnline) {
         await ordersRepo.processOrder(serverId!);
@@ -596,7 +600,7 @@ class EditOrderProvider extends ChangeNotifier {
         await cachedProcessOrdersDao.saveDetailJson(serverId!, processedJson);
         await localOrdersDao.updateOrderStatusByServerId(
           serverId: serverId!,
-          status: 'PROCESSED',
+          status: targetStatus,
         );
 
         return processed;
@@ -607,12 +611,12 @@ class EditOrderProvider extends ChangeNotifier {
       await cachedProcessOrdersDao.saveDetailJson(serverId!, json);
       await localOrdersDao.updateOrderStatusByServerId(
         serverId: serverId!,
-        status: 'PROCESSED',
+        status: targetStatus,
       );
 
       return {
         ...currentSnapshot,
-        'order_status': 'PROCESSED',
+        'order_status': targetStatus,
         'pending_process': true,
       };
     }
@@ -620,11 +624,11 @@ class EditOrderProvider extends ChangeNotifier {
     if (localId != null && localId!.isNotEmpty) {
       await localOrdersDao.updateOrderStatusLocal(
         localId: localId!,
-        status: 'PROCESSED',
+        status: targetStatus,
       );
       return {
         ...currentSnapshot,
-        'order_status': 'PROCESSED',
+        'order_status': targetStatus,
       };
     }
 

@@ -39,19 +39,26 @@ bool canMarkKitchenServed(Map<String, dynamic> order) {
   }.contains(status);
 }
 
-bool isKitchenItemAwaitingServe(Map<String, dynamic> item) {
+bool isItemInKitchenProcess(Map<String, dynamic> item) {
   final status = (item['status'] ?? '').toString();
-  if (status == 'SERVED BY KITCHEN' || status == 'SERVED BY CASHIER') {
-    return false;
-  }
+  if (status == 'PROCESSED_BY_CASHIER') return true;
 
   final rawKitchenProcessId = item['kitchen_process_id'];
   final kitchenProcessId = rawKitchenProcessId == null
       ? null
       : num.tryParse(rawKitchenProcessId.toString())?.toInt();
 
-  return status == 'PROCESSED_BY_CASHIER' ||
-      (kitchenProcessId != null && kitchenProcessId > 0);
+  return kitchenProcessId != null && kitchenProcessId > 0;
+}
+
+bool isItemAwaitingServe(Map<String, dynamic> item) {
+  final status = (item['status'] ?? '').toString();
+  return status != 'SERVED BY KITCHEN' && status != 'SERVED BY CASHIER';
+}
+
+String serveButtonLabelForItem(Map<String, dynamic> item) {
+  if (isItemInKitchenProcess(item)) return 'Tandai Served Kitchen';
+  return 'Tandai Served';
 }
 
 bool isOrderDetailLocked(Map<String, dynamic> item) {

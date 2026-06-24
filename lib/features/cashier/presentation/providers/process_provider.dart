@@ -764,7 +764,7 @@ class ProcessProvider extends ChangeNotifier {
       return {
         'status': 'offline_success',
         'offline': true,
-        'message': 'Item berhasil ditandai served oleh kitchen',
+        'message': 'Status item berhasil diperbarui',
         ...result,
       };
     }
@@ -793,7 +793,7 @@ class ProcessProvider extends ChangeNotifier {
 
       return {
         'status': 'ok',
-        'message': 'Item berhasil ditandai served oleh kitchen',
+        'message': 'Status item berhasil diperbarui',
         'data': updated,
       };
     } on DioException catch (e) {
