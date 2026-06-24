@@ -1307,6 +1307,7 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                             final qty = _toNum(item['quantity']).toInt();
                             final name = (item['product_name'] ?? 'Produk').toString();
                             final note = (item['customer_note'] ?? '').toString().trim();
+                            final optionLines = _orderDetailOptionLines(item, qty);
                             final state = _resolveProcessItemState(item, order);
                             final checked = _selectedIds.contains(itemId);
 
@@ -1361,12 +1362,28 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                                               if (state != null) _ProcessItemStateBadge(state: state),
                                             ],
                                           ),
+                                          if (optionLines.isNotEmpty) ...[
+                                            const SizedBox(height: 6),
+                                            ...optionLines.map(
+                                              (line) => Padding(
+                                                padding: const EdgeInsets.only(bottom: 2),
+                                                child: Text(
+                                                  '- $line',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.black.withOpacity(0.65),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                           if (note.isNotEmpty) ...[
                                             const SizedBox(height: 4),
                                             Text(
-                                              note,
+                                              'Catatan: $note',
                                               style: TextStyle(
                                                 fontSize: 12,
+                                                fontStyle: FontStyle.italic,
                                                 color: Colors.black.withOpacity(0.55),
                                               ),
                                             ),
@@ -1472,6 +1489,43 @@ class _ProcessItemStateBadge extends StatelessWidget {
 enum _ProcessItemState {
   processing,
   served,
+}
+
+List<String> _orderDetailOptionLines(Map<String, dynamic> item, int qty) {
+  final opts = (item['order_detail_options'] as List?) ?? [];
+  final lines = <String>[];
+
+  for (final raw in opts) {
+    if (raw is! Map) continue;
+    final om = Map<String, dynamic>.from(raw);
+
+    String optName;
+    String parentName;
+
+    if (om['option'] is Map) {
+      final opt = Map<String, dynamic>.from(om['option'] as Map);
+      optName = (opt['name'] ?? '-').toString();
+      parentName = opt['parent'] is Map
+          ? (opt['parent']['name'] ?? '').toString()
+          : '';
+    } else {
+      optName =
+          (om['partner_product_option_name'] ?? om['name'] ?? '-').toString();
+      parentName = (om['parent_name'] ?? '').toString();
+    }
+
+    final price = _toNum(om['price']);
+    final priceText =
+        price > 0 ? ' (+ Rp ${_rupiah(price * qty)})' : '';
+
+    if (parentName.isNotEmpty) {
+      lines.add('$parentName: $optName$priceText');
+    } else {
+      lines.add('$optName$priceText');
+    }
+  }
+
+  return lines;
 }
 
 _ProcessItemState? _resolveProcessItemState(
