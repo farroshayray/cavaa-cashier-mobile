@@ -68,37 +68,45 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
     final editVm = context.read<EditOrderProvider>();
     final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
 
-    final sendToProcess = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Simpan Perubahan'),
-        content: const Text(
-          'Pilih tindakan setelah menyimpan:\n\n'
-          '• Kirim ke Proses Kitchen — order masuk tab Proses dan langsung terkonfirmasi, '
-          'sehingga kitchen dapat melihat pesanan.\n\n'
-          '• Tetap di Stage Ini — hanya memperbarui menu, status order tidak berubah.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Tetap di Stage Ini'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Kirim ke Proses Kitchen'),
-          ),
-        ],
-      ),
-    );
+    final allServedFlow = editVm.allItemsServed;
+    bool? sendToProcess;
 
-    if (sendToProcess == null || !mounted) return;
+    if (!allServedFlow) {
+      sendToProcess = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Simpan Perubahan'),
+          content: const Text(
+            'Pilih tindakan setelah menyimpan:\n\n'
+            '• Kirim ke Proses Kitchen — order masuk tab Proses dan langsung terkonfirmasi, '
+            'sehingga kitchen dapat melihat pesanan.\n\n'
+            '• Tetap di Stage Ini — hanya memperbarui menu, status order tidak berubah.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Tetap di Stage Ini'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Kirim ke Proses Kitchen'),
+            ),
+          ],
+        ),
+      );
+
+      if (sendToProcess == null || !mounted) return;
+    }
 
     try {
-      await editVm.save(isOnline: isOnline, sendToProcess: sendToProcess);
+      await editVm.save(
+        isOnline: isOnline,
+        sendToProcess: sendToProcess ?? false,
+      );
       if (!mounted) return;
       await widget.onSaved();
       if (!mounted) return;
@@ -106,13 +114,17 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            sendToProcess
-                ? (isOnline
-                    ? 'Order diperbarui dan dikirim ke Proses Kitchen'
-                    : 'Perubahan disimpan, order akan dikirim ke kitchen saat online')
-                : (isOnline
-                    ? 'Order berhasil diperbarui'
-                    : 'Perubahan disimpan, menunggu sinkronisasi'),
+            allServedFlow
+                ? (editVm.isOpenbillOrder
+                    ? 'Semua item sudah served, order dipindahkan ke pembayaran'
+                    : 'Semua item sudah served, order selesai diproses')
+                : (sendToProcess == true
+                    ? (isOnline
+                        ? 'Order diperbarui dan dikirim ke Proses Kitchen'
+                        : 'Perubahan disimpan, order akan dikirim ke kitchen saat online')
+                    : (isOnline
+                        ? 'Order berhasil diperbarui'
+                        : 'Perubahan disimpan, menunggu sinkronisasi')),
           ),
         ),
       );

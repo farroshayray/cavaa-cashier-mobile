@@ -67,8 +67,21 @@ class EditOrderProvider extends ChangeNotifier {
   bool isPpnActive = false;
   num ppnPercent = 0;
   String? paymentMethodEffective;
+  bool openbillFlag = false;
 
   final List<EditableCartItem> items = [];
+
+  bool get isOpenbillOrder =>
+      openbillFlag ||
+      paymentMethodEffective == 'OPENBILL' ||
+      orderStatus.startsWith('OPENBILL');
+
+  bool get allItemsServed {
+    if (items.isEmpty) return false;
+    return items.every(
+      (item) => isDetailServedStatus(item.detailStatusSnapshot ?? ''),
+    );
+  }
 
   num get subtotal => items.fold<num>(0, (sum, item) => sum + item.lineTotal);
 
@@ -95,6 +108,7 @@ class EditOrderProvider extends ChangeNotifier {
     isPpnActive = false;
     ppnPercent = 0;
     paymentMethodEffective = null;
+    openbillFlag = false;
     items.clear();
   }
 
@@ -119,6 +133,7 @@ class EditOrderProvider extends ChangeNotifier {
       isPpnActive = parseBool(order['is_ppn_active']);
       ppnPercent = parseNum(order['ppn']);
       paymentMethodEffective = order['payment_method']?.toString();
+      openbillFlag = parseBool(order['openbill_flag']);
 
       final table = order['table'];
       if (table is Map) {
@@ -153,7 +168,7 @@ class EditOrderProvider extends ChangeNotifier {
             detailId: detailId,
             isLocked: locked,
             lockStatusLabel: lockLabel,
-            detailStatusSnapshot: locked ? detailStatusOf(detail) : null,
+            detailStatusSnapshot: detailStatusOf(detail),
             kitchenProcessIdSnapshot:
                 locked ? detailKitchenProcessId(detail) : null,
             minQty: locked ? qty : 1,
@@ -289,6 +304,10 @@ class EditOrderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (allItemsServed) {
+        orderStatus = isOpenbillOrder ? 'UNPAID' : 'SERVED';
+      }
+
       final payload = buildItemsPayload();
       final snapshot = await _buildSnapshotMap();
       final snapshotJson = jsonEncode(snapshot);
@@ -304,9 +323,6 @@ class EditOrderProvider extends ChangeNotifier {
           items: payload,
         );
 
-        await cachedPaymentOrdersDao.upsertDetailFromApi(updated);
-        await cachedProcessOrdersDao.saveDetailJson(serverId!, jsonEncode(updated));
-
         if (localId != null && localId!.isNotEmpty) {
           await localOrdersDao.replaceLocalOrderItemsFromEdit(
             localId: localId!,
@@ -317,6 +333,13 @@ class EditOrderProvider extends ChangeNotifier {
             syncStatus: 'SYNCED',
           );
         }
+
+        if (allItemsServed) {
+          return _transitionOrderAfterAllServed(updated, isOnline: isOnline);
+        }
+
+        await cachedPaymentOrdersDao.upsertDetailFromApi(updated);
+        await cachedProcessOrdersDao.saveDetailJson(serverId!, jsonEncode(updated));
 
         if (sendToProcess) {
           return _sendOrderToProcess(
@@ -344,6 +367,10 @@ class EditOrderProvider extends ChangeNotifier {
         tableServerId: tableServerId,
         customerName: customerName,
       );
+
+      if (allItemsServed) {
+        return _transitionOrderAfterAllServed(snapshot, isOnline: isOnline);
+      }
 
       if (serverId != null && serverId! > 0) {
         await cachedPaymentOrdersDao.upsertDetailFromApi(snapshot);
@@ -426,7 +453,7 @@ class EditOrderProvider extends ChangeNotifier {
         'quantity': item.qty,
         'customer_note': item.note,
         'order_detail_options': optionRows,
-        if (item.isLocked && item.detailStatusSnapshot != null &&
+        if (item.detailStatusSnapshot != null &&
             item.detailStatusSnapshot!.isNotEmpty)
           'status': item.detailStatusSnapshot,
         if (item.isLocked && item.kitchenProcessIdSnapshot != null)
@@ -585,6 +612,62 @@ class EditOrderProvider extends ChangeNotifier {
       return 'Sudah selesai';
     }
     return 'Sudah diproses';
+  }
+
+  Future<Map<String, dynamic>> _transitionOrderAfterAllServed(
+    Map<String, dynamic> order, {
+    required bool isOnline,
+  }) async {
+    final openbill = isOpenbillOrder ||
+        parseBool(order['openbill_flag']) ||
+        order['payment_method']?.toString() == 'OPENBILL' ||
+        (order['order_status'] ?? '').toString().startsWith('OPENBILL');
+    final fallbackStatus = openbill ? 'UNPAID' : 'SERVED';
+    final status = (order['order_status'] ?? fallbackStatus).toString();
+    final normalized = <String, dynamic>{
+      ...order,
+      'order_status': status,
+    };
+
+    orderStatus = status;
+
+    if (serverId != null && serverId! > 0) {
+      await cachedProcessOrdersDao.deleteByServerId(serverId!);
+
+      if (status == 'UNPAID' ||
+          status == 'EXPIRED' ||
+          status == 'PAYMENT REQUEST') {
+        await cachedPaymentOrdersDao.upsertDetailFromApi(normalized);
+      }
+
+      await localOrdersDao.updateOrderStatusByServerId(
+        serverId: serverId!,
+        status: status,
+      );
+    }
+
+    final effectiveLocalId = localId;
+    if (effectiveLocalId != null && effectiveLocalId.isNotEmpty) {
+      if (openbill && status == 'UNPAID') {
+        final current = await localOrdersDao.getOrderByLocalId(effectiveLocalId);
+        final nextSync = !isOnline && current?.syncStatus == 'PENDING_UPDATE'
+            ? 'PENDING_UPDATE'
+            : (isOnline ? 'SYNCED' : 'PENDING_FINISH');
+
+        await localOrdersDao.updateOrderStatusByLocalId(
+          localId: effectiveLocalId,
+          status: status,
+          syncStatus: nextSync,
+        );
+      } else {
+        await localOrdersDao.updateOrderStatusLocal(
+          localId: effectiveLocalId,
+          status: status,
+        );
+      }
+    }
+
+    return normalized;
   }
 
   Future<Map<String, dynamic>> _sendOrderToProcess({
