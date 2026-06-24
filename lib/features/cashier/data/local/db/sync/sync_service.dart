@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import '/features/cashier/data/models/checkout_exceptions.dart';
@@ -259,6 +260,27 @@ class SyncService {
         order = await localOrdersDao.getOrderByLocalId(localOrderId);
         if (order == null) {
           throw Exception('Order hilang setelah attach server identity');
+        }
+      }
+
+      if (order.syncStatus == 'PENDING_UPDATE' &&
+          serverId != null &&
+          serverId > 0) {
+        debugPrint(
+          '🔹 STEP UPDATE check localId=$localOrderId serverId=$serverId',
+        );
+        await _syncOrderUpdate(order);
+        await localOrdersDao.markOrderUpdateSynced(localOrderId);
+
+        if (localOrderId.startsWith('shadow_edit_')) {
+          await localOrdersDao.deleteOrderByLocalId(localOrderId);
+          await reconciliationService.reconcileAll();
+          return;
+        }
+
+        order = await localOrdersDao.getOrderByLocalId(localOrderId);
+        if (order == null) {
+          throw Exception('Order hilang setelah sync update');
         }
       }
 
@@ -543,6 +565,43 @@ class SyncService {
       }
     }
     await reconciliationService.reconcileAll();
+  }
+
+  Future<void> _syncOrderUpdate(LocalOrder order) async {
+    final serverId = order.serverId;
+    if (serverId == null || serverId <= 0) {
+      throw Exception('serverId kosong untuk sync update');
+    }
+
+    final bundle = await localOrdersDao.getOrderBundle(order.localId);
+    if (bundle == null) {
+      throw Exception('order bundle not found: ${order.localId}');
+    }
+
+    final itemsPayload = bundle.items.map((item) {
+      final options = bundle.optionsByItemId[item.localId] ?? const [];
+      final optionIds = options.map((e) => e.optionServerId).toList();
+
+      return <String, dynamic>{
+        if (item.serverOrderDetailId != null)
+          'detail_id': item.serverOrderDetailId,
+        'product_id': item.productServerId,
+        'qty': item.qty,
+        'note': item.customerNote,
+        'option_ids': optionIds,
+        if (item.promoId != null) 'promo_id': item.promoId,
+      };
+    }).toList();
+
+    final updated = await ordersRepo.updateOrder(
+      id: serverId,
+      orderTable: order.tableServerId,
+      orderName: order.customerName,
+      items: itemsPayload,
+    );
+
+    await cachedPaymentOrdersDao.upsertDetailFromApi(updated);
+    await cachedProcessOrdersDao.saveDetailJson(serverId, jsonEncode(updated));
   }
 
   Future<Map<String, dynamic>> _createOrderOnBackend(LocalOrder order) async {

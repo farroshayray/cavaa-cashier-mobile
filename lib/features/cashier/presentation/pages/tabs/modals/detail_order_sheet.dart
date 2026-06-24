@@ -10,11 +10,19 @@ class DetailOrderSheet extends StatefulWidget {
     required this.orderId,
     required this.loadDetail,
     this.stockConflictMessage,
+    this.canEdit = false,
+    this.canDelete = false,
+    this.onEdit,
+    this.onDelete,
   });
 
   final int orderId;
   final Future<Map<String, dynamic>> Function(int id) loadDetail;
   final String? stockConflictMessage;
+  final bool canEdit;
+  final bool canDelete;
+  final VoidCallback? onEdit;
+  final Future<void> Function()? onDelete;
 
   @override
   State<DetailOrderSheet> createState() => _DetailOrderSheetState();
@@ -114,6 +122,10 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
                           : _Body(
                               order: _order!,
                               stockConflictMessage: widget.stockConflictMessage,
+                              canEdit: widget.canEdit,
+                              canDelete: widget.canDelete,
+                              onEdit: widget.onEdit,
+                              onDelete: widget.onDelete,
                             ),
                 ),
               ],
@@ -187,10 +199,18 @@ class _Body extends StatelessWidget {
   const _Body({
     required this.order,
     this.stockConflictMessage,
+    this.canEdit = false,
+    this.canDelete = false,
+    this.onEdit,
+    this.onDelete,
   });
 
   final Map<String, dynamic> order;
   final String? stockConflictMessage;
+  final bool canEdit;
+  final bool canDelete;
+  final VoidCallback? onEdit;
+  final Future<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +257,40 @@ class _Body extends StatelessWidget {
           ],
 
           _ItemsCard(order: order),
+
+          if (canEdit || canDelete) ...[
+            const SizedBox(height: 16),
+            if (canEdit && onEdit != null)
+              ElevatedButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_rounded, size: 18),
+                label: const Text('Ubah Order'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFAE1504),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            if (canDelete && onDelete != null) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () async => onDelete!.call(),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('Hapus Order'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFDC2626),
+                  side: const BorderSide(color: Color(0xFFFECACA)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );

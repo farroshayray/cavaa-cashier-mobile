@@ -8,6 +8,9 @@ import '../../providers/done_provider.dart';
 import '../../../../scanner/pages/barcode_scanner_page.dart';
 import '/features/cashier/presentation/pages/tabs/modals/payment_process_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
+import '/features/cashier/presentation/pages/tabs/modals/edit_order_sheet.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
+import '/features/cashier/presentation/utils/order_delete_helper.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 
@@ -372,20 +375,7 @@ class _PaymentViewState extends State<_PaymentView> {
                       child: _PaymentOrderCard(
                         data: data,
                         onDetail: () async {
-                          await showModalBottomSheet(
-                            context: context,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.92,
-                              child: DetailOrderSheet(
-                                orderId: id,
-                                stockConflictMessage: data['last_error']?.toString(),
-                                loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
-                              ),
-                            ),
-                          );
+                          await _openPaymentOrderDetail(context, data, id);
                         },
                         onDelete: () async {
                           final isLocalOnly = data['is_local_only'] == true;
@@ -1021,7 +1011,10 @@ class _PaymentOrderCard extends StatelessWidget {
       );
     }
 
-    if (isLocalOnly || syncStatus == 'PENDING' || syncStatus == 'PENDING_FINISH') {
+    if (isLocalOnly ||
+        syncStatus == 'PENDING' ||
+        syncStatus == 'PENDING_UPDATE' ||
+        syncStatus == 'PENDING_FINISH') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -1196,3 +1189,50 @@ String? _formatOrderDateTime(Map<String, dynamic> data) {
 }
 
 String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
+Future<void> _openPaymentOrderDetail(
+  BuildContext context,
+  Map<String, dynamic> data,
+  int id,
+) async {
+  final paymentProvider = context.read<PaymentProvider>();
+  final editable = canEditOrder(data);
+  final syncStatus = (data['sync_status'] ?? '').toString();
+
+  await showModalBottomSheet(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => SizedBox(
+      height: MediaQuery.of(sheetCtx).size.height * 0.92,
+      child: DetailOrderSheet(
+        orderId: id,
+        stockConflictMessage: data['last_error']?.toString(),
+        loadDetail: (_) => paymentProvider.getOrderDetailFromListItem(data),
+        canEdit: editable && syncStatus != 'PENDING_DELETE',
+        canDelete: canDeleteUnpaidOrder(data) && syncStatus != 'PENDING_DELETE',
+        onEdit: editable && syncStatus != 'PENDING_DELETE'
+            ? () async {
+                Navigator.of(sheetCtx).pop();
+                final detail = await paymentProvider.getOrderDetailFromListItem(data);
+                if (!context.mounted) return;
+                await showModalBottomSheet(
+                  context: context,
+                  useRootNavigator: true,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => EditOrderSheet(
+                    order: detail,
+                    onSaved: () => paymentProvider.load(),
+                  ),
+                );
+              }
+            : null,
+        onDelete: editable && syncStatus != 'PENDING_DELETE'
+            ? () => confirmDeleteUnpaidOrder(context, data)
+            : null,
+      ),
+    ),
+  );
+}

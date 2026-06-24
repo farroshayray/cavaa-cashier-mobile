@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'models/checkout_exceptions.dart';
 
 class OrdersApi {
   final Dio dio;
@@ -56,6 +57,41 @@ class OrdersApi {
     final data = resp.data;
     if (data is Map<String, dynamic>) return data;
     return {"message": "Order deleted"};
+  }
+
+  Future<Map<String, dynamic>> updateOrder({
+    required int id,
+    int? orderTable,
+    String? orderName,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final payload = <String, dynamic>{
+      'items': items,
+      if (orderTable != null) 'order_table': orderTable,
+      if (orderName != null && orderName.trim().isNotEmpty)
+        'order_name': orderName.trim(),
+    };
+
+    late final Response resp;
+    try {
+      resp = await dio.post(
+        '/api/v1/mobile/cashier/update-order/$id',
+        data: payload,
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        final map = Map<String, dynamic>.from(data);
+        if (map['code'] == 'STOCK_INSUFFICIENT') {
+          throw StockInsufficientException.fromResponse(map);
+        }
+      }
+      rethrow;
+    }
+
+    final data = resp.data;
+    if (data is Map<String, dynamic>) return data;
+    throw Exception('Response JSON bukan object');
   }
 
   Future<Map<String, dynamic>> paymentOrder({

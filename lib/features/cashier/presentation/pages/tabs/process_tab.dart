@@ -13,6 +13,9 @@ import '../../providers/process_provider.dart';
 import '../../providers/payment_provider.dart';
 
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
+import '/features/cashier/presentation/pages/tabs/modals/edit_order_sheet.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
+import '/features/cashier/presentation/utils/order_delete_helper.dart';
 // kalau nanti ada modal khusus proses/selesai, import juga
 
 class ProcessTab extends StatefulWidget {
@@ -335,23 +338,8 @@ class _ProcessViewState extends State<_ProcessView> {
                         isActing: vm.isActionLoading(actionKey),
                         onDetail: () async {
                           final row = vm.items[i];
-                          final id = _toId(row['id']);
-
-                          await showModalBottomSheet(
-                            context: context,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.92,
-                              child: DetailOrderSheet(
-                                orderId: id > 0 ? id : -1,
-                                stockConflictMessage: row['last_error']?.toString(),
-                                loadDetail: (_) =>
-                                    context.read<ProcessProvider>().getOrderDetailFromListItem(row),
-                              ),
-                            ),
-                          );
+                          final detailId = _toId(row['id']);
+                          await _openProcessOrderDetail(context, row, detailId);
                         },
                         onPrint: () async {
                           final row = vm.items[i];
@@ -1633,3 +1621,54 @@ String? _formatOrderDateTime(Map<String, dynamic> data) {
 }
 
 String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
+Future<void> _openProcessOrderDetail(
+  BuildContext context,
+  Map<String, dynamic> row,
+  int id,
+) async {
+  final processProvider = context.read<ProcessProvider>();
+  final editable = canEditOrder(row);
+  final deletable = canDeleteUnpaidOrder(row);
+  final syncStatus = (row['sync_status'] ?? '').toString();
+
+  await showModalBottomSheet(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => SizedBox(
+      height: MediaQuery.of(sheetCtx).size.height * 0.92,
+      child: DetailOrderSheet(
+        orderId: id > 0 ? id : -1,
+        stockConflictMessage: row['last_error']?.toString(),
+        loadDetail: (_) => processProvider.getOrderDetailFromListItem(row),
+        canEdit: editable && syncStatus != 'PENDING_DELETE',
+        canDelete: deletable && syncStatus != 'PENDING_DELETE',
+        onEdit: editable && syncStatus != 'PENDING_DELETE'
+            ? () async {
+                Navigator.of(sheetCtx).pop();
+                final detail = await processProvider.getOrderDetailFromListItem(row);
+                if (!context.mounted) return;
+                await showModalBottomSheet(
+                  context: context,
+                  useRootNavigator: true,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => EditOrderSheet(
+                    order: detail,
+                    onSaved: () async {
+                      await processProvider.load();
+                      await context.read<PaymentProvider>().load();
+                    },
+                  ),
+                );
+              }
+            : null,
+        onDelete: deletable && syncStatus != 'PENDING_DELETE'
+            ? () => confirmDeleteUnpaidOrder(context, row)
+            : null,
+      ),
+    ),
+  );
+}

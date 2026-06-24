@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 
 class LocalOrderBundle {
@@ -25,6 +26,58 @@ class LocalPendingStockLine {
     required this.productId,
     required this.qty,
     required this.optionIds,
+  });
+}
+
+class LocalOrderEditOptionLine {
+  final String localId;
+  final int optionServerId;
+  final String optionNameSnapshot;
+  final double price;
+  final String? parentNameSnapshot;
+
+  const LocalOrderEditOptionLine({
+    required this.localId,
+    required this.optionServerId,
+    required this.optionNameSnapshot,
+    required this.price,
+    this.parentNameSnapshot,
+  });
+}
+
+class LocalOrderEditLine {
+  final String? localItemId;
+  final int? serverOrderDetailId;
+  final int productServerId;
+  final String productNameSnapshot;
+  final double basePrice;
+  final int qty;
+  final String? customerNote;
+  final double optionsPrice;
+  final double lineTotal;
+  final int? promoId;
+  final String? promoType;
+  final double? promoAmount;
+  final int? categoryServerId;
+  final String? categoryNameSnapshot;
+  final List<LocalOrderEditOptionLine> options;
+
+  const LocalOrderEditLine({
+    this.localItemId,
+    this.serverOrderDetailId,
+    required this.productServerId,
+    required this.productNameSnapshot,
+    required this.basePrice,
+    required this.qty,
+    this.customerNote,
+    required this.optionsPrice,
+    required this.lineTotal,
+    this.promoId,
+    this.promoType,
+    this.promoAmount,
+    this.categoryServerId,
+    this.categoryNameSnapshot,
+    this.options = const [],
   });
 }
 
@@ -77,6 +130,7 @@ class LocalOrdersDao {
     final rows = await (db.select(db.localOrders)
           ..where((tbl) => tbl.syncStatus.isIn([
                 'PENDING',
+                'PENDING_UPDATE',
                 'PENDING_PAYMENT',
                 'PENDING_PROCESS',
                 'PENDING_FINISH',
@@ -767,6 +821,173 @@ class LocalOrdersDao {
     return (db.select(db.localOrders)
           ..where((t) => t.serverId.equals(serverId)))
         .getSingleOrNull();
+  }
+
+  Future<void> replaceLocalOrderItemsFromEdit({
+    required String localId,
+    required List<LocalOrderEditLine> lines,
+    required double subtotal,
+    required double grandTotal,
+    String? orderSnapshotJson,
+    String? syncStatus,
+    int? tableServerId,
+    String? customerName,
+  }) async {
+    await db.transaction(() async {
+      final itemRows = await getItemsByOrderLocalId(localId);
+      for (final item in itemRows) {
+        await (db.delete(db.localOrderItemOptions)
+              ..where((tbl) => tbl.orderItemLocalId.equals(item.localId)))
+            .go();
+      }
+
+      await (db.delete(db.localOrderItems)
+            ..where((tbl) => tbl.orderLocalId.equals(localId)))
+          .go();
+
+      for (final line in lines) {
+        final itemLocalId =
+            line.localItemId ?? 'edit-${localId}-${line.productServerId}-${DateTime.now().microsecondsSinceEpoch}';
+
+        await createItem(
+          LocalOrderMapper.toLocalItem(
+            localId: itemLocalId,
+            orderLocalId: localId,
+            productServerId: line.productServerId,
+            productNameSnapshot: line.productNameSnapshot,
+            basePrice: line.basePrice,
+            qty: line.qty,
+            customerNote: line.customerNote,
+            optionsPrice: line.optionsPrice,
+            lineTotal: line.lineTotal,
+            promoId: line.promoId,
+            promoType: line.promoType,
+            promoAmount: line.promoAmount,
+            categoryServerId: line.categoryServerId,
+            categoryNameSnapshot: line.categoryNameSnapshot,
+          ).copyWith(
+            serverOrderDetailId: Value(line.serverOrderDetailId),
+          ),
+        );
+
+        for (final opt in line.options) {
+          await createOption(
+            LocalOrderMapper.toLocalOption(
+              localId: opt.localId,
+              orderItemLocalId: itemLocalId,
+              optionServerId: opt.optionServerId,
+              optionNameSnapshot: opt.optionNameSnapshot,
+              price: opt.price,
+              parentNameSnapshot: opt.parentNameSnapshot,
+            ),
+          );
+        }
+      }
+
+      await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
+        LocalOrdersCompanion(
+          subtotal: Value(subtotal),
+          grandTotal: Value(grandTotal),
+          tableServerId: tableServerId == null ? const Value.absent() : Value(tableServerId),
+          customerName: customerName == null ? const Value.absent() : Value(customerName),
+          orderSnapshotJson: orderSnapshotJson == null
+              ? const Value.absent()
+              : Value(orderSnapshotJson),
+          syncStatus: syncStatus == null ? const Value.absent() : Value(syncStatus),
+          updatedAtLocal: Value(DateTime.now()),
+          lastError: const Value(null),
+        ),
+      );
+    });
+  }
+
+  Future<void> markOrderPendingUpdate({
+    required String localId,
+    required String orderSnapshotJson,
+    required double subtotal,
+    required double grandTotal,
+  }) async {
+    await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
+      LocalOrdersCompanion(
+        syncStatus: const Value('PENDING_UPDATE'),
+        orderSnapshotJson: Value(orderSnapshotJson),
+        subtotal: Value(subtotal),
+        grandTotal: Value(grandTotal),
+        updatedAtLocal: Value(DateTime.now()),
+        lastError: const Value(null),
+      ),
+    );
+  }
+
+  Future<void> markOrderUpdateSynced(String localId) async {
+    final current = await getOrderByLocalId(localId);
+    if (current == null) return;
+
+    final nextSync = current.orderStatusLocal == 'UNPAID' &&
+            current.backendSyncStage == 'PURCHASED'
+        ? 'SYNCED'
+        : current.syncStatus == 'PENDING_UPDATE'
+            ? (current.orderStatusLocal == 'UNPAID' ? 'SYNCED' : 'PENDING')
+            : 'SYNCED';
+
+    await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
+      LocalOrdersCompanion(
+        syncStatus: Value(nextSync),
+        updatedAtLocal: Value(DateTime.now()),
+        lastError: const Value(null),
+      ),
+    );
+  }
+
+  Future<void> ensureShadowEditOrder({
+    required int serverId,
+    required String bookingOrderCode,
+    required String customerName,
+    required int? tableServerId,
+    required String? tableNoSnapshot,
+    required String orderStatusLocal,
+    required String? paymentMethodEffective,
+    required double subtotal,
+    required double grandTotal,
+    required bool isPpnActive,
+    required double ppnPercent,
+    required String orderSnapshotJson,
+  }) async {
+    final localId = 'shadow_edit_$serverId';
+    final existing = await getOrderByLocalId(localId);
+
+    if (existing != null) {
+      await markOrderPendingUpdate(
+        localId: localId,
+        orderSnapshotJson: orderSnapshotJson,
+        subtotal: subtotal,
+        grandTotal: grandTotal,
+      );
+      return;
+    }
+
+    await createOrder(
+      LocalOrdersCompanion(
+        localId: Value(localId),
+        serverId: Value(serverId),
+        serverOrderCode: Value(bookingOrderCode),
+        clientOrderCode: Value(bookingOrderCode),
+        customerName: Value(customerName),
+        tableServerId: Value(tableServerId),
+        tableNoSnapshot: Value(tableNoSnapshot),
+        paymentMethodEffective: Value(paymentMethodEffective),
+        subtotal: Value(subtotal),
+        grandTotal: Value(grandTotal),
+        isPpnActive: Value(isPpnActive),
+        ppnPercent: Value(ppnPercent),
+        orderStatusLocal: Value(orderStatusLocal),
+        syncStatus: const Value('PENDING_UPDATE'),
+        backendSyncStage: const Value('PURCHASED'),
+        orderSnapshotJson: Value(orderSnapshotJson),
+        createdAtLocal: Value(DateTime.now()),
+        updatedAtLocal: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> updateOrderStatusByServerId({

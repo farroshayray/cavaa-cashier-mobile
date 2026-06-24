@@ -27,6 +27,20 @@ class OrdersRepository {
     return api.softDeleteOrder(id: id);
   }
 
+  Future<Map<String, dynamic>> updateOrder({
+    required int id,
+    int? orderTable,
+    String? orderName,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    return api.updateOrder(
+      id: id,
+      orderTable: orderTable,
+      orderName: orderName,
+      items: items,
+    );
+  }
+
   Future<Map<String, dynamic>> paymentOrder({
     required int id,
     required num paidAmount,

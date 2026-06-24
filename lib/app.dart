@@ -21,6 +21,7 @@ import 'features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/preference/printer_prefs.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
+import '/features/cashier/presentation/providers/edit_order_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
@@ -185,6 +186,14 @@ class _CavaaAppState extends State<CavaaApp> {
           create: (_) => PurchaseProvider(
             repo: purchaseRepo,
             localOrdersDao: localOrdersDao,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => EditOrderProvider(
+            ordersRepo: ordersRepo,
+            localOrdersDao: localOrdersDao,
+            cachedPaymentOrdersDao: cachedPaymentOrdersDao,
+            cachedProcessOrdersDao: cachedProcessOrdersDao,
           ),
         ),
         ChangeNotifierProvider(
