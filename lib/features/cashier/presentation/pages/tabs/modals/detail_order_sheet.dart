@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/presentation/printing/order_list_printer.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class DetailOrderSheet extends StatefulWidget {
   const DetailOrderSheet({
@@ -12,8 +13,10 @@ class DetailOrderSheet extends StatefulWidget {
     this.stockConflictMessage,
     this.canEdit = false,
     this.canDelete = false,
+    this.canMarkKitchenServed = false,
     this.onEdit,
     this.onDelete,
+    this.onMarkKitchenServed,
   });
 
   final int orderId;
@@ -21,8 +24,10 @@ class DetailOrderSheet extends StatefulWidget {
   final String? stockConflictMessage;
   final bool canEdit;
   final bool canDelete;
+  final bool canMarkKitchenServed;
   final VoidCallback? onEdit;
   final Future<void> Function()? onDelete;
+  final Future<void> Function(int detailId)? onMarkKitchenServed;
 
   @override
   State<DetailOrderSheet> createState() => _DetailOrderSheetState();
@@ -31,6 +36,7 @@ class DetailOrderSheet extends StatefulWidget {
 class _DetailOrderSheetState extends State<DetailOrderSheet> {
   bool _loading = true;
   bool _printing = false;
+  int? _markingDetailId;
   String? _error;
   Map<String, dynamic>? _order;
 
@@ -94,6 +100,27 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
     }
   }
 
+  Future<void> _markKitchenServed(int detailId) async {
+    if (widget.onMarkKitchenServed == null || _markingDetailId != null) return;
+
+    setState(() => _markingDetailId = detailId);
+    try {
+      await widget.onMarkKitchenServed!(detailId);
+      await _fetch();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Item ditandai served oleh kitchen')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal update status: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _markingDetailId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
@@ -124,8 +151,13 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
                               stockConflictMessage: widget.stockConflictMessage,
                               canEdit: widget.canEdit,
                               canDelete: widget.canDelete,
+                              canMarkKitchenServed: widget.canMarkKitchenServed,
+                              markingDetailId: _markingDetailId,
                               onEdit: widget.onEdit,
                               onDelete: widget.onDelete,
+                              onMarkKitchenServed: widget.onMarkKitchenServed == null
+                                  ? null
+                                  : _markKitchenServed,
                             ),
                 ),
               ],
@@ -201,16 +233,22 @@ class _Body extends StatelessWidget {
     this.stockConflictMessage,
     this.canEdit = false,
     this.canDelete = false,
+    this.canMarkKitchenServed = false,
+    this.markingDetailId,
     this.onEdit,
     this.onDelete,
+    this.onMarkKitchenServed,
   });
 
   final Map<String, dynamic> order;
   final String? stockConflictMessage;
   final bool canEdit;
   final bool canDelete;
+  final bool canMarkKitchenServed;
+  final int? markingDetailId;
   final VoidCallback? onEdit;
   final Future<void> Function()? onDelete;
+  final Future<void> Function(int detailId)? onMarkKitchenServed;
 
   @override
   Widget build(BuildContext context) {
@@ -256,7 +294,12 @@ class _Body extends StatelessWidget {
             const SizedBox(height: 12),
           ],
 
-          _ItemsCard(order: order),
+          _ItemsCard(
+            order: order,
+            canMarkKitchenServed: canMarkKitchenServed,
+            markingDetailId: markingDetailId,
+            onMarkKitchenServed: onMarkKitchenServed,
+          ),
 
           if (canEdit || canDelete) ...[
             const SizedBox(height: 16),
@@ -566,8 +609,17 @@ class _PaymentNoteCard extends StatelessWidget {
 }
 
 class _ItemsCard extends StatelessWidget {
-  const _ItemsCard({required this.order});
+  const _ItemsCard({
+    required this.order,
+    this.canMarkKitchenServed = false,
+    this.markingDetailId,
+    this.onMarkKitchenServed,
+  });
+
   final Map<String, dynamic> order;
+  final bool canMarkKitchenServed;
+  final int? markingDetailId;
+  final Future<void> Function(int detailId)? onMarkKitchenServed;
 
   @override
   Widget build(BuildContext context) {
@@ -602,6 +654,12 @@ class _ItemsCard extends StatelessWidget {
 
               final opts = (m['order_detail_options'] as List?) ?? [];
               final itemState = _resolveKitchenItemState(m, order);
+              final detailId = orderDetailId(m);
+              final canMarkThis = canMarkKitchenServed &&
+                  onMarkKitchenServed != null &&
+                  detailId != null &&
+                  isKitchenItemAwaitingServe(m);
+              final isMarking = detailId != null && markingDetailId == detailId;
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -648,6 +706,25 @@ class _ItemsCard extends StatelessWidget {
                           ),
                         );
                       }),
+                    ],
+                    if (canMarkThis) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: isMarking
+                              ? null
+                              : () => onMarkKitchenServed!(detailId!),
+                          icon: isMarking
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.restaurant_rounded, size: 18),
+                          label: const Text('Tandai Served Kitchen'),
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 10),
                     Container(height: 1, color: Colors.black.withOpacity(0.06)),
@@ -704,7 +781,13 @@ class _KitchenStateBadge extends StatelessWidget {
         icon = Icons.timelapse_rounded;
         label = 'Diproses';
         break;
-      case _KitchenItemState.served:
+      case _KitchenItemState.servedKitchen:
+        bg = const Color(0xFFDCFCE7);
+        fg = const Color(0xFF047857);
+        icon = Icons.check_circle_rounded;
+        label = 'Served Kitchen';
+        break;
+      case _KitchenItemState.servedCashier:
         bg = const Color(0xFFDCFCE7);
         fg = const Color(0xFF047857);
         icon = Icons.check_circle_rounded;
@@ -740,7 +823,8 @@ class _KitchenStateBadge extends StatelessWidget {
 // ===== helpers =====
 enum _KitchenItemState {
   processing,
-  served,
+  servedKitchen,
+  servedCashier,
 }
 
 num _num(dynamic v) {
@@ -811,8 +895,16 @@ _KitchenItemState? _resolveKitchenItemState(
   final status = (item['status'] ?? '').toString();
   final orderStatus = (order['order_status'] ?? '').toString();
 
-  if (status == 'SERVED BY KITCHEN' || status == 'SERVED BY CASHIER' || orderStatus == 'SERVED') {
-    return _KitchenItemState.served;
+  if (status == 'SERVED BY KITCHEN') {
+    return _KitchenItemState.servedKitchen;
+  }
+
+  if (status == 'SERVED BY CASHIER' || orderStatus == 'SERVED') {
+    return _KitchenItemState.servedCashier;
+  }
+
+  if (status == 'PROCESSED_BY_CASHIER') {
+    return _KitchenItemState.processing;
   }
 
   if (kitchenProcessId != null && kitchenProcessId > 0) {

@@ -567,6 +567,75 @@ class LocalOrdersDao {
     };
   }
 
+  Future<Map<String, dynamic>> markLocalOrderItemsServedByKitchen({
+    required String localId,
+    required List<int> detailIds,
+  }) async {
+    final detail = await getOrderDetailMapByLocalId(localId);
+    final order = await getOrderByLocalId(localId);
+
+    if (detail == null || order == null) {
+      throw Exception('Detail order lokal tidak ditemukan');
+    }
+
+    final details = ((detail['order_details'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    var updatedCount = 0;
+
+    for (final item in details) {
+      final itemId = _toInt(item['id']);
+      if (itemId != null && detailIds.contains(itemId)) {
+        item['status'] = 'SERVED BY KITCHEN';
+        updatedCount++;
+      }
+    }
+
+    if (updatedCount == 0) {
+      throw Exception('Item yang dipilih tidak ditemukan');
+    }
+
+    final allServed = details.every((item) {
+      final status = (item['status'] ?? '').toString();
+      return status == 'SERVED BY CASHIER' || status == 'SERVED BY KITCHEN';
+    });
+
+    final isOpenbill =
+        (order.paymentMethodSelected ?? order.paymentMethodEffective) == 'OPENBILL';
+    final nextStatus = allServed
+        ? (isOpenbill ? 'UNPAID' : 'SERVED')
+        : order.orderStatusLocal;
+    final nextSyncStatus = allServed
+        ? 'PENDING_FINISH'
+        : (order.syncStatus == 'STOCK_CONFLICT' ? 'STOCK_CONFLICT' : order.syncStatus);
+
+    final snapshot = Map<String, dynamic>.from(detail)
+      ..['order_details'] = details
+      ..['order_status'] = nextStatus
+      ..['sync_status'] = nextSyncStatus
+      ..['is_local_only'] = true;
+
+    await (db.update(db.localOrders)
+          ..where((t) => t.localId.equals(localId)))
+        .write(
+      LocalOrdersCompanion(
+        orderStatusLocal: Value(nextStatus),
+        syncStatus: Value(nextSyncStatus),
+        orderSnapshotJson: Value(jsonEncode(snapshot)),
+        updatedAtLocal: Value(DateTime.now()),
+        lastError: const Value(null),
+      ),
+    );
+
+    return {
+      'all_served': allServed,
+      'order_status': nextStatus,
+      'detail_count': updatedCount,
+    };
+  }
+
   Future<void> markOrderPaidOffline({
     required String localId,
     required num paidAmount,

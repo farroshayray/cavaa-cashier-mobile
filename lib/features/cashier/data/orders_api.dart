@@ -156,6 +156,22 @@ class OrdersApi {
     return {'status': 'ok'};
   }
 
+  Future<Map<String, dynamic>> markServedByKitchen({
+    required int id,
+    required List<int> detailIds,
+  }) async {
+    final resp = await dio.post(
+      '/api/v1/mobile/cashier/mark-served-by-kitchen/$id',
+      data: {
+        'detail_ids': detailIds,
+      },
+    );
+
+    final data = resp.data;
+    if (data is Map<String, dynamic>) return data;
+    throw Exception('Response JSON bukan object');
+  }
+
   Future<Map<String, dynamic>> cancelProcessOrder({
     required int id,
   }) async {

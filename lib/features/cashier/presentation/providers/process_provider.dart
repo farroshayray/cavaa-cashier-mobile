@@ -735,6 +735,78 @@ class ProcessProvider extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>> actionMarkKitchenServed(
+    Map<String, dynamic> row, {
+    required int detailId,
+  }) async {
+    final isLocalOnly = row['is_local_only'] == true;
+    final isStockConflict =
+        (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
+    final id = _toId(row['id']);
+
+    if (detailId <= 0) {
+      throw Exception('Item tidak valid');
+    }
+
+    if (isLocalOnly) {
+      final localId = (row['local_id'] ?? '').toString();
+      if (localId.isEmpty) {
+        throw Exception('Local ID tidak valid');
+      }
+
+      final result = await localOrdersDao.markLocalOrderItemsServedByKitchen(
+        localId: localId,
+        detailIds: [detailId],
+      );
+
+      await load();
+
+      return {
+        'status': 'offline_success',
+        'offline': true,
+        'message': 'Item berhasil ditandai served oleh kitchen',
+        ...result,
+      };
+    }
+
+    if (isStockConflict) {
+      throw Exception('Update served tidak tersedia saat ada konflik stok');
+    }
+
+    if (!connectivity.isOnline) {
+      throw Exception('Butuh koneksi internet untuk update served kitchen');
+    }
+
+    if (id <= 0) {
+      throw Exception('Order server tidak valid');
+    }
+
+    try {
+      final updated = await repo.markServedByKitchen(
+        id: id,
+        detailIds: [detailId],
+      );
+
+      await cachedPaymentOrdersDao.upsertDetailFromApi(updated);
+      await cachedProcessOrdersDao.saveDetailJson(id, jsonEncode(updated));
+      await load();
+
+      return {
+        'status': 'ok',
+        'message': 'Item berhasil ditandai served oleh kitchen',
+        'data': updated,
+      };
+    } on DioException catch (e) {
+      final responseData = e.response?.data;
+      if (responseData is Map) {
+        final mapped = Map<String, dynamic>.from(responseData);
+        await load();
+        return mapped;
+      }
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> actionFinish(Map<String, dynamic> row) async {
     final isLocalOnly = row['is_local_only'] == true;
     final isStockConflict =

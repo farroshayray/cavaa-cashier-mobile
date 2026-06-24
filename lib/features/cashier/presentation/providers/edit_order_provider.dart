@@ -269,7 +269,10 @@ class EditOrderProvider extends ChangeNotifier {
     }).toList();
   }
 
-  Future<Map<String, dynamic>> save({required bool isOnline}) async {
+  Future<Map<String, dynamic>> save({
+    required bool isOnline,
+    bool sendToProcess = false,
+  }) async {
     if (items.isEmpty) {
       throw Exception('Order harus memiliki minimal 1 item');
     }
@@ -308,6 +311,13 @@ class EditOrderProvider extends ChangeNotifier {
           );
         }
 
+        if (sendToProcess) {
+          return _sendOrderToProcess(
+            isOnline: true,
+            currentSnapshot: updated,
+          );
+        }
+
         return updated;
       }
 
@@ -331,6 +341,14 @@ class EditOrderProvider extends ChangeNotifier {
       if (serverId != null && serverId! > 0) {
         await cachedPaymentOrdersDao.upsertDetailFromApi(snapshot);
         await cachedProcessOrdersDao.saveDetailJson(serverId!, snapshotJson);
+      }
+
+      if (sendToProcess) {
+        return _sendOrderToProcess(
+          isOnline: isOnline,
+          currentSnapshot: snapshot,
+          snapshotJson: snapshotJson,
+        );
       }
 
       return snapshot;
@@ -557,6 +575,60 @@ class EditOrderProvider extends ChangeNotifier {
       return 'Sudah selesai';
     }
     return 'Sudah diproses';
+  }
+
+  Future<Map<String, dynamic>> _sendOrderToProcess({
+    required bool isOnline,
+    required Map<String, dynamic> currentSnapshot,
+    String? snapshotJson,
+  }) async {
+    if (serverId != null && serverId! > 0) {
+      if (isOnline) {
+        await ordersRepo.processOrder(serverId!);
+        final processed = await ordersRepo.fetchOrderDetail(serverId!);
+        final processedJson = jsonEncode(processed);
+
+        await cachedPaymentOrdersDao.upsertDetailFromApi(processed);
+        await cachedProcessOrdersDao.markProcessedOnline(
+          serverId!,
+          latestJson: processedJson,
+        );
+        await cachedProcessOrdersDao.saveDetailJson(serverId!, processedJson);
+        await localOrdersDao.updateOrderStatusByServerId(
+          serverId: serverId!,
+          status: 'PROCESSED',
+        );
+
+        return processed;
+      }
+
+      final json = snapshotJson ?? jsonEncode(currentSnapshot);
+      await cachedProcessOrdersDao.markProcessedOffline(serverId!, json);
+      await cachedProcessOrdersDao.saveDetailJson(serverId!, json);
+      await localOrdersDao.updateOrderStatusByServerId(
+        serverId: serverId!,
+        status: 'PROCESSED',
+      );
+
+      return {
+        ...currentSnapshot,
+        'order_status': 'PROCESSED',
+        'pending_process': true,
+      };
+    }
+
+    if (localId != null && localId!.isNotEmpty) {
+      await localOrdersDao.updateOrderStatusLocal(
+        localId: localId!,
+        status: 'PROCESSED',
+      );
+      return {
+        ...currentSnapshot,
+        'order_status': 'PROCESSED',
+      };
+    }
+
+    return currentSnapshot;
   }
 
   bool _sameSelected(Map<int, Set<int>> a, Map<int, Set<int>> b) {

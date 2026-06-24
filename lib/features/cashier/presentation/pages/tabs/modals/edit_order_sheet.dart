@@ -68,8 +68,34 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
     final editVm = context.read<EditOrderProvider>();
     final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
 
+    final sendToProcess = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Simpan Perubahan'),
+        content: const Text(
+          'Kirim order ke tab Proses untuk ditindaklanjuti kitchen?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Simpan Saja'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Kirim ke Proses'),
+          ),
+        ],
+      ),
+    );
+
+    if (sendToProcess == null || !mounted) return;
+
     try {
-      await editVm.save(isOnline: isOnline);
+      await editVm.save(isOnline: isOnline, sendToProcess: sendToProcess);
       if (!mounted) return;
       await widget.onSaved();
       if (!mounted) return;
@@ -77,9 +103,13 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isOnline
-                ? 'Order berhasil diperbarui'
-                : 'Perubahan disimpan, menunggu sinkronisasi',
+            sendToProcess
+                ? (isOnline
+                    ? 'Order diperbarui dan dikirim ke Proses'
+                    : 'Perubahan disimpan, order akan dikirim ke Proses saat online')
+                : (isOnline
+                    ? 'Order berhasil diperbarui'
+                    : 'Perubahan disimpan, menunggu sinkronisasi'),
           ),
         ),
       );

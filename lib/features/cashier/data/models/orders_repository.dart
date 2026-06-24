@@ -74,6 +74,13 @@ class OrdersRepository {
     return api.serveOrderItems(id: id, detailIds: detailIds);
   }
 
+  Future<Map<String, dynamic>> markServedByKitchen({
+    required int id,
+    required List<int> detailIds,
+  }) async {
+    return api.markServedByKitchen(id: id, detailIds: detailIds);
+  }
+
   Future<Map<String, dynamic>> cancelProcessOrder(int id) async {
     return api.cancelProcessOrder(id: id);
   }

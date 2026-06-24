@@ -1196,7 +1196,9 @@ Future<void> _openPaymentOrderDetail(
   int id,
 ) async {
   final paymentProvider = context.read<PaymentProvider>();
+  final processProvider = context.read<ProcessProvider>();
   final editable = canEditOrder(data);
+  final kitchenServed = canMarkKitchenServed(data);
   final syncStatus = (data['sync_status'] ?? '').toString();
 
   await showModalBottomSheet(
@@ -1212,6 +1214,21 @@ Future<void> _openPaymentOrderDetail(
         loadDetail: (_) => paymentProvider.getOrderDetailFromListItem(data),
         canEdit: editable && syncStatus != 'PENDING_DELETE',
         canDelete: canDeleteUnpaidOrder(data) && syncStatus != 'PENDING_DELETE',
+        canMarkKitchenServed: kitchenServed && syncStatus != 'PENDING_DELETE',
+        onMarkKitchenServed: kitchenServed && syncStatus != 'PENDING_DELETE'
+            ? (detailId) async {
+                final res = await processProvider.actionMarkKitchenServed(
+                  data,
+                  detailId: detailId,
+                );
+                final status = (res['status'] ?? '').toString();
+                if (status == 'warning' || status == 'error') {
+                  throw Exception((res['message'] ?? 'Gagal update status').toString());
+                }
+                await paymentProvider.load();
+                await processProvider.load();
+              }
+            : null,
         onEdit: editable && syncStatus != 'PENDING_DELETE'
             ? () async {
                 Navigator.of(sheetCtx).pop();
@@ -1224,7 +1241,10 @@ Future<void> _openPaymentOrderDetail(
                   backgroundColor: Colors.transparent,
                   builder: (_) => EditOrderSheet(
                     order: detail,
-                    onSaved: () => paymentProvider.load(),
+                    onSaved: () async {
+                      await paymentProvider.load();
+                      await processProvider.load();
+                    },
                   ),
                 );
               }
