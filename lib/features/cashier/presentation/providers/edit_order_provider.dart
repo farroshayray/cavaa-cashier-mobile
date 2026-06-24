@@ -14,6 +14,7 @@ import '/features/cashier/presentation/utils/order_edit_utils.dart';
 class EditableCartItem {
   final int? detailId;
   final bool isLocked;
+  final String? lockStatusLabel;
   final int minQty;
   CartItem cart;
 
@@ -21,6 +22,7 @@ class EditableCartItem {
     this.detailId,
     required this.cart,
     this.isLocked = false,
+    this.lockStatusLabel,
     this.minQty = 1,
   });
 
@@ -127,6 +129,7 @@ class EditOrderProvider extends ChangeNotifier {
         final productId = orderProductId(detail);
         final locked = isOrderDetailLocked(detail);
         final detailId = orderDetailId(detail);
+        final lockLabel = locked ? _lockStatusLabel(detail) : null;
 
         Product? product;
         for (final candidate in catalog) {
@@ -145,6 +148,7 @@ class EditOrderProvider extends ChangeNotifier {
           EditableCartItem(
             detailId: detailId,
             isLocked: locked,
+            lockStatusLabel: lockLabel,
             minQty: locked ? qty : 1,
             cart: CartItem(
               product: product,
@@ -210,10 +214,11 @@ class EditOrderProvider extends ChangeNotifier {
   }) {
     if (index < 0 || index >= items.length) return;
     final item = items[index];
+    if (item.isLocked) return;
     final selectedCopy = <int, Set<int>>{
       for (final entry in selected.entries) entry.key: {...entry.value},
     };
-    final nextQty = item.isLocked && qty < item.minQty ? item.minQty : qty;
+    final nextQty = qty < item.minQty ? item.minQty : qty;
 
     item.cart = CartItem(
       product: item.product,
@@ -236,15 +241,16 @@ class EditOrderProvider extends ChangeNotifier {
   void setQty(int index, int qty, {required int maxQty}) {
     if (index < 0 || index >= items.length) return;
     final item = items[index];
+    if (item.isLocked) return;
     var next = qty < item.minQty ? item.minQty : qty;
     if (next > maxQty) next = maxQty;
-    if (item.isLocked && next < item.minQty) return;
     item.qty = next;
     notifyListeners();
   }
 
   void setNote(int index, String note) {
     if (index < 0 || index >= items.length) return;
+    if (items[index].isLocked) return;
     items[index].note = note;
     notifyListeners();
   }
@@ -543,6 +549,14 @@ class EditOrderProvider extends ChangeNotifier {
     }
 
     return product.price + optionsPrice - promoAmount;
+  }
+
+  String _lockStatusLabel(Map<String, dynamic> detail) {
+    final status = (detail['status'] ?? '').toString();
+    if (status == 'SERVED BY KITCHEN' || status == 'SERVED BY CASHIER') {
+      return 'Sudah selesai';
+    }
+    return 'Sudah diproses';
   }
 
   bool _sameSelected(Map<int, Set<int>> a, Map<int, Set<int>> b) {

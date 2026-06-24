@@ -223,11 +223,17 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
                         padding: const EdgeInsets.all(16),
                         itemCount: editVm.items.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) => _EditItemRow(
-                          index: i,
-                          item: editVm.items[i],
-                          onEdit: () => _openItemEditor(i),
-                        ),
+                        itemBuilder: (_, i) {
+                          final item = editVm.items[i];
+                          if (item.isLocked) {
+                            return _LockedItemRow(item: item);
+                          }
+                          return _EditableItemRow(
+                            index: i,
+                            item: item,
+                            onEdit: () => _openItemEditor(i),
+                          );
+                        },
                       ),
               ),
             const Divider(height: 1),
@@ -292,8 +298,125 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
   }
 }
 
-class _EditItemRow extends StatefulWidget {
-  const _EditItemRow({
+class _LockedItemRow extends StatelessWidget {
+  const _LockedItemRow({required this.item});
+
+  final EditableCartItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final purchaseVm = context.watch<PurchaseProvider>();
+    final optionLines = selectedOptionTextLines(item.cart, purchaseVm);
+    final promo = item.product.promotion;
+    final hasPromo = promo != null;
+    final note = item.note.trim();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.blue.withOpacity(0.35)),
+        color: Colors.blue.withOpacity(0.04),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.product.name,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    if (hasPromo) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        promo.type == 'percentage'
+                            ? 'Diskon ${promo.value}%'
+                            : 'Potongan Rp ${_rupiah(promo.value)}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFAE1504),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  item.lockStatusLabel ?? 'Sudah diproses',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          if (optionLines.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            ...optionLines.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  line,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.62),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Catatan: $note',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.62),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                '${item.qty}x',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '@ Rp ${_rupiah(item.unitFinalPrice)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Rp ${_rupiah(item.lineTotal)}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditableItemRow extends StatefulWidget {
+  const _EditableItemRow({
     required this.index,
     required this.item,
     required this.onEdit,
@@ -304,10 +427,10 @@ class _EditItemRow extends StatefulWidget {
   final VoidCallback onEdit;
 
   @override
-  State<_EditItemRow> createState() => _EditItemRowState();
+  State<_EditableItemRow> createState() => _EditableItemRowState();
 }
 
-class _EditItemRowState extends State<_EditItemRow> {
+class _EditableItemRowState extends State<_EditableItemRow> {
   late final TextEditingController _noteC;
 
   @override
@@ -317,7 +440,7 @@ class _EditItemRowState extends State<_EditItemRow> {
   }
 
   @override
-  void didUpdateWidget(covariant _EditItemRow oldWidget) {
+  void didUpdateWidget(covariant _EditableItemRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.item.note != _noteC.text) {
       _noteC.text = widget.item.note;
@@ -354,7 +477,7 @@ class _EditItemRowState extends State<_EditItemRow> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: item.isLocked ? null : widget.onEdit,
+        onTap: widget.onEdit,
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -362,15 +485,11 @@ class _EditItemRowState extends State<_EditItemRow> {
             border: Border.all(
               color: hasBlockingWarning
                   ? Colors.redAccent.withOpacity(0.55)
-                  : item.isLocked
-                      ? Colors.blue.withOpacity(0.35)
-                      : Colors.black.withOpacity(0.10),
+                  : Colors.black.withOpacity(0.10),
             ),
-            color: item.isLocked
-                ? Colors.blue.withOpacity(0.04)
-                : hasBlockingWarning
-                    ? Colors.redAccent.withOpacity(0.04)
-                    : Colors.white,
+            color: hasBlockingWarning
+                ? Colors.redAccent.withOpacity(0.04)
+                : Colors.white,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,35 +520,18 @@ class _EditItemRowState extends State<_EditItemRow> {
                       ],
                     ),
                   ),
-                  if (item.isLocked)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Text(
-                        'Sudah diproses',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-                      ),
+                  IconButton(
+                    onPressed: widget.onEdit,
+                    icon: const Icon(Icons.tune_rounded, size: 20),
+                    tooltip: 'Ubah opsi',
+                  ),
+                  IconButton(
+                    onPressed: () => editVm.removeAt(i),
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.redAccent,
                     ),
-                  if (!item.isLocked) ...[
-                    IconButton(
-                      onPressed: widget.onEdit,
-                      icon: const Icon(Icons.tune_rounded, size: 20),
-                      tooltip: 'Ubah opsi',
-                    ),
-                    IconButton(
-                      onPressed: () => editVm.removeAt(i),
-                      icon: const Icon(
-                        Icons.delete_outline_rounded,
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
               ),
               if (stockNotices.isNotEmpty) ...[
@@ -464,7 +566,7 @@ class _EditItemRowState extends State<_EditItemRow> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: item.isLocked || item.qty <= item.minQty
+                    onPressed: item.qty <= item.minQty
                         ? null
                         : () => editVm.setQty(i, item.qty - 1, maxQty: maxQty),
                     icon: const Icon(Icons.remove_circle_outline_rounded),
@@ -495,14 +597,13 @@ class _EditItemRowState extends State<_EditItemRow> {
                 ),
                 onChanged: (v) => editVm.setNote(i, v),
               ),
-              if (!item.isLocked)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: widget.onEdit,
-                    child: const Text('Ubah opsi & qty'),
-                  ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: widget.onEdit,
+                  child: const Text('Ubah opsi & qty'),
                 ),
+              ),
             ],
           ),
         ),
