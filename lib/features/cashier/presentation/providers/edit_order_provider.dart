@@ -15,6 +15,8 @@ class EditableCartItem {
   final int? detailId;
   final bool isLocked;
   final String? lockStatusLabel;
+  final String? detailStatusSnapshot;
+  final int? kitchenProcessIdSnapshot;
   final int minQty;
   CartItem cart;
 
@@ -23,6 +25,8 @@ class EditableCartItem {
     required this.cart,
     this.isLocked = false,
     this.lockStatusLabel,
+    this.detailStatusSnapshot,
+    this.kitchenProcessIdSnapshot,
     this.minQty = 1,
   });
 
@@ -149,6 +153,9 @@ class EditOrderProvider extends ChangeNotifier {
             detailId: detailId,
             isLocked: locked,
             lockStatusLabel: lockLabel,
+            detailStatusSnapshot: locked ? detailStatusOf(detail) : null,
+            kitchenProcessIdSnapshot:
+                locked ? detailKitchenProcessId(detail) : null,
             minQty: locked ? qty : 1,
             cart: CartItem(
               product: product,
@@ -419,8 +426,11 @@ class EditOrderProvider extends ChangeNotifier {
         'quantity': item.qty,
         'customer_note': item.note,
         'order_detail_options': optionRows,
-        if (item.isLocked) 'kitchen_process_id': 1,
-        if (item.isLocked) 'status': 'PROCESSED_BY_CASHIER',
+        if (item.isLocked && item.detailStatusSnapshot != null &&
+            item.detailStatusSnapshot!.isNotEmpty)
+          'status': item.detailStatusSnapshot,
+        if (item.isLocked && item.kitchenProcessIdSnapshot != null)
+          'kitchen_process_id': item.kitchenProcessIdSnapshot,
       };
     }).toList();
 
@@ -570,8 +580,8 @@ class EditOrderProvider extends ChangeNotifier {
   }
 
   String _lockStatusLabel(Map<String, dynamic> detail) {
-    final status = (detail['status'] ?? '').toString();
-    if (status == 'SERVED BY KITCHEN' || status == 'SERVED BY CASHIER') {
+    final status = detailStatusOf(detail);
+    if (isDetailServedStatus(status)) {
       return 'Sudah selesai';
     }
     return 'Sudah diproses';
@@ -582,20 +592,21 @@ class EditOrderProvider extends ChangeNotifier {
     required Map<String, dynamic> currentSnapshot,
     String? snapshotJson,
   }) async {
-    final targetStatus = orderStatus == 'OPENBILL_CONFIRMATION'
-        ? 'OPENBILL_WAITING_ORDER'
-        : 'PROCESSED';
+    const targetStatus = 'OPENBILL_WAITING_ORDER';
 
     if (serverId != null && serverId! > 0) {
       if (isOnline) {
-        await ordersRepo.processOrder(serverId!);
-        final processed = await ordersRepo.fetchOrderDetail(serverId!);
+        final processed = await ordersRepo.processOrder(
+          serverId!,
+          sendToKitchenWaiting: true,
+        );
         final processedJson = jsonEncode(processed);
 
         await cachedPaymentOrdersDao.upsertDetailFromApi(processed);
         await cachedProcessOrdersDao.markProcessedOnline(
           serverId!,
           latestJson: processedJson,
+          orderStatus: targetStatus,
         );
         await cachedProcessOrdersDao.saveDetailJson(serverId!, processedJson);
         await localOrdersDao.updateOrderStatusByServerId(
@@ -607,7 +618,11 @@ class EditOrderProvider extends ChangeNotifier {
       }
 
       final json = snapshotJson ?? jsonEncode(currentSnapshot);
-      await cachedProcessOrdersDao.markProcessedOffline(serverId!, json);
+      await cachedProcessOrdersDao.markProcessedOffline(
+        serverId!,
+        json,
+        orderStatus: targetStatus,
+      );
       await cachedProcessOrdersDao.saveDetailJson(serverId!, json);
       await localOrdersDao.updateOrderStatusByServerId(
         serverId: serverId!,

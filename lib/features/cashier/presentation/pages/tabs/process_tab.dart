@@ -1250,9 +1250,7 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    final selectableItems = details.where((item) {
-      return _resolveProcessItemState(item, order) == null;
-    }).toList();
+    final selectableItems = details.where(isItemAwaitingCashierServe).toList();
 
     return SafeArea(
       top: false,
@@ -1480,18 +1478,14 @@ _ProcessItemState? _resolveProcessItemState(
   Map<String, dynamic> item,
   Map<String, dynamic> order,
 ) {
-  final rawKitchenProcessId = item['kitchen_process_id'];
-  final kitchenProcessId = rawKitchenProcessId == null
-      ? null
-      : num.tryParse(rawKitchenProcessId.toString())?.toInt();
-  final status = (item['status'] ?? '').toString();
+  final status = detailStatusOf(item);
   final orderStatus = (order['order_status'] ?? '').toString();
 
-  if (status == 'SERVED BY KITCHEN' || status == 'SERVED BY CASHIER' || orderStatus == 'SERVED') {
+  if (isDetailServedStatus(status) || orderStatus == 'SERVED') {
     return _ProcessItemState.served;
   }
 
-  if (kitchenProcessId != null && kitchenProcessId > 0) {
+  if (isDetailProcessingStatus(status) || isDetailWithKitchenHands(item)) {
     return _ProcessItemState.processing;
   }
 

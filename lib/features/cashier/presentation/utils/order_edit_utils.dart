@@ -9,6 +9,52 @@ const editableOrderStatuses = {
   'PROCESSED',
 };
 
+const detailServedStatuses = {
+  'SERVED BY KITCHEN',
+  'SERVED BY CASHIER',
+};
+
+const detailProcessingStatuses = {
+  'PROCESSED_BY_CASHIER',
+  'PROCESSED BY KITCHEN',
+};
+
+String detailStatusOf(Map<String, dynamic> item) =>
+    (item['status'] ?? '').toString().trim();
+
+bool isDetailServedStatus(String status) =>
+    detailServedStatuses.contains(status);
+
+bool isDetailProcessingStatus(String status) =>
+    detailProcessingStatuses.contains(status);
+
+int? detailKitchenProcessId(Map<String, dynamic> item) {
+  final raw = item['kitchen_process_id'];
+  if (raw == null) return null;
+  return num.tryParse(raw.toString())?.toInt();
+}
+
+bool isDetailWithKitchenHands(Map<String, dynamic> item) {
+  final status = detailStatusOf(item);
+  if (status == 'PROCESSED BY KITCHEN') return true;
+  final kitchenId = detailKitchenProcessId(item);
+  return kitchenId != null && kitchenId > 0;
+}
+
+bool isDetailInKitchenProcessing(Map<String, dynamic> item) {
+  final status = detailStatusOf(item);
+  if (isDetailProcessingStatus(status)) return true;
+  return isDetailWithKitchenHands(item);
+}
+
+bool isItemAwaitingCashierServe(Map<String, dynamic> item) {
+  final status = detailStatusOf(item);
+  if (status.isEmpty) return true;
+  if (isDetailServedStatus(status)) return false;
+  if (isDetailInKitchenProcessing(item)) return false;
+  return true;
+}
+
 bool canEditOrder(Map<String, dynamic> order) {
   if (parseBool(order['payment_flag'])) return false;
   final status = (order['order_status'] ?? '').toString();
@@ -39,21 +85,12 @@ bool canMarkKitchenServed(Map<String, dynamic> order) {
   }.contains(status);
 }
 
-bool isItemInKitchenProcess(Map<String, dynamic> item) {
-  final status = (item['status'] ?? '').toString();
-  if (status == 'PROCESSED_BY_CASHIER') return true;
-
-  final rawKitchenProcessId = item['kitchen_process_id'];
-  final kitchenProcessId = rawKitchenProcessId == null
-      ? null
-      : num.tryParse(rawKitchenProcessId.toString())?.toInt();
-
-  return kitchenProcessId != null && kitchenProcessId > 0;
-}
+bool isItemInKitchenProcess(Map<String, dynamic> item) =>
+    isDetailWithKitchenHands(item);
 
 bool isItemAwaitingServe(Map<String, dynamic> item) {
-  final status = (item['status'] ?? '').toString();
-  return status != 'SERVED BY KITCHEN' && status != 'SERVED BY CASHIER';
+  final status = detailStatusOf(item);
+  return !isDetailServedStatus(status);
 }
 
 String serveButtonLabelForItem(Map<String, dynamic> item) {
@@ -62,17 +99,9 @@ String serveButtonLabelForItem(Map<String, dynamic> item) {
 }
 
 bool isOrderDetailLocked(Map<String, dynamic> item) {
-  final rawKitchenProcessId = item['kitchen_process_id'];
-  final kitchenProcessId = rawKitchenProcessId == null
-      ? null
-      : num.tryParse(rawKitchenProcessId.toString())?.toInt();
-  final status = (item['status'] ?? '').toString();
-
-  if (kitchenProcessId != null && kitchenProcessId > 0) return true;
-
-  return status == 'PROCESSED_BY_CASHIER' ||
-      status == 'SERVED BY KITCHEN' ||
-      status == 'SERVED BY CASHIER';
+  final status = detailStatusOf(item);
+  if (isDetailServedStatus(status)) return true;
+  return isDetailInKitchenProcessing(item);
 }
 
 String guestDisplayName(String? raw) {

@@ -588,12 +588,12 @@ class LocalOrdersDao {
     for (final item in details) {
       final itemId = _toInt(item['id']);
       if (itemId != null && detailIds.contains(itemId)) {
-        final status = (item['status'] ?? '').toString();
+        final status = (item['status'] ?? '').toString().trim();
         final rawKitchen = item['kitchen_process_id'];
         final kitchenId = rawKitchen == null
             ? null
             : int.tryParse(rawKitchen.toString());
-        final inKitchen = status == 'PROCESSED_BY_CASHIER' ||
+        final inKitchen = status == 'PROCESSED BY KITCHEN' ||
             (kitchenId != null && kitchenId > 0);
 
         item['status'] =

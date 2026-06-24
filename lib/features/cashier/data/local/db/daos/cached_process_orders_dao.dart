@@ -56,12 +56,16 @@ class CachedProcessOrdersDao extends DatabaseAccessor<CashierDb>
         .get();
   }
 
-  Future<void> markProcessedOffline(int serverId, String latestJson) {
+  Future<void> markProcessedOffline(
+    int serverId,
+    String latestJson, {
+    String orderStatus = 'PROCESSED',
+  }) {
     return (update(cachedProcessOrders)
           ..where((t) => t.serverId.equals(serverId)))
         .write(
       CachedProcessOrdersCompanion(
-        orderStatus: const Value('PROCESSED'),
+        orderStatus: Value(orderStatus),
         latestProcessJson: Value(latestJson),
         pendingAction: const Value('PROCESS'),
         isSynced: const Value(false),
@@ -139,12 +143,16 @@ class CachedProcessOrdersDao extends DatabaseAccessor<CashierDb>
     });
   }
 
-  Future<void> markProcessedOnline(int serverId, {String? latestJson}) {
+  Future<void> markProcessedOnline(
+    int serverId, {
+    String? latestJson,
+    String orderStatus = 'PROCESSED',
+  }) {
     return (update(cachedProcessOrders)
           ..where((t) => t.serverId.equals(serverId)))
         .write(
       CachedProcessOrdersCompanion(
-        orderStatus: const Value('PROCESSED'),
+        orderStatus: Value(orderStatus),
         pendingAction: const Value(null),
         isSynced: const Value(true),
         latestProcessJson:

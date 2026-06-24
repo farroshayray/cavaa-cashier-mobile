@@ -63,8 +63,14 @@ class OrdersRepository {
     );
   }
 
-  Future<Map<String, dynamic>> processOrder(int id) async {
-    return api.processOrder(id: id);
+  Future<Map<String, dynamic>> processOrder(
+    int id, {
+    bool sendToKitchenWaiting = false,
+  }) async {
+    return api.processOrder(
+      id: id,
+      sendToKitchenWaiting: sendToKitchenWaiting,
+    );
   }
 
   Future<Map<String, dynamic>> serveOrderItems({

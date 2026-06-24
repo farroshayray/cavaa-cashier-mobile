@@ -509,10 +509,18 @@ class SyncService {
       try {
         switch (row.pendingAction) {
           case 'PROCESS':
-            await ordersRepo.processOrder(row.serverId);
+            final kitchenWaiting =
+                row.orderStatus == 'OPENBILL_WAITING_ORDER';
+            await ordersRepo.processOrder(
+              row.serverId,
+              sendToKitchenWaiting: kitchenWaiting,
+            );
             await cachedProcessOrdersDao.markProcessedOnline(
               row.serverId,
               latestJson: row.latestProcessJson,
+              orderStatus: kitchenWaiting
+                  ? 'OPENBILL_WAITING_ORDER'
+                  : 'PROCESSED',
             );
             break;
 

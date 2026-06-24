@@ -889,11 +889,7 @@ _KitchenItemState? _resolveKitchenItemState(
   Map<String, dynamic> item,
   Map<String, dynamic> order,
 ) {
-  final rawKitchenProcessId = item['kitchen_process_id'];
-  final kitchenProcessId = rawKitchenProcessId == null
-      ? null
-      : num.tryParse(rawKitchenProcessId.toString())?.toInt();
-  final status = (item['status'] ?? '').toString();
+  final status = detailStatusOf(item);
   final orderStatus = (order['order_status'] ?? '').toString();
 
   if (status == 'SERVED BY KITCHEN') {
@@ -904,11 +900,7 @@ _KitchenItemState? _resolveKitchenItemState(
     return _KitchenItemState.servedCashier;
   }
 
-  if (status == 'PROCESSED_BY_CASHIER') {
-    return _KitchenItemState.processing;
-  }
-
-  if (kitchenProcessId != null && kitchenProcessId > 0) {
+  if (isDetailProcessingStatus(status) || isDetailWithKitchenHands(item)) {
     return _KitchenItemState.processing;
   }
 

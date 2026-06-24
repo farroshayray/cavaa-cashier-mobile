@@ -131,8 +131,14 @@ class OrdersApi {
 
   Future<Map<String, dynamic>> processOrder({
     required int id,
+    bool sendToKitchenWaiting = false,
   }) async {
-    final resp = await dio.post('/api/v1/mobile/cashier/process-order/$id');
+    final resp = await dio.post(
+      '/api/v1/mobile/cashier/process-order/$id',
+      data: {
+        if (sendToKitchenWaiting) 'send_to_kitchen_waiting': true,
+      },
+    );
     print('response process-order: $resp');
 
     final data = resp.data;
