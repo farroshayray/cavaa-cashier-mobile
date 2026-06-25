@@ -174,7 +174,7 @@ class _CashierHomePageState extends State<CashierHomePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Realtime mobile: FCM saja (new_order + order_updated).
+    // Realtime mobile: FCM (new_order + order_updated + order_cancelled).
   }
 
   void _handleConnectivitySync() {
@@ -554,7 +554,9 @@ class _CashierHomePageState extends State<CashierHomePage>
         return;
       }
 
-      if (type == 'order_updated' || _isCashierOriginatedOrder(data)) {
+      if (type == 'order_updated' ||
+          type == 'order_cancelled' ||
+          _isCashierOriginatedOrder(data)) {
         _debouncedReloadAllOrderTabs();
         return;
       }
@@ -581,7 +583,9 @@ class _CashierHomePageState extends State<CashierHomePage>
         return;
       }
 
-      if (type == 'order_updated' || _isCashierOriginatedOrder(data)) {
+      if (type == 'order_updated' ||
+          type == 'order_cancelled' ||
+          _isCashierOriginatedOrder(data)) {
         _debouncedReloadAllOrderTabs();
         return;
       }

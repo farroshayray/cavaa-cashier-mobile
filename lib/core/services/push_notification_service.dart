@@ -31,7 +31,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  if (type == 'order_updated') {
+  if (type == 'order_updated' || type == 'order_cancelled') {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('orders_stale', true);
     return;
@@ -306,7 +306,7 @@ class PushNotificationService {
         return;
       }
 
-      if (type == 'order_updated') {
+      if (type == 'order_updated' || type == 'order_cancelled') {
         return;
       }
 
