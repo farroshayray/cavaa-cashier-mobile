@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 
-import '/features/cashier/presentation/printing/receipt_printer.dart';
-import '/features/cashier/data/preference/printer_manager.dart';
-import '/features/cashier/data/models/printer_device.dart';
+import '/features/cashier/presentation/printing/receipt_action_service.dart';
+import '/features/cashier/presentation/widgets/receipt_action_icon_button.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 
 import '../../providers/done_provider.dart';
@@ -69,7 +68,45 @@ class _DoneViewState extends State<_DoneView> {
   Timer? _blinkTimer;
   Timer? _searchDebounce;
 
-  final Set<int> _printingIds = <int>{};
+  final Set<int> _receiptBusyIds = <int>{};
+
+  int _receiptKeyFor(Map<String, dynamic> row) {
+    final id = _toId(row['id']);
+    return id > 0 ? id : row['local_id'].hashCode;
+  }
+
+  Future<void> _withReceiptBusy(
+    Map<String, dynamic> row,
+    Future<void> Function() action,
+  ) async {
+    final key = _receiptKeyFor(row);
+    if (_receiptBusyIds.contains(key)) return;
+
+    setState(() => _receiptBusyIds.add(key));
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _receiptBusyIds.remove(key));
+    }
+  }
+
+  Future<void> _handleReceiptPrint(Map<String, dynamic> row) async {
+    await _withReceiptBusy(row, () async {
+      await ReceiptActionService(context).printReceipt(
+        row: row,
+        fetchOrder: context.read<DoneProvider>().getPrintDetailFromListItem,
+      );
+    });
+  }
+
+  Future<void> _handleReceiptShare(Map<String, dynamic> row) async {
+    await _withReceiptBusy(row, () async {
+      await ReceiptActionService(context).shareReceiptPdf(
+        row: row,
+        fetchOrder: context.read<DoneProvider>().getPrintDetailFromListItem,
+      );
+    });
+  }
 
   @override
   void initState() {
@@ -227,7 +264,7 @@ class _DoneViewState extends State<_DoneView> {
                   itemBuilder: (_, i) {
                     final data = vm.items[i];
                     final id = _toId(data['id']);
-                    final printKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
+                    final receiptKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
                     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
                     final actionKey = id > 0
@@ -250,7 +287,7 @@ class _DoneViewState extends State<_DoneView> {
                       ),
                       child: _DoneOrderCard(
                         data: data,
-                        isPrinting: _printingIds.contains(printKey),
+                        isReceiptBusy: _receiptBusyIds.contains(receiptKey),
                         onDetail: () async {
                           final row = vm.items[i];
                           final id = _toId(row['id']);
@@ -271,10 +308,8 @@ class _DoneViewState extends State<_DoneView> {
                             ),
                           );
                         },
-                        onPrint: () async {
-                          final row = vm.items[i];
-                          await _printOrder(row);
-                        },
+                        onReceiptPrint: () => _handleReceiptPrint(data),
+                        onReceiptShare: () => _handleReceiptShare(data),
                       ),
                     ),
                     );
@@ -286,58 +321,6 @@ class _DoneViewState extends State<_DoneView> {
         ),
       ],
     );
-  }
-
-  Future<void> _printOrder(Map<String, dynamic> row) async {
-    final id = _toId(row['id']);
-    final printKey = id > 0 ? id : row['local_id'].hashCode;
-
-    if (_printingIds.contains(printKey)) return;
-
-    setState(() => _printingIds.add(printKey));
-    try {
-      final order =
-          await context.read<DoneProvider>().getPrintDetailFromListItem(row);
-
-      final paid = _pickNum(order, ['payment', 'paid_amount']) ??
-          _pickNum(order, ['latest_payment', 'paid_amount']) ??
-          _pickNum(order, ['paid_amount']) ??
-          _orderGrandTotal(order);
-
-      final change = _pickNum(order, ['payment', 'change_amount']) ??
-          _pickNum(order, ['latest_payment', 'change_amount']) ??
-          _pickNum(order, ['change_amount']) ??
-          0;
-
-      final pm = context.read<PrinterManager>();
-      final p = pm.defaultPrinter;
-      if (p == null) throw Exception('Default printer belum dipilih');
-      if (p.type != PrinterType.bluetooth ||
-          p.address == null ||
-          p.address!.trim().isEmpty) {
-        throw Exception('Default printer bukan Bluetooth / address kosong');
-      }
-
-      final bytes = await ReceiptPrinter().buildReceiptBytes(
-        order: order,
-        paidAmount: paid,
-        changeAmount: change,
-      );
-
-      await pm.write(bytes);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Struk berhasil diprint')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal print: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _printingIds.remove(printKey));
-    }
   }
 
   @override
@@ -385,18 +368,6 @@ class _DoneViewState extends State<_DoneView> {
     _blinkTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _blinkOrderId = null);
     });
-  }
-
-  num? _pickNum(Map<String, dynamic> root, List<String> path) {
-    dynamic cur = root;
-    for (final k in path) {
-      if (cur is Map && cur[k] != null) {
-        cur = cur[k];
-      } else {
-        return null;
-      }
-    }
-    return (cur is num) ? cur : num.tryParse(cur.toString());
   }
 }
 
@@ -534,14 +505,16 @@ class _DoneOrderCard extends StatelessWidget {
   const _DoneOrderCard({
     required this.data,
     required this.onDetail,
-    required this.onPrint,
-    required this.isPrinting,
+    required this.onReceiptPrint,
+    required this.onReceiptShare,
+    required this.isReceiptBusy,
   });
 
   final Map<String, dynamic> data;
   final VoidCallback onDetail;
-  final VoidCallback onPrint;
-  final bool isPrinting;
+  final VoidCallback onReceiptPrint;
+  final VoidCallback onReceiptShare;
+  final bool isReceiptBusy;
 
   @override
   Widget build(BuildContext context) {
@@ -702,16 +675,11 @@ class _DoneOrderCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: isPrinting ? null : onPrint,
-              icon: isPrinting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.print_rounded),
-              tooltip: 'Print',
+            ReceiptActionIconButton(
+              isLoading: isReceiptBusy,
+              enabled: true,
+              onPrint: onReceiptPrint,
+              onShare: onReceiptShare,
             ),
           ],
         ),
@@ -829,18 +797,12 @@ class _DoneOrderCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  onPressed: isPrinting ? null : onPrint,
-                  icon: isPrinting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.print_rounded),
-                  tooltip: 'Print',
+                ReceiptActionIconButton(
+                  compact: true,
+                  isLoading: isReceiptBusy,
+                  enabled: true,
+                  onPrint: onReceiptPrint,
+                  onShare: onReceiptShare,
                 ),
               ],
             ),
@@ -978,22 +940,6 @@ num _calcGrandTotalFromMap(Map<String, dynamic> data) {
       ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
       : subtotal.ceil();
   return baseTotal + _calcCashRoundingAmount(data, baseTotal: baseTotal);
-}
-
-num _orderGrandTotal(Map<String, dynamic> order) {
-  if (order['grand_total_local'] != null) {
-    return _toNum(order['grand_total_local']).ceil();
-  }
-
-  final subtotal = _toNum(order['total_order_value']);
-  final isPpnActive = _toBool(order['is_ppn_active']);
-  final ppnPercent = _toNum(order['ppn']);
-
-  final baseTotal = isPpnActive
-      ? (subtotal + (subtotal * ppnPercent / 100))
-      : subtotal;
-
-  return baseTotal.ceil() + _calcCashRoundingAmount(order, baseTotal: baseTotal.ceil());
 }
 
 num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {

@@ -88,6 +88,23 @@ bool canMarkKitchenServed(Map<String, dynamic> order) {
   }.contains(status);
 }
 
+bool isOpenBillOrder(Map<String, dynamic> order) {
+  final status = (order['order_status'] ?? '').toString().toUpperCase();
+  return parseBool(order['openbill_flag']) ||
+      (order['payment_method'] ?? '').toString().toUpperCase() == 'OPENBILL' ||
+      status.startsWith('OPENBILL');
+}
+
+/// Struk di tab proses hanya untuk order yang sudah tercatat bayar.
+bool canPrintProcessReceipt(Map<String, dynamic> order) {
+  if (parseBool(order['payment_flag'])) return true;
+
+  if (isOpenBillOrder(order)) return false;
+
+  final status = (order['order_status'] ?? '').toString().toUpperCase();
+  return status == 'PAID' || status == 'PROCESSED';
+}
+
 bool isItemInKitchenProcess(Map<String, dynamic> item) =>
     isDetailWithKitchenHands(item);
 
