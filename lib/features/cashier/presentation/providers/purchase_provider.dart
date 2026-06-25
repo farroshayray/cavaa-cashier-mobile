@@ -207,7 +207,6 @@ class PurchaseProvider extends ChangeNotifier {
 
       if (paymentMethod != "QRIS") {
         cart.clear();
-        notifyListeners();
       }
 
       return {

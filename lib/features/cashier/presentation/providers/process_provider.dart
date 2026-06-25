@@ -33,11 +33,29 @@ class ProcessProvider extends ChangeNotifier {
 
   String query = '';
   List<Map<String, dynamic>> items = [];
+  Future<void>? _loadInFlight;
+  bool _loadInFlightSilent = true;
 
-  Future<void> load() async {
-    isLoading = true;
-    error = null;
-    notifyListeners();
+  Future<void> load({bool silent = false}) {
+    if (_loadInFlight != null) {
+      if (!silent) _loadInFlightSilent = false;
+      return _loadInFlight!;
+    }
+
+    _loadInFlightSilent = silent;
+    _loadInFlight = _loadImpl(silent: _loadInFlightSilent).whenComplete(() {
+      _loadInFlight = null;
+      _loadInFlightSilent = true;
+    });
+    return _loadInFlight!;
+  }
+
+  Future<void> _loadImpl({bool silent = false}) async {
+    if (!silent) {
+      isLoading = true;
+      error = null;
+      notifyListeners();
+    }
 
     try {
       if (connectivity.isOnline) {
@@ -59,6 +77,7 @@ class ProcessProvider extends ChangeNotifier {
       final remoteItems = cachedRows
         .where((row) {
           if (row.orderStatus == 'SERVED') return false;
+          if (row.orderStatus == 'UNPAID') return false;
           if (doneIds.contains(row.serverId)) return false;
           if (row.bookingOrderCode.trim().isNotEmpty &&
               doneCodes.contains(row.bookingOrderCode.trim())) {
@@ -182,7 +201,9 @@ class ProcessProvider extends ChangeNotifier {
     } catch (e) {
       error = e.toString();
     } finally {
-      isLoading = false;
+      if (!silent) {
+        isLoading = false;
+      }
       notifyListeners();
     }
   }

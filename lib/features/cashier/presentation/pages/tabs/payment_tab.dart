@@ -311,7 +311,7 @@ class _PaymentViewState extends State<_PaymentView> {
             },
             child: Builder(
               builder: (_) {
-                if (vm.isLoading) {
+                if (vm.isLoading && vm.items.isEmpty) {
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
@@ -362,7 +362,15 @@ class _PaymentViewState extends State<_PaymentView> {
                     final id = _toId(data['id']);
                     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
-                    return AnimatedContainer(
+                    final actionKey = id > 0
+                        ? id
+                        : ((data['local_id'] ?? '').toString().isNotEmpty
+                            ? data['local_id'].toString()
+                            : 'idx-$i');
+
+                    return KeyedSubtree(
+                      key: ValueKey('payment-$actionKey'),
+                      child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
@@ -477,6 +485,7 @@ class _PaymentViewState extends State<_PaymentView> {
                           }
                         },
                       ),
+                    ),
                     );
                   },
                 );

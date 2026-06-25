@@ -31,6 +31,19 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
+  if (type == 'order_updated') {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('orders_stale', true);
+    return;
+  }
+
+  if (type == 'new_order' &&
+      (data['order_by'] ?? '').toString().toUpperCase() == 'CASHIER') {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('orders_stale', true);
+    return;
+  }
+
   final prefs = await SharedPreferences.getInstance();
   const key = 'cashier_notifications';
   const unreadKey = 'cashier_notifications_unread';
@@ -240,6 +253,19 @@ class PushNotificationService {
     return null;
   }
 
+  static const String ordersStaleKey = 'orders_stale';
+
+  Future<bool> consumeOrdersStaleFlag() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stale = prefs.getBool(ordersStaleKey) ?? false;
+
+    if (stale) {
+      await prefs.setBool(ordersStaleKey, false);
+    }
+
+    return stale;
+  }
+
   Future<Map<String, dynamic>?> consumePendingForceLogout() async {
     final prefs = await SharedPreferences.getInstance();
     final pending = prefs.getBool('force_logout_pending') ?? false;
@@ -277,6 +303,10 @@ class PushNotificationService {
 
       if (type == 'force_logout') {
         // debugPrint('🚪 force_logout received in foreground');
+        return;
+      }
+
+      if (type == 'order_updated') {
         return;
       }
 

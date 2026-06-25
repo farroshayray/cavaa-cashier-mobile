@@ -15,6 +15,7 @@ class PusherOrdersService {
   Future<void> start({
     required int partnerId,
     required void Function(Map<String, dynamic> data) onOrderCreated,
+    void Function(Map<String, dynamic> data)? onOrderUpdated,
   }) async {
     if (_started) return;
     _started = true;
@@ -77,10 +78,26 @@ class PusherOrdersService {
         // print('EVENT RECEIVED: ${event.eventName}');
         // print('DATA: ${event.data}');
 
-        if (event.eventName == '.OrderCreated' ||
-            event.eventName == 'OrderCreated') {
-          final data = jsonDecode(event.data ?? '{}');
-          if (data is Map<String, dynamic>) onOrderCreated(data);
+        final name = event.eventName ?? '';
+        final raw = event.data;
+        if (raw == null || raw.isEmpty) return;
+
+        Map<String, dynamic> data;
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is! Map) return;
+          data = Map<String, dynamic>.from(decoded);
+        } catch (_) {
+          return;
+        }
+
+        if (name == '.OrderCreated' || name == 'OrderCreated') {
+          onOrderCreated(data);
+          return;
+        }
+
+        if (name == '.OrderUpdated' || name == 'OrderUpdated') {
+          onOrderUpdated?.call(data);
         }
       },
     );

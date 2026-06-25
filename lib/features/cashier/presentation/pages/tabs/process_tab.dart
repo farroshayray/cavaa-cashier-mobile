@@ -262,7 +262,7 @@ class _ProcessViewState extends State<_ProcessView> {
             },
             child: Builder(
               builder: (_) {
-                if (vm.isLoading) {
+                if (vm.isLoading && vm.items.isEmpty) {
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: const [
@@ -322,7 +322,9 @@ class _ProcessViewState extends State<_ProcessView> {
                     final printKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
                     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
-                    return AnimatedContainer(
+                    return KeyedSubtree(
+                      key: ValueKey('process-$actionKey'),
+                      child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
@@ -400,6 +402,7 @@ class _ProcessViewState extends State<_ProcessView> {
                           }
                         },
                       ),
+                    ),
                     );
                   },
                 );
@@ -481,7 +484,7 @@ class _ProcessViewState extends State<_ProcessView> {
   Future<void> _refreshKeepScroll() async {
     if (_listCtrl.hasClients) _lastOffset = _listCtrl.offset;
 
-    await context.read<ProcessProvider>().load();
+    await context.read<ProcessProvider>().load(silent: true);
 
     if (!mounted) return;
 

@@ -177,7 +177,7 @@ class _DoneViewState extends State<_DoneView> {
             },
             child: Builder(
               builder: (_) {
-                if (vm.isLoading) {
+                if (vm.isLoading && vm.items.isEmpty) {
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: const [
@@ -230,7 +230,15 @@ class _DoneViewState extends State<_DoneView> {
                     final printKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
                     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
-                    return AnimatedContainer(
+                    final actionKey = id > 0
+                        ? id
+                        : ((data['local_id'] ?? '').toString().isNotEmpty
+                            ? data['local_id'].toString()
+                            : 'idx-$i');
+
+                    return KeyedSubtree(
+                      key: ValueKey('done-$actionKey'),
+                      child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
@@ -268,6 +276,7 @@ class _DoneViewState extends State<_DoneView> {
                           await _printOrder(row);
                         },
                       ),
+                    ),
                     );
                   },
                 );

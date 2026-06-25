@@ -27,11 +27,29 @@ class DoneProvider extends ChangeNotifier {
 
   String query = '';
   List<Map<String, dynamic>> items = [];
+  Future<void>? _loadInFlight;
+  bool _loadInFlightSilent = true;
 
-  Future<void> load() async {
-    isLoading = true;
-    error = null;
-    notifyListeners();
+  Future<void> load({bool silent = false}) {
+    if (_loadInFlight != null) {
+      if (!silent) _loadInFlightSilent = false;
+      return _loadInFlight!;
+    }
+
+    _loadInFlightSilent = silent;
+    _loadInFlight = _loadImpl(silent: _loadInFlightSilent).whenComplete(() {
+      _loadInFlight = null;
+      _loadInFlightSilent = true;
+    });
+    return _loadInFlight!;
+  }
+
+  Future<void> _loadImpl({bool silent = false}) async {
+    if (!silent) {
+      isLoading = true;
+      error = null;
+      notifyListeners();
+    }
 
     try {
       if (connectivity.isOnline) {
@@ -161,7 +179,9 @@ class DoneProvider extends ChangeNotifier {
     } catch (e) {
       error = e.toString();
     } finally {
-      isLoading = false;
+      if (!silent) {
+        isLoading = false;
+      }
       notifyListeners();
     }
   }

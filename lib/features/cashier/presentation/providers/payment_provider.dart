@@ -42,11 +42,29 @@ class PaymentProvider extends ChangeNotifier {
 
   String query = '';
   List<Map<String, dynamic>> items = [];
+  Future<void>? _loadInFlight;
+  bool _loadInFlightSilent = true;
 
-  Future<void> load() async {
-    isLoading = true;
-    error = null;
-    notifyListeners();
+  Future<void> load({bool silent = false}) {
+    if (_loadInFlight != null) {
+      if (!silent) _loadInFlightSilent = false;
+      return _loadInFlight!;
+    }
+
+    _loadInFlightSilent = silent;
+    _loadInFlight = _loadImpl(silent: _loadInFlightSilent).whenComplete(() {
+      _loadInFlight = null;
+      _loadInFlightSilent = true;
+    });
+    return _loadInFlight!;
+  }
+
+  Future<void> _loadImpl({bool silent = false}) async {
+    if (!silent) {
+      isLoading = true;
+      error = null;
+      notifyListeners();
+    }
 
     try {
       final mergedItems = <Map<String, dynamic>>[];
@@ -75,11 +93,24 @@ class PaymentProvider extends ChangeNotifier {
 
       final processServerIds = processRows
           .where((e) {
-            if (e.paymentMethod == 'OPENBILL' &&
-                (e.pendingAction == 'FINISH' || e.orderStatus == 'SERVED')) {
-              return false;
+            final status = e.orderStatus;
+
+            // Open bill siap bayar / selesai → bukan lagi tab proses
+            if (e.paymentMethod == 'OPENBILL' || status.startsWith('OPENBILL')) {
+              if (status == 'UNPAID' ||
+                  e.pendingAction == 'FINISH' ||
+                  status == 'SERVED') {
+                return false;
+              }
             }
-            return true;
+
+            const activeProcessStatuses = {
+              'PROCESSED',
+              'PAID',
+              'OPENBILL_WAITING_ORDER',
+              'OPENBILL_CONFIRMATION',
+            };
+            return activeProcessStatuses.contains(status);
           })
           .map((e) => e.serverId)
           .toSet();
@@ -220,7 +251,10 @@ class PaymentProvider extends ChangeNotifier {
         final hiddenByCode = code.isNotEmpty && hiddenOrderCodes.contains(code);
 
         final hiddenBecauseAlreadyInProcess =
-            sid != null && sid > 0 && processServerIds.contains(sid);
+            !_isOpenbillReadyForPayment(e) &&
+            sid != null &&
+            sid > 0 &&
+            processServerIds.contains(sid);
 
         final hiddenBecauseAlreadyInDone =
             (sid != null && sid > 0 && doneServerIds.contains(sid)) ||
@@ -253,7 +287,9 @@ class PaymentProvider extends ChangeNotifier {
     } catch (e) {
       error = e.toString();
     } finally {
-      isLoading = false;
+      if (!silent) {
+        isLoading = false;
+      }
       notifyListeners();
     }
   }
@@ -328,6 +364,15 @@ class PaymentProvider extends ChangeNotifier {
         latestPaymentJson == null ? null : jsonEncode(latestPaymentJson),
       ),
     );
+  }
+
+  bool _isOpenbillReadyForPayment(Map<String, dynamic> e) {
+    final status = (e['order_status'] ?? '').toString();
+    final isOpenbill =
+        _toBool(e['openbill_flag']) ||
+        (e['payment_method'] ?? '').toString() == 'OPENBILL' ||
+        status.startsWith('OPENBILL');
+    return isOpenbill && status == 'UNPAID';
   }
 
   Map<String, dynamic> _normalizeServerItem(Map<String, dynamic> e) {

@@ -14,8 +14,6 @@ import '../../../auth/presentation/pages/login_page.dart';
 import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
-import '/features/cashier/presentation/realtime/pusher_orders_service.dart';
-
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
@@ -44,9 +42,6 @@ class CashierHomePage extends StatefulWidget {
 
 class _CashierHomePageState extends State<CashierHomePage>
     with WidgetsBindingObserver {
-  // ===== Realtime =====
-  late final PusherOrdersService _pusherSvc;
-  bool _pusherStarted = false;
   final InAppApkUpdater _apkUpdater = InAppApkUpdater();
   final ValueNotifier<double> _updateProgressNotifier = ValueNotifier<double>(
     0,
@@ -66,7 +61,9 @@ class _CashierHomePageState extends State<CashierHomePage>
   Timer? _paymentReloadDebounce;
   Timer? _processReloadDebounce;
   Timer? _doneReloadDebounce;
+  Timer? _allTabsReloadDebounce;
   Timer? _resumeReloadDebounce;
+  Future<void>? _reloadTabsInFlight;
 
   bool? _lastOnlineState;
 
@@ -81,7 +78,6 @@ class _CashierHomePageState extends State<CashierHomePage>
   @override
   void initState() {
     super.initState();
-    _pusherSvc = PusherOrdersService(context.read<DioClient>());
     WidgetsBinding.instance.addObserver(this);
     _listenFcmEvents();
 
@@ -117,17 +113,21 @@ class _CashierHomePageState extends State<CashierHomePage>
       _refreshAfterResume();
 
       Future.microtask(() async {
+        final stale = await PushNotificationService.instance
+            .consumeOrdersStaleFlag();
+        if (stale && mounted) {
+          _debouncedReloadAllOrderTabs();
+        }
+      });
+
+      Future.microtask(() async {
         try {
           final conn = context.read<ConnectivityStatusProvider>();
           if (conn.isOnline && !conn.isChecking) {
             await context.read<SyncService>().syncPendingOrders();
 
             if (!mounted) return;
-            await Future.wait([
-              context.read<PaymentProvider>().load(),
-              context.read<ProcessProvider>().load(),
-              context.read<DoneProvider>().load(),
-            ]);
+            await _reloadAllOrderTabsSequentially();
           }
         } catch (e) {
           debugPrint('❌ sync after resume failed: $e');
@@ -150,14 +150,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (!mounted) return;
 
       try {
-        final payVm = context.read<PaymentProvider>();
-        final procVm = context.read<ProcessProvider>();
-        final doneVm = context.read<DoneProvider>();
-
-        payVm.setQuery('');
-        procVm.setQuery('');
-
-        await Future.wait([payVm.load(), procVm.load(), doneVm.load()]);
+        await _reloadAllOrderTabsSequentially();
       } catch (e) {
         debugPrint('❌ refresh after resume failed: $e');
       }
@@ -174,18 +167,14 @@ class _CashierHomePageState extends State<CashierHomePage>
 
       if (!mounted) return;
 
-      await Future.wait([
-        context.read<PaymentProvider>().load(),
-        context.read<ProcessProvider>().load(),
-        context.read<DoneProvider>().load(),
-      ]);
+      await _reloadAllOrderTabsSequentially();
     };
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _startRealtimeIfReady();
+    // Realtime mobile: FCM saja (new_order + order_updated).
   }
 
   void _handleConnectivitySync() {
@@ -205,11 +194,7 @@ class _CashierHomePageState extends State<CashierHomePage>
           await context.read<SyncService>().syncPendingOrders();
           if (!mounted) return;
 
-          await Future.wait([
-            context.read<PaymentProvider>().load(),
-            context.read<ProcessProvider>().load(),
-            context.read<DoneProvider>().load(),
-          ]);
+          await _reloadAllOrderTabsSequentially();
         } catch (e) {
           debugPrint('❌ auto sync on reconnect failed: $e');
         }
@@ -249,39 +234,6 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     if (confirm == true) {
       await _logout();
-    }
-  }
-
-  Future<void> _startRealtimeIfReady() async {
-    if (!mounted || _pusherStarted) return;
-
-    final auth = context.read<AuthProvider>();
-    final partnerId = auth.user?.partnerId;
-
-    if (partnerId == null) {
-      debugPrint('PUSHER: partnerId null, belum start');
-      return;
-    }
-
-    final notif = context.read<NotificationsProvider>();
-
-    try {
-      await _pusherSvc.start(
-        partnerId: partnerId,
-        onOrderCreated: (data) async {
-          // await SoundService.instance.playNotification();
-
-          await notif.pushFromPusher(data);
-
-          _refreshTabByRealtimeData(data);
-        },
-      );
-
-      _pusherStarted = true;
-      // debugPrint('✅ PUSHER STARTED partner=$partnerId');
-    } catch (e, st) {
-      debugPrint('❌ PUSHER start error: $e');
-      debugPrint('$st');
     }
   }
 
@@ -339,13 +291,13 @@ class _CashierHomePageState extends State<CashierHomePage>
     _paymentReloadDebounce?.cancel();
     _processReloadDebounce?.cancel();
     _doneReloadDebounce?.cancel();
+    _allTabsReloadDebounce?.cancel();
     _resumeReloadDebounce?.cancel();
 
     _fcmMessageSub?.cancel();
     _fcmTapSub?.cancel();
 
     _updateProgressNotifier.dispose();
-    _pusherSvc.stop();
 
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -585,11 +537,15 @@ class _CashierHomePageState extends State<CashierHomePage>
     }
   }
 
+  bool _isCashierOriginatedOrder(Map<String, dynamic> data) {
+    return (data['order_by'] ?? '').toString().toUpperCase() == 'CASHIER';
+  }
+
   void _listenFcmEvents() {
     _fcmMessageSub = PushNotificationService.instance.onMessageReceived.listen((
       data,
     ) async {
-      // debugPrint('🔔 FCM received event: $data');
+      if (!mounted) return;
 
       final type = (data['type'] ?? '').toString();
 
@@ -598,19 +554,35 @@ class _CashierHomePageState extends State<CashierHomePage>
         return;
       }
 
-      await context.read<NotificationsProvider>().pushFromFcm(data);
-      _refreshTabByRealtimeData(data);
+      if (type == 'order_updated' || _isCashierOriginatedOrder(data)) {
+        _debouncedReloadAllOrderTabs();
+        return;
+      }
+
+      if (type == 'new_order') {
+        try {
+          await context.read<NotificationsProvider>().pushFromFcm(data);
+          _debouncedReloadAllOrderTabs();
+        } catch (e, st) {
+          debugPrint('FCM foreground handler error: $e\n$st');
+        }
+      }
     });
 
     _fcmTapSub = PushNotificationService.instance.onMessageTapped.listen((
       data,
     ) async {
-      // debugPrint('👉 FCM tapped event: $data');
+      if (!mounted) return;
 
       final type = (data['type'] ?? '').toString();
 
       if (type == 'force_logout') {
         await _handleForceLogout(data);
+        return;
+      }
+
+      if (type == 'order_updated' || _isCashierOriginatedOrder(data)) {
+        _debouncedReloadAllOrderTabs();
         return;
       }
 
@@ -633,7 +605,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (!mounted) return;
       final vm = context.read<PaymentProvider>();
       vm.setQuery('');
-      unawaited(vm.load());
+      unawaited(vm.load(silent: true));
     });
   }
 
@@ -643,7 +615,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (!mounted) return;
       final vm = context.read<ProcessProvider>();
       vm.setQuery('');
-      unawaited(vm.load());
+      unawaited(vm.load(silent: true));
     });
   }
 
@@ -652,7 +624,40 @@ class _CashierHomePageState extends State<CashierHomePage>
     _doneReloadDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       final vm = context.read<DoneProvider>();
-      unawaited(vm.load());
+      unawaited(vm.load(silent: true));
+    });
+  }
+
+  Future<void> _reloadAllOrderTabsSequentially() {
+    return _reloadTabsInFlight ??= _reloadAllOrderTabsSequentiallyImpl().whenComplete(() {
+      _reloadTabsInFlight = null;
+    });
+  }
+
+  Future<void> _reloadAllOrderTabsSequentiallyImpl() async {
+    if (!mounted) return;
+
+    final payVm = context.read<PaymentProvider>();
+    final procVm = context.read<ProcessProvider>();
+    final doneVm = context.read<DoneProvider>();
+
+    payVm.setQuery('');
+    procVm.setQuery('');
+    doneVm.setQuery('');
+
+    // Proses dulu agar cache proses terbaru sebelum pembayaran membaca filter-nya.
+    await procVm.load(silent: true);
+    if (!mounted) return;
+    await Future.wait([
+      payVm.load(silent: true),
+      doneVm.load(silent: true),
+    ]);
+  }
+
+  void _debouncedReloadAllOrderTabs() {
+    _allTabsReloadDebounce?.cancel();
+    _allTabsReloadDebounce = Timer(const Duration(milliseconds: 400), () {
+      unawaited(_reloadAllOrderTabsSequentially());
     });
   }
 

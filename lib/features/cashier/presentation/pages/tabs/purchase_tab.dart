@@ -315,19 +315,19 @@ class _MiniCartBar extends StatelessWidget {
                   );
 
                   if (result != null && context.mounted) {
-                    final refreshTarget = (result['refresh_target'] ?? '').toString();
+                    final purchaseVm = context.read<PurchaseProvider>();
+                    purchaseVm.notifyListeners();
+
+                    final refreshTarget =
+                        (result['refresh_target'] ?? '').toString();
                     final isSuccess = result['success'] == true;
 
                     if (isSuccess && refreshTarget == 'payment') {
-                      await Future.wait([
-                        context.read<PaymentProvider>().load(),
-                        context.read<PurchaseProvider>().load(),
-                      ]);
+                      await context.read<PaymentProvider>().load();
+                      await purchaseVm.load();
                     } else if (isSuccess && refreshTarget == 'process') {
-                      await Future.wait([
-                        context.read<ProcessProvider>().load(),
-                        context.read<PurchaseProvider>().load(),
-                      ]);
+                      await context.read<ProcessProvider>().load();
+                      await purchaseVm.load();
                     }
                   }
                 },
