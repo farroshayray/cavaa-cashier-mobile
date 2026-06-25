@@ -637,6 +637,7 @@ class PaymentProvider extends ChangeNotifier {
 
         // online + sudah ada serverId -> delete backend lalu hapus lokal
         await repo.softDeleteOrder(serverId);
+        await cachedProcessOrdersDao.deleteByServerId(serverId);
         await localOrdersDao.deleteOrderByLocalId(localId);
         await load();
         return;
@@ -659,6 +660,7 @@ class PaymentProvider extends ChangeNotifier {
       // saat online: langsung delete backend
       await repo.softDeleteOrder(serverId);
       await cachedPaymentOrdersDao.deleteCachedOrderByServerId(serverId);
+      await cachedProcessOrdersDao.deleteByServerId(serverId);
       await load();
     } catch (e) {
       rethrow;

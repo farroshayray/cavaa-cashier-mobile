@@ -63,12 +63,15 @@ bool canEditOrder(Map<String, dynamic> order) {
 
 bool canDeleteUnpaidOrder(Map<String, dynamic> order) {
   if (!canEditOrder(order)) return false;
+  if (parseBool(order['payment_flag'])) return false;
   final status = (order['order_status'] ?? '').toString();
   return const {
     'UNPAID',
     'EXPIRED',
     'PAYMENT REQUEST',
     'OPENBILL_CONFIRMATION',
+    'OPENBILL_WAITING_ORDER',
+    'PAYMENT',
   }.contains(status);
 }
 

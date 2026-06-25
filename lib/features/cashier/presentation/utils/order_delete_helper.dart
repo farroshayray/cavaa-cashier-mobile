@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/providers/process_provider.dart';
 
 Future<void> confirmDeleteUnpaidOrder(
   BuildContext context,
@@ -47,13 +48,17 @@ Future<void> confirmDeleteUnpaidOrder(
     },
   );
 
-  if (ok != true) return;
+  if (ok != true || !context.mounted) return;
+
+  final paymentProvider = context.read<PaymentProvider>();
+  final processProvider = context.read<ProcessProvider>();
 
   try {
-    await context.read<PaymentProvider>().deleteOrderItem(
+    await paymentProvider.deleteOrderItem(
       data,
       isOnline: isOnline,
     );
+    await processProvider.load();
 
     if (!context.mounted) return;
     Navigator.of(context, rootNavigator: true).maybePop();
