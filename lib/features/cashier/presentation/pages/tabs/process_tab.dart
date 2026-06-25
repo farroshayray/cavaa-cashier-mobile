@@ -16,6 +16,9 @@ import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart
 import '/features/cashier/presentation/pages/tabs/modals/edit_order_sheet.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 import '/features/cashier/presentation/utils/order_delete_helper.dart';
+import '/features/cashier/presentation/utils/order_tab_grouping.dart';
+import '/features/cashier/presentation/widgets/order_tab_section_widgets.dart';
+import '/features/scanner/pages/barcode_scanner_page.dart';
 // kalau nanti ada modal khusus proses/selesai, import juga
 
 class ProcessTab extends StatefulWidget {
@@ -77,6 +80,8 @@ class _ProcessViewState extends State<_ProcessView> {
   Timer? _blinkTimer;
   Timer? _searchDebounce;
   int? _lastHandledFocus;
+  ProcessSection? _sectionFilter;
+  final Set<ProcessSection> _collapsedProcessSections = {};
 
   @override
   void initState() {
@@ -184,6 +189,112 @@ class _ProcessViewState extends State<_ProcessView> {
     });
   }
 
+  Future<void> _scanAndSearch() async {
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+    );
+
+    if (!mounted) return;
+
+    if (code != null && code.trim().isNotEmpty) {
+      _searchCtrl.text = code.trim();
+      _searchDebounce?.cancel();
+      await _runSearch();
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  Widget _buildProcessCard(
+    BuildContext context,
+    ProcessProvider vm,
+    Map<String, dynamic> data,
+  ) {
+    final id = _toId(data['id']);
+    final actionKey = id > 0
+        ? id
+        : ((data['local_id'] ?? '').toString().isNotEmpty
+            ? data['local_id'].toString().hashCode
+            : data.hashCode);
+    final printKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
+    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
+
+    return KeyedSubtree(
+      key: ValueKey('process-$actionKey'),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: blinking ? Colors.red : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: _ProcessOrderCard(
+          data: data,
+          isPrinting: _printingIds.contains(printKey),
+          isActing: vm.isActionLoading(actionKey),
+          onDetail: () async {
+            final detailId = _toId(data['id']);
+            await _openProcessOrderDetail(context, data, detailId);
+          },
+          onPrint: () async {
+            await _printOrder(data);
+          },
+          onProcess: () async {
+            try {
+              await _handleProcessAction(data);
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Gagal proses: $e')),
+              );
+            }
+          },
+          onCancelProcess: () async {
+            try {
+              final res = await context.read<ProcessProvider>().actionCancelProcess(data);
+              if (!mounted) return;
+
+              final message = (res['message'] ?? 'Proses dibatalkan').toString();
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Gagal batal: $e')),
+              );
+            }
+          },
+          onFinish: () async {
+            try {
+              final res = await context.read<ProcessProvider>().actionFinish(data);
+
+              await _refreshKeepScroll();
+              await context.read<DoneProvider>().load();
+              await context.read<PaymentProvider>().load();
+
+              if (!mounted) return;
+
+              final message = (res['message'] ?? 'Order selesai').toString();
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Gagal selesai: $e')),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<ProcessProvider>();
@@ -191,6 +302,8 @@ class _ProcessViewState extends State<_ProcessView> {
     final isLandscape = media.orientation == Orientation.landscape;
     final shortestSide = media.size.shortestSide;
     final isMobileLandscape = isLandscape && shortestSide < 600;
+    final groupedSections = groupProcessItems(vm.items, filter: _sectionFilter);
+    final hasSearchQuery = vm.query.trim().isNotEmpty;
 
     return Column(
       children: [
@@ -204,6 +317,7 @@ class _ProcessViewState extends State<_ProcessView> {
           child: _SearchBar(
             compact: isMobileLandscape,
             controller: _searchCtrl,
+            onScan: _scanAndSearch,
             onChanged: (_) => _scheduleSearch(),
             onSubmit: () {
               _searchDebounce?.cancel();
@@ -218,37 +332,11 @@ class _ProcessViewState extends State<_ProcessView> {
           ),
         ),
 
-        Container(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            isMobileLandscape ? 8 : 10,
-            16,
-            isMobileLandscape ? 8 : 10,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7F8FA),
-            border: Border(
-              top: BorderSide(color: Colors.black.withOpacity(0.06)),
-              bottom: BorderSide(color: Colors.black.withOpacity(0.06)),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Proses',
-                  style: TextStyle(
-                    fontSize: isMobileLandscape ? 14 : 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              _Badge(
-                text: '${vm.items.length} order',
-                compact: isMobileLandscape,
-              ),
-            ],
-          ),
+        ...buildProcessSectionFilterChips(
+          items: vm.items,
+          selected: _sectionFilter,
+          compact: isMobileLandscape,
+          onSelected: (value) => setState(() => _sectionFilter = value),
         ),
 
         Expanded(
@@ -296,7 +384,9 @@ class _ProcessViewState extends State<_ProcessView> {
                       Icon(Icons.inbox_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
                       const SizedBox(height: 10),
                       Text(
-                        'Tidak ada order yang sedang diproses.',
+                        hasSearchQuery
+                            ? 'Tidak ditemukan untuk pencarian "${vm.query}".'
+                            : 'Tidak ada order yang sedang diproses.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.black.withOpacity(0.60)),
                       ),
@@ -304,107 +394,35 @@ class _ProcessViewState extends State<_ProcessView> {
                   );
                 }
 
-                return ListView.separated(
+                if (groupedSections.isEmpty) {
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      const SizedBox(height: 80),
+                      Icon(Icons.filter_list_off_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Tidak ada order di kelompok ini.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black.withOpacity(0.60)),
+                      ),
+                    ],
+                  );
+                }
+
+                return CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   controller: _listCtrl,
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                  itemCount: vm.items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) {
-                    final data = vm.items[i];
-                    // debugPrint('Datadebug: ${data.toString()}');
-                    final id = _toId(data['id']);
-                    final actionKey = id > 0
-                        ? id
-                        : ((data['local_id'] ?? '').toString().isNotEmpty
-                            ? data['local_id'].toString().hashCode
-                            : data.hashCode);
-                    final printKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
-                    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
-
-                    return KeyedSubtree(
-                      key: ValueKey('process-$actionKey'),
-                      child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: blinking ? Colors.red : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                      child: _ProcessOrderCard(
-                        data: data,
-                        isPrinting: _printingIds.contains(printKey),
-                        isActing: vm.isActionLoading(actionKey),
-                        onDetail: () async {
-                          final row = vm.items[i];
-                          final detailId = _toId(row['id']);
-                          await _openProcessOrderDetail(context, row, detailId);
-                        },
-                        onPrint: () async {
-                          final row = vm.items[i];
-                          await _printOrder(row);
-                        },
-                        onProcess: () async {
-                          final row = vm.items[i];
-                          try {
-                            await _handleProcessAction(row);
-                          } catch (e) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal proses: $e')),
-                            );
-                          }
-                        },
-                        onCancelProcess: () async {
-                          final row = vm.items[i];
-                          try {
-                            final res = await context.read<ProcessProvider>().actionCancelProcess(row);
-                            if (!mounted) return;
-
-                            final message =
-                                (res['message'] ?? 'Proses dibatalkan').toString();
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(message)),
-                            );
-                          } catch (e) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal batal: $e')),
-                            );
-                          }
-                        },
-                        onFinish: () async {
-                          final row = vm.items[i];
-                          try {
-                            final res = await context.read<ProcessProvider>().actionFinish(row);
-
-                            await _refreshKeepScroll();
-                            await context.read<DoneProvider>().load();
-                            await context.read<PaymentProvider>().load();
-
-                            if (!mounted) return;
-
-                            final message =
-                                (res['message'] ?? 'Order selesai').toString();
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(message)),
-                            );
-                          } catch (e) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal selesai: $e')),
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                    );
-                  },
+                  slivers: buildGroupedOrderSlivers<ProcessSection>(
+                    context: context,
+                    sections: groupedSections,
+                    compact: isMobileLandscape,
+                    isSectionExpanded: _isProcessSectionExpanded,
+                    onToggleSection: _toggleProcessSection,
+                    itemBuilder: (context, data, i) =>
+                        _buildProcessCard(context, vm, data),
+                  ),
                 );
               },
             ),
@@ -501,40 +519,93 @@ class _ProcessViewState extends State<_ProcessView> {
 
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
 
+  bool _isProcessSectionExpanded(ProcessSection section) =>
+      !_collapsedProcessSections.contains(section);
+
+  void _toggleProcessSection(ProcessSection section) {
+    setState(() {
+      if (_collapsedProcessSections.contains(section)) {
+        _collapsedProcessSections.remove(section);
+      } else {
+        _collapsedProcessSections.add(section);
+      }
+    });
+  }
+
   Future<void> _goToAndBlink(int orderId) async {
     final vm = context.read<ProcessProvider>();
 
-    // pastikan data ada
     if (vm.items.isEmpty) {
       await vm.load();
     }
     if (!mounted) return;
 
-    final idx = vm.items.indexWhere((e) => _toId(e['id']) == orderId);
-    if (idx < 0) {
-      // debugPrint('FOCUS PROCESS: id=$orderId NOT FOUND in process list');
-      return;
+    ProcessSection? targetSection;
+    for (final item in vm.items) {
+      if (_toId(item['id']) == orderId) {
+        targetSection = classifyProcessSection(item);
+        break;
+      }
     }
 
-    const approxItemHeight = 170.0; // estimasi tinggi card proses
-    final targetOffset = (idx * (approxItemHeight + 10)).toDouble();
+    final needsExpand = targetSection != null &&
+        _collapsedProcessSections.contains(targetSection);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_listCtrl.hasClients) return;
-      final max = _listCtrl.position.maxScrollExtent;
-      _listCtrl.animateTo(
-        targetOffset.clamp(0.0, max),
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOut,
+    if (needsExpand) {
+      setState(() => _collapsedProcessSections.remove(targetSection));
+    }
+
+    void scrollAndBlink() {
+      if (!mounted) return;
+
+      var grouped = groupProcessItems(vm.items, filter: _sectionFilter);
+      var flatItems = flattenGroupedItems(
+        grouped,
+        isSectionExpanded: _isProcessSectionExpanded,
       );
-    });
+      var idx = flatItems.indexWhere((e) => _toId(e['id']) == orderId);
 
-    // blink
-    _blinkTimer?.cancel();
-    setState(() => _blinkOrderId = orderId);
-    _blinkTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted) setState(() => _blinkOrderId = null);
-    });
+      if (idx < 0 && _sectionFilter != null) {
+        setState(() => _sectionFilter = null);
+        grouped = groupProcessItems(vm.items);
+        flatItems = flattenGroupedItems(
+          grouped,
+          isSectionExpanded: _isProcessSectionExpanded,
+        );
+        idx = flatItems.indexWhere((e) => _toId(e['id']) == orderId);
+      }
+      if (idx < 0) return;
+
+      final targetOffset = estimateGroupedScrollOffset(
+        sections: grouped,
+        orderId: orderId,
+        toId: _toId,
+        isSectionExpanded: _isProcessSectionExpanded,
+        cardHeight: 170,
+      );
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_listCtrl.hasClients) return;
+        final max = _listCtrl.position.maxScrollExtent;
+        _listCtrl.animateTo(
+          targetOffset.clamp(0.0, max),
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOut,
+        );
+      });
+
+      _blinkTimer?.cancel();
+      setState(() => _blinkOrderId = orderId);
+      _blinkTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _blinkOrderId = null);
+      });
+    }
+
+    if (needsExpand) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => scrollAndBlink());
+    } else {
+      scrollAndBlink();
+    }
   }
 
 }
@@ -544,6 +615,7 @@ int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
 class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
+    required this.onScan,
     required this.onChanged,
     required this.onSubmit,
     required this.onClear,
@@ -551,6 +623,7 @@ class _SearchBar extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final VoidCallback onScan;
   final ValueChanged<String> onChanged;
   final VoidCallback onSubmit;
   final VoidCallback onClear;
@@ -614,6 +687,15 @@ class _SearchBar extends StatelessWidget {
               icon: Icon(Icons.close_rounded, size: actionIconSize),
               tooltip: 'Reset',
             ),
+          IconButton(
+            visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+            constraints: compact
+                ? const BoxConstraints(minWidth: 32, minHeight: 32)
+                : null,
+            onPressed: onScan,
+            icon: Icon(Icons.qr_code_scanner_rounded, size: actionIconSize),
+            tooltip: 'Scan barcode',
+          ),
           SizedBox(width: compact ? 4 : 6),
           ElevatedButton(
             style: ElevatedButton.styleFrom(

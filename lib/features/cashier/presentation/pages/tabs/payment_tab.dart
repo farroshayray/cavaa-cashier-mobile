@@ -11,6 +11,8 @@ import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart
 import '/features/cashier/presentation/pages/tabs/modals/edit_order_sheet.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 import '/features/cashier/presentation/utils/order_delete_helper.dart';
+import '/features/cashier/presentation/utils/order_tab_grouping.dart';
+import '/features/cashier/presentation/widgets/order_tab_section_widgets.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 
@@ -80,6 +82,8 @@ class _PaymentViewState extends State<_PaymentView> {
   int? _lastHandledFocus;
   bool? _lastOnline;
   ConnectivityStatusProvider? _connectivity;
+  PaymentSection? _sectionFilter;
+  final Set<PaymentSection> _collapsedPaymentSections = {};
 
 
   @override
@@ -195,44 +199,222 @@ class _PaymentViewState extends State<_PaymentView> {
 
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
 
+  bool _isPaymentSectionExpanded(PaymentSection section) =>
+      !_collapsedPaymentSections.contains(section);
+
+  void _togglePaymentSection(PaymentSection section) {
+    setState(() {
+      if (_collapsedPaymentSections.contains(section)) {
+        _collapsedPaymentSections.remove(section);
+      } else {
+        _collapsedPaymentSections.add(section);
+      }
+    });
+  }
+
   Future<void> _goToAndBlink(int orderId) async {
     final vm = context.read<PaymentProvider>();
 
-    // 1) pastikan list sudah ada data terbaru
-    // (kalau dari Home sudah load(), ini tetap aman)
     if (vm.items.isEmpty) {
       await vm.load();
     }
 
     if (!mounted) return;
 
-    final idx = vm.items.indexWhere((e) => _toId(e['id']) == orderId);
-    if (idx < 0) {
-      // order tidak ketemu di tab ini (bisa karena statusnya sudah pindah tab)
-      return;
+    PaymentSection? targetSection;
+    for (final item in vm.items) {
+      if (_toId(item['id']) == orderId) {
+        targetSection = classifyPaymentSection(item);
+        break;
+      }
     }
 
-    // 2) scroll ke index (perkiraan tinggi item)
-    // kalau kamu butuh akurat banget, nanti kita bisa pakai package scrollable_positioned_list
-    const approxItemHeight = 160.0; // estimasi tinggi card + spacing
-    final targetOffset = (idx * (approxItemHeight + 10)).toDouble();
+    final needsExpand = targetSection != null &&
+        _collapsedPaymentSections.contains(targetSection);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_listCtrl.hasClients) return;
-      final max = _listCtrl.position.maxScrollExtent;
-      _listCtrl.animateTo(
-        targetOffset.clamp(0.0, max),
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOut,
+    if (needsExpand) {
+      setState(() => _collapsedPaymentSections.remove(targetSection));
+    }
+
+    void scrollAndBlink() {
+      if (!mounted) return;
+
+      var grouped = groupPaymentItems(vm.items, filter: _sectionFilter);
+      var flatItems = flattenGroupedItems(
+        grouped,
+        isSectionExpanded: _isPaymentSectionExpanded,
       );
-    });
+      var idx = flatItems.indexWhere((e) => _toId(e['id']) == orderId);
 
-    // 3) blink border
-    _blinkTimer?.cancel();
-    setState(() => _blinkOrderId = orderId);
-    _blinkTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted) setState(() => _blinkOrderId = null);
-    });
+      if (idx < 0 && _sectionFilter != null) {
+        setState(() => _sectionFilter = null);
+        grouped = groupPaymentItems(vm.items);
+        flatItems = flattenGroupedItems(
+          grouped,
+          isSectionExpanded: _isPaymentSectionExpanded,
+        );
+        idx = flatItems.indexWhere((e) => _toId(e['id']) == orderId);
+      }
+      if (idx < 0) return;
+
+      final targetOffset = estimateGroupedScrollOffset(
+        sections: grouped,
+        orderId: orderId,
+        toId: _toId,
+        isSectionExpanded: _isPaymentSectionExpanded,
+      );
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_listCtrl.hasClients) return;
+        final max = _listCtrl.position.maxScrollExtent;
+        _listCtrl.animateTo(
+          targetOffset.clamp(0.0, max),
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOut,
+        );
+      });
+
+      _blinkTimer?.cancel();
+      setState(() => _blinkOrderId = orderId);
+      _blinkTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _blinkOrderId = null);
+      });
+    }
+
+    if (needsExpand) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => scrollAndBlink());
+    } else {
+      scrollAndBlink();
+    }
+  }
+
+  Widget _buildPaymentCard(BuildContext context, Map<String, dynamic> data, int i) {
+    final id = _toId(data['id']);
+    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
+
+    final actionKey = id > 0
+        ? id
+        : ((data['local_id'] ?? '').toString().isNotEmpty
+            ? data['local_id'].toString()
+            : 'idx-$i');
+
+    return KeyedSubtree(
+      key: ValueKey('payment-$actionKey'),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: blinking ? Colors.red : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: _PaymentOrderCard(
+          data: data,
+          onDetail: () async {
+            await _openPaymentOrderDetail(context, data, id);
+          },
+          onDelete: () async {
+            final isLocalOnly = data['is_local_only'] == true;
+            final serverId = (data['server_id'] ?? data['id']);
+            final hasServerId = serverId != null && serverId.toString() != '-1';
+
+            final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
+
+            final ok = await showDialog<bool>(
+              context: context,
+              useRootNavigator: true,
+              builder: (ctx) {
+                String message;
+
+                if (isLocalOnly && !hasServerId) {
+                  message = 'Order lokal yang belum sinkron akan dihapus permanen dari device.';
+                } else if (!isOnline) {
+                  message = 'Order akan ditandai sebagai Pending Delete dan dihapus saat koneksi kembali online.';
+                } else {
+                  message = 'Order akan dihapus.';
+                }
+
+                return AlertDialog(
+                  title: const Text('Hapus order?'),
+                  content: Text(message),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('Batal'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color.fromARGB(255, 146, 10, 0),
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text('Hapus'),
+                    ),
+                  ],
+                );
+              },
+            );
+
+            if (ok != true) return;
+
+            try {
+              await context.read<PaymentProvider>().deleteOrderItem(
+                data,
+                isOnline: isOnline,
+              );
+
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Order berhasil diperbarui.')),
+              );
+            } catch (e) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Gagal hapus order: $e')),
+              );
+            }
+          },
+          onProcess: () async {
+            final syncStatus = (data['sync_status'] ?? '').toString();
+            if (syncStatus == 'PENDING_DELETE') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Order ini sedang menunggu penghapusan.'),
+                ),
+              );
+              return;
+            }
+
+            final result = await showModalBottomSheet<bool>(
+              context: context,
+              useRootNavigator: true,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => SizedBox(
+                height: MediaQuery.of(context).size.height * 0.92,
+                child: PaymentProcessSheet(
+                  orderId: id,
+                  forceOffline: syncStatus == 'STOCK_CONFLICT',
+                  loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
+                  ordersRepo: context.read<PaymentProvider>().repo,
+                ),
+              ),
+            );
+
+            if (result == true && context.mounted) {
+              final paymentVM = context.read<PaymentProvider>();
+              final processVM = context.read<ProcessProvider>();
+              final doneVM = context.read<DoneProvider>();
+              await paymentVM.load();
+              unawaited(processVM.load());
+              unawaited(doneVM.load());
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -242,6 +424,8 @@ class _PaymentViewState extends State<_PaymentView> {
     final isLandscape = media.orientation == Orientation.landscape;
     final shortestSide = media.size.shortestSide;
     final isMobileLandscape = isLandscape && shortestSide < 600;
+    final groupedSections = groupPaymentItems(vm.items, filter: _sectionFilter);
+    final hasSearchQuery = vm.query.trim().isNotEmpty;
 
     return Column(
       children: [
@@ -270,37 +454,11 @@ class _PaymentViewState extends State<_PaymentView> {
           ),
         ),
 
-        Container(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            isMobileLandscape ? 8 : 10,
-            16,
-            isMobileLandscape ? 8 : 10,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7F8FA),
-            border: Border(
-              top: BorderSide(color: Colors.black.withOpacity(0.06)),
-              bottom: BorderSide(color: Colors.black.withOpacity(0.06)),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Pembayaran',
-                  style: TextStyle(
-                    fontSize: isMobileLandscape ? 14 : 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              _Badge(
-                text: '${vm.items.length} order',
-                compact: isMobileLandscape,
-              ),
-            ],
-          ),
+        ...buildPaymentSectionFilterChips(
+          items: vm.items,
+          selected: _sectionFilter,
+          compact: isMobileLandscape,
+          onSelected: (value) => setState(() => _sectionFilter = value),
         ),
 
         Expanded(
@@ -337,13 +495,16 @@ class _PaymentViewState extends State<_PaymentView> {
 
                 if (vm.items.isEmpty) {
                   return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
                       Icon(Icons.inbox_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
                       const SizedBox(height: 10),
                       Text(
-                        'Tidak ada order yang menunggu pembayaran.',
+                        hasSearchQuery
+                            ? 'Tidak ditemukan untuk pencarian "${vm.query}".'
+                            : 'Tidak ada order yang menunggu pembayaran.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.black.withOpacity(0.60)),
                       ),
@@ -351,143 +512,35 @@ class _PaymentViewState extends State<_PaymentView> {
                   );
                 }
 
-                return ListView.separated(
+                if (groupedSections.isEmpty) {
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      const SizedBox(height: 80),
+                      Icon(Icons.filter_list_off_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Tidak ada order di kelompok ini.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black.withOpacity(0.60)),
+                      ),
+                    ],
+                  );
+                }
+
+                return CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  controller: _listCtrl, // ✅ penting untuk scroll
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                  itemCount: vm.items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) {
-                    final data = vm.items[i];
-                    final id = _toId(data['id']);
-                    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
-
-                    final actionKey = id > 0
-                        ? id
-                        : ((data['local_id'] ?? '').toString().isNotEmpty
-                            ? data['local_id'].toString()
-                            : 'idx-$i');
-
-                    return KeyedSubtree(
-                      key: ValueKey('payment-$actionKey'),
-                      child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: blinking ? Colors.red : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                      child: _PaymentOrderCard(
-                        data: data,
-                        onDetail: () async {
-                          await _openPaymentOrderDetail(context, data, id);
-                        },
-                        onDelete: () async {
-                          final isLocalOnly = data['is_local_only'] == true;
-                          final serverId = (data['server_id'] ?? data['id']);
-                          final hasServerId = serverId != null && serverId.toString() != '-1';
-
-                          final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
-
-                          final ok = await showDialog<bool>(
-                            context: context,
-                            useRootNavigator: true,
-                            builder: (ctx) {
-                              String message;
-
-                              if (isLocalOnly && !hasServerId) {
-                                message = 'Order lokal yang belum sinkron akan dihapus permanen dari device.';
-                              } else if (!isOnline) {
-                                message = 'Order akan ditandai sebagai Pending Delete dan dihapus saat koneksi kembali online.';
-                              } else {
-                                message = 'Order akan dihapus.';
-                              }
-
-                              return AlertDialog(
-                                title: const Text('Hapus order?'),
-                                content: Text(message),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.of(ctx).pop(false),
-                                    child: const Text('Batal'),
-                                  ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color.fromARGB(255, 146, 10, 0),
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    onPressed: () => Navigator.of(ctx).pop(true),
-                                    child: const Text('Hapus'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-
-                          if (ok != true) return;
-
-                          try {
-                            await context.read<PaymentProvider>().deleteOrderItem(
-                              data,
-                              isOnline: isOnline,
-                            );
-
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Order berhasil diperbarui.')),
-                            );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal hapus order: $e')),
-                            );
-                          }
-                        },
-                        onProcess: () async {
-                          final syncStatus = (data['sync_status'] ?? '').toString();
-                          // 🚫 kalau order sedang pending delete
-                          if (syncStatus == 'PENDING_DELETE') {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Order ini sedang menunggu penghapusan.'),
-                              ),
-                            );
-                            return;
-                          }
-
-                          final result = await showModalBottomSheet<bool>(
-                            context: context,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.92,
-                              child: PaymentProcessSheet(
-                                orderId: id,
-                                forceOffline: syncStatus == 'STOCK_CONFLICT',
-                                // 🔑 ini yang membuat modal bisa offline
-                                loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
-                                ordersRepo: context.read<PaymentProvider>().repo,
-                              ),
-                            ),
-                          );
-
-                          if (result == true && context.mounted) {
-                            final paymentVM = context.read<PaymentProvider>();
-                            final processVM = context.read<ProcessProvider>();
-                            final doneVM = context.read<DoneProvider>();
-                            await paymentVM.load();
-                            unawaited(processVM.load());
-                            unawaited(doneVM.load());
-                          }
-                        },
-                      ),
-                    ),
-                    );
-                  },
+                  controller: _listCtrl,
+                  slivers: buildGroupedOrderSlivers<PaymentSection>(
+                    context: context,
+                    sections: groupedSections,
+                    compact: isMobileLandscape,
+                    isSectionExpanded: _isPaymentSectionExpanded,
+                    onToggleSection: _togglePaymentSection,
+                    itemBuilder: (context, data, i) =>
+                        _buildPaymentCard(context, data, i),
+                  ),
                 );
               },
             ),
@@ -598,39 +651,6 @@ class _SearchBar extends StatelessWidget {
             child: Icon(Icons.search_rounded, size: compact ? 16 : 18),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.text,
-    this.compact = false,
-  });
-
-  final String text;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 8 : 10,
-        vertical: compact ? 4 : 6,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFBFDBFE)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: compact ? 11 : 12,
-          fontWeight: FontWeight.w800,
-          color: const Color(0xFF1D4ED8),
-        ),
       ),
     );
   }
