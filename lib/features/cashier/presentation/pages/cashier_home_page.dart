@@ -595,14 +595,6 @@ class _CashierHomePageState extends State<CashierHomePage>
     });
   }
 
-  void _openBarcode() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Sementara anda belum dapat menggunakan fitur ini...'),
-      ),
-    );
-  }
-
   void _debouncedReloadPayment() {
     _paymentReloadDebounce?.cancel();
     _paymentReloadDebounce = Timer(const Duration(milliseconds: 400), () {
@@ -961,7 +953,6 @@ class _CashierHomePageState extends State<CashierHomePage>
                   _SideNav(
                     currentIndex: _index,
                     onTap: _onTap,
-                    onBarcodeTap: _openBarcode,
                     iconOnly: true,
                     paymentCount: paymentCount,
                     processCount: processCount,
@@ -995,10 +986,6 @@ class _CashierHomePageState extends State<CashierHomePage>
                           onTap: () => _onTap(1),
                           badge: paymentCount,
                         ),
-                        // _BarcodeNavItem(
-                        //   active: false,
-                        //   onTap: _openBarcode,
-                        // ),
                         _NavItem(
                           icon: Icons.sync_rounded,
                           label: 'Proses',
@@ -1027,7 +1014,6 @@ class _SideNav extends StatelessWidget {
   const _SideNav({
     required this.currentIndex,
     required this.onTap,
-    required this.onBarcodeTap,
     this.iconOnly = false,
     this.paymentCount = 0,
     this.processCount = 0,
@@ -1036,7 +1022,6 @@ class _SideNav extends StatelessWidget {
 
   final int currentIndex;
   final ValueChanged<int> onTap;
-  final VoidCallback onBarcodeTap;
   final bool iconOnly;
   final int paymentCount;
   final int processCount;
@@ -1044,8 +1029,6 @@ class _SideNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const brand = Color(0xFFAE1504);
-
     final media = MediaQuery.of(context);
     final leftInset = media.padding.left;
 
@@ -1093,35 +1076,6 @@ class _SideNav extends StatelessWidget {
                   onTap: () => onTap(1),
                   iconOnly: iconOnly,
                   badge: paymentCount,
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Center(
-                    child: InkWell(
-                      onTap: onBarcodeTap,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        width: iconOnly ? 44 : 56,
-                        height: iconOnly ? 44 : 56,
-                        decoration: BoxDecoration(
-                          color: brand,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: brand.withOpacity(0.25),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.qr_code_scanner_rounded,
-                          color: Colors.white,
-                          size: iconOnly ? 22 : 28,
-                        ),
-                      ),
-                    ),
-                  ),
                 ),
                 _SideNavItem(
                   icon: Icons.sync_rounded,
@@ -1421,47 +1375,6 @@ class _NavItem extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BarcodeNavItem extends StatelessWidget {
-  const _BarcodeNavItem({required this.onTap, this.active = false});
-
-  final VoidCallback onTap;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    const brand = Color(0xFFAE1504);
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Transform.translate(
-          offset: const Offset(0, -10),
-          child: Container(
-            height: 52,
-            width: 52,
-            decoration: BoxDecoration(
-              color: brand,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: brand.withOpacity(0.45),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.qr_code_scanner_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
           ),
         ),
       ),
