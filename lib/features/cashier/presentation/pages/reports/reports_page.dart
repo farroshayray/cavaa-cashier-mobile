@@ -12,6 +12,7 @@ import '/core/network/dio_client.dart';
 import '/features/cashier/data/models/purchase_models.dart';
 import '/features/cashier/data/report_api.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
+import '/features/cashier/presentation/utils/report_xlsx_converter.dart';
 
 part 'reports_filters.dart';
 part 'reports_sold_products_sheet.dart';
@@ -280,12 +281,13 @@ class _ReportsPageState extends State<ReportsPage> {
     try {
       final dioClient = context.read<DioClient>();
       final api = ReportApi(dioClient.dio);
-      final bytes = await api.exportSummary(
+      final csvBytes = await api.exportSummary(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
         cashierScope: _cashierScopeValue(_cashierScope),
         paymentFilters: _activePaymentFilterKeys,
       );
+      final bytes = csvBytesToXlsx(csvBytes);
 
       final dir = await getApplicationDocumentsDirectory();
       final folder = Directory('${dir.path}/report_exports');
@@ -294,7 +296,7 @@ class _ReportsPageState extends State<ReportsPage> {
       }
 
       final fileName =
-          'laporan_${_formatApiDate(_activeRange.start)}_${_formatApiDate(_activeRange.end)}_${_cashierScopeValue(_cashierScope)}${_activePaymentFilterKeys.isEmpty ? '' : '_filtered'}.csv';
+          'laporan_${_formatApiDate(_activeRange.start)}_${_formatApiDate(_activeRange.end)}_${_cashierScopeValue(_cashierScope)}${_activePaymentFilterKeys.isEmpty ? '' : '_filtered'}.xlsx';
       final file = File('${folder.path}/$fileName');
 
       if (await file.exists()) {
@@ -514,7 +516,7 @@ class _ReportsPageState extends State<ReportsPage> {
                 ),
               )
             : const Icon(Icons.file_download_outlined),
-        label: Text(_isExporting ? 'Exporting...' : 'Export CSV'),
+        label: Text(_isExporting ? 'Exporting...' : 'Export Excel'),
       ),
     );
   }
@@ -559,7 +561,7 @@ class _ReportsHeroCard extends StatelessWidget {
           ),
           SizedBox(height: 10),
           Text(
-            'Ringkasan laporan, filter kasir, dan export CSV sekarang siap untuk mobile cashier.',
+            'Ringkasan laporan, filter kasir, dan export Excel sekarang siap untuk mobile cashier.',
             style: TextStyle(color: Colors.white, height: 1.4),
           ),
         ],
@@ -1023,7 +1025,7 @@ class _EmptyStateCard extends StatelessWidget {
         ? errorMessage!
         : hasData
         ? isExporting
-              ? 'File CSV sedang disiapkan. Anda bisa menunggu sampai proses export selesai.'
+              ? 'File Excel sedang disiapkan. Anda bisa menunggu sampai proses export selesai.'
               : 'Data yang tampil saat ini menggunakan filter: $activeFilterLabel.'
         : 'Pilih periode dan filter yang sesuai untuk mulai melihat data laporan.';
 
