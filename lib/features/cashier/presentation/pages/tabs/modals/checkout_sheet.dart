@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/models/checkout_exceptions.dart';
@@ -515,13 +516,13 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               if (mounted) {
                                 await context.read<PurchaseProvider>().load();
                               }
-                            } catch (_) {
+                            } catch (e) {
                               if (!mounted) return;
                               ScaffoldMessenger.of(context)
                                 ..hideCurrentSnackBar()
                                 ..showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Gagal memproses pembayaran. Coba lagi.'),
+                                  SnackBar(
+                                    content: Text(_checkoutErrorMessage(e)),
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
@@ -1103,6 +1104,23 @@ class _ProductThumb extends StatelessWidget {
           const Icon(Icons.broken_image_outlined),
     );
   }
+}
+
+String _checkoutErrorMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map && data['message'] != null) {
+      final message = data['message'].toString().trim();
+      if (message.isNotEmpty) return message;
+    }
+  }
+
+  if (error is Exception) {
+    final message = error.toString().replaceFirst('Exception: ', '').trim();
+    if (message.isNotEmpty) return message;
+  }
+
+  return 'Gagal memproses pembayaran. Coba lagi.';
 }
 
 String _rupiah(num n) {

@@ -76,7 +76,7 @@ class PurchaseApi {
                 ) !=
                 null);
 
-    if (success == false || status == 'error') {
+    if (_isExplicitCheckoutFailure(success, status)) {
       throw Exception(
         data['message']?.toString() ?? 'Checkout gagal tanpa pesan dari server',
       );
@@ -99,12 +99,26 @@ class PurchaseApi {
       );
     }
 
-    if (!hasOrderId) {
-      throw Exception(
-        data['message']?.toString() ??
-            'Checkout tidak mengembalikan ID order dari server',
-      );
+    if (hasOrderId || _isExplicitCheckoutSuccess(success, status)) {
+      return;
     }
+
+    throw Exception(
+      data['message']?.toString() ??
+          'Checkout tidak mengembalikan ID order dari server',
+    );
+  }
+
+  static bool _isExplicitCheckoutFailure(dynamic success, String? status) {
+    if (success is bool && !success) return true;
+    if (status == 'error' || status == 'failed') return true;
+    return false;
+  }
+
+  static bool _isExplicitCheckoutSuccess(dynamic success, String? status) {
+    if (success is bool && success) return true;
+    if (status == 'success' || status == 'ok') return true;
+    return false;
   }
 
   static int? _readPositiveInt(dynamic raw) {

@@ -170,18 +170,8 @@ class PurchaseProvider extends ChangeNotifier {
     required String paymentMethod,
     required PaymentOption payment,
   }) async {
-    // 1. simpan lokal dulu
-    // final normalizedCustomerName = _normalizeGuestName(customerName);
     final normalizedCustomerName = customerName;
 
-    final localOrderId = await _saveOrderToLocal(
-      customerName: normalizedCustomerName,
-      table: table,
-      paymentMethod: paymentMethod,
-      payment: payment,
-    );
-
-    // 2. siapkan payload API seperti sebelumnya
     final itemsPayload = cart.map((it) {
       final optionIds = it.selected.values.expand((s) => s).toList();
 
@@ -203,52 +193,45 @@ class PurchaseProvider extends ChangeNotifier {
         items: itemsPayload,
       );
 
-      await localOrdersDao.deleteOrderByLocalId(localOrderId);
-
       if (paymentMethod != "QRIS") {
         cart.clear();
       }
+      notifyListeners();
 
       return {
         ...resp,
-        'local_order_id': localOrderId,
-        'saved_local': true,
+        'saved_local': false,
       };
     } on StockInsufficientException {
-      await localOrdersDao.deleteOrderByLocalId(localOrderId);
       rethrow;
     } on DioException catch (e) {
       if (e.response != null) {
-        await localOrdersDao.deleteOrderByLocalId(localOrderId);
         rethrow;
       }
 
       debugPrint('checkout network failed, saved locally only: $e');
-
-      cart.clear();
-      notifyListeners();
-
-      return {
-        'status': true,
-        'message': 'Order disimpan lokal, menunggu sinkronisasi',
-        'local_order_id': localOrderId,
-        'saved_local': true,
-        'offline': true,
-      };
     } catch (e) {
-      debugPrint('checkout online failed, saved locally only: $e');
-
-      cart.clear();
-      notifyListeners();
-
-      return {
-        'status': true,
-        'message': 'Order disimpan lokal, menunggu sinkronisasi',
-        'local_order_id': localOrderId,
-        'saved_local': true,
-        'offline': true,
-      };
+      debugPrint('checkout online failed: $e');
+      rethrow;
     }
+
+    final localOrderId = await _saveOrderToLocal(
+      customerName: normalizedCustomerName,
+      table: table,
+      paymentMethod: paymentMethod,
+      payment: payment,
+    );
+
+    cart.clear();
+    notifyListeners();
+
+    return {
+      'status': true,
+      'message': 'Order disimpan lokal, menunggu sinkronisasi',
+      'local_order_id': localOrderId,
+      'saved_local': true,
+      'offline': true,
+    };
   }
 
   Future<String> _saveOrderToLocal({
