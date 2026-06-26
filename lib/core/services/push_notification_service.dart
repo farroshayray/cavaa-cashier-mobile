@@ -384,8 +384,12 @@ class PushNotificationService {
   }
 
   Future<void> _printInitialToken() async {
-    await _messaging.getToken();
-    // debugPrint('✅ FCM TOKEN ASLI: $token');
+    try {
+      await _messaging.getToken();
+      // debugPrint('✅ FCM TOKEN ASLI: $token');
+    } catch (e) {
+      debugPrint('FCM getToken skipped: $e');
+    }
   }
 
   void _listenTokenRefresh() {
@@ -396,11 +400,16 @@ class PushNotificationService {
   }
 
   Future<String?> getFcmToken() async {
-    return _messaging.getToken();
+    try {
+      return await _messaging.getToken();
+    } catch (e) {
+      debugPrint('FCM getToken failed: $e');
+      return null;
+    }
   }
 
   Future<void> syncCurrentTokenToBackend() async {
-    final token = await _messaging.getToken();
+    final token = await getFcmToken();
     if (token == null || token.isEmpty) {
       // debugPrint('⚠️ FCM token kosong.');
       return;

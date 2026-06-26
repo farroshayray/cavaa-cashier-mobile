@@ -206,6 +206,8 @@ class PurchaseCacheMapper {
   }
 
   static PaymentOption fromCachedPayment(CachedPaymentMethod row) {
+    final raw = _decodeRawMap(row.rawJson);
+
     PayKind kind;
     switch (row.kind) {
       case 'cashierCash':
@@ -226,12 +228,23 @@ class PurchaseCacheMapper {
         break;
     }
 
+    final rawValue = raw['value']?.toString().trim();
+    final value = rawValue != null && rawValue.isNotEmpty
+        ? rawValue
+        : switch (kind) {
+            PayKind.cashierCash => 'CASH',
+            PayKind.openbill => 'OPENBILL',
+            PayKind.onlineQris => 'QRIS',
+            PayKind.manual =>
+              row.serverManualPaymentId?.toString() ?? row.localKey,
+          };
+
     return PaymentOption(
       kind: kind,
-      value: row.serverManualPaymentId?.toString() ?? row.localKey,
+      value: value,
       label: row.label,
-      desc: null,
-      manualType: row.kind,
+      desc: raw['desc']?.toString(),
+      manualType: raw['manual_type']?.toString() ?? row.kind,
       manualId: row.serverManualPaymentId,
       providerName: row.providerName,
       providerAccountName: row.providerAccountName,

@@ -488,7 +488,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               final redirect = resp['redirect'];
                               final isXenditQris = selectedPay.kind == PayKind.onlineQris;
 
-                              final isOpenbill = selectedPay.kind == PayKind.openbill;
+                              final isOpenbill = _isOpenbillCheckout(selectedPay, resp);
                               final refreshTarget = isXenditQris
                                   ? ''
                                   : (isOpenbill ? 'process' : 'payment');
@@ -1104,6 +1104,21 @@ class _ProductThumb extends StatelessWidget {
           const Icon(Icons.broken_image_outlined),
     );
   }
+}
+
+bool _isOpenbillCheckout(
+  PaymentOption payment,
+  Map<String, dynamic> resp,
+) {
+  if (payment.isOpenbill) return true;
+
+  final data = resp['data'];
+  final status = (data is Map ? data['order_status'] : null) ??
+      resp['order_status'] ??
+      resp['orderStatus'];
+  final normalized = status?.toString().toUpperCase() ?? '';
+  return normalized == 'OPENBILL_CONFIRMATION' ||
+      normalized == 'OPENBILL_WAITING_ORDER';
 }
 
 String _checkoutErrorMessage(Object error) {

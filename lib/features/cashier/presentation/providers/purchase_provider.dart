@@ -251,9 +251,11 @@ class PurchaseProvider extends ChangeNotifier {
 
     final selectedPaymentMethod = paymentMethod;
     final effectivePaymentMethod =
-      payment.kind == PayKind.manual
-          ? (payment.manualType ?? paymentMethod)
-          : paymentMethod;
+      payment.isOpenbill
+          ? 'OPENBILL'
+          : payment.kind == PayKind.manual
+              ? (payment.manualType ?? paymentMethod)
+              : payment.backendPaymentMethod;
     String? manualPaymentRawJson;
 
     if (payment.kind == PayKind.manual) {

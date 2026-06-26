@@ -132,21 +132,10 @@ class CartSheet extends StatelessWidget {
                                 height: MediaQuery.of(rootCtx).size.height * 0.92,
                                 child: CheckoutSheet(
                                   onSubmit: ({required customerName, required table, required payment}) async {
-                                    // 1) mapping ke string backend (sementara)
-                                    // - cashierCash => "CASH"
-                                    // - onlineQris  => "QRIS"
-                                    // - manual      => biasanya kirim manualId (string) ATAU "MANUAL" tergantung backend
-                                    final String paymentMethod = switch (payment.kind) {
-                                      PayKind.cashierCash => 'CASH',
-                                      PayKind.openbill    => 'OPENBILL',
-                                      PayKind.onlineQris  => 'QRIS',
-                                      PayKind.manual      => payment.value, // default: kirim manualId string
-                                    };
-
                                     final resp = await context.read<PurchaseProvider>().checkout(
                                       customerName: customerName,
                                       table: table,
-                                      paymentMethod: paymentMethod,
+                                      paymentMethod: payment.backendPaymentMethod,
                                       payment: payment,
                                     );
 

@@ -553,6 +553,22 @@ class PaymentOption {
     this.qrisImageUrl,
     this.qrisImageLocalPath,
   });
+
+  bool get isOpenbill =>
+      kind == PayKind.openbill || value.trim().toUpperCase() == 'OPENBILL';
+
+  String get backendPaymentMethod {
+    switch (kind) {
+      case PayKind.cashierCash:
+        return 'CASH';
+      case PayKind.openbill:
+        return 'OPENBILL';
+      case PayKind.onlineQris:
+        return 'QRIS';
+      case PayKind.manual:
+        return value;
+    }
+  }
 }
 
 List<PaymentOption> parseManualPaymentOptions(Map<String, dynamic> data) {

@@ -296,14 +296,10 @@ class _MiniCartBar extends StatelessWidget {
                         height: MediaQuery.of(rootCtx).size.height * 0.92,
                         child: CheckoutSheet(
                           onSubmit: ({required customerName, required table, required payment}) async {
-                            final paymentMethod = payment.kind == PayKind.manual
-                                ? payment.value
-                                : payment.value;
-
                             final resp = await context.read<PurchaseProvider>().checkout(
                               customerName: customerName,
                               table: table,
-                              paymentMethod: paymentMethod,
+                              paymentMethod: payment.backendPaymentMethod,
                               payment: payment,
                             );
 
