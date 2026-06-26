@@ -4169,6 +4169,28 @@ class $LocalOrdersTable extends LocalOrders
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _cashRoundingAmountMeta =
+      const VerificationMeta('cashRoundingAmount');
+  @override
+  late final GeneratedColumn<double> cashRoundingAmount =
+      GeneratedColumn<double>(
+        'cash_rounding_amount',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _cashRoundingUnitMeta = const VerificationMeta(
+    'cashRoundingUnit',
+  );
+  @override
+  late final GeneratedColumn<int> cashRoundingUnit = GeneratedColumn<int>(
+    'cash_rounding_unit',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _paidAmountLocalMeta = const VerificationMeta(
     'paidAmountLocal',
   );
@@ -4435,6 +4457,8 @@ class $LocalOrdersTable extends LocalOrders
     ppnPercent,
     isPpnActive,
     grandTotal,
+    cashRoundingAmount,
+    cashRoundingUnit,
     paidAmountLocal,
     changeAmountLocal,
     cashierProofImageLocalPath,
@@ -4600,6 +4624,24 @@ class $LocalOrdersTable extends LocalOrders
       context.handle(
         _grandTotalMeta,
         grandTotal.isAcceptableOrUnknown(data['grand_total']!, _grandTotalMeta),
+      );
+    }
+    if (data.containsKey('cash_rounding_amount')) {
+      context.handle(
+        _cashRoundingAmountMeta,
+        cashRoundingAmount.isAcceptableOrUnknown(
+          data['cash_rounding_amount']!,
+          _cashRoundingAmountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cash_rounding_unit')) {
+      context.handle(
+        _cashRoundingUnitMeta,
+        cashRoundingUnit.isAcceptableOrUnknown(
+          data['cash_rounding_unit']!,
+          _cashRoundingUnitMeta,
+        ),
       );
     }
     if (data.containsKey('paid_amount_local')) {
@@ -4868,6 +4910,14 @@ class $LocalOrdersTable extends LocalOrders
         DriftSqlType.double,
         data['${effectivePrefix}grand_total'],
       )!,
+      cashRoundingAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}cash_rounding_amount'],
+      ),
+      cashRoundingUnit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cash_rounding_unit'],
+      ),
       paidAmountLocal: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}paid_amount_local'],
@@ -4982,6 +5032,8 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
   final double ppnPercent;
   final bool isPpnActive;
   final double grandTotal;
+  final double? cashRoundingAmount;
+  final int? cashRoundingUnit;
   final double? paidAmountLocal;
   final double? changeAmountLocal;
   final String? cashierProofImageLocalPath;
@@ -5021,6 +5073,8 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
     required this.ppnPercent,
     required this.isPpnActive,
     required this.grandTotal,
+    this.cashRoundingAmount,
+    this.cashRoundingUnit,
     this.paidAmountLocal,
     this.changeAmountLocal,
     this.cashierProofImageLocalPath,
@@ -5081,6 +5135,12 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
     map['ppn_percent'] = Variable<double>(ppnPercent);
     map['is_ppn_active'] = Variable<bool>(isPpnActive);
     map['grand_total'] = Variable<double>(grandTotal);
+    if (!nullToAbsent || cashRoundingAmount != null) {
+      map['cash_rounding_amount'] = Variable<double>(cashRoundingAmount);
+    }
+    if (!nullToAbsent || cashRoundingUnit != null) {
+      map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit);
+    }
     if (!nullToAbsent || paidAmountLocal != null) {
       map['paid_amount_local'] = Variable<double>(paidAmountLocal);
     }
@@ -5184,6 +5244,12 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
       ppnPercent: Value(ppnPercent),
       isPpnActive: Value(isPpnActive),
       grandTotal: Value(grandTotal),
+      cashRoundingAmount: cashRoundingAmount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cashRoundingAmount),
+      cashRoundingUnit: cashRoundingUnit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cashRoundingUnit),
       paidAmountLocal: paidAmountLocal == null && nullToAbsent
           ? const Value.absent()
           : Value(paidAmountLocal),
@@ -5271,6 +5337,10 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
       ppnPercent: serializer.fromJson<double>(json['ppnPercent']),
       isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
       grandTotal: serializer.fromJson<double>(json['grandTotal']),
+      cashRoundingAmount: serializer.fromJson<double?>(
+        json['cashRoundingAmount'],
+      ),
+      cashRoundingUnit: serializer.fromJson<int?>(json['cashRoundingUnit']),
       paidAmountLocal: serializer.fromJson<double?>(json['paidAmountLocal']),
       changeAmountLocal: serializer.fromJson<double?>(
         json['changeAmountLocal'],
@@ -5347,6 +5417,8 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
       'ppnPercent': serializer.toJson<double>(ppnPercent),
       'isPpnActive': serializer.toJson<bool>(isPpnActive),
       'grandTotal': serializer.toJson<double>(grandTotal),
+      'cashRoundingAmount': serializer.toJson<double?>(cashRoundingAmount),
+      'cashRoundingUnit': serializer.toJson<int?>(cashRoundingUnit),
       'paidAmountLocal': serializer.toJson<double?>(paidAmountLocal),
       'changeAmountLocal': serializer.toJson<double?>(changeAmountLocal),
       'cashierProofImageLocalPath': serializer.toJson<String?>(
@@ -5399,6 +5471,8 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
     double? ppnPercent,
     bool? isPpnActive,
     double? grandTotal,
+    Value<double?> cashRoundingAmount = const Value.absent(),
+    Value<int?> cashRoundingUnit = const Value.absent(),
     Value<double?> paidAmountLocal = const Value.absent(),
     Value<double?> changeAmountLocal = const Value.absent(),
     Value<String?> cashierProofImageLocalPath = const Value.absent(),
@@ -5448,6 +5522,12 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
     ppnPercent: ppnPercent ?? this.ppnPercent,
     isPpnActive: isPpnActive ?? this.isPpnActive,
     grandTotal: grandTotal ?? this.grandTotal,
+    cashRoundingAmount: cashRoundingAmount.present
+        ? cashRoundingAmount.value
+        : this.cashRoundingAmount,
+    cashRoundingUnit: cashRoundingUnit.present
+        ? cashRoundingUnit.value
+        : this.cashRoundingUnit,
     paidAmountLocal: paidAmountLocal.present
         ? paidAmountLocal.value
         : this.paidAmountLocal,
@@ -5543,6 +5623,12 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
       grandTotal: data.grandTotal.present
           ? data.grandTotal.value
           : this.grandTotal,
+      cashRoundingAmount: data.cashRoundingAmount.present
+          ? data.cashRoundingAmount.value
+          : this.cashRoundingAmount,
+      cashRoundingUnit: data.cashRoundingUnit.present
+          ? data.cashRoundingUnit.value
+          : this.cashRoundingUnit,
       paidAmountLocal: data.paidAmountLocal.present
           ? data.paidAmountLocal.value
           : this.paidAmountLocal,
@@ -5627,6 +5713,8 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
           ..write('ppnPercent: $ppnPercent, ')
           ..write('isPpnActive: $isPpnActive, ')
           ..write('grandTotal: $grandTotal, ')
+          ..write('cashRoundingAmount: $cashRoundingAmount, ')
+          ..write('cashRoundingUnit: $cashRoundingUnit, ')
           ..write('paidAmountLocal: $paidAmountLocal, ')
           ..write('changeAmountLocal: $changeAmountLocal, ')
           ..write('cashierProofImageLocalPath: $cashierProofImageLocalPath, ')
@@ -5671,6 +5759,8 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
     ppnPercent,
     isPpnActive,
     grandTotal,
+    cashRoundingAmount,
+    cashRoundingUnit,
     paidAmountLocal,
     changeAmountLocal,
     cashierProofImageLocalPath,
@@ -5714,6 +5804,8 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
           other.ppnPercent == this.ppnPercent &&
           other.isPpnActive == this.isPpnActive &&
           other.grandTotal == this.grandTotal &&
+          other.cashRoundingAmount == this.cashRoundingAmount &&
+          other.cashRoundingUnit == this.cashRoundingUnit &&
           other.paidAmountLocal == this.paidAmountLocal &&
           other.changeAmountLocal == this.changeAmountLocal &&
           other.cashierProofImageLocalPath == this.cashierProofImageLocalPath &&
@@ -5755,6 +5847,8 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
   final Value<double> ppnPercent;
   final Value<bool> isPpnActive;
   final Value<double> grandTotal;
+  final Value<double?> cashRoundingAmount;
+  final Value<int?> cashRoundingUnit;
   final Value<double?> paidAmountLocal;
   final Value<double?> changeAmountLocal;
   final Value<String?> cashierProofImageLocalPath;
@@ -5795,6 +5889,8 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
     this.ppnPercent = const Value.absent(),
     this.isPpnActive = const Value.absent(),
     this.grandTotal = const Value.absent(),
+    this.cashRoundingAmount = const Value.absent(),
+    this.cashRoundingUnit = const Value.absent(),
     this.paidAmountLocal = const Value.absent(),
     this.changeAmountLocal = const Value.absent(),
     this.cashierProofImageLocalPath = const Value.absent(),
@@ -5836,6 +5932,8 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
     this.ppnPercent = const Value.absent(),
     this.isPpnActive = const Value.absent(),
     this.grandTotal = const Value.absent(),
+    this.cashRoundingAmount = const Value.absent(),
+    this.cashRoundingUnit = const Value.absent(),
     this.paidAmountLocal = const Value.absent(),
     this.changeAmountLocal = const Value.absent(),
     this.cashierProofImageLocalPath = const Value.absent(),
@@ -5881,6 +5979,8 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
     Expression<double>? ppnPercent,
     Expression<bool>? isPpnActive,
     Expression<double>? grandTotal,
+    Expression<double>? cashRoundingAmount,
+    Expression<int>? cashRoundingUnit,
     Expression<double>? paidAmountLocal,
     Expression<double>? changeAmountLocal,
     Expression<String>? cashierProofImageLocalPath,
@@ -5924,6 +6024,9 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
       if (ppnPercent != null) 'ppn_percent': ppnPercent,
       if (isPpnActive != null) 'is_ppn_active': isPpnActive,
       if (grandTotal != null) 'grand_total': grandTotal,
+      if (cashRoundingAmount != null)
+        'cash_rounding_amount': cashRoundingAmount,
+      if (cashRoundingUnit != null) 'cash_rounding_unit': cashRoundingUnit,
       if (paidAmountLocal != null) 'paid_amount_local': paidAmountLocal,
       if (changeAmountLocal != null) 'change_amount_local': changeAmountLocal,
       if (cashierProofImageLocalPath != null)
@@ -5978,6 +6081,8 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
     Value<double>? ppnPercent,
     Value<bool>? isPpnActive,
     Value<double>? grandTotal,
+    Value<double?>? cashRoundingAmount,
+    Value<int?>? cashRoundingUnit,
     Value<double?>? paidAmountLocal,
     Value<double?>? changeAmountLocal,
     Value<String?>? cashierProofImageLocalPath,
@@ -6021,6 +6126,8 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
       ppnPercent: ppnPercent ?? this.ppnPercent,
       isPpnActive: isPpnActive ?? this.isPpnActive,
       grandTotal: grandTotal ?? this.grandTotal,
+      cashRoundingAmount: cashRoundingAmount ?? this.cashRoundingAmount,
+      cashRoundingUnit: cashRoundingUnit ?? this.cashRoundingUnit,
       paidAmountLocal: paidAmountLocal ?? this.paidAmountLocal,
       changeAmountLocal: changeAmountLocal ?? this.changeAmountLocal,
       cashierProofImageLocalPath:
@@ -6108,6 +6215,12 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
     }
     if (grandTotal.present) {
       map['grand_total'] = Variable<double>(grandTotal.value);
+    }
+    if (cashRoundingAmount.present) {
+      map['cash_rounding_amount'] = Variable<double>(cashRoundingAmount.value);
+    }
+    if (cashRoundingUnit.present) {
+      map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit.value);
     }
     if (paidAmountLocal.present) {
       map['paid_amount_local'] = Variable<double>(paidAmountLocal.value);
@@ -6216,6 +6329,8 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
           ..write('ppnPercent: $ppnPercent, ')
           ..write('isPpnActive: $isPpnActive, ')
           ..write('grandTotal: $grandTotal, ')
+          ..write('cashRoundingAmount: $cashRoundingAmount, ')
+          ..write('cashRoundingUnit: $cashRoundingUnit, ')
           ..write('paidAmountLocal: $paidAmountLocal, ')
           ..write('changeAmountLocal: $changeAmountLocal, ')
           ..write('cashierProofImageLocalPath: $cashierProofImageLocalPath, ')
@@ -15240,6 +15355,8 @@ typedef $$LocalOrdersTableCreateCompanionBuilder =
       Value<double> ppnPercent,
       Value<bool> isPpnActive,
       Value<double> grandTotal,
+      Value<double?> cashRoundingAmount,
+      Value<int?> cashRoundingUnit,
       Value<double?> paidAmountLocal,
       Value<double?> changeAmountLocal,
       Value<String?> cashierProofImageLocalPath,
@@ -15282,6 +15399,8 @@ typedef $$LocalOrdersTableUpdateCompanionBuilder =
       Value<double> ppnPercent,
       Value<bool> isPpnActive,
       Value<double> grandTotal,
+      Value<double?> cashRoundingAmount,
+      Value<int?> cashRoundingUnit,
       Value<double?> paidAmountLocal,
       Value<double?> changeAmountLocal,
       Value<String?> cashierProofImageLocalPath,
@@ -15393,6 +15512,16 @@ class $$LocalOrdersTableFilterComposer
 
   ColumnFilters<double> get grandTotal => $composableBuilder(
     column: $table.grandTotal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get cashRoundingAmount => $composableBuilder(
+    column: $table.cashRoundingAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15596,6 +15725,16 @@ class $$LocalOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get cashRoundingAmount => $composableBuilder(
+    column: $table.cashRoundingAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get paidAmountLocal => $composableBuilder(
     column: $table.paidAmountLocal,
     builder: (column) => ColumnOrderings(column),
@@ -15788,6 +15927,16 @@ class $$LocalOrdersTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get cashRoundingAmount => $composableBuilder(
+    column: $table.cashRoundingAmount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get paidAmountLocal => $composableBuilder(
     column: $table.paidAmountLocal,
     builder: (column) => column,
@@ -15942,6 +16091,8 @@ class $$LocalOrdersTableTableManager
                 Value<double> ppnPercent = const Value.absent(),
                 Value<bool> isPpnActive = const Value.absent(),
                 Value<double> grandTotal = const Value.absent(),
+                Value<double?> cashRoundingAmount = const Value.absent(),
+                Value<int?> cashRoundingUnit = const Value.absent(),
                 Value<double?> paidAmountLocal = const Value.absent(),
                 Value<double?> changeAmountLocal = const Value.absent(),
                 Value<String?> cashierProofImageLocalPath =
@@ -15983,6 +16134,8 @@ class $$LocalOrdersTableTableManager
                 ppnPercent: ppnPercent,
                 isPpnActive: isPpnActive,
                 grandTotal: grandTotal,
+                cashRoundingAmount: cashRoundingAmount,
+                cashRoundingUnit: cashRoundingUnit,
                 paidAmountLocal: paidAmountLocal,
                 changeAmountLocal: changeAmountLocal,
                 cashierProofImageLocalPath: cashierProofImageLocalPath,
@@ -16025,6 +16178,8 @@ class $$LocalOrdersTableTableManager
                 Value<double> ppnPercent = const Value.absent(),
                 Value<bool> isPpnActive = const Value.absent(),
                 Value<double> grandTotal = const Value.absent(),
+                Value<double?> cashRoundingAmount = const Value.absent(),
+                Value<int?> cashRoundingUnit = const Value.absent(),
                 Value<double?> paidAmountLocal = const Value.absent(),
                 Value<double?> changeAmountLocal = const Value.absent(),
                 Value<String?> cashierProofImageLocalPath =
@@ -16066,6 +16221,8 @@ class $$LocalOrdersTableTableManager
                 ppnPercent: ppnPercent,
                 isPpnActive: isPpnActive,
                 grandTotal: grandTotal,
+                cashRoundingAmount: cashRoundingAmount,
+                cashRoundingUnit: cashRoundingUnit,
                 paidAmountLocal: paidAmountLocal,
                 changeAmountLocal: changeAmountLocal,
                 cashierProofImageLocalPath: cashierProofImageLocalPath,

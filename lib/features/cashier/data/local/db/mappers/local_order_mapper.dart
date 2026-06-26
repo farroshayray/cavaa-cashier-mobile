@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'dart:convert';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 class LocalOrderMapper {
   static LocalOrdersCompanion toLocalOrder({
@@ -18,6 +19,8 @@ class LocalOrderMapper {
     required double ppnPercent,
     required bool isPpnActive,
     required double grandTotal,
+    double? cashRoundingAmount,
+    int? cashRoundingUnit,
     String orderStatusLocal = 'UNPAID',
     String syncStatus = 'PENDING',
     String? manualPaymentRawJson,
@@ -44,6 +47,8 @@ class LocalOrderMapper {
       ppnPercent: Value(ppnPercent),
       isPpnActive: Value(isPpnActive),
       grandTotal: Value(grandTotal),
+      cashRoundingAmount: Value(cashRoundingAmount),
+      cashRoundingUnit: Value(cashRoundingUnit),
 
       orderStatusLocal: Value(orderStatusLocal),
       syncStatus: Value(syncStatus),
@@ -115,6 +120,14 @@ Map<String, dynamic> mapLocalOrderToProcessItem(LocalOrder row) {
 
   final merged = <String, dynamic>{
     ...snapshot,
+    ...CashRoundingHelpers.roundingFieldsFromLocalOrder(
+      subtotal: row.subtotal,
+      grandTotal: row.grandTotal,
+      isPpnActive: row.isPpnActive,
+      ppnPercent: row.ppnPercent,
+      cashRoundingAmount: row.cashRoundingAmount,
+      cashRoundingUnit: row.cashRoundingUnit,
+    ),
     'id': row.serverId ?? snapshot['id'] ?? -DateTime.now().millisecondsSinceEpoch,
     'local_id': row.localId,
     'is_local_only': true,
@@ -128,6 +141,7 @@ Map<String, dynamic> mapLocalOrderToProcessItem(LocalOrder row) {
     'total_order_value': row.subtotal,
     'ppn': row.ppnPercent,
     'is_ppn_active': row.isPpnActive,
+    'grand_total': row.grandTotal,
     'grand_total_local': row.grandTotal,
     'payment_confirmed_at_local':
         row.paymentConfirmedAtLocal?.toIso8601String(),

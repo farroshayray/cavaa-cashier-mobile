@@ -10,6 +10,7 @@ import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import '/features/cashier/data/local/db/sync/local_reconciliation_service.dart';
 import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 class SyncService {
   final LocalOrdersDao localOrdersDao;
@@ -148,6 +149,30 @@ class SyncService {
   }
 
   int? _extractServerId(Map<String, dynamic> resp) {
+    for (final key in const [
+      'id',
+      'order_id',
+      'server_id',
+      'booking_order_id',
+    ]) {
+      final parsed = _readPositiveInt(resp[key]);
+      if (parsed != null) return parsed;
+    }
+
+    final data = resp['data'];
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      for (final key in const [
+        'id',
+        'order_id',
+        'server_id',
+        'booking_order_id',
+      ]) {
+        final parsed = _readPositiveInt(map[key]);
+        if (parsed != null) return parsed;
+      }
+    }
+
     final raw = _findFirstByKeys(resp, [
       'id',
       'order_id',
@@ -155,10 +180,38 @@ class SyncService {
       'booking_order_id',
     ]);
 
-    if (raw is int) return raw;
-    if (raw is String) return int.tryParse(raw);
+    return _readPositiveInt(raw);
+  }
 
+  int? _readPositiveInt(dynamic raw) {
+    if (raw is int) return raw > 0 ? raw : null;
+    if (raw is num) return raw.toInt() > 0 ? raw.toInt() : null;
+    if (raw is String) {
+      final parsed = int.tryParse(raw);
+      return parsed != null && parsed > 0 ? parsed : null;
+    }
     return null;
+  }
+
+  String _resolveCheckoutPaymentMethod(LocalOrder order) {
+    String? normalize(String? value) {
+      if (value == null) return null;
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
+
+      final upper = trimmed.toUpperCase();
+      if (upper == 'CASH' || upper == 'QRIS' || upper == 'OPENBILL') {
+        return upper;
+      }
+      if (RegExp(r'^\d+$').hasMatch(trimmed)) {
+        return trimmed;
+      }
+      return null;
+    }
+
+    return normalize(order.paymentMethodSelected) ??
+        normalize(order.paymentMethodEffective) ??
+        'CASH';
   }
 
   String? _extractServerOrderCode(Map<String, dynamic> resp) {
@@ -238,7 +291,12 @@ class SyncService {
         );
 
         if (serverId == null || serverId <= 0) {
-          throw Exception('Gagal mendapatkan serverId dari purchase sync');
+          final message = createResp['message']?.toString();
+          throw Exception(
+            message != null && message.trim().isNotEmpty
+                ? message.trim()
+                : 'Gagal mendapatkan serverId dari purchase sync',
+          );
         }
 
         await localOrdersDao.attachServerIdentity(
@@ -638,11 +696,20 @@ class SyncService {
       };
     }).toList();
 
-    final paymentMethodForBackend =
-        (order.paymentMethodSelected != null &&
-                order.paymentMethodSelected!.trim().isNotEmpty)
-            ? order.paymentMethodSelected!
-            : (order.paymentMethodEffective ?? 'CASH');
+    if (itemsPayload.isEmpty) {
+      throw Exception('Item order lokal kosong, tidak bisa sync checkout');
+    }
+
+    for (final item in itemsPayload) {
+      final productId = item['product_id'];
+      if (productId is! int || productId <= 0) {
+        throw Exception(
+          'Produk pada order lokal tidak valid (product_id=$productId). Refresh data produk lalu coba lagi.',
+        );
+      }
+    }
+
+    final paymentMethodForBackend = _resolveCheckoutPaymentMethod(order);
 
     final resp = await purchaseApi.checkout(
       orderTable: order.tableServerId!,
@@ -665,33 +732,76 @@ class SyncService {
   }
 
   Future<void> _syncPayment(LocalOrder order, int serverId) async {
-    int? resolvedLatestPaymentId = order.latestPaymentServerId;
+    final paymentMethod =
+        order.paymentMethodEffective ?? order.paymentMethodSelected ?? 'CASH';
+
+    Map<String, dynamic>? detail;
+    int? resolvedLatestPaymentId;
 
     try {
-      final detail = await ordersRepo.fetchOrderDetail(serverId);
+      detail = await ordersRepo.fetchOrderDetail(serverId);
       final latest = detail['latest_payment'];
-      if (latest is Map && latest['id'] != null) {
-        resolvedLatestPaymentId = int.tryParse(latest['id'].toString());
+      if (latest is Map) {
+        final status = (latest['payment_status'] ?? '').toString().toUpperCase();
+        if (status == 'PENDING' || status == 'PAYMENT REQUEST') {
+          final id = latest['id'];
+          if (id != null) {
+            resolvedLatestPaymentId = int.tryParse(id.toString());
+          }
+        }
       }
     } catch (e) {
       debugPrint('⚠️ fetch detail before payment sync failed for serverId=$serverId: $e');
+    }
+
+    final expectedPayable = detail != null
+        ? CashRoundingHelpers.expectedPayableFromServerDetail(
+            detail,
+            paymentMethod,
+          )
+        : CashRoundingHelpers.expectedPayable(
+            subtotal: order.subtotal,
+            isPpnActive: order.isPpnActive,
+            ppn: order.ppnPercent,
+            paymentType: paymentMethod,
+            cashRoundingUnit: order.cashRoundingUnit ?? 0,
+            storedRoundingAmount: order.cashRoundingAmount,
+          );
+
+    num paidAmount = order.paidAmountLocal ?? order.grandTotal;
+    if (order.paymentConfirmedAtLocal != null) {
+      if (paidAmount < expectedPayable) {
+        paidAmount = order.grandTotal >= expectedPayable
+            ? order.grandTotal
+            : expectedPayable;
+      }
+    } else if (paidAmount < expectedPayable) {
+      paidAmount = expectedPayable;
+    }
+
+    num changeAmount = order.changeAmountLocal ?? 0;
+    if (paidAmount > expectedPayable) {
+      changeAmount = paidAmount - expectedPayable;
+    } else {
+      changeAmount = 0;
     }
 
     debugPrint(
       '💳 sync payment request '
       'localId=${order.localId} '
       'serverId=$serverId '
-      'paid=${order.paidAmountLocal ?? order.grandTotal} '
-      'change=${order.changeAmountLocal ?? 0} '
+      'paid=$paidAmount '
+      'expected=$expectedPayable '
+      'change=$changeAmount '
       'lastPaymentId=$resolvedLatestPaymentId '
       'proof=${order.cashierProofImageLocalPath}',
     );
 
     await ordersRepo.paymentOrder(
       id: serverId,
-      paidAmount: order.paidAmountLocal ?? order.grandTotal,
-      changeAmount: order.changeAmountLocal ?? 0,
-      paymentMethod: order.paymentMethodEffective,
+      paidAmount: paidAmount,
+      changeAmount: changeAmount,
+      paymentMethod: paymentMethod,
       lastPaymentId: resolvedLatestPaymentId?.toString(),
       cashierProofImagePath: order.cashierProofImageLocalPath,
     );

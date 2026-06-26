@@ -4,6 +4,7 @@ import 'dart:convert';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 class LocalOrderBundle {
   final LocalOrder order;
@@ -480,6 +481,14 @@ class LocalOrdersDao {
       'ppn': order.ppnPercent,
       'is_ppn_active': order.isPpnActive,
       'grand_total': order.grandTotal,
+      ...CashRoundingHelpers.roundingFieldsFromLocalOrder(
+        subtotal: order.subtotal,
+        grandTotal: order.grandTotal,
+        isPpnActive: order.isPpnActive,
+        ppnPercent: order.ppnPercent,
+        cashRoundingAmount: order.cashRoundingAmount,
+        cashRoundingUnit: order.cashRoundingUnit,
+      ),
       'is_local_only': true,
       'sync_status': order.syncStatus,
       'payment_request': null,

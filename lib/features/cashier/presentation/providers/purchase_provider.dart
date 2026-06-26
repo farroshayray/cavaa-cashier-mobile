@@ -263,6 +263,8 @@ class PurchaseProvider extends ChangeNotifier {
     final subtotal = cartSubtotal.toDouble();
     final ppn = ppnPercent.toDouble();
     final grandTotal = payableTotalForPayment(payment).toDouble();
+    final cashRoundingAmount = roundingAmountForPayment(payment).toDouble();
+    final cashRoundingUnitValue = cashRoundingUnit;
 
     final selectedPaymentMethod = paymentMethod;
     final effectivePaymentMethod =
@@ -303,6 +305,8 @@ class PurchaseProvider extends ChangeNotifier {
       ppnPercent: ppn,
       isPpnActive: isPpnActive,
       grandTotal: grandTotal,
+      cashRoundingAmount: cashRoundingAmount,
+      cashRoundingUnit: cashRoundingUnitValue,
       orderStatusLocal: effectivePaymentMethod == 'OPENBILL' ? 'OPENBILL_CONFIRMATION' : 'UNPAID',
       syncStatus: 'PENDING',
     );

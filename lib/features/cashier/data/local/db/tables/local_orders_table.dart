@@ -23,6 +23,8 @@ class LocalOrders extends Table {
   RealColumn get ppnPercent => real().withDefault(const Constant(0))();
   BoolColumn get isPpnActive => boolean().withDefault(const Constant(false))();
   RealColumn get grandTotal => real().withDefault(const Constant(0))();
+  RealColumn get cashRoundingAmount => real().nullable()();
+  IntColumn get cashRoundingUnit => integer().nullable()();
 
   RealColumn get paidAmountLocal => real().nullable()();
   RealColumn get changeAmountLocal => real().nullable()();

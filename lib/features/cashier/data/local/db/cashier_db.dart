@@ -63,7 +63,7 @@ class CashierDb extends _$CashierDb {
   CashierDb() : super(_openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -71,23 +71,10 @@ class CashierDb extends _$CashierDb {
           await m.createAll();
         },
         onUpgrade: (m, from, to) async {
-          await m.deleteTable('cached_payment_methods');
-          await m.deleteTable('cached_tables');
-          await m.deleteTable('cached_option_items');
-          await m.deleteTable('cached_option_groups');
-          await m.deleteTable('cached_products');
-          await m.deleteTable('cached_categories');
-          await m.deleteTable('local_orders');
-          await m.deleteTable('local_order_items');
-          await m.deleteTable('local_order_item_options');
-          await m.deleteTable('local_payments');
-          await m.deleteTable('sync_queue');
-          await m.deleteTable('cached_payment_orders');
-          await m.deleteTable('cached_payment_order_items');
-          await m.deleteTable('cached_payment_order_item_options');
-          await m.deleteTable('cached_process_orders');
-          await m.deleteTable('cached_done_orders');
-          await m.createAll();
+          if (from < 12) {
+            await m.addColumn(localOrders, localOrders.cashRoundingAmount);
+            await m.addColumn(localOrders, localOrders.cashRoundingUnit);
+          }
         },
       );
 }

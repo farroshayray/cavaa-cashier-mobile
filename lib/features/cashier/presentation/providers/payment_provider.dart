@@ -10,6 +10,7 @@ import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import 'dart:convert';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -203,6 +204,14 @@ class PaymentProvider extends ChangeNotifier {
 
       final localItems = visibleLocalOrders.map((o) {
         final tableNo = o.tableNoSnapshot ?? '-';
+        final roundingFields = CashRoundingHelpers.roundingFieldsFromLocalOrder(
+          subtotal: o.subtotal,
+          grandTotal: o.grandTotal,
+          isPpnActive: o.isPpnActive,
+          ppnPercent: o.ppnPercent,
+          cashRoundingAmount: o.cashRoundingAmount,
+          cashRoundingUnit: o.cashRoundingUnit,
+        );
 
         return <String, dynamic>{
           'id': -1,
@@ -222,6 +231,7 @@ class PaymentProvider extends ChangeNotifier {
           'subtotal': o.subtotal,
           'grand_total': o.grandTotal,
           'total_amount': o.grandTotal,
+          ...roundingFields,
           'is_ppn_active': o.isPpnActive,
           'ppn': o.ppnPercent,
           'openbill_flag':

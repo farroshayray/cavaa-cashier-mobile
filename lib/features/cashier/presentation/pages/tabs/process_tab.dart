@@ -17,6 +17,7 @@ import '/features/cashier/presentation/utils/order_edit_utils.dart';
 import '/features/cashier/presentation/utils/order_delete_helper.dart';
 import '/features/cashier/presentation/utils/order_tab_grouping.dart';
 import '/features/cashier/presentation/widgets/order_tab_section_widgets.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 import '/features/scanner/pages/barcode_scanner_page.dart';
 // kalau nanti ada modal khusus proses/selesai, import juga
 
@@ -870,17 +871,19 @@ class _ProcessOrderCard extends StatelessWidget {
                         : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
-                  if (data['is_synced'] == false) ...[
+                  if (data['is_synced'] == false &&
+                      localSyncStatusMessage(data) != null) ...[
                     const SizedBox(height: 6),
                     Text(
-                      (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
-                          ? 'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}'
-                          : ((data['pending_action'] ?? '').toString().isNotEmpty)
-                          ? 'Perubahan lokal: ${data['pending_action']}'
-                          : 'Perubahan lokal belum tersinkron',
+                      localSyncStatusMessage(data)!,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11,
-                        color: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                        color: localSyncStatusMessageIsError(
+                              localSyncStatusMessage(data),
+                              data,
+                            )
                             ? const Color(0xFFB91C1C)
                             : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
@@ -1008,15 +1011,20 @@ class _ProcessOrderCard extends StatelessWidget {
                     : 'Meja: $table',
                 style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
               ),
-              if ((data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT') ...[
+              if (localSyncStatusMessage(data) != null) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}',
-                  maxLines: 2,
+                  localSyncStatusMessage(data)!,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
-                    color: Color(0xFFB91C1C),
+                    color: localSyncStatusMessageIsError(
+                          localSyncStatusMessage(data),
+                          data,
+                        )
+                        ? const Color(0xFFB91C1C)
+                        : Colors.orange.shade800,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

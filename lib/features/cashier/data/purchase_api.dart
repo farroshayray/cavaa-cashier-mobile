@@ -48,8 +48,72 @@ class PurchaseApi {
     }
 
     final data = resp.data;
-    if (data is Map<String, dynamic>) return data;
+    if (data is Map<String, dynamic>) {
+      _ensureCheckoutSucceeded(data, paymentMethod: paymentMethod);
+      return data;
+    }
 
-    return {'success': true, 'raw': data};
+    throw Exception(
+      'Response checkout tidak valid: ${data?.toString() ?? 'kosong'}',
+    );
+  }
+
+  static void _ensureCheckoutSucceeded(
+    Map<String, dynamic> data, {
+    String? paymentMethod,
+  }) {
+    final success = data['success'];
+    final status = data['status']?.toString().toLowerCase();
+    final hasOrderId = _readPositiveInt(
+          data['id'] ?? data['order_id'] ?? data['booking_order_id'],
+        ) !=
+        null ||
+        (data['data'] is Map &&
+            _readPositiveInt(
+                  (data['data'] as Map)['id'] ??
+                      (data['data'] as Map)['order_id'] ??
+                      (data['data'] as Map)['booking_order_id'],
+                ) !=
+                null);
+
+    if (success == false || status == 'error') {
+      throw Exception(
+        data['message']?.toString() ?? 'Checkout gagal tanpa pesan dari server',
+      );
+    }
+
+    final redirect = data['redirect'];
+    final isQrisCheckout = paymentMethod?.toUpperCase() == 'QRIS';
+    if (!hasOrderId &&
+        redirect is String &&
+        redirect.trim().isNotEmpty &&
+        isQrisCheckout) {
+      return;
+    }
+
+    if (!hasOrderId &&
+        redirect is String &&
+        redirect.trim().isNotEmpty) {
+      throw Exception(
+        'Checkout memerlukan redirect QRIS. Sinkronkan ulang dengan metode pembayaran yang sama saat pembelian.',
+      );
+    }
+
+    if (!hasOrderId) {
+      throw Exception(
+        data['message']?.toString() ??
+            'Checkout tidak mengembalikan ID order dari server',
+      );
+    }
+  }
+
+  static int? _readPositiveInt(dynamic raw) {
+    if (raw is int) return raw > 0 ? raw : null;
+    if (raw is num) return raw.toInt() > 0 ? raw.toInt() : null;
+    if (raw is String) {
+      final parsed = int.tryParse(raw);
+      return parsed != null && parsed > 0 ? parsed : null;
+    }
+    return null;
   }
 }

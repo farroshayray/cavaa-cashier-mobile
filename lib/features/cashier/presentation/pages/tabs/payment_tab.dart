@@ -15,6 +15,7 @@ import '/features/cashier/presentation/utils/order_tab_grouping.dart';
 import '/features/cashier/presentation/widgets/order_tab_section_widgets.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 
 
@@ -679,6 +680,8 @@ class _PaymentOrderCard extends StatelessWidget {
     final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
     final orderDateTime = _formatOrderDateTime(data);
 
+    final syncMessage = localSyncStatusMessage(data);
+
     final badge = _statusBadge(
       status,
       (data['payment_method'] ?? '').toString(),
@@ -721,6 +724,7 @@ class _PaymentOrderCard extends StatelessWidget {
                   roundingAmount: roundingAmount,
                   orderDateTime: orderDateTime,
                   badge: badge,
+                  syncMessage: syncMessage,
                 )
               : _buildDefaultLayout(
                   code: code,
@@ -730,6 +734,7 @@ class _PaymentOrderCard extends StatelessWidget {
                   roundingAmount: roundingAmount,
                   orderDateTime: orderDateTime,
                   badge: badge,
+                  syncMessage: syncMessage,
                 ),
         ),
       ),
@@ -744,6 +749,7 @@ class _PaymentOrderCard extends StatelessWidget {
     required num roundingAmount,
     required String? orderDateTime,
     required Widget badge,
+    required String? syncMessage,
   }) {
     const brand = Color(0xFFAE1504);
 
@@ -785,15 +791,17 @@ class _PaymentOrderCard extends StatelessWidget {
                         : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
-                  if ((data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT') ...[
+                  if (syncMessage != null) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}',
-                      maxLines: 2,
+                      syncMessage,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFFB91C1C),
+                        color: localSyncStatusMessageIsError(syncMessage, data)
+                            ? const Color(0xFFB91C1C)
+                            : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -864,6 +872,7 @@ class _PaymentOrderCard extends StatelessWidget {
     required num roundingAmount,
     required String? orderDateTime,
     required Widget badge,
+    required String? syncMessage,
   }) {
     const brand = Color(0xFFAE1504);
 
@@ -914,15 +923,17 @@ class _PaymentOrderCard extends StatelessWidget {
                         : 'Meja: $table',
                     style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
                   ),
-                  if ((data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT') ...[
+                  if (syncMessage != null) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}',
-                      maxLines: 2,
+                      syncMessage,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFFB91C1C),
+                        color: localSyncStatusMessageIsError(syncMessage, data)
+                            ? const Color(0xFFB91C1C)
+                            : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -1043,7 +1054,10 @@ class _PaymentOrderCard extends StatelessWidget {
     if (isLocalOnly ||
         syncStatus == 'PENDING' ||
         syncStatus == 'PENDING_UPDATE' ||
-        syncStatus == 'PENDING_FINISH') {
+        syncStatus == 'PENDING_PAYMENT' ||
+        syncStatus == 'PENDING_PROCESS' ||
+        syncStatus == 'PENDING_FINISH' ||
+        syncStatus == 'FAILED') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
