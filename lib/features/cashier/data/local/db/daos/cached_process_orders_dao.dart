@@ -220,6 +220,43 @@ class CachedProcessOrdersDao extends DatabaseAccessor<CashierDb>
     );
   }
 
+  Future<void> markServeItemsOffline({
+    required int serverId,
+    required String detailJson,
+    required String orderStatus,
+    String? pendingAction,
+  }) {
+    return (update(cachedProcessOrders)
+          ..where((t) => t.serverId.equals(serverId)))
+        .write(
+      CachedProcessOrdersCompanion(
+        detailJson: Value(detailJson),
+        orderStatus: Value(orderStatus),
+        pendingAction: Value(pendingAction ?? 'SERVE_ITEMS'),
+        isSynced: const Value(false),
+        syncedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> markServeItemsSynced({
+    required int serverId,
+    required String detailJson,
+    required String orderStatus,
+  }) {
+    return (update(cachedProcessOrders)
+          ..where((t) => t.serverId.equals(serverId)))
+        .write(
+      CachedProcessOrdersCompanion(
+        detailJson: Value(detailJson),
+        orderStatus: Value(orderStatus),
+        pendingAction: const Value(null),
+        isSynced: const Value(true),
+        syncedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<void> deleteByServerId(int serverId) {
     return (delete(cachedProcessOrders)
           ..where((t) => t.serverId.equals(serverId)))

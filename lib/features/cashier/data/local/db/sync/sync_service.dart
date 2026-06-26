@@ -11,6 +11,7 @@ import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import '/features/cashier/data/local/db/sync/local_reconciliation_service.dart';
 import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class SyncService {
   final LocalOrdersDao localOrdersDao;
@@ -617,6 +618,14 @@ class SyncService {
               debugPrint('✅ [SYNC] Completed non-OPENBILL finish sync for serverId=${row.serverId}');
             }
             break;
+
+          case 'SERVE_ITEMS':
+            await _syncServeItemsPending(row);
+            break;
+
+          case 'MARK_KITCHEN_SERVED':
+            await _syncMarkKitchenServedPending(row);
+            break;
         }
       } catch (e) {
         if (_isRemoteOrderGone(e)) {
@@ -722,6 +731,139 @@ class SyncService {
     debugPrint('🧾 purchase sync raw response for ${order.localId}: $resp');
 
     return resp;
+  }
+
+  Map<String, dynamic> _decodeCachedDetail(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  List<Map<String, dynamic>> _detailRows(Map<String, dynamic> detail) {
+    return ((detail['order_details'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  Map<int, Map<String, dynamic>> _detailMapById(
+    List<Map<String, dynamic>> details,
+  ) {
+    final map = <int, Map<String, dynamic>>{};
+    for (final item in details) {
+      final id = orderDetailId(item);
+      if (id != null) map[id] = item;
+    }
+    return map;
+  }
+
+  bool _isServeWarning(DioException error) {
+    final data = error.response?.data;
+    final status = data is Map ? data['status']?.toString() : null;
+    return status == 'warning' || error.response?.statusCode == 409;
+  }
+
+  Future<void> _finalizeServeItemsSync(
+    CachedProcessOrder row,
+    Map<String, dynamic> updated,
+  ) async {
+    final updatedStatus = (updated['order_status'] ?? '').toString();
+    final isOpenbill = isOpenBillOrder(updated);
+
+    if (isOpenbill && updatedStatus == 'UNPAID') {
+      await cachedPaymentOrdersDao.upsertDetailFromApi(updated);
+      await cachedProcessOrdersDao.deleteByServerId(row.serverId);
+      return;
+    }
+
+    if (updatedStatus == 'SERVED') {
+      await cachedDoneOrdersDao.markSyncedByServerId(
+        row.serverId,
+        latestDoneJson: jsonEncode(updated),
+      );
+      await cachedProcessOrdersDao.deleteByServerId(row.serverId);
+      return;
+    }
+
+    await cachedProcessOrdersDao.markServeItemsSynced(
+      serverId: row.serverId,
+      detailJson: jsonEncode(updated),
+      orderStatus: updatedStatus.isNotEmpty ? updatedStatus : row.orderStatus,
+    );
+  }
+
+  Future<void> _syncServeItemsPending(CachedProcessOrder row) async {
+    final localDetail = _decodeCachedDetail(row.detailJson);
+    final serverDetail = await ordersRepo.fetchOrderDetail(row.serverId);
+    final localDetails = _detailRows(localDetail);
+    final serverById = _detailMapById(_detailRows(serverDetail));
+
+    final idsToServe = <int>[];
+    for (final localItem in localDetails) {
+      final id = orderDetailId(localItem);
+      if (id == null) continue;
+      if (detailStatusOf(localItem) != 'SERVED BY CASHIER') continue;
+
+      final serverItem = serverById[id];
+      if (serverItem == null) continue;
+      if (isDetailServedStatus(detailStatusOf(serverItem))) continue;
+      if (!isItemAwaitingCashierServe(serverItem)) continue;
+
+      idsToServe.add(id);
+    }
+
+    if (idsToServe.isNotEmpty) {
+      try {
+        await ordersRepo.serveOrderItems(
+          id: row.serverId,
+          detailIds: idsToServe,
+        );
+      } on DioException catch (e) {
+        if (!_isServeWarning(e)) rethrow;
+      }
+    }
+
+    final updated = await ordersRepo.fetchOrderDetail(row.serverId);
+    await _finalizeServeItemsSync(row, updated);
+  }
+
+  Future<void> _syncMarkKitchenServedPending(CachedProcessOrder row) async {
+    final localDetail = _decodeCachedDetail(row.detailJson);
+    final serverDetail = await ordersRepo.fetchOrderDetail(row.serverId);
+    final localDetails = _detailRows(localDetail);
+    final serverById = _detailMapById(_detailRows(serverDetail));
+
+    final idsToMark = <int>[];
+    for (final localItem in localDetails) {
+      final id = orderDetailId(localItem);
+      if (id == null) continue;
+      if (!isDetailServedStatus(detailStatusOf(localItem))) continue;
+
+      final serverItem = serverById[id];
+      if (serverItem == null) continue;
+      if (isDetailServedStatus(detailStatusOf(serverItem))) continue;
+
+      idsToMark.add(id);
+    }
+
+    if (idsToMark.isNotEmpty) {
+      try {
+        await ordersRepo.markServedByKitchen(
+          id: row.serverId,
+          detailIds: idsToMark,
+        );
+      } on DioException catch (e) {
+        if (!_isServeWarning(e)) rethrow;
+      }
+    }
+
+    final updated = await ordersRepo.fetchOrderDetail(row.serverId);
+    await _finalizeServeItemsSync(row, updated);
   }
 
   Future<void> clearCashierSessionData() async {

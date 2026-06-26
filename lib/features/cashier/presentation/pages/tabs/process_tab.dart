@@ -1161,6 +1161,10 @@ class _ProcessOrderCard extends StatelessWidget {
         label = 'Sync batal';
       } else if (pendingAction == 'FINISH') {
         label = 'Sync selesai';
+      } else if (pendingAction == 'SERVE_ITEMS') {
+        label = 'Sync served';
+      } else if (pendingAction == 'MARK_KITCHEN_SERVED') {
+        label = 'Sync served kitchen';
       }
 
       return Container(

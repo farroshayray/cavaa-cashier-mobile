@@ -10,6 +10,7 @@ import 'package:drift/drift.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class ProcessProvider extends ChangeNotifier {
   final OrdersRepository repo;
@@ -727,7 +728,35 @@ class ProcessProvider extends ChangeNotifier {
       }
 
       if (!connectivity.isOnline) {
-        throw Exception('Butuh koneksi internet untuk update served per item');
+        final result = await _markCachedOrderItemsServed(
+          serverId: id,
+          detailIds: detailIds,
+        );
+
+        await load();
+
+        final allServed = result['all_served'] == true;
+        final isOpenbill =
+            _toBool(row['openbill_flag']) ||
+            row['payment_method']?.toString() == 'OPENBILL' ||
+            (row['order_status'] ?? '').toString().startsWith('OPENBILL');
+
+        if (allServed && isOpenbill) {
+          await _stageOpenbillForPaymentCache(id, row);
+        } else if (allServed) {
+          await _stageServedOrderForDoneCache(id, row);
+        }
+
+        return {
+          'status': 'offline_success',
+          'offline': true,
+          'all_served': allServed,
+          'message': allServed
+              ? (isOpenbill
+                  ? 'Semua item served, order dipindahkan ke pembayaran'
+                  : 'Semua item served')
+              : 'Item terpilih berhasil ditandai served',
+        };
       }
 
       try {
@@ -795,7 +824,31 @@ class ProcessProvider extends ChangeNotifier {
     }
 
     if (!connectivity.isOnline) {
-      throw Exception('Butuh koneksi internet untuk update served kitchen');
+      final result = await _markCachedKitchenItemsServed(
+        serverId: id,
+        detailIds: [detailId],
+      );
+
+      await load();
+
+      final allServed = result['all_served'] == true;
+      final isOpenbill =
+          _toBool(row['openbill_flag']) ||
+          row['payment_method']?.toString() == 'OPENBILL' ||
+          (row['order_status'] ?? '').toString().startsWith('OPENBILL');
+
+      if (allServed && isOpenbill) {
+        await _stageOpenbillForPaymentCache(id, row);
+      } else if (allServed) {
+        await _stageServedOrderForDoneCache(id, row);
+      }
+
+      return {
+        'status': 'offline_success',
+        'offline': true,
+        'message': 'Status item berhasil diperbarui',
+        ...result,
+      };
     }
 
     if (id <= 0) {
@@ -995,5 +1048,182 @@ class ProcessProvider extends ChangeNotifier {
     if (v is bool) return v;
     final s = v.toString().toLowerCase();
     return s == '1' || s == 'true';
+  }
+
+  Future<Map<String, dynamic>> _markCachedOrderItemsServed({
+    required int serverId,
+    required List<int> detailIds,
+  }) async {
+    final detail = await _getCachedProcessDetailMap(serverId);
+    if (detail == null) {
+      throw Exception('Detail order tidak tersedia di cache offline');
+    }
+
+    final details = ((detail['order_details'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    var updatedCount = 0;
+
+    for (final item in details) {
+      final itemId = orderDetailId(item);
+      if (itemId == null || !detailIds.contains(itemId)) continue;
+      if (isDetailServedStatus(detailStatusOf(item))) continue;
+      if (!isItemAwaitingCashierServe(item)) continue;
+
+      item['status'] = 'SERVED BY CASHIER';
+      item['cashier_process_id'] = item['cashier_process_id'] ?? -1;
+      updatedCount++;
+    }
+
+    if (updatedCount == 0) {
+      throw Exception('Item yang dipilih tidak ditemukan');
+    }
+
+    final allServed = details.every(
+      (item) => isDetailServedStatus(detailStatusOf(item)),
+    );
+    final isOpenbill = isOpenBillOrder(detail);
+    final nextStatus = allServed
+        ? (isOpenbill ? 'UNPAID' : 'SERVED')
+        : (detail['order_status'] ?? 'PROCESSED').toString();
+
+    detail['order_details'] = details;
+    detail['order_status'] = nextStatus;
+
+    await cachedProcessOrdersDao.markServeItemsOffline(
+      serverId: serverId,
+      detailJson: jsonEncode(detail),
+      orderStatus: nextStatus,
+    );
+
+    return {
+      'all_served': allServed,
+      'order_status': nextStatus,
+      'detail_count': updatedCount,
+    };
+  }
+
+  Future<Map<String, dynamic>> _markCachedKitchenItemsServed({
+    required int serverId,
+    required List<int> detailIds,
+  }) async {
+    final detail = await _getCachedProcessDetailMap(serverId);
+    if (detail == null) {
+      throw Exception('Detail order tidak tersedia di cache offline');
+    }
+
+    final details = ((detail['order_details'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    var updatedCount = 0;
+
+    for (final item in details) {
+      final itemId = orderDetailId(item);
+      if (itemId == null || !detailIds.contains(itemId)) continue;
+      if (isDetailServedStatus(detailStatusOf(item))) continue;
+
+      final inKitchen = isDetailInKitchenProcessing(item);
+      item['status'] = inKitchen ? 'SERVED BY KITCHEN' : 'SERVED BY CASHIER';
+      if (!inKitchen) {
+        item['cashier_process_id'] = item['cashier_process_id'] ?? -1;
+      }
+      updatedCount++;
+    }
+
+    if (updatedCount == 0) {
+      throw Exception('Item yang dipilih tidak ditemukan');
+    }
+
+    final allServed = details.every(
+      (item) => isDetailServedStatus(detailStatusOf(item)),
+    );
+    final isOpenbill = isOpenBillOrder(detail);
+    final nextStatus = allServed
+        ? (isOpenbill ? 'UNPAID' : 'SERVED')
+        : (detail['order_status'] ?? 'PROCESSED').toString();
+
+    detail['order_details'] = details;
+    detail['order_status'] = nextStatus;
+
+    await cachedProcessOrdersDao.markServeItemsOffline(
+      serverId: serverId,
+      detailJson: jsonEncode(detail),
+      orderStatus: nextStatus,
+      pendingAction: 'MARK_KITCHEN_SERVED',
+    );
+
+    return {
+      'all_served': allServed,
+      'order_status': nextStatus,
+      'detail_count': updatedCount,
+    };
+  }
+
+  Future<void> _stageOpenbillForPaymentCache(
+    int serverId,
+    Map<String, dynamic> row,
+  ) async {
+    final cached = await cachedProcessOrdersDao.findByServerId(serverId);
+    Map<String, dynamic> detailMap = {};
+
+    if (cached?.detailJson != null && cached!.detailJson!.trim().isNotEmpty) {
+      try {
+        detailMap = Map<String, dynamic>.from(jsonDecode(cached.detailJson!));
+      } catch (_) {}
+    }
+
+    if (detailMap.isEmpty) {
+      final fallback = await _getCachedProcessDetailMap(serverId);
+      if (fallback != null) detailMap = fallback;
+    }
+
+    detailMap['id'] ??= serverId;
+    detailMap['booking_order_code'] ??= row['booking_order_code'];
+    detailMap['customer_name'] ??= row['customer_name'];
+    detailMap['table'] ??=
+        row['table'] ?? {'table_no': row['table_no_snapshot'] ?? '-'};
+    detailMap['payment_method'] = 'OPENBILL';
+    detailMap['openbill_flag'] = true;
+    detailMap['order_status'] = 'UNPAID';
+    detailMap['total_order_value'] ??= row['total_order_value'] ?? 0;
+    detailMap['ppn'] ??= row['ppn'] ?? 0;
+    detailMap['is_ppn_active'] ??= row['is_ppn_active'] ?? 0;
+    detailMap['created_at'] ??=
+        row['created_at'] ??
+        row['sort_time'] ??
+        row['cached_at'] ??
+        DateTime.now().toIso8601String();
+
+    await cachedPaymentOrdersDao.upsertDetailFromApi(detailMap);
+  }
+
+  Future<void> _stageServedOrderForDoneCache(
+    int serverId,
+    Map<String, dynamic> row,
+  ) async {
+    final cached = await cachedProcessOrdersDao.findByServerId(serverId);
+    final rawJson =
+        cached?.detailJson ??
+        cached?.latestProcessJson ??
+        cached?.processRequestJson ??
+        '{}';
+
+    await cachedDoneOrdersDao.upsertPendingFinishFromProcess(
+      serverId: serverId,
+      bookingOrderCode: (row['booking_order_code'] ?? '').toString(),
+      customerName: (row['customer_name'] ?? '').toString(),
+      tableNo: row['table'] is Map
+          ? row['table']['table_no']?.toString()
+          : row['table_no_snapshot']?.toString(),
+      paymentMethod: row['payment_method']?.toString(),
+      subtotal: _toDouble(row['total_order_value']),
+      ppnPercent: _toDouble(row['ppn']),
+      isPpnActive: _toBool(row['is_ppn_active']),
+      rawJson: rawJson,
+    );
   }
 }
