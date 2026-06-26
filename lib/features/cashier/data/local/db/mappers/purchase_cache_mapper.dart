@@ -254,6 +254,56 @@ class PurchaseCacheMapper {
     );
   }
 
+  static CachedPartnerSettingsCompanion toCachedPartnerSettings(PartnerData p) {
+    return CachedPartnerSettingsCompanion.insert(
+      partnerId: Value(p.id),
+      name: p.name,
+      isQrActive: Value(p.isQrisActive),
+      isCashierActive: Value(p.isCashierActive),
+      isOpenbill: Value(p.isOpenbillActive),
+      ppn: Value(p.ppn.toDouble()),
+      isPpnActive: Value(p.isPpnActive),
+      cashRoundingUnit: Value(p.cashRoundingUnit),
+      cachedAt: DateTime.now(),
+    );
+  }
+
+  static PartnerData fromCachedPartnerSettings(CachedPartnerSetting row) {
+    return PartnerData(
+      id: row.partnerId,
+      name: row.name,
+      isQrisActive: row.isQrActive,
+      isCashierActive: row.isCashierActive,
+      isOpenbillActive: row.isOpenbill,
+      ppn: row.ppn,
+      isPpnActive: row.isPpnActive,
+      cashRoundingUnit: row.cashRoundingUnit,
+    );
+  }
+
+  static List<PaymentOption> purchasePaymentOptionsFromPartner(PartnerData? partner) {
+    final options = <PaymentOption>[];
+    if (partner?.isCashierActive == true) {
+      options.add(
+        const PaymentOption(
+          kind: PayKind.cashierCash,
+          value: 'CASH',
+          label: 'Bayar Sekarang',
+        ),
+      );
+    }
+    if (partner?.isOpenbillActive == true) {
+      options.add(
+        const PaymentOption(
+          kind: PayKind.openbill,
+          value: 'OPENBILL',
+          label: 'Bayar Nanti',
+        ),
+      );
+    }
+    return options;
+  }
+
   static PurchasePayload buildPayloadFromCache({
     required List<CachedCategory> categories,
     required List<CachedProduct> products,
@@ -261,6 +311,7 @@ class PurchaseCacheMapper {
     required List<CachedOptionItem> items,
     required List<CachedTable> tables,
     required List<CachedPaymentMethod> payments,
+    CachedPartnerSetting? partnerSettings,
   }) {
     final mappedProducts = products
         .map((p) => fromCachedProduct(
@@ -276,14 +327,22 @@ class PurchaseCacheMapper {
       ..sort((a, b) => a.order.compareTo(b.order));
 
     final mappedTables = tables.map(fromCachedTable).toList();
-    final mappedPayments = payments.map(fromCachedPayment).toList();
+    final partnerData = partnerSettings == null
+        ? null
+        : fromCachedPartnerSettings(partnerSettings);
+    final paymentOptions = purchasePaymentOptionsFromPartner(partnerData);
+    final allPaymentOptionsForCache = payments
+        .map(fromCachedPayment)
+        .where((p) => p.kind != PayKind.openbill)
+        .toList();
 
     return PurchasePayload(
       products: mappedProducts,
       categories: mappedCategories,
       tables: mappedTables,
-      paymentOptions: mappedPayments,
-      partnerData: null,
+      paymentOptions: paymentOptions,
+      allPaymentOptionsForCache: allPaymentOptionsForCache,
+      partnerData: partnerData,
     );
   }
 

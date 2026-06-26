@@ -89,16 +89,26 @@ class CashRoundingHelpers {
     final isPpnActive = _toBool(detail['is_ppn_active']);
     final ppn = _num(detail['ppn']);
     final unit = _num(detail['cash_rounding_unit']).toInt();
-    final storedRounding = detail['cash_rounding_amount'];
+    final resolvedType = paymentType ?? detail['payment_method']?.toString();
+    final isCashPayment = (resolvedType ?? 'CASH').toUpperCase() == 'CASH';
+
+    // Open bill UNPAID returns cash_rounding_amount=0 until a method is chosen.
+    // For CASH payment sync, always derive rounding from unit (matches Laravel validation).
+    num? storedRounding;
+    if (!isCashPayment) {
+      final rawStored = detail['cash_rounding_amount'];
+      if (rawStored != null) {
+        storedRounding = _num(rawStored);
+      }
+    }
 
     return expectedPayable(
       subtotal: subtotal,
       isPpnActive: isPpnActive,
       ppn: ppn,
-      paymentType: paymentType ?? detail['payment_method']?.toString(),
+      paymentType: resolvedType,
       cashRoundingUnit: unit,
-      storedRoundingAmount:
-          storedRounding != null ? _num(storedRounding) : null,
+      storedRoundingAmount: storedRounding,
     );
   }
 

@@ -5,15 +5,83 @@ class PurchasePayload {
   final List<Category> categories;
   final List<StoreTable> tables;
   final List<PaymentOption> paymentOptions;
-  final PartnerData? partnerData; // ✅ baru
+  final List<PaymentOption> allPaymentOptionsForCache;
+  final PartnerData? partnerData;
 
   PurchasePayload({
     required this.products,
     required this.categories,
     required this.tables,
     required this.paymentOptions,
-    required this.partnerData, // ✅ baru
+    required this.allPaymentOptionsForCache,
+    required this.partnerData,
   });
+
+  static List<PaymentOption> buildPurchasePaymentOptions(PartnerData? partnerData) {
+    final paymentOptions = <PaymentOption>[];
+
+    if (partnerData?.isCashierActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.cashierCash,
+          value: 'CASH',
+          label: 'Bayar Sekarang',
+        ),
+      );
+    }
+
+    if (partnerData?.isOpenbillActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.openbill,
+          value: 'OPENBILL',
+          label: 'Bayar Nanti',
+        ),
+      );
+    }
+
+    return paymentOptions;
+  }
+
+  static List<PaymentOption> buildAllPaymentOptionsForCache(
+    Map<String, dynamic> json, {
+    PartnerData? partnerData,
+  }) {
+    final paymentOptions = <PaymentOption>[];
+
+    if (partnerData?.isCashierActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.cashierCash,
+          value: 'CASH',
+          label: 'Cash (Kasir)',
+        ),
+      );
+    }
+
+    if (partnerData?.isQrisActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.onlineQris,
+          value: 'QRIS',
+          label: 'QRIS (Xendit)',
+        ),
+      );
+    }
+
+    if (partnerData?.isOpenbillActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.openbill,
+          value: 'OPENBILL',
+          label: 'Bayar Nanti',
+        ),
+      );
+    }
+
+    paymentOptions.addAll(parseManualPaymentOptions(json));
+    return paymentOptions;
+  }
 
   factory PurchasePayload.fromJson(Map<String, dynamic> json) {
 
@@ -56,51 +124,16 @@ class PurchasePayload {
       partnerData = PartnerData.fromJson(Map<String, dynamic>.from(partnerRaw));
     }
 
-    final manualPayments = parseManualPaymentOptions(json);
-
-    final paymentOptions = <PaymentOption>[];
-
-    // ✅ tampilkan Cash hanya jika aktif
-    if (partnerData?.isCashierActive == true) {
-      paymentOptions.add(
-        const PaymentOption(
-          kind: PayKind.cashierCash,
-          value: 'CASH',
-          label: 'Cash (Kasir)',
-        ),
-      );
-    }
-
-    // ✅ tampilkan QRIS hanya jika aktif
-    if (partnerData?.isQrisActive == true) {
-      paymentOptions.add(
-        const PaymentOption(
-          kind: PayKind.onlineQris,
-          value: 'QRIS',
-          label: 'QRIS (Xendit)',
-        ),
-      );
-    }
-
-    // ✅ tampilkan OPENBILL hanya jika aktif
-    if (partnerData?.isOpenbillActive == true) {
-      paymentOptions.add(
-        const PaymentOption(
-          kind: PayKind.openbill,
-          value: 'OPENBILL',
-          label: 'Bayar Nanti',
-        ),
-      );
-    }
-
-    // manual payments tetap ditambahkan
-    paymentOptions.addAll(manualPayments);
+    final paymentOptions = buildPurchasePaymentOptions(partnerData);
+    final allPaymentOptionsForCache =
+        buildAllPaymentOptionsForCache(json, partnerData: partnerData);
 
     return PurchasePayload(
       products: products,
       categories: categories,
       tables: tables,
       paymentOptions: paymentOptions,
+      allPaymentOptionsForCache: allPaymentOptionsForCache,
       partnerData: partnerData,
     );
   }

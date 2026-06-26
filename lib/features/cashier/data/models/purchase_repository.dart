@@ -42,30 +42,9 @@ class PurchaseRepository {
         );
       }
 
-      final enrichedPayments = <PaymentOption>[];
-
-      for (final pmt in payload.paymentOptions) {
-        String? localPath;
-        if (pmt.qrisImageUrl != null && pmt.qrisImageUrl!.trim().isNotEmpty) {
-          localPath = await _downloadManualPaymentImageToLocal(pmt.qrisImageUrl!);
-        }
-
-        enrichedPayments.add(
-          PaymentOption(
-            kind: pmt.kind,
-            value: pmt.value,
-            label: pmt.label,
-            desc: pmt.desc,
-            manualType: pmt.manualType,
-            manualId: pmt.manualId,
-            providerName: pmt.providerName,
-            providerAccountName: pmt.providerAccountName,
-            providerAccountNo: pmt.providerAccountNo,
-            qrisImageUrl: pmt.qrisImageUrl,
-            qrisImageLocalPath: localPath,
-          ),
-        );
-      }
+      final enrichedPayments = await _enrichPaymentOptions(
+        payload.allPaymentOptionsForCache,
+      );
 
       final productRows = payload.products
           .map(PurchaseCacheMapper.toCachedProduct)
@@ -115,6 +94,12 @@ class PurchaseRepository {
         tables: tableRows,
         payments: paymentRows,
       );
+
+      if (payload.partnerData != null) {
+        await cacheDao.savePartnerSettings(
+          PurchaseCacheMapper.toCachedPartnerSettings(payload.partnerData!),
+        );
+      }
 
       debugPrint('✅ cache purchase data saved to local DB');
       debugPrint('categories: ${categoryRows.length}');
@@ -194,6 +179,7 @@ class PurchaseRepository {
       final tables = await cacheDao.getTables();
       final payments = await cacheDao.getPayments();
       final categories = await cacheDao.getCategories();
+      final partnerSettings = await cacheDao.getPartnerSettings();
 
       debugPrint('🔄 trying fallback from local DB...');
       debugPrint('fallback products: ${products.length}');
@@ -214,8 +200,40 @@ class PurchaseRepository {
         items: items,
         tables: tables,
         payments: payments,
+        partnerSettings: partnerSettings,
       );
     }
+  }
+
+  Future<List<PaymentOption>> _enrichPaymentOptions(
+    List<PaymentOption> source,
+  ) async {
+    final enrichedPayments = <PaymentOption>[];
+
+    for (final pmt in source) {
+      String? localPath;
+      if (pmt.qrisImageUrl != null && pmt.qrisImageUrl!.trim().isNotEmpty) {
+        localPath = await _downloadManualPaymentImageToLocal(pmt.qrisImageUrl!);
+      }
+
+      enrichedPayments.add(
+        PaymentOption(
+          kind: pmt.kind,
+          value: pmt.value,
+          label: pmt.label,
+          desc: pmt.desc,
+          manualType: pmt.manualType,
+          manualId: pmt.manualId,
+          providerName: pmt.providerName,
+          providerAccountName: pmt.providerAccountName,
+          providerAccountNo: pmt.providerAccountNo,
+          qrisImageUrl: pmt.qrisImageUrl,
+          qrisImageLocalPath: localPath,
+        ),
+      );
+    }
+
+    return enrichedPayments;
   }
 
   Future<String?> _downloadManualPaymentImageToLocal(String rawPath) async {

@@ -11,6 +11,7 @@ import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import 'dart:convert';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -180,6 +181,20 @@ class PaymentProvider extends ChangeNotifier {
         query: query.isEmpty ? null : query,
       );
 
+      final pendingLocalServerIds = <int>{};
+      final pendingLocalBookingCodes = <String>{};
+      for (final o in localOrders) {
+        if (o.syncStatus == 'SYNCED') continue;
+        final sid = o.serverId;
+        if (sid != null && sid > 0) {
+          pendingLocalServerIds.add(sid);
+        }
+        final code = (o.serverOrderCode ?? o.clientOrderCode).trim();
+        if (code.isNotEmpty) {
+          pendingLocalBookingCodes.add(code);
+        }
+      }
+
       final visibleLocalOrders = localOrders.where((o) {
         final alreadyMirroredOnServer =
             o.syncStatus == 'SYNCED' &&
@@ -218,9 +233,9 @@ class PaymentProvider extends ChangeNotifier {
           'local_id': o.localId,
           'client_order_code': o.clientOrderCode,
           'booking_order_code': o.serverOrderCode ?? o.clientOrderCode,
-          'customer_name': o.customerName,
-          'customer': o.customerName,
-          'order_name': o.customerName,
+          'customer_name': guestDisplayName(o.customerName),
+          'customer': guestDisplayName(o.customerName),
+          'order_name': guestDisplayName(o.customerName),
           'table': {
             'table_no': tableNo,
           },
@@ -272,11 +287,16 @@ class PaymentProvider extends ChangeNotifier {
 
         final hiddenBecausePendingDelete = syncStatus == 'PENDING_DELETE';
 
+        final hiddenBecausePendingLocalMirror =
+            (sid != null && sid > 0 && pendingLocalServerIds.contains(sid)) ||
+            (code.isNotEmpty && pendingLocalBookingCodes.contains(code));
+
         return !(hiddenById ||
             hiddenByCode ||
             hiddenBecauseAlreadyInProcess ||
             hiddenBecauseAlreadyInDone ||
-            hiddenBecausePendingDelete);
+            hiddenBecausePendingDelete ||
+            hiddenBecausePendingLocalMirror);
       }).toList();
 
       items = [
@@ -399,6 +419,15 @@ class PaymentProvider extends ChangeNotifier {
 
     return <String, dynamic>{
       ...e,
+      'customer_name': guestDisplayName(
+        (e['customer_name'] ?? e['customer'] ?? e['order_name'])?.toString(),
+      ),
+      'customer': guestDisplayName(
+        (e['customer'] ?? e['customer_name'] ?? e['order_name'])?.toString(),
+      ),
+      'order_name': guestDisplayName(
+        (e['order_name'] ?? e['customer_name'] ?? e['customer'])?.toString(),
+      ),
       'subtotal': subtotal,
       'grand_total': baseTotal + roundingAmount,
       'cash_rounding_amount': roundingAmount,
@@ -434,9 +463,9 @@ class PaymentProvider extends ChangeNotifier {
       'id': o.serverId,
       'server_id': o.serverId,
       'booking_order_code': o.bookingOrderCode,
-      'customer_name': o.customerName,
-      'customer': o.customerName,
-      'order_name': o.customerName,
+      'customer_name': guestDisplayName(o.customerName),
+      'customer': guestDisplayName(o.customerName),
+      'order_name': guestDisplayName(o.customerName),
 
       'table': {
         'table_no': tableNo,
@@ -621,6 +650,10 @@ class PaymentProvider extends ChangeNotifier {
     if (selectedPaymentMethod != null && selectedPaymentMethod.trim().isNotEmpty) {
       snapshot['payment_method'] = selectedPaymentMethod.trim();
     }
+    snapshot['openbill_flag'] =
+        _toBool(order['openbill_flag']) ||
+        (order['payment_method'] ?? '').toString().toUpperCase() == 'OPENBILL' ||
+        (order['order_status'] ?? '').toString().toUpperCase().startsWith('OPENBILL');
     snapshot['payment'] = {
       'updated_at': now.toIso8601String(),
       'paid_amount': paidAmount,
@@ -628,6 +661,22 @@ class PaymentProvider extends ChangeNotifier {
     };
     snapshot.remove('sync_status');
     snapshot.remove('pending_sync');
+
+    final billTotal = (paidAmount - changeAmount) > 0
+        ? (paidAmount - changeAmount).toDouble()
+        : paidAmount.toDouble();
+    final subtotal = _toNum(
+      snapshot['total_order_value'] ?? snapshot['subtotal'] ?? 0,
+    ).toDouble();
+    final isPpnActive = _toBool(snapshot['is_ppn_active']);
+    final ppnPercent = _toNum(snapshot['ppn']).toDouble();
+    final basePayable = CashRoundingHelpers.basePayable(
+      subtotal,
+      isPpnActive,
+      ppnPercent,
+    );
+    final cashRoundingAmount =
+        billTotal > basePayable ? billTotal - basePayable : 0.0;
 
     await localOrdersDao.markPaymentConfirmedOffline(
       localId: localId,
@@ -639,6 +688,8 @@ class PaymentProvider extends ChangeNotifier {
       latestPaymentServerId: int.tryParse(lastPaymentId ?? ''),
       orderSnapshotJson: jsonEncode(snapshot),
       preserveStockConflict: isStockConflict,
+      billTotalLocal: billTotal,
+      cashRoundingAmount: cashRoundingAmount,
     );
 
     // kalau source-nya cached server, tandai agar tidak tampil lagi di tab pembayaran

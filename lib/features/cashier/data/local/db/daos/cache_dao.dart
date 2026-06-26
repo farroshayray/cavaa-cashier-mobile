@@ -48,4 +48,14 @@ class CacheDao {
 
   Future<List<CachedOptionItem>> getItems() =>
       db.select(db.cachedOptionItems).get();
+
+  Future<void> savePartnerSettings(CachedPartnerSettingsCompanion row) async {
+    await db.into(db.cachedPartnerSettings).insertOnConflictUpdate(row);
+  }
+
+  Future<CachedPartnerSetting?> getPartnerSettings() async {
+    final rows = await db.select(db.cachedPartnerSettings).get();
+    if (rows.isEmpty) return null;
+    return rows.first;
+  }
 }

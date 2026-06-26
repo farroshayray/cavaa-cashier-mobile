@@ -3978,6 +3978,577 @@ class CachedPaymentMethodsCompanion
   }
 }
 
+class $CachedPartnerSettingsTable extends CachedPartnerSettings
+    with TableInfo<$CachedPartnerSettingsTable, CachedPartnerSetting> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CachedPartnerSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _partnerIdMeta = const VerificationMeta(
+    'partnerId',
+  );
+  @override
+  late final GeneratedColumn<int> partnerId = GeneratedColumn<int>(
+    'partner_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isQrActiveMeta = const VerificationMeta(
+    'isQrActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isQrActive = GeneratedColumn<bool>(
+    'is_qr_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_qr_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isCashierActiveMeta = const VerificationMeta(
+    'isCashierActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isCashierActive = GeneratedColumn<bool>(
+    'is_cashier_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_cashier_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isOpenbillMeta = const VerificationMeta(
+    'isOpenbill',
+  );
+  @override
+  late final GeneratedColumn<bool> isOpenbill = GeneratedColumn<bool>(
+    'is_openbill',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_openbill" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _ppnMeta = const VerificationMeta('ppn');
+  @override
+  late final GeneratedColumn<double> ppn = GeneratedColumn<double>(
+    'ppn',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isPpnActiveMeta = const VerificationMeta(
+    'isPpnActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isPpnActive = GeneratedColumn<bool>(
+    'is_ppn_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_ppn_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _cashRoundingUnitMeta = const VerificationMeta(
+    'cashRoundingUnit',
+  );
+  @override
+  late final GeneratedColumn<int> cashRoundingUnit = GeneratedColumn<int>(
+    'cash_rounding_unit',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _cachedAtMeta = const VerificationMeta(
+    'cachedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+    'cached_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    partnerId,
+    name,
+    isQrActive,
+    isCashierActive,
+    isOpenbill,
+    ppn,
+    isPpnActive,
+    cashRoundingUnit,
+    cachedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cached_partner_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedPartnerSetting> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('partner_id')) {
+      context.handle(
+        _partnerIdMeta,
+        partnerId.isAcceptableOrUnknown(data['partner_id']!, _partnerIdMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('is_qr_active')) {
+      context.handle(
+        _isQrActiveMeta,
+        isQrActive.isAcceptableOrUnknown(
+          data['is_qr_active']!,
+          _isQrActiveMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_cashier_active')) {
+      context.handle(
+        _isCashierActiveMeta,
+        isCashierActive.isAcceptableOrUnknown(
+          data['is_cashier_active']!,
+          _isCashierActiveMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_openbill')) {
+      context.handle(
+        _isOpenbillMeta,
+        isOpenbill.isAcceptableOrUnknown(data['is_openbill']!, _isOpenbillMeta),
+      );
+    }
+    if (data.containsKey('ppn')) {
+      context.handle(
+        _ppnMeta,
+        ppn.isAcceptableOrUnknown(data['ppn']!, _ppnMeta),
+      );
+    }
+    if (data.containsKey('is_ppn_active')) {
+      context.handle(
+        _isPpnActiveMeta,
+        isPpnActive.isAcceptableOrUnknown(
+          data['is_ppn_active']!,
+          _isPpnActiveMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cash_rounding_unit')) {
+      context.handle(
+        _cashRoundingUnitMeta,
+        cashRoundingUnit.isAcceptableOrUnknown(
+          data['cash_rounding_unit']!,
+          _cashRoundingUnitMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(
+        _cachedAtMeta,
+        cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cachedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {partnerId};
+  @override
+  CachedPartnerSetting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedPartnerSetting(
+      partnerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}partner_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      isQrActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_qr_active'],
+      )!,
+      isCashierActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_cashier_active'],
+      )!,
+      isOpenbill: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_openbill'],
+      )!,
+      ppn: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}ppn'],
+      )!,
+      isPpnActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_ppn_active'],
+      )!,
+      cashRoundingUnit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cash_rounding_unit'],
+      )!,
+      cachedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}cached_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CachedPartnerSettingsTable createAlias(String alias) {
+    return $CachedPartnerSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class CachedPartnerSetting extends DataClass
+    implements Insertable<CachedPartnerSetting> {
+  final int partnerId;
+  final String name;
+  final bool isQrActive;
+  final bool isCashierActive;
+  final bool isOpenbill;
+  final double ppn;
+  final bool isPpnActive;
+  final int cashRoundingUnit;
+  final DateTime cachedAt;
+  const CachedPartnerSetting({
+    required this.partnerId,
+    required this.name,
+    required this.isQrActive,
+    required this.isCashierActive,
+    required this.isOpenbill,
+    required this.ppn,
+    required this.isPpnActive,
+    required this.cashRoundingUnit,
+    required this.cachedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['partner_id'] = Variable<int>(partnerId);
+    map['name'] = Variable<String>(name);
+    map['is_qr_active'] = Variable<bool>(isQrActive);
+    map['is_cashier_active'] = Variable<bool>(isCashierActive);
+    map['is_openbill'] = Variable<bool>(isOpenbill);
+    map['ppn'] = Variable<double>(ppn);
+    map['is_ppn_active'] = Variable<bool>(isPpnActive);
+    map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit);
+    map['cached_at'] = Variable<DateTime>(cachedAt);
+    return map;
+  }
+
+  CachedPartnerSettingsCompanion toCompanion(bool nullToAbsent) {
+    return CachedPartnerSettingsCompanion(
+      partnerId: Value(partnerId),
+      name: Value(name),
+      isQrActive: Value(isQrActive),
+      isCashierActive: Value(isCashierActive),
+      isOpenbill: Value(isOpenbill),
+      ppn: Value(ppn),
+      isPpnActive: Value(isPpnActive),
+      cashRoundingUnit: Value(cashRoundingUnit),
+      cachedAt: Value(cachedAt),
+    );
+  }
+
+  factory CachedPartnerSetting.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedPartnerSetting(
+      partnerId: serializer.fromJson<int>(json['partnerId']),
+      name: serializer.fromJson<String>(json['name']),
+      isQrActive: serializer.fromJson<bool>(json['isQrActive']),
+      isCashierActive: serializer.fromJson<bool>(json['isCashierActive']),
+      isOpenbill: serializer.fromJson<bool>(json['isOpenbill']),
+      ppn: serializer.fromJson<double>(json['ppn']),
+      isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
+      cashRoundingUnit: serializer.fromJson<int>(json['cashRoundingUnit']),
+      cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'partnerId': serializer.toJson<int>(partnerId),
+      'name': serializer.toJson<String>(name),
+      'isQrActive': serializer.toJson<bool>(isQrActive),
+      'isCashierActive': serializer.toJson<bool>(isCashierActive),
+      'isOpenbill': serializer.toJson<bool>(isOpenbill),
+      'ppn': serializer.toJson<double>(ppn),
+      'isPpnActive': serializer.toJson<bool>(isPpnActive),
+      'cashRoundingUnit': serializer.toJson<int>(cashRoundingUnit),
+      'cachedAt': serializer.toJson<DateTime>(cachedAt),
+    };
+  }
+
+  CachedPartnerSetting copyWith({
+    int? partnerId,
+    String? name,
+    bool? isQrActive,
+    bool? isCashierActive,
+    bool? isOpenbill,
+    double? ppn,
+    bool? isPpnActive,
+    int? cashRoundingUnit,
+    DateTime? cachedAt,
+  }) => CachedPartnerSetting(
+    partnerId: partnerId ?? this.partnerId,
+    name: name ?? this.name,
+    isQrActive: isQrActive ?? this.isQrActive,
+    isCashierActive: isCashierActive ?? this.isCashierActive,
+    isOpenbill: isOpenbill ?? this.isOpenbill,
+    ppn: ppn ?? this.ppn,
+    isPpnActive: isPpnActive ?? this.isPpnActive,
+    cashRoundingUnit: cashRoundingUnit ?? this.cashRoundingUnit,
+    cachedAt: cachedAt ?? this.cachedAt,
+  );
+  CachedPartnerSetting copyWithCompanion(CachedPartnerSettingsCompanion data) {
+    return CachedPartnerSetting(
+      partnerId: data.partnerId.present ? data.partnerId.value : this.partnerId,
+      name: data.name.present ? data.name.value : this.name,
+      isQrActive: data.isQrActive.present
+          ? data.isQrActive.value
+          : this.isQrActive,
+      isCashierActive: data.isCashierActive.present
+          ? data.isCashierActive.value
+          : this.isCashierActive,
+      isOpenbill: data.isOpenbill.present
+          ? data.isOpenbill.value
+          : this.isOpenbill,
+      ppn: data.ppn.present ? data.ppn.value : this.ppn,
+      isPpnActive: data.isPpnActive.present
+          ? data.isPpnActive.value
+          : this.isPpnActive,
+      cashRoundingUnit: data.cashRoundingUnit.present
+          ? data.cashRoundingUnit.value
+          : this.cashRoundingUnit,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedPartnerSetting(')
+          ..write('partnerId: $partnerId, ')
+          ..write('name: $name, ')
+          ..write('isQrActive: $isQrActive, ')
+          ..write('isCashierActive: $isCashierActive, ')
+          ..write('isOpenbill: $isOpenbill, ')
+          ..write('ppn: $ppn, ')
+          ..write('isPpnActive: $isPpnActive, ')
+          ..write('cashRoundingUnit: $cashRoundingUnit, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    partnerId,
+    name,
+    isQrActive,
+    isCashierActive,
+    isOpenbill,
+    ppn,
+    isPpnActive,
+    cashRoundingUnit,
+    cachedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedPartnerSetting &&
+          other.partnerId == this.partnerId &&
+          other.name == this.name &&
+          other.isQrActive == this.isQrActive &&
+          other.isCashierActive == this.isCashierActive &&
+          other.isOpenbill == this.isOpenbill &&
+          other.ppn == this.ppn &&
+          other.isPpnActive == this.isPpnActive &&
+          other.cashRoundingUnit == this.cashRoundingUnit &&
+          other.cachedAt == this.cachedAt);
+}
+
+class CachedPartnerSettingsCompanion
+    extends UpdateCompanion<CachedPartnerSetting> {
+  final Value<int> partnerId;
+  final Value<String> name;
+  final Value<bool> isQrActive;
+  final Value<bool> isCashierActive;
+  final Value<bool> isOpenbill;
+  final Value<double> ppn;
+  final Value<bool> isPpnActive;
+  final Value<int> cashRoundingUnit;
+  final Value<DateTime> cachedAt;
+  const CachedPartnerSettingsCompanion({
+    this.partnerId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.isQrActive = const Value.absent(),
+    this.isCashierActive = const Value.absent(),
+    this.isOpenbill = const Value.absent(),
+    this.ppn = const Value.absent(),
+    this.isPpnActive = const Value.absent(),
+    this.cashRoundingUnit = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+  });
+  CachedPartnerSettingsCompanion.insert({
+    this.partnerId = const Value.absent(),
+    required String name,
+    this.isQrActive = const Value.absent(),
+    this.isCashierActive = const Value.absent(),
+    this.isOpenbill = const Value.absent(),
+    this.ppn = const Value.absent(),
+    this.isPpnActive = const Value.absent(),
+    this.cashRoundingUnit = const Value.absent(),
+    required DateTime cachedAt,
+  }) : name = Value(name),
+       cachedAt = Value(cachedAt);
+  static Insertable<CachedPartnerSetting> custom({
+    Expression<int>? partnerId,
+    Expression<String>? name,
+    Expression<bool>? isQrActive,
+    Expression<bool>? isCashierActive,
+    Expression<bool>? isOpenbill,
+    Expression<double>? ppn,
+    Expression<bool>? isPpnActive,
+    Expression<int>? cashRoundingUnit,
+    Expression<DateTime>? cachedAt,
+  }) {
+    return RawValuesInsertable({
+      if (partnerId != null) 'partner_id': partnerId,
+      if (name != null) 'name': name,
+      if (isQrActive != null) 'is_qr_active': isQrActive,
+      if (isCashierActive != null) 'is_cashier_active': isCashierActive,
+      if (isOpenbill != null) 'is_openbill': isOpenbill,
+      if (ppn != null) 'ppn': ppn,
+      if (isPpnActive != null) 'is_ppn_active': isPpnActive,
+      if (cashRoundingUnit != null) 'cash_rounding_unit': cashRoundingUnit,
+      if (cachedAt != null) 'cached_at': cachedAt,
+    });
+  }
+
+  CachedPartnerSettingsCompanion copyWith({
+    Value<int>? partnerId,
+    Value<String>? name,
+    Value<bool>? isQrActive,
+    Value<bool>? isCashierActive,
+    Value<bool>? isOpenbill,
+    Value<double>? ppn,
+    Value<bool>? isPpnActive,
+    Value<int>? cashRoundingUnit,
+    Value<DateTime>? cachedAt,
+  }) {
+    return CachedPartnerSettingsCompanion(
+      partnerId: partnerId ?? this.partnerId,
+      name: name ?? this.name,
+      isQrActive: isQrActive ?? this.isQrActive,
+      isCashierActive: isCashierActive ?? this.isCashierActive,
+      isOpenbill: isOpenbill ?? this.isOpenbill,
+      ppn: ppn ?? this.ppn,
+      isPpnActive: isPpnActive ?? this.isPpnActive,
+      cashRoundingUnit: cashRoundingUnit ?? this.cashRoundingUnit,
+      cachedAt: cachedAt ?? this.cachedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (partnerId.present) {
+      map['partner_id'] = Variable<int>(partnerId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (isQrActive.present) {
+      map['is_qr_active'] = Variable<bool>(isQrActive.value);
+    }
+    if (isCashierActive.present) {
+      map['is_cashier_active'] = Variable<bool>(isCashierActive.value);
+    }
+    if (isOpenbill.present) {
+      map['is_openbill'] = Variable<bool>(isOpenbill.value);
+    }
+    if (ppn.present) {
+      map['ppn'] = Variable<double>(ppn.value);
+    }
+    if (isPpnActive.present) {
+      map['is_ppn_active'] = Variable<bool>(isPpnActive.value);
+    }
+    if (cashRoundingUnit.present) {
+      map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedPartnerSettingsCompanion(')
+          ..write('partnerId: $partnerId, ')
+          ..write('name: $name, ')
+          ..write('isQrActive: $isQrActive, ')
+          ..write('isCashierActive: $isCashierActive, ')
+          ..write('isOpenbill: $isOpenbill, ')
+          ..write('ppn: $ppn, ')
+          ..write('isPpnActive: $isPpnActive, ')
+          ..write('cashRoundingUnit: $cashRoundingUnit, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LocalOrdersTable extends LocalOrders
     with TableInfo<$LocalOrdersTable, LocalOrder> {
   @override
@@ -13363,6 +13934,8 @@ abstract class _$CashierDb extends GeneratedDatabase {
   late final $CachedTablesTable cachedTables = $CachedTablesTable(this);
   late final $CachedPaymentMethodsTable cachedPaymentMethods =
       $CachedPaymentMethodsTable(this);
+  late final $CachedPartnerSettingsTable cachedPartnerSettings =
+      $CachedPartnerSettingsTable(this);
   late final $LocalOrdersTable localOrders = $LocalOrdersTable(this);
   late final $LocalOrderItemsTable localOrderItems = $LocalOrderItemsTable(
     this,
@@ -13398,6 +13971,7 @@ abstract class _$CashierDb extends GeneratedDatabase {
     cachedOptionItems,
     cachedTables,
     cachedPaymentMethods,
+    cachedPartnerSettings,
     localOrders,
     localOrderItems,
     localOrderItemOptions,
@@ -15335,6 +15909,305 @@ typedef $$CachedPaymentMethodsTableProcessedTableManager =
         >,
       ),
       CachedPaymentMethod,
+      PrefetchHooks Function()
+    >;
+typedef $$CachedPartnerSettingsTableCreateCompanionBuilder =
+    CachedPartnerSettingsCompanion Function({
+      Value<int> partnerId,
+      required String name,
+      Value<bool> isQrActive,
+      Value<bool> isCashierActive,
+      Value<bool> isOpenbill,
+      Value<double> ppn,
+      Value<bool> isPpnActive,
+      Value<int> cashRoundingUnit,
+      required DateTime cachedAt,
+    });
+typedef $$CachedPartnerSettingsTableUpdateCompanionBuilder =
+    CachedPartnerSettingsCompanion Function({
+      Value<int> partnerId,
+      Value<String> name,
+      Value<bool> isQrActive,
+      Value<bool> isCashierActive,
+      Value<bool> isOpenbill,
+      Value<double> ppn,
+      Value<bool> isPpnActive,
+      Value<int> cashRoundingUnit,
+      Value<DateTime> cachedAt,
+    });
+
+class $$CachedPartnerSettingsTableFilterComposer
+    extends Composer<_$CashierDb, $CachedPartnerSettingsTable> {
+  $$CachedPartnerSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get partnerId => $composableBuilder(
+    column: $table.partnerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isQrActive => $composableBuilder(
+    column: $table.isQrActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isCashierActive => $composableBuilder(
+    column: $table.isCashierActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isOpenbill => $composableBuilder(
+    column: $table.isOpenbill,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get ppn => $composableBuilder(
+    column: $table.ppn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CachedPartnerSettingsTableOrderingComposer
+    extends Composer<_$CashierDb, $CachedPartnerSettingsTable> {
+  $$CachedPartnerSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get partnerId => $composableBuilder(
+    column: $table.partnerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isQrActive => $composableBuilder(
+    column: $table.isQrActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isCashierActive => $composableBuilder(
+    column: $table.isCashierActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isOpenbill => $composableBuilder(
+    column: $table.isOpenbill,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get ppn => $composableBuilder(
+    column: $table.ppn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CachedPartnerSettingsTableAnnotationComposer
+    extends Composer<_$CashierDb, $CachedPartnerSettingsTable> {
+  $$CachedPartnerSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get partnerId =>
+      $composableBuilder(column: $table.partnerId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<bool> get isQrActive => $composableBuilder(
+    column: $table.isQrActive,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isCashierActive => $composableBuilder(
+    column: $table.isCashierActive,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isOpenbill => $composableBuilder(
+    column: $table.isOpenbill,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get ppn =>
+      $composableBuilder(column: $table.ppn, builder: (column) => column);
+
+  GeneratedColumn<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+}
+
+class $$CachedPartnerSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$CashierDb,
+          $CachedPartnerSettingsTable,
+          CachedPartnerSetting,
+          $$CachedPartnerSettingsTableFilterComposer,
+          $$CachedPartnerSettingsTableOrderingComposer,
+          $$CachedPartnerSettingsTableAnnotationComposer,
+          $$CachedPartnerSettingsTableCreateCompanionBuilder,
+          $$CachedPartnerSettingsTableUpdateCompanionBuilder,
+          (
+            CachedPartnerSetting,
+            BaseReferences<
+              _$CashierDb,
+              $CachedPartnerSettingsTable,
+              CachedPartnerSetting
+            >,
+          ),
+          CachedPartnerSetting,
+          PrefetchHooks Function()
+        > {
+  $$CachedPartnerSettingsTableTableManager(
+    _$CashierDb db,
+    $CachedPartnerSettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CachedPartnerSettingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$CachedPartnerSettingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CachedPartnerSettingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> partnerId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<bool> isQrActive = const Value.absent(),
+                Value<bool> isCashierActive = const Value.absent(),
+                Value<bool> isOpenbill = const Value.absent(),
+                Value<double> ppn = const Value.absent(),
+                Value<bool> isPpnActive = const Value.absent(),
+                Value<int> cashRoundingUnit = const Value.absent(),
+                Value<DateTime> cachedAt = const Value.absent(),
+              }) => CachedPartnerSettingsCompanion(
+                partnerId: partnerId,
+                name: name,
+                isQrActive: isQrActive,
+                isCashierActive: isCashierActive,
+                isOpenbill: isOpenbill,
+                ppn: ppn,
+                isPpnActive: isPpnActive,
+                cashRoundingUnit: cashRoundingUnit,
+                cachedAt: cachedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> partnerId = const Value.absent(),
+                required String name,
+                Value<bool> isQrActive = const Value.absent(),
+                Value<bool> isCashierActive = const Value.absent(),
+                Value<bool> isOpenbill = const Value.absent(),
+                Value<double> ppn = const Value.absent(),
+                Value<bool> isPpnActive = const Value.absent(),
+                Value<int> cashRoundingUnit = const Value.absent(),
+                required DateTime cachedAt,
+              }) => CachedPartnerSettingsCompanion.insert(
+                partnerId: partnerId,
+                name: name,
+                isQrActive: isQrActive,
+                isCashierActive: isCashierActive,
+                isOpenbill: isOpenbill,
+                ppn: ppn,
+                isPpnActive: isPpnActive,
+                cashRoundingUnit: cashRoundingUnit,
+                cachedAt: cachedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CachedPartnerSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$CashierDb,
+      $CachedPartnerSettingsTable,
+      CachedPartnerSetting,
+      $$CachedPartnerSettingsTableFilterComposer,
+      $$CachedPartnerSettingsTableOrderingComposer,
+      $$CachedPartnerSettingsTableAnnotationComposer,
+      $$CachedPartnerSettingsTableCreateCompanionBuilder,
+      $$CachedPartnerSettingsTableUpdateCompanionBuilder,
+      (
+        CachedPartnerSetting,
+        BaseReferences<
+          _$CashierDb,
+          $CachedPartnerSettingsTable,
+          CachedPartnerSetting
+        >,
+      ),
+      CachedPartnerSetting,
       PrefetchHooks Function()
     >;
 typedef $$LocalOrdersTableCreateCompanionBuilder =
@@ -19590,6 +20463,8 @@ class $CashierDbManager {
       $$CachedTablesTableTableManager(_db, _db.cachedTables);
   $$CachedPaymentMethodsTableTableManager get cachedPaymentMethods =>
       $$CachedPaymentMethodsTableTableManager(_db, _db.cachedPaymentMethods);
+  $$CachedPartnerSettingsTableTableManager get cachedPartnerSettings =>
+      $$CachedPartnerSettingsTableTableManager(_db, _db.cachedPartnerSettings);
   $$LocalOrdersTableTableManager get localOrders =>
       $$LocalOrdersTableTableManager(_db, _db.localOrders);
   $$LocalOrderItemsTableTableManager get localOrderItems =>

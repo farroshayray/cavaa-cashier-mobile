@@ -535,6 +535,10 @@ class ProcessProvider extends ChangeNotifier {
           preserveStockConflict: isStockConflict,
         );
 
+        if (isConfirmingOpenbill) {
+          await localOrdersDao.updateBackendSyncStage(localId, 'CONFIRMED');
+        }
+
         final idx = items.indexWhere((e) => e['local_id'] == localId);
         if (idx >= 0) {
           items[idx] = {
@@ -896,10 +900,15 @@ class ProcessProvider extends ChangeNotifier {
           throw Exception('Local ID tidak valid');
         }
 
+        final localOrder = await localOrdersDao.getOrderByLocalId(localId);
         final isOpenbill =
             _toBool(row['openbill_flag']) ||
             row['payment_method']?.toString() == 'OPENBILL' ||
-            (row['order_status'] ?? '').toString().startsWith('OPENBILL');
+            (row['order_status'] ?? '').toString().startsWith('OPENBILL') ||
+            (localOrder?.paymentMethodSelected ?? '').toUpperCase() ==
+                'OPENBILL' ||
+            (localOrder?.paymentMethodEffective ?? '').toUpperCase() ==
+                'OPENBILL';
 
         if (isOpenbill) {
           await localOrdersDao.updateOrderStatusByLocalId(
@@ -907,6 +916,7 @@ class ProcessProvider extends ChangeNotifier {
             status: 'UNPAID',
             syncStatus: isStockConflict ? 'STOCK_CONFLICT' : 'PENDING_FINISH',
           );
+          await localOrdersDao.updateBackendSyncStage(localId, 'OPENBILL_SERVED');
 
           items.removeWhere((e) => e['local_id'] == localId);
           notifyListeners();

@@ -267,17 +267,28 @@ class LocalOrdersDao {
     );
   }
 
-  Future<void> markOrderPending(String localId, {String? error}) async {
+  Future<void> markOrderPending(
+    String localId, {
+    String? error,
+    String? restoreSyncStatus,
+  }) async {
     final current = await getOrderByLocalId(localId);
     if (current == null) return;
+
+    String nextSyncStatus;
+    if (restoreSyncStatus != null && restoreSyncStatus.trim().isNotEmpty) {
+      nextSyncStatus = restoreSyncStatus.trim();
+    } else if (current.syncStatus == 'SYNCING') {
+      nextSyncStatus = 'FAILED';
+    } else {
+      nextSyncStatus = current.syncStatus;
+    }
 
     await (db.update(db.localOrders)
           ..where((tbl) => tbl.localId.equals(localId)))
         .write(
       LocalOrdersCompanion(
-        syncStatus: Value(
-          current.syncStatus == 'SYNCING' ? 'FAILED' : current.syncStatus,
-        ),
+        syncStatus: Value(nextSyncStatus),
         lastError: Value(error),
         updatedAtLocal: Value(DateTime.now()),
       ),
@@ -564,6 +575,9 @@ class LocalOrdersDao {
         orderStatusLocal: Value(nextStatus),
         syncStatus: Value(nextSyncStatus),
         orderSnapshotJson: Value(jsonEncode(snapshot)),
+        backendSyncStage: allServed
+            ? const Value('ITEMS_SERVED')
+            : const Value.absent(),
         updatedAtLocal: Value(DateTime.now()),
         lastError: const Value(null),
       ),
@@ -675,6 +689,9 @@ class LocalOrdersDao {
         orderStatusLocal: Value(isOpenbill ? 'SERVED' : 'PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
         backendSyncStage: Value(isOpenbill ? 'OPENBILL_SERVED' : 'PURCHASED'),
+        paidAmountLocal: Value(paidAmount.toDouble()),
+        changeAmountLocal: Value(changeAmount.toDouble()),
+        paymentConfirmedAtLocal: Value(DateTime.now()),
         updatedAtLocal: Value(DateTime.now()),
       ),
     );
@@ -779,6 +796,9 @@ class LocalOrdersDao {
         orderStatusLocal: Value(isOpenbill ? 'SERVED' : 'PAID'),
         syncStatus: const Value('PENDING_PAYMENT'),
         backendSyncStage: Value(isOpenbill ? 'OPENBILL_SERVED' : 'PURCHASED'),
+        paidAmountLocal: Value(paidAmount),
+        changeAmountLocal: Value(changeAmount),
+        paymentConfirmedAtLocal: Value(DateTime.now()),
         createdAtLocal: Value(DateTime.now()),
         updatedAtLocal: Value(DateTime.now()),
         serverId: Value(serverId),
@@ -797,28 +817,51 @@ class LocalOrdersDao {
     int? latestPaymentServerId,
     String? orderSnapshotJson,
     bool preserveStockConflict = false,
+    double? billTotalLocal,
+    double? cashRoundingAmount,
   }) async {
     final current = await getOrderByLocalId(localId);
     final keepStockConflict =
         preserveStockConflict && current?.syncStatus == 'STOCK_CONFLICT';
 
     final isOpenbill =
-        (current?.paymentMethodSelected ?? current?.paymentMethodEffective) ==
-            'OPENBILL';
+        (current?.paymentMethodSelected ?? '').toUpperCase() == 'OPENBILL' ||
+        (current?.paymentMethodEffective ?? '').toUpperCase() == 'OPENBILL' ||
+        (current?.orderStatusLocal ?? '').toUpperCase().startsWith('OPENBILL');
+
+    final resolvedEffective = selectedPaymentMethod?.trim();
+    final resolvedBillTotal = billTotalLocal ??
+        ((paidAmount - changeAmount) > 0 ? paidAmount - changeAmount : paidAmount);
+    final resolvedRounding = cashRoundingAmount ??
+        (current != null
+            ? (resolvedBillTotal -
+                    CashRoundingHelpers.basePayable(
+                      current.subtotal,
+                      current.isPpnActive,
+                      current.ppnPercent,
+                    ))
+                .clamp(0, double.infinity)
+            : 0.0);
 
     await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
       LocalOrdersCompanion(
-        paymentMethodEffective: selectedPaymentMethod == null
+        paymentMethodEffective: resolvedEffective == null ||
+                resolvedEffective.isEmpty
             ? const Value.absent()
-            : Value(selectedPaymentMethod),
+            : Value(resolvedEffective),
         paidAmountLocal: Value(paidAmount),
         changeAmountLocal: Value(changeAmount),
+        grandTotal: Value(resolvedBillTotal.toDouble()),
+        cashRoundingAmount: Value(resolvedRounding.toDouble()),
         cashierProofImageLocalPath: Value(cashierProofImageLocalPath),
         paymentConfirmedAtLocal: Value(paymentConfirmedAtLocal ?? DateTime.now()),
         latestPaymentServerId: Value(latestPaymentServerId),
         orderSnapshotJson: Value(orderSnapshotJson),
         orderStatusLocal: Value(isOpenbill ? 'SERVED' : 'PAID'),
         syncStatus: Value(keepStockConflict ? 'STOCK_CONFLICT' : 'PENDING_PAYMENT'),
+        backendSyncStage: isOpenbill
+            ? const Value('OPENBILL_SERVED')
+            : const Value.absent(),
         updatedAtLocal: Value(DateTime.now()),
         lastError: keepStockConflict ? const Value.absent() : const Value(null),
       ),
@@ -855,6 +898,18 @@ class LocalOrdersDao {
         .write(
       LocalOrdersCompanion(
         backendSyncStage: Value(stage),
+        updatedAtLocal: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> saveOrderSnapshotJson({
+    required String localId,
+    required String orderSnapshotJson,
+  }) async {
+    await (db.update(db.localOrders)..where((t) => t.localId.equals(localId))).write(
+      LocalOrdersCompanion(
+        orderSnapshotJson: Value(orderSnapshotJson),
         updatedAtLocal: Value(DateTime.now()),
       ),
     );

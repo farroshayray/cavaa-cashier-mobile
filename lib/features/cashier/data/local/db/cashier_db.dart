@@ -10,6 +10,7 @@ import 'tables/cached_option_groups_table.dart';
 import 'tables/cached_option_items_table.dart';
 import 'tables/cached_tables_table.dart';
 import 'tables/cached_payment_methods_table.dart';
+import 'tables/cached_partner_settings_table.dart';
 import 'tables/cached_payment_orders_table.dart';
 import 'tables/cached_payment_order_items_table.dart';
 import 'tables/cached_payment_order_item_options_table.dart';
@@ -43,6 +44,7 @@ LazyDatabase _openConnection() {
     CachedOptionItems,
     CachedTables,
     CachedPaymentMethods,
+    CachedPartnerSettings,
     LocalOrders,
     LocalOrderItems,
     LocalOrderItemOptions,
@@ -63,7 +65,7 @@ class CashierDb extends _$CashierDb {
   CashierDb() : super(_openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -74,6 +76,9 @@ class CashierDb extends _$CashierDb {
           if (from < 12) {
             await m.addColumn(localOrders, localOrders.cashRoundingAmount);
             await m.addColumn(localOrders, localOrders.cashRoundingUnit);
+          }
+          if (from < 13) {
+            await m.createTable(cachedPartnerSettings);
           }
         },
       );

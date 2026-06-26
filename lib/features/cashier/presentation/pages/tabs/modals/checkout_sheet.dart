@@ -138,23 +138,10 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     final ppnActive = vm.isPpnActive;
     final ppnPercent = vm.ppnPercent;
     final ppnAmount = vm.cartPpnAmount;
-    final roundingAmount = vm.roundingAmountForPayment(_selectedPay);
-    final grandTotal = vm.payableTotalForPayment(_selectedPay);
+    final grandTotal = vm.cartGrandTotalRounded;
 
-    final instantPayments = payOptions.where((o) {
-      return o.kind == PayKind.cashierCash || o.kind == PayKind.onlineQris || o.kind == PayKind.openbill;
-    }).toList();
-
-    final manualTfPayments = payOptions.where((o) {
-      return o.kind == PayKind.manual && o.manualType == 'manual_tf';
-    }).toList();
-
-    final manualEwalletPayments = payOptions.where((o) {
-      return o.kind == PayKind.manual && o.manualType == 'manual_ewallet';
-    }).toList();
-
-    final manualQrisPayments = payOptions.where((o) {
-      return o.kind == PayKind.manual && o.manualType == 'manual_qris';
+    final purchasePayments = payOptions.where((o) {
+      return o.kind == PayKind.cashierCash || o.kind == PayKind.openbill;
     }).toList();
 
     return SafeArea(
@@ -215,7 +202,6 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                       ppnActive: ppnActive,
                       ppnPercent: ppnPercent,
                       ppnAmount: ppnAmount,
-                      roundingAmount: roundingAmount,
                       grandTotal: grandTotal,
                     ),
                     const SizedBox(height: 14),
@@ -378,43 +364,11 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               'Metode pembayaran belum tersedia.',
                               style: TextStyle(color: Colors.black.withOpacity(0.55)),
                             )
-                          else ...[
-                            if (instantPayments.isNotEmpty) ...[
-                              _PaymentGroupTitle(title: 'Pembayaran Instan'),
-                              const SizedBox(height: 8),
-                              ...instantPayments.map((opt) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildPaymentCard(opt, brand),
-                                  )),
-                              const SizedBox(height: 8),
-                            ],
-                            if (manualTfPayments.isNotEmpty) ...[
-                              _PaymentGroupTitle(title: 'Transfer Bank'),
-                              const SizedBox(height: 8),
-                              ...manualTfPayments.map((opt) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildPaymentCard(opt, brand),
-                                  )),
-                              const SizedBox(height: 8),
-                            ],
-                            if (manualEwalletPayments.isNotEmpty) ...[
-                              _PaymentGroupTitle(title: 'E-Wallet'),
-                              const SizedBox(height: 8),
-                              ...manualEwalletPayments.map((opt) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildPaymentCard(opt, brand),
-                                  )),
-                              const SizedBox(height: 8),
-                            ],
-                            if (manualQrisPayments.isNotEmpty) ...[
-                              _PaymentGroupTitle(title: 'QRIS Manual'),
-                              const SizedBox(height: 8),
-                              ...manualQrisPayments.map((opt) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildPaymentCard(opt, brand),
-                                  )),
-                            ],
-                          ],
+                          else
+                            ...purchasePayments.map((opt) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _buildPaymentCard(opt, brand),
+                                )),
                           if (_paymentInvalid) ...[
                             const SizedBox(height: 4),
                             const Text(
@@ -862,7 +816,6 @@ class _TotalCard extends StatelessWidget {
     required this.ppnActive,
     required this.ppnPercent,
     required this.ppnAmount,
-    required this.roundingAmount,
     required this.grandTotal,
   });
 
@@ -870,7 +823,6 @@ class _TotalCard extends StatelessWidget {
   final bool ppnActive;
   final num ppnPercent;
   final num ppnAmount;
-  final num roundingAmount;
   final num grandTotal;
 
   @override
@@ -919,8 +871,6 @@ class _TotalCard extends StatelessWidget {
             row('PPN (${ppnPercent.toStringAsFixed(ppnPercent % 1 == 0 ? 0 : 2)}%)',
                 'Rp ${_rupiah(ppnAmount)}'),
           ],
-          if (roundingAmount > 0)
-            row('Pembulatan Cash', 'Rp ${_rupiah(roundingAmount)}'),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 6),
             child: Divider(height: 1),
