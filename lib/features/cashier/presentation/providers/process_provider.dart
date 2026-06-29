@@ -590,12 +590,13 @@ class ProcessProvider extends ChangeNotifier {
         await cachedProcessOrdersDao.markProcessedOffline(
           id,
           cached?.latestProcessJson ?? cached?.processRequestJson ?? '{}',
+          orderStatus: targetStatus,
         );
 
         await tabCoordinator.transitionOrderStage(
           serverId: id,
           orderStatus: targetStatus,
-          syncIntent: 'PROCESS',
+          syncIntent: isConfirmingOpenbill ? 'CONFIRM_OPENBILL' : 'PROCESS',
           syncDirty: true,
           orderSnapshot: row,
         );

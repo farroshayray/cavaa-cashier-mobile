@@ -158,7 +158,9 @@ class SyncEngine {
       bookingOrdersPayload.add(row);
 
       final dirtyDetails = await bookingOrdersDao.getDirtyDetailsForOrder(order.clientUuid);
-      final skipDetailPush = intent == 'CREATE' || order.serverId == null;
+      final skipDetailPush = intent == 'CREATE' ||
+          intent == 'CONFIRM_OPENBILL' ||
+          order.serverId == null;
       for (final detail in dirtyDetails) {
         if (skipDetailPush || detail.serverId == null) continue;
         orderDetailsPayload.add({
