@@ -408,9 +408,9 @@ class _PaymentViewState extends State<_PaymentView> {
               final paymentVM = context.read<PaymentProvider>();
               final processVM = context.read<ProcessProvider>();
               final doneVM = context.read<DoneProvider>();
-              await paymentVM.load();
-              unawaited(processVM.load());
-              unawaited(doneVM.load());
+              await paymentVM.load(silent: true);
+              await processVM.load(silent: true);
+              await doneVM.load(silent: true);
             }
           },
         ),

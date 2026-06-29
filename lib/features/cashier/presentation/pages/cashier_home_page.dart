@@ -118,7 +118,7 @@ class _CashierHomePageState extends State<CashierHomePage>
         final stale = await PushNotificationService.instance
             .consumeOrdersStaleFlag();
         if (stale && mounted) {
-          _debouncedReloadAllOrderTabs();
+          _debouncedSyncAndReloadAllOrderTabs();
         }
       });
 
@@ -581,14 +581,20 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (type == 'order_updated' ||
           type == 'order_cancelled' ||
           _isCashierOriginatedOrder(data)) {
-        _debouncedReloadAllOrderTabs();
+        final status = (data['status'] ?? data['order_status'] ?? '')
+            .toString()
+            .toUpperCase();
+        if (status.isNotEmpty) {
+          _refreshTabByRealtimeData(data);
+        }
+        _debouncedSyncAndReloadAllOrderTabs();
         return;
       }
 
       if (type == 'new_order') {
         try {
           await context.read<NotificationsProvider>().pushFromFcm(data);
-          _debouncedReloadAllOrderTabs();
+          _debouncedSyncAndReloadAllOrderTabs();
         } catch (e, st) {
           debugPrint('FCM foreground handler error: $e\n$st');
         }
@@ -610,7 +616,13 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (type == 'order_updated' ||
           type == 'order_cancelled' ||
           _isCashierOriginatedOrder(data)) {
-        _debouncedReloadAllOrderTabs();
+        final status = (data['status'] ?? data['order_status'] ?? '')
+            .toString()
+            .toUpperCase();
+        if (status.isNotEmpty) {
+          _refreshTabByRealtimeData(data);
+        }
+        _debouncedSyncAndReloadAllOrderTabs();
         return;
       }
 
@@ -674,11 +686,25 @@ class _CashierHomePageState extends State<CashierHomePage>
     ]);
   }
 
-  void _debouncedReloadAllOrderTabs() {
+  void _debouncedSyncAndReloadAllOrderTabs() {
     _allTabsReloadDebounce?.cancel();
     _allTabsReloadDebounce = Timer(const Duration(milliseconds: 400), () {
-      unawaited(_reloadAllOrderTabsSequentially());
+      unawaited(_syncAndReloadAllOrderTabs());
     });
+  }
+
+  Future<void> _syncAndReloadAllOrderTabs() async {
+    try {
+      final conn = context.read<ConnectivityStatusProvider>();
+      if (conn.isOnline && !conn.isChecking) {
+        await context.read<SyncService>().syncPendingOrders();
+      }
+    } catch (e) {
+      debugPrint('sync before tab reload failed: $e');
+    }
+
+    if (!mounted) return;
+    await _reloadAllOrderTabsSequentially();
   }
 
   void _refreshTabByRealtimeData(Map<String, dynamic> data) {
@@ -704,7 +730,10 @@ class _CashierHomePageState extends State<CashierHomePage>
       return;
     }
 
-    if (status == 'PAID' || status == 'PROCESSED') {
+    if (status == 'PAID' ||
+        status == 'PROCESSED' ||
+        status == 'OPENBILL_CONFIRMATION' ||
+        status == 'OPENBILL_WAITING_ORDER') {
       _debouncedReloadProcess();
       return;
     }

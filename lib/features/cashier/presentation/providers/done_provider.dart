@@ -7,6 +7,8 @@ import 'package:drift/drift.dart';
 import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/sync/order_tab_item_mapper.dart';
 import '/core/services/connectivity_status_provider.dart';
 
 class DoneProvider extends ChangeNotifier {
@@ -14,12 +16,14 @@ class DoneProvider extends ChangeNotifier {
   final LocalOrdersDao localOrdersDao;
   final CachedDoneOrdersDao cachedDoneOrdersDao;
   final ConnectivityStatusProvider connectivity;
+  final BookingOrdersDao bookingOrdersDao;
 
   DoneProvider(
     this.repo,
     this.localOrdersDao,
     this.cachedDoneOrdersDao,
     this.connectivity,
+    this.bookingOrdersDao,
   );
 
   bool isLoading = false;
@@ -52,34 +56,11 @@ class DoneProvider extends ChangeNotifier {
     }
 
     try {
-      final cachedRows = await cachedDoneOrdersDao.getAllActive();
+      final mirrorRows = await bookingOrdersDao.getDoneTabOrders();
 
-      final remoteItems = cachedRows.map((row) {
-        final cached = _decodeCachedJson(row.detailJson) ??
-            _decodeCachedJson(row.latestDoneJson) ??
-            _decodeCachedJson(row.doneRequestJson) ??
-            <String, dynamic>{};
-
-        return <String, dynamic>{
-          ..._normalizeCachedOrderMap(cached),
-          'id': row.serverId,
-          'booking_order_code': row.bookingOrderCode,
-          'customer_name': row.customerName,
-          'payment_method': row.paymentMethod,
-          'order_status': row.orderStatus,
-          'total_order_value': row.subtotal,
-          'ppn': row.ppnPercent,
-          'is_ppn_active': row.isPpnActive ? 1 : 0,
-          'table': {
-            'table_no': row.tableNo,
-          },
-          'is_synced': row.isSynced,
-          'cached_at': row.syncedAt?.toIso8601String(),
-          'sort_time': _extractCreatedAtFromRawJson(row.latestDoneJson) ??
-              _extractCreatedAtFromRawJson(row.doneRequestJson) ??
-              row.syncedAt?.toIso8601String(),
-        };
-      }).toList();
+      final remoteItems = mirrorRows
+          .map(OrderTabItemMapper.toDoneItem)
+          .toList();
 
       if (connectivity.isOnline && remoteItems.isNotEmpty) {
         try {

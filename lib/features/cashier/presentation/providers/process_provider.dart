@@ -10,6 +10,10 @@ import 'package:drift/drift.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/order_stage_resolver.dart';
+import '/features/cashier/data/sync/order_tab_item_mapper.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class ProcessProvider extends ChangeNotifier {
@@ -19,6 +23,8 @@ class ProcessProvider extends ChangeNotifier {
   final ConnectivityStatusProvider connectivity;
   final CachedDoneOrdersDao cachedDoneOrdersDao;
   final CachedPaymentOrdersDao cachedPaymentOrdersDao;
+  final BookingOrdersDao bookingOrdersDao;
+  final OrderTabCoordinator tabCoordinator;
 
   ProcessProvider(
     this.repo,
@@ -27,6 +33,8 @@ class ProcessProvider extends ChangeNotifier {
     this.cachedDoneOrdersDao,
     this.cachedPaymentOrdersDao,
     this.connectivity,
+    this.bookingOrdersDao,
+    this.tabCoordinator,
   );
 
   bool isLoading = false;
@@ -59,53 +67,32 @@ class ProcessProvider extends ChangeNotifier {
     }
 
     try {
-      final cachedRows = await cachedProcessOrdersDao.getAllActive();
-      final doneRows = await cachedDoneOrdersDao.getAllActive();
-      final doneIds = doneRows.map((e) => e.serverId).toSet();
+      final mirrorRows = await bookingOrdersDao.getProcessTabOrders(
+        query: query.isEmpty ? null : query,
+      );
+      final doneRows = await bookingOrdersDao.getDoneTabOrders();
+      final doneIds = doneRows
+          .map((e) => _toId(e['id']))
+          .where((id) => id > 0)
+          .toSet();
       final doneCodes = doneRows
-          .map((e) => e.bookingOrderCode.trim())
+          .map((e) => (e['booking_order_code'] ?? '').toString().trim())
           .where((e) => e.isNotEmpty)
           .toSet();
 
-      final remoteItems = cachedRows
-        .where((row) {
-          if (row.orderStatus == 'SERVED') return false;
-          if (row.orderStatus == 'UNPAID') return false;
-          if (doneIds.contains(row.serverId)) return false;
-          if (row.bookingOrderCode.trim().isNotEmpty &&
-              doneCodes.contains(row.bookingOrderCode.trim())) {
-            return false;
-          }
-          return true;
-        })
-        .map((row) {
-        final cached = _decodeCachedJson(row.detailJson) ??
-            _decodeCachedJson(row.latestProcessJson) ??
-            _decodeCachedJson(row.processRequestJson) ??
-            <String, dynamic>{};
-
-        return <String, dynamic>{
-          ..._normalizeCachedOrderMap(cached),
-          'id': row.serverId,
-          'booking_order_code': row.bookingOrderCode,
-          'customer_name': row.customerName,
-          'payment_method': row.paymentMethod,
-          'order_status': row.orderStatus,
-          'total_order_value': row.subtotal,
-          'ppn': row.ppnPercent,
-          'is_ppn_active': row.isPpnActive ? 1 : 0,
-          'processed_by_kitchen': row.processedByKitchen,
-          'table': {
-            'table_no': row.tableNo,
-          },
-          'is_synced': row.isSynced,
-          'pending_action': row.pendingAction,
-          'cached_at': row.syncedAt?.toIso8601String(),
-          'sort_time': _extractCreatedAtFromRawJson(row.latestProcessJson) ??
-              _extractCreatedAtFromRawJson(row.processRequestJson) ??
-              row.syncedAt?.toIso8601String(),
-        };
-      }).toList();
+      final remoteItems = mirrorRows
+          .where((row) {
+            final status = (row['order_status'] ?? '').toString();
+            if (status == 'SERVED') return false;
+            if (status == 'UNPAID') return false;
+            final id = _toId(row['id']);
+            if (doneIds.contains(id)) return false;
+            final code = (row['booking_order_code'] ?? '').toString().trim();
+            if (code.isNotEmpty && doneCodes.contains(code)) return false;
+            return true;
+          })
+          .map(OrderTabItemMapper.toProcessItem)
+          .toList();
 
       if (connectivity.isOnline && remoteItems.isNotEmpty) {
         try {
@@ -573,12 +560,27 @@ class ProcessProvider extends ChangeNotifier {
           status: targetStatus,
         );
 
+        await tabCoordinator.transitionOrderStage(
+          serverId: id,
+          orderStatus: targetStatus,
+          syncDirty: false,
+          orderSnapshot: row,
+        );
+
         _setStatusLocal(id, targetStatus);
         return res;
       } else {
         await cachedProcessOrdersDao.markProcessedOffline(
           id,
           cached?.latestProcessJson ?? cached?.processRequestJson ?? '{}',
+        );
+
+        await tabCoordinator.transitionOrderStage(
+          serverId: id,
+          orderStatus: targetStatus,
+          syncIntent: 'PROCESS',
+          syncDirty: true,
+          orderSnapshot: row,
         );
 
         _setStatusLocal(id, targetStatus);
@@ -952,8 +954,26 @@ class ProcessProvider extends ChangeNotifier {
       if (connectivity.isOnline && !forceOffline) {
         final res = await repo.finishOrder(id);
 
+        final nextStatus = OrderStageResolver.resolveAfterFinish(
+          order: row,
+          apiResponse: res,
+        );
+
+        await tabCoordinator.transitionOrderStage(
+          serverId: id,
+          orderStatus: nextStatus,
+          syncIntent: 'FINISH',
+          syncDirty: false,
+          orderSnapshot: {
+            ...row,
+            'order_status': nextStatus,
+          },
+        );
+
         await cachedProcessOrdersDao.deleteByServerId(id);
-        await localOrdersDao.deleteOrderByServerId(id);
+        if (nextStatus == 'SERVED') {
+          await localOrdersDao.deleteOrderByServerId(id);
+        }
 
         items.removeWhere((e) => _toId(e['id']) == id);
         notifyListeners();
@@ -999,6 +1019,23 @@ class ProcessProvider extends ChangeNotifier {
           detailMap['created_at'] ??= row['created_at'] ?? row['sort_time'] ?? row['cached_at'] ?? DateTime.now().toIso8601String();
 
           await cachedPaymentOrdersDao.upsertDetailFromApi(detailMap);
+
+          await tabCoordinator.transitionOrderStage(
+            serverId: id,
+            orderStatus: 'UNPAID',
+            syncIntent: 'FINISH',
+            syncDirty: true,
+            orderSnapshot: detailMap,
+          );
+
+          items.removeWhere((e) => _toId(e['id']) == id);
+          notifyListeners();
+
+          return {
+            'status': 'offline_success',
+            'offline': true,
+            'message': 'Order open bill dipindahkan ke pembayaran',
+          };
         } else {
           await cachedDoneOrdersDao.upsertPendingFinishFromProcess(
             serverId: id,
@@ -1014,6 +1051,14 @@ class ProcessProvider extends ChangeNotifier {
             rawJson: rawJson,
           );
         }
+
+        await tabCoordinator.transitionOrderStage(
+          serverId: id,
+          orderStatus: 'SERVED',
+          syncIntent: 'FINISH',
+          syncDirty: true,
+          orderSnapshot: row,
+        );
 
         _setStatusLocal(id, 'SERVED');
 

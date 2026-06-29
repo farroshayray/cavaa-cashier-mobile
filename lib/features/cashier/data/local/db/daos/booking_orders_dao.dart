@@ -142,6 +142,75 @@ class BookingOrdersDao {
         .write(companion);
   }
 
+  /// Ensures a mirror row exists for a server order shown in tab UI.
+  Future<void> ensureFromUiMap(
+    Map<String, dynamic> order, {
+    required int serverId,
+  }) async {
+    final existing = await getByServerId(serverId);
+    if (existing != null) return;
+
+    final clientUuid = _uuid.v4();
+    final now = DateTime.now();
+    final tableNo = order['table'] is Map
+        ? order['table']['table_no']?.toString()
+        : order['table_no']?.toString();
+
+    await db.into(db.bookingOrders).insert(
+          BookingOrdersCompanion.insert(
+            clientUuid: clientUuid,
+            customerName: order['customer_name']?.toString() ?? 'guest',
+            serverId: Value(serverId),
+            bookingOrderCode: Value(order['booking_order_code']?.toString()),
+            tableId: Value(_toIntOrNull(order['table_id'])),
+            tableNo: Value(tableNo),
+            orderStatus: Value(order['order_status']?.toString() ?? 'UNPAID'),
+            paymentMethod: Value(order['payment_method']?.toString()),
+            openbillFlag: Value(_toBool(order['openbill_flag'])),
+            totalOrderValue: Value(_toDouble(order['total_order_value'])),
+            ppn: Value(_toDouble(order['ppn'])),
+            isPpnActive: Value(_toBool(order['is_ppn_active'])),
+            paidAmountLocal: Value(_toDouble(order['paid_amount_local'] ?? order['paid_amount'])),
+            changeAmountLocal: Value(_toDouble(order['change_amount_local'] ?? order['change_amount'])),
+            syncDirty: const Value(false),
+            createdAt: Value(_parseDate(order['created_at']) ?? now),
+            updatedAt: Value(now),
+          ),
+        );
+  }
+
+  /// Updates mirror status after a tab action so all tabs stay consistent.
+  Future<bool> applyLocalStageByServerId({
+    required int serverId,
+    required String orderStatus,
+    String? syncIntent,
+    bool syncDirty = false,
+    Map<String, dynamic>? extras,
+  }) async {
+    final existing = await getByServerId(serverId);
+    if (existing == null) return false;
+
+    final now = DateTime.now();
+    await (db.update(db.bookingOrders)..where((t) => t.serverId.equals(serverId))).write(
+          BookingOrdersCompanion(
+            orderStatus: Value(orderStatus),
+            updatedAt: Value(now),
+            syncDirty: Value(syncDirty),
+            syncIntent: syncIntent != null ? Value(syncIntent) : const Value.absent(),
+            paidAmountLocal: extras?['paid_amount'] != null
+                ? Value(_toDouble(extras!['paid_amount']))
+                : const Value.absent(),
+            changeAmountLocal: extras?['change_amount'] != null
+                ? Value(_toDouble(extras!['change_amount']))
+                : const Value.absent(),
+            paymentMethod: extras?['payment_method'] != null
+                ? Value(extras!['payment_method'].toString())
+                : const Value.absent(),
+          ),
+        );
+    return true;
+  }
+
   Future<List<Map<String, dynamic>>> getPaymentTabOrders({String? query}) {
     return _queryTabOrders(
       statuses: const ['UNPAID', 'EXPIRED', 'PAYMENT REQUEST'],

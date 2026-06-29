@@ -13,6 +13,8 @@ import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/providers/process_provider.dart';
+import '/features/cashier/presentation/providers/done_provider.dart';
 
 Map<String, dynamic> _normalizePaymentInstruction(Map<String, dynamic> raw) {
   final type = (raw['payment_type'] ?? raw['type'] ?? '').toString();
@@ -718,6 +720,20 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           Navigator.of(context).pop(true);
           return;
         }
+
+        if (!mounted) return;
+        await context.read<PaymentProvider>().afterPaymentSuccess(
+          serverId: widget.orderId,
+          orderSnapshot: _order,
+          apiResponse: payResp,
+          offline: false,
+          process: context.read<ProcessProvider>(),
+          done: context.read<DoneProvider>(),
+          paidAmount: paid,
+          changeAmount: change,
+          paymentMethod:
+              _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
+        );
       } else {
         final offlineOrder = Map<String, dynamic>.from(_order!);
         if (widget.forceOffline) {
@@ -730,6 +746,19 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           selectedPaymentMethod: _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
           cashierProofImagePath: _cashierProofImage?.path,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
+        );
+
+        if (!mounted) return;
+        await context.read<PaymentProvider>().afterPaymentSuccess(
+          serverId: widget.orderId,
+          orderSnapshot: offlineOrder,
+          offline: true,
+          process: context.read<ProcessProvider>(),
+          done: context.read<DoneProvider>(),
+          paidAmount: paid,
+          changeAmount: change,
+          paymentMethod:
+              _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
         );
       }
 

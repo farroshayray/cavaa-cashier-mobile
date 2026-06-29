@@ -11,6 +11,13 @@ import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import 'dart:convert';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/sync/order_stage_resolver.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/order_tab_item_mapper.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/presentation/providers/done_provider.dart';
+import '/features/cashier/presentation/providers/process_provider.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 import 'dart:io';
@@ -27,7 +34,9 @@ class PaymentProvider extends ChangeNotifier {
   final ConnectivityStatusProvider connectivity;
   final CachedProcessOrdersDao cachedProcessOrdersDao;
   final CachedDoneOrdersDao cachedDoneOrdersDao;
-  
+  final BookingOrdersDao bookingOrdersDao;
+  final OrderTabCoordinator tabCoordinator;
+  final SyncService? syncService;
 
   PaymentProvider({
     required this.repo,
@@ -37,6 +46,9 @@ class PaymentProvider extends ChangeNotifier {
     required this.cachedProcessOrdersDao,
     required this.cachedDoneOrdersDao,
     required this.connectivity,
+    required this.bookingOrdersDao,
+    required this.tabCoordinator,
+    this.syncService,
   });
 
   bool isLoading = false;
@@ -85,22 +97,25 @@ class PaymentProvider extends ChangeNotifier {
           .where((e) => e.trim().isNotEmpty)
           .toSet();
 
-      final processRows = await cachedProcessOrdersDao.getAllActive();
-      final doneRows = await cachedDoneOrdersDao.getAllActive();
+      final processRows = await bookingOrdersDao.getProcessTabOrders();
+      final doneRows = await bookingOrdersDao.getDoneTabOrders();
 
       final pendingFinishServerIds = processRows
-          .where((e) => e.pendingAction == 'FINISH' && e.isSynced == false)
-          .map((e) => e.serverId)
+          .where((e) =>
+              (e['sync_dirty'] == true || e['sync_dirty'] == 1) &&
+              (e['sync_intent']?.toString() ?? '').toUpperCase() == 'FINISH')
+          .map((e) => _toInt(e['id']))
+          .whereType<int>()
           .toSet();
 
       final processServerIds = processRows
           .where((e) {
-            final status = e.orderStatus;
+            final status = (e['order_status'] ?? '').toString();
 
-            // Open bill siap bayar / selesai → bukan lagi tab proses
-            if (e.paymentMethod == 'OPENBILL' || status.startsWith('OPENBILL')) {
+            if ((e['payment_method'] ?? '').toString() == 'OPENBILL' ||
+                status.startsWith('OPENBILL')) {
               if (status == 'UNPAID' ||
-                  e.pendingAction == 'FINISH' ||
+                  (e['sync_intent']?.toString() ?? '').toUpperCase() == 'FINISH' ||
                   status == 'SERVED') {
                 return false;
               }
@@ -114,27 +129,28 @@ class PaymentProvider extends ChangeNotifier {
             };
             return activeProcessStatuses.contains(status);
           })
-          .map((e) => e.serverId)
+          .map((e) => _toInt(e['id']))
+          .whereType<int>()
           .toSet();
 
       final doneServerIds = doneRows
-          .map((e) => e.serverId)
+          .map((e) => _toInt(e['id']))
+          .whereType<int>()
           .toSet();
 
       final doneOrderCodes = doneRows
-          .map((e) => e.bookingOrderCode.trim())
+          .map((e) => (e['booking_order_code'] ?? '').toString().trim())
           .where((e) => e.isNotEmpty)
           .toSet();
 
-      // Tab data comes from local mirror cache (refreshed by SyncService /sync pull).
-      final cachedOrders = await cachedPaymentOrdersDao.getCachedOrders(
+      final mirrorOrders = await bookingOrdersDao.getPaymentTabOrders(
         query: query.isEmpty ? null : query,
       );
 
       mergedItems.addAll(
-        cachedOrders.map((o) => _normalizeCachedServerItem(o, pendingFinishServerIds)),
+        mirrorOrders.map((o) => _normalizeMirrorPaymentItem(o, pendingFinishServerIds)),
       );
-      gotServer = cachedOrders.isNotEmpty;
+      gotServer = mirrorOrders.isNotEmpty;
 
       final localOrders = await localOrdersDao.getUnpaidOrders(
         query: query.isEmpty ? null : query,
@@ -399,6 +415,112 @@ class PaymentProvider extends ChangeNotifier {
     };
   }
 
+  Map<String, dynamic> _normalizeMirrorPaymentItem(
+    Map<String, dynamic> row,
+    Set<int> pendingFinishServerIds,
+  ) {
+    final item = OrderTabItemMapper.toPaymentItem(row);
+    final serverId = _toInt(item['id']);
+    final isPendingFinish =
+        serverId != null && pendingFinishServerIds.contains(serverId);
+    if (isPendingFinish) {
+      item['sync_status'] = 'PENDING_FINISH';
+    }
+    return item;
+  }
+
+  /// Moves order to the correct tab after payment (PAID vs open-bill SERVED).
+  Future<void> afterPaymentSuccess({
+    required int serverId,
+    Map<String, dynamic>? orderSnapshot,
+    Map<String, dynamic>? apiResponse,
+    bool offline = false,
+    ProcessProvider? process,
+    DoneProvider? done,
+    num? paidAmount,
+    num? changeAmount,
+    String? paymentMethod,
+  }) async {
+    final snapshot = orderSnapshot ?? <String, dynamic>{};
+    final nextStatus = OrderStageResolver.resolveAfterPayment(
+      orderBeforePay: snapshot,
+      apiResponse: apiResponse,
+    );
+
+    final resolvedPaymentMethod = paymentMethod ??
+        snapshot['payment_method']?.toString();
+
+    final extras = <String, dynamic>{
+      if (paidAmount != null) 'paid_amount': paidAmount,
+      if (changeAmount != null) 'change_amount': changeAmount,
+      if (resolvedPaymentMethod != null && resolvedPaymentMethod.isNotEmpty)
+        'payment_method': resolvedPaymentMethod,
+    };
+
+    final updatedSnapshot = {
+      ...snapshot,
+      'order_status': nextStatus,
+      if (resolvedPaymentMethod != null) 'payment_method': resolvedPaymentMethod,
+      if (isOpenBillOrder(snapshot)) 'openbill_flag': true,
+    };
+
+    debugPrint(
+      'afterPaymentSuccess resolved_status=$nextStatus '
+      'openbill=${isOpenBillOrder(snapshot)} serverId=$serverId',
+    );
+
+    if (process != null && done != null) {
+      await tabCoordinator.transitionAndReload(
+        serverId: serverId,
+        orderStatus: nextStatus,
+        syncIntent: offline ? 'PAY' : null,
+        syncDirty: offline,
+        extras: extras.isEmpty ? null : extras,
+        orderSnapshot: updatedSnapshot,
+        payment: this,
+        process: process,
+        done: done,
+      );
+    } else {
+      await tabCoordinator.transitionOrderStage(
+        serverId: serverId,
+        orderStatus: nextStatus,
+        syncIntent: offline ? 'PAY' : null,
+        syncDirty: offline,
+        extras: extras.isEmpty ? null : extras,
+        orderSnapshot: updatedSnapshot,
+      );
+      await load(silent: true);
+    }
+
+    if (!offline) {
+      unawaited(_backgroundSyncAndReload(process: process, done: done));
+    }
+  }
+
+  Future<void> _backgroundSyncAndReload({
+    ProcessProvider? process,
+    DoneProvider? done,
+  }) async {
+    final sync = syncService;
+    if (sync == null) return;
+
+    try {
+      await sync.syncPendingOrders();
+      if (process != null && done != null) {
+        await tabCoordinator.reloadAllTabs(
+          payment: this,
+          process: process,
+          done: done,
+        );
+      } else {
+        await load(silent: true);
+      }
+    } catch (e) {
+      debugPrint('background sync after payment failed: $e');
+    }
+  }
+
   Map<String, dynamic> _normalizeCachedServerItem(
     CachedPaymentOrder o,
     Set<int> pendingFinishServerIds,
@@ -500,7 +622,7 @@ class PaymentProvider extends ChangeNotifier {
         throw Exception('ID order tidak valid untuk pembayaran online');
       }
 
-      await repo.paymentOrder(
+      final payResp = await repo.paymentOrder(
         id: serverId,
         paidAmount: paidAmount,
         changeAmount: changeAmount,
@@ -509,7 +631,12 @@ class PaymentProvider extends ChangeNotifier {
         cashierProofImagePath: cashierProofImagePath,
       );
 
-      await load();
+      await afterPaymentSuccess(
+        serverId: serverId,
+        orderSnapshot: row,
+        apiResponse: payResp,
+        offline: false,
+      );
       return;
     }
 
@@ -522,7 +649,19 @@ class PaymentProvider extends ChangeNotifier {
       lastPaymentId: lastPaymentId,
     );
 
-    await load();
+    final serverId = _toInt(row['server_id'] ?? row['id']);
+    if (serverId != null && serverId > 0) {
+      await afterPaymentSuccess(
+        serverId: serverId,
+        orderSnapshot: row,
+        offline: true,
+        paidAmount: paidAmount,
+        changeAmount: changeAmount,
+        paymentMethod: paymentMethod,
+      );
+    } else {
+      await load();
+    }
   }
 
   Future<void> confirmPaymentOffline({
@@ -651,7 +790,6 @@ class PaymentProvider extends ChangeNotifier {
       cashRoundingAmount: cashRoundingAmount,
     );
 
-    // kalau source-nya cached server, tandai agar tidak tampil lagi di tab pembayaran
     final serverId = _toInt(order['server_id'] ?? order['id']);
     if (serverId != null && serverId > 0) {
       await cachedPaymentOrdersDao.markPendingDelete(serverId);

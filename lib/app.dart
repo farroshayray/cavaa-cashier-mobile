@@ -36,6 +36,8 @@ import 'features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/sync/legacy_cache_bridge.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/data/sync/sync_api.dart';
 import 'core/services/app_update_provider.dart';
 import '/core/services/push_notification_service.dart';
@@ -167,6 +169,16 @@ class _CavaaAppState extends State<CavaaApp> {
         ),
 
         Provider(
+          create: (_) => OrderTabCoordinator(
+            bookingOrdersDao: bookingOrdersDao,
+            bridge: LegacyCacheBridge(
+              db: cashierDb,
+              bookingOrdersDao: bookingOrdersDao,
+            ),
+          ),
+        ),
+
+        Provider(
           create: (_) => SyncService(
             localOrdersDao: localOrdersDao,
             cachedPaymentOrdersDao: cachedPaymentOrdersDao,
@@ -208,6 +220,9 @@ class _CavaaAppState extends State<CavaaApp> {
             cachedProcessOrdersDao: cachedProcessOrdersDao,
             cachedDoneOrdersDao: cachedDoneOrdersDao,
             connectivity: ctx.read<ConnectivityStatusProvider>(),
+            bookingOrdersDao: bookingOrdersDao,
+            tabCoordinator: ctx.read<OrderTabCoordinator>(),
+            syncService: ctx.read<SyncService>(),
           ),
         ),
         ChangeNotifierProvider(
@@ -218,6 +233,8 @@ class _CavaaAppState extends State<CavaaApp> {
             cachedDoneOrdersDao,
             cachedPaymentOrdersDao,
             ctx.read<ConnectivityStatusProvider>(),
+            bookingOrdersDao,
+            ctx.read<OrderTabCoordinator>(),
           ),
         ),
         ChangeNotifierProvider(
@@ -226,6 +243,7 @@ class _CavaaAppState extends State<CavaaApp> {
             localOrdersDao,
             cachedDoneOrdersDao,
             ctx.read<ConnectivityStatusProvider>(),
+            bookingOrdersDao,
           ),
         ),
         ChangeNotifierProvider(
