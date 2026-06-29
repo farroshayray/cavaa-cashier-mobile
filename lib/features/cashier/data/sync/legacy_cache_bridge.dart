@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '/core/network/api_debug_log.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 
@@ -37,6 +38,16 @@ class LegacyCacheBridge {
         final serverId = map['id'] as int?;
         if (serverId == null) continue;
 
+        final subtotal = (map['total_order_value'] as num?)?.toDouble() ?? 0;
+        final ppnPercent = (map['ppn'] as num?)?.toDouble() ?? 0;
+        final isPpnActive =
+            map['is_ppn_active'] == true || map['is_ppn_active'] == 1;
+        final grandTotal = CashRoundingHelpers.basePayable(
+          subtotal,
+          isPpnActive,
+          ppnPercent,
+        ).toDouble();
+
         await db.into(db.cachedPaymentOrders).insert(
               CachedPaymentOrdersCompanion.insert(
                 serverId: Value(serverId),
@@ -46,10 +57,10 @@ class LegacyCacheBridge {
                 paymentMethod: Value(map['payment_method']?.toString()),
                 orderStatus: map['order_status']?.toString() ?? 'UNPAID',
                 detailJson: Value(jsonEncode(map)),
-                subtotal: Value((map['total_order_value'] as num?)?.toDouble() ?? 0),
-                ppnPercent: Value((map['ppn'] as num?)?.toDouble() ?? 0),
-                isPpnActive: Value(map['is_ppn_active'] == true || map['is_ppn_active'] == 1),
-                grandTotal: Value((map['total_order_value'] as num?)?.toDouble() ?? 0),
+                subtotal: Value(subtotal),
+                ppnPercent: Value(ppnPercent),
+                isPpnActive: Value(isPpnActive),
+                grandTotal: Value(grandTotal),
                 createdAt: Value(_parseDate(map['created_at'])),
                 updatedAt: Value(_parseDate(map['updated_at'])),
                 cachedAt: now,

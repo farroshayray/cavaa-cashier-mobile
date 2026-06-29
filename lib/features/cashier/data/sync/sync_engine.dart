@@ -131,6 +131,7 @@ class SyncEngine {
 
       final bundle = await bookingOrdersDao.getBundleByClientUuid(order.clientUuid);
       final items = await _buildItemsPayload(bundle);
+      final subtotal = _resolveSubtotalForPush(order, bundle);
 
       final row = <String, dynamic>{
         'client_uuid': order.clientUuid,
@@ -146,8 +147,8 @@ class SyncEngine {
         'order_name': _checkoutOrderName(order.customerName),
         'payment_method': _checkoutPaymentMethod(order),
         'openbill_flag': order.openbillFlag,
-        'total_amount': order.totalOrderValue,
-        'total_order_value': order.totalOrderValue,
+        'total_amount': subtotal,
+        'total_order_value': subtotal,
         'items': items,
         if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
         if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
@@ -198,6 +199,28 @@ class SyncEngine {
       });
     }
     return items;
+  }
+
+  /// Subtotal before PPN — prefer line-item sum over mirror field.
+  num _resolveSubtotalForPush(BookingOrder order, BookingOrderBundle? bundle) {
+    final fromDetails = _subtotalFromBundle(bundle);
+    if (fromDetails > 0) {
+      return fromDetails;
+    }
+    return order.totalOrderValue;
+  }
+
+  num _subtotalFromBundle(BookingOrderBundle? bundle) {
+    if (bundle == null || bundle.details.isEmpty) return 0;
+
+    return bundle.details.fold<num>(0, (sum, detail) {
+      final base = detail.basePrice;
+      final options = detail.optionsPrice;
+      final promo = detail.promoAmount ?? 0;
+      final qty = detail.quantity;
+      final line = (base + options - promo) * qty;
+      return sum + (line > 0 ? line : 0);
+    });
   }
 
   Future<void> _applyResponse(Map<String, dynamic> response) async {

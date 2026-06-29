@@ -164,7 +164,7 @@ class _MiniCartBar extends StatelessWidget {
 
     // TODO: sesuaikan dengan provider kamu
     final itemCount = vm.cartItemCount;        // total qty semua item
-    final total = vm.cartGrandTotal;           // total harga semua item (num/double)
+    final total = vm.cartGrandTotalRounded;
     // final distinct = vm.cart.length;         // kalau kamu butuh jumlah jenis item
 
     if (itemCount <= 0) return const SizedBox.shrink();

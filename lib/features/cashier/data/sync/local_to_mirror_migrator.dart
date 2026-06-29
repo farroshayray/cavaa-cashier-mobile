@@ -62,7 +62,8 @@ class LocalToMirrorMigrator {
                     order.paymentMethodEffective == 'OPENBILL' ||
                     order.orderStatusLocal.startsWith('OPENBILL'),
               ),
-              totalOrderValue: Value(order.grandTotal),
+              // Mirrors booking_orders.total_order_value: subtotal before PPN.
+              totalOrderValue: Value(order.subtotal),
               ppn: Value(order.ppnPercent),
               isPpnActive: Value(order.isPpnActive),
               orderStatus: Value(order.orderStatusLocal),
