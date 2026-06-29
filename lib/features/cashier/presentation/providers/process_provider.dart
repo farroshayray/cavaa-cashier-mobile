@@ -70,6 +70,13 @@ class ProcessProvider extends ChangeNotifier {
       final mirrorRows = await bookingOrdersDao.getProcessTabOrders(
         query: query.isEmpty ? null : query,
       );
+
+      final mirroredClientUuids = mirrorRows
+          .map((o) => o['local_client_uuid']?.toString())
+          .whereType<String>()
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
       final doneRows = await bookingOrdersDao.getDoneTabOrders();
       final doneIds = doneRows
           .map((e) => _toId(e['id']))
@@ -132,6 +139,11 @@ class ProcessProvider extends ChangeNotifier {
       final filteredLocalItems = localItems.where((e) {
         final id = e['id'];
         final code = (e['booking_order_code'] ?? '').toString().trim();
+        final localId = (e['local_id'] ?? '').toString();
+
+        if (localId.isNotEmpty && mirroredClientUuids.contains(localId)) {
+          return false;
+        }
 
         if (id is int && id > 0) {
           if (remoteIds.contains(id)) return false;

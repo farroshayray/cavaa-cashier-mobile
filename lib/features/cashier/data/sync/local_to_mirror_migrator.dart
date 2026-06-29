@@ -144,7 +144,13 @@ class LocalToMirrorMigrator {
     if (syncStatus == 'PENDING_PROCESS') return 'PROCESS';
     if (syncStatus == 'PENDING_FINISH') return 'FINISH';
     if (syncStatus == 'PENDING_DELETE') return 'DELETE';
-    if (status == 'OPENBILL_CONFIRMATION') return 'CONFIRM_OPENBILL';
+    // CONFIRM_OPENBILL is only for existing server orders (e.g. customer add-more).
+    // Brand-new cashier checkout must CREATE first.
+    if (status == 'OPENBILL_CONFIRMATION' &&
+        order.serverId != null &&
+        order.serverId! > 0) {
+      return 'CONFIRM_OPENBILL';
+    }
     if (status == 'PAID' || status == 'PROCESSED') return 'PROCESS';
     if (status == 'SERVED') return 'FINISH';
 
