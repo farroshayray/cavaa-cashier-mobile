@@ -251,10 +251,24 @@ class SyncEngine {
           }
         }
 
+        final deletedOrders = (orders['deleted_booking_orders'] as List?) ?? [];
+        for (final raw in deletedOrders) {
+          if (raw is! Map) continue;
+          final map = Map<String, dynamic>.from(raw);
+          final serverId = _toInt(map['id']);
+          if (serverId == null) continue;
+          final deletedAt = DateTime.tryParse((map['deleted_at'] ?? '').toString());
+          await bookingOrdersDao.markDeletedByServerId(
+            serverId,
+            deletedAt: deletedAt,
+          );
+        }
+
         ApiDebugLog.sync(
           'pull applied',
           'booking_orders=${bookingOrders.length} '
-          'standalone_details=${standaloneDetails.length}',
+          'standalone_details=${standaloneDetails.length} '
+          'deleted_orders=${deletedOrders.length}',
         );
       }
 
@@ -275,6 +289,13 @@ class SyncEngine {
     if (syncToken != null && syncToken.isNotEmpty) {
       await bookingOrdersDao.setSyncMeta('last_sync_token', syncToken);
     }
+  }
+
+  int? _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
   }
 
   String _buildBatchIdempotencyKey(Map<String, dynamic> push) {

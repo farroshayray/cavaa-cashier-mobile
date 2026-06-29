@@ -60,6 +60,37 @@ class OrderTabCoordinator {
     );
   }
 
+  Future<void> markOrderDeleted({
+    int? serverId,
+    String? clientUuid,
+    bool hardRemove = false,
+    DateTime? deletedAt,
+  }) async {
+    if (hardRemove && clientUuid != null && clientUuid.isNotEmpty) {
+      await bookingOrdersDao.removeOrderMirrorByClientUuid(clientUuid);
+    } else if (serverId != null && serverId > 0) {
+      await bookingOrdersDao.markDeletedByServerId(serverId, deletedAt: deletedAt);
+    } else if (clientUuid != null && clientUuid.isNotEmpty) {
+      await bookingOrdersDao.removeOrderMirrorByClientUuid(clientUuid);
+    }
+
+    await bridge.refreshAll();
+    ApiDebugLog.sync(
+      'OrderTabCoordinator order deleted',
+      'serverId=$serverId clientUuid=$clientUuid hardRemove=$hardRemove',
+    );
+  }
+
+  Future<void> markOrderPendingDelete({
+    required int serverId,
+  }) async {
+    final mirror = await bookingOrdersDao.getByServerId(serverId);
+    if (mirror != null) {
+      await bookingOrdersDao.markIntent(mirror.clientUuid, 'DELETE');
+    }
+    await bridge.refreshAll();
+  }
+
   Future<void> reloadAllTabs({
     required PaymentProvider payment,
     required ProcessProvider process,

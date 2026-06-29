@@ -89,9 +89,20 @@ class SyncService {
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
       final clientUuid = map['client_uuid']?.toString();
+      final serverId = (map['server_id'] as num?)?.toInt();
+      final deleted = map['deleted'] == true;
+
+      if (deleted && serverId != null) {
+        await _localOrdersDao.deleteOrderByServerId(serverId);
+        ApiDebugLog.sync(
+          'local_orders removed after DELETE sync',
+          'serverId=$serverId',
+        );
+        continue;
+      }
+
       if (clientUuid == null || clientUuid.isEmpty) continue;
 
-      final serverId = (map['server_id'] as num?)?.toInt();
       final code = map['booking_order_code']?.toString();
 
       await _localOrdersDao.markOrderSynced(

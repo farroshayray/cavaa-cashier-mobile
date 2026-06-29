@@ -33,7 +33,7 @@ class OrderTabItemMapper {
           (row['order_status'] ?? '').toString().startsWith('OPENBILL'),
       'is_local_only': false,
       'is_cached_server': true,
-      'sync_status': row['sync_dirty'] == true ? 'PENDING' : 'SYNCED',
+      'sync_status': _mirrorSyncStatus(row),
       'last_error': row['sync_error']?.toString(),
       'sort_time': row['created_at']?.toString() ?? row['updated_at']?.toString(),
     };
@@ -112,5 +112,13 @@ class OrderTabItemMapper {
     if (v is num) return v != 0;
     final s = v?.toString().toLowerCase();
     return s == '1' || s == 'true';
+  }
+
+  static String _mirrorSyncStatus(Map<String, dynamic> row) {
+    final intent = (row['sync_intent'] ?? '').toString().toUpperCase();
+    if (intent == 'DELETE' && _toBool(row['sync_dirty'])) {
+      return 'PENDING_DELETE';
+    }
+    return row['sync_dirty'] == true ? 'PENDING' : 'SYNCED';
   }
 }

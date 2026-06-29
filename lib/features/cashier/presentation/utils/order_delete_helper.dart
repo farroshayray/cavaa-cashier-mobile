@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '/core/services/connectivity_status_provider.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 
@@ -52,13 +54,19 @@ Future<void> confirmDeleteUnpaidOrder(
 
   final paymentProvider = context.read<PaymentProvider>();
   final processProvider = context.read<ProcessProvider>();
+  final doneProvider = context.read<DoneProvider>();
+  final tabCoordinator = context.read<OrderTabCoordinator>();
 
   try {
     await paymentProvider.deleteOrderItem(
       data,
       isOnline: isOnline,
     );
-    await processProvider.load();
+    await tabCoordinator.reloadAllTabs(
+      payment: paymentProvider,
+      process: processProvider,
+      done: doneProvider,
+    );
 
     if (!context.mounted) return;
     Navigator.of(context, rootNavigator: true).maybePop();

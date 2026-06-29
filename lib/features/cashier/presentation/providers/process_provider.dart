@@ -85,6 +85,11 @@ class ProcessProvider extends ChangeNotifier {
             final status = (row['order_status'] ?? '').toString();
             if (status == 'SERVED') return false;
             if (status == 'UNPAID') return false;
+            final intent = (row['sync_intent'] ?? '').toString().toUpperCase();
+            if (intent == 'DELETE' &&
+                (row['sync_dirty'] == true || row['sync_dirty'] == 1)) {
+              return false;
+            }
             final id = _toId(row['id']);
             if (doneIds.contains(id)) return false;
             final code = (row['booking_order_code'] ?? '').toString().trim();

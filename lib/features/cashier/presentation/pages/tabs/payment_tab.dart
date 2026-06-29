@@ -317,67 +317,7 @@ class _PaymentViewState extends State<_PaymentView> {
           onDetail: () async {
             await _openPaymentOrderDetail(context, data, id);
           },
-          onDelete: () async {
-            final isLocalOnly = data['is_local_only'] == true;
-            final serverId = (data['server_id'] ?? data['id']);
-            final hasServerId = serverId != null && serverId.toString() != '-1';
-
-            final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
-
-            final ok = await showDialog<bool>(
-              context: context,
-              useRootNavigator: true,
-              builder: (ctx) {
-                String message;
-
-                if (isLocalOnly && !hasServerId) {
-                  message = 'Order lokal yang belum sinkron akan dihapus permanen dari device.';
-                } else if (!isOnline) {
-                  message = 'Order akan ditandai sebagai Pending Delete dan dihapus saat koneksi kembali online.';
-                } else {
-                  message = 'Order akan dihapus.';
-                }
-
-                return AlertDialog(
-                  title: const Text('Hapus order?'),
-                  content: Text(message),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(false),
-                      child: const Text('Batal'),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 146, 10, 0),
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () => Navigator.of(ctx).pop(true),
-                      child: const Text('Hapus'),
-                    ),
-                  ],
-                );
-              },
-            );
-
-            if (ok != true) return;
-
-            try {
-              await context.read<PaymentProvider>().deleteOrderItem(
-                data,
-                isOnline: isOnline,
-              );
-
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Order berhasil diperbarui.')),
-              );
-            } catch (e) {
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Gagal hapus order: $e')),
-              );
-            }
-          },
+          onDelete: () => confirmDeleteUnpaidOrder(context, data),
           onProcess: () async {
             final syncStatus = (data['sync_status'] ?? '').toString();
             if (syncStatus == 'PENDING_DELETE') {

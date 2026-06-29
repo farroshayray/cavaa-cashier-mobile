@@ -821,6 +821,10 @@ class PaymentProvider extends ChangeNotifier {
   Future<void> deleteOrder(int id) async {
     try {
       await repo.softDeleteOrder(id);
+      await cachedPaymentOrdersDao.deleteCachedOrderByServerId(id);
+      await cachedProcessOrdersDao.deleteByServerId(id);
+      await localOrdersDao.deleteOrderByServerId(id);
+      await tabCoordinator.markOrderDeleted(serverId: id);
       await load();
     } catch (e) {
       rethrow;
@@ -831,7 +835,7 @@ class PaymentProvider extends ChangeNotifier {
     final isLocalOnly = item['is_local_only'] == true;
     final isCachedServer = item['is_cached_server'] == true;
 
-    final localId = (item['local_id'] ?? '').toString();
+    final localId = (item['local_id'] ?? item['local_client_uuid'] ?? '').toString();
     final syncStatus = (item['sync_status'] ?? '').toString();
 
     final serverId = _toInt(item['server_id']) ?? _toInt(item['id']);
@@ -844,6 +848,10 @@ class PaymentProvider extends ChangeNotifier {
         // belum pernah sync ke server -> hapus langsung
         if (serverId == null || serverId <= 0) {
           await localOrdersDao.deleteOrderByLocalId(localId);
+          await tabCoordinator.markOrderDeleted(
+            clientUuid: localId,
+            hardRemove: true,
+          );
           await load();
           return;
         }
@@ -851,6 +859,8 @@ class PaymentProvider extends ChangeNotifier {
         // sudah pernah sync ke server
         if (!isOnline) {
           await localOrdersDao.markOrderPendingDelete(localId);
+          await bookingOrdersDao.markIntent(localId, 'DELETE');
+          await tabCoordinator.markOrderPendingDelete(serverId: serverId);
           await load();
           return;
         }
@@ -858,7 +868,9 @@ class PaymentProvider extends ChangeNotifier {
         // online + sudah ada serverId -> delete backend lalu hapus lokal
         await repo.softDeleteOrder(serverId);
         await cachedProcessOrdersDao.deleteByServerId(serverId);
+        await cachedPaymentOrdersDao.deleteCachedOrderByServerId(serverId);
         await localOrdersDao.deleteOrderByLocalId(localId);
+        await tabCoordinator.markOrderDeleted(serverId: serverId);
         await load();
         return;
       }
@@ -871,8 +883,8 @@ class PaymentProvider extends ChangeNotifier {
       }
 
       if (!isOnline) {
-        // saat offline: tandai pending delete di cache
         await cachedPaymentOrdersDao.markPendingDelete(serverId);
+        await tabCoordinator.markOrderPendingDelete(serverId: serverId);
         await load();
         return;
       }
@@ -881,6 +893,8 @@ class PaymentProvider extends ChangeNotifier {
       await repo.softDeleteOrder(serverId);
       await cachedPaymentOrdersDao.deleteCachedOrderByServerId(serverId);
       await cachedProcessOrdersDao.deleteByServerId(serverId);
+      await localOrdersDao.deleteOrderByServerId(serverId);
+      await tabCoordinator.markOrderDeleted(serverId: serverId);
       await load();
     } catch (e) {
       rethrow;

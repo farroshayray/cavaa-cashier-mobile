@@ -374,7 +374,62 @@ class BookingOrdersDao {
         );
   }
 
+  Future<void> markDeletedByServerId(int serverId, {DateTime? deletedAt}) async {
+    await (db.update(db.bookingOrders)..where((t) => t.serverId.equals(serverId))).write(
+          BookingOrdersCompanion(
+            deletedAt: Value(deletedAt ?? DateTime.now()),
+            syncDirty: const Value(false),
+            syncError: const Value(null),
+            syncIntent: const Value(null),
+          ),
+        );
+  }
+
+  Future<void> markDeletedByClientUuid(String clientUuid, {DateTime? deletedAt}) async {
+    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
+          BookingOrdersCompanion(
+            deletedAt: Value(deletedAt ?? DateTime.now()),
+            syncDirty: const Value(false),
+            syncError: const Value(null),
+            syncIntent: const Value(null),
+          ),
+        );
+  }
+
+  Future<void> removeOrderMirrorByClientUuid(String clientUuid) async {
+    await db.transaction(() async {
+      final details = await (db.select(db.orderDetails)
+            ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
+          .get();
+
+      for (final detail in details) {
+        await (db.delete(db.orderDetailOptions)
+              ..where((t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid)))
+            .go();
+      }
+
+      await (db.delete(db.orderDetails)
+            ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
+          .go();
+
+      await (db.delete(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).go();
+    });
+  }
+
   Future<void> applyAppliedResult(Map<String, dynamic> applied) async {
+    if (applied['deleted'] == true) {
+      final serverId = _toIntOrNull(applied['server_id']);
+      if (serverId != null) {
+        await markDeletedByServerId(serverId);
+      }
+
+      final deletedClientUuid = applied['client_uuid']?.toString();
+      if (deletedClientUuid != null && deletedClientUuid.isNotEmpty) {
+        await markDeletedByClientUuid(deletedClientUuid);
+      }
+      return;
+    }
+
     final clientUuid = applied['client_uuid']?.toString();
     if (clientUuid == null || clientUuid.isEmpty) return;
 
