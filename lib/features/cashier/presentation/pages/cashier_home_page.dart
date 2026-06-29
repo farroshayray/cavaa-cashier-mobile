@@ -15,6 +15,7 @@ import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
 import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
@@ -94,6 +95,7 @@ class _CashierHomePageState extends State<CashierHomePage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _setupConnectivitySyncHook();
+      _bootstrapAfterLogin();
     });
 
     Future.microtask(() async {
@@ -169,6 +171,28 @@ class _CashierHomePageState extends State<CashierHomePage>
 
       await _reloadAllOrderTabsSequentially();
     };
+  }
+
+  Future<void> _bootstrapAfterLogin() async {
+    if (!mounted) return;
+
+    try {
+      final conn = context.read<ConnectivityStatusProvider>();
+      if (conn.isOnline && !conn.isChecking) {
+        await context.read<SyncService>().syncPendingOrders();
+      }
+    } catch (e) {
+      debugPrint('bootstrap sync failed: $e');
+    }
+
+    if (!mounted) return;
+
+    try {
+      await context.read<PurchaseProvider>().load();
+      await _reloadAllOrderTabsSequentially();
+    } catch (e) {
+      debugPrint('bootstrap load tabs failed: $e');
+    }
   }
 
   @override

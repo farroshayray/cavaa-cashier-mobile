@@ -59,14 +59,6 @@ class ProcessProvider extends ChangeNotifier {
     }
 
     try {
-      if (connectivity.isOnline) {
-        try {
-          await _refreshProcessOrdersFromServer();
-        } catch (e) {
-          debugPrint('ProcessProvider refresh cache failed: $e');
-        }
-      }
-
       final cachedRows = await cachedProcessOrdersDao.getAllActive();
       final doneRows = await cachedDoneOrdersDao.getAllActive();
       final doneIds = doneRows.map((e) => e.serverId).toSet();

@@ -126,56 +126,15 @@ class PaymentProvider extends ChangeNotifier {
           .where((e) => e.isNotEmpty)
           .toSet();
 
-      try {
-        final res = await repo.fetchOrdersData(
-          tab: 'pembayaran',
-          q: query.isEmpty ? null : query,
-        );
+      // Tab data comes from local mirror cache (refreshed by SyncService /sync pull).
+      final cachedOrders = await cachedPaymentOrdersDao.getCachedOrders(
+        query: query.isEmpty ? null : query,
+      );
 
-        final raw = res['items'];
-        if (raw is List) {
-          final serverItems = raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-
-          mergedItems.addAll(serverItems.map(_normalizeServerItem));
-          gotServer = true;
-
-          final cachedRows = serverItems
-              .map(_mapServerItemToCachedCompanion)
-              .toList();
-
-          await cachedPaymentOrdersDao.replaceAllOrders(
-            orders: cachedRows,
-          );
-          unawaited(_prefetchAndCacheDetails(serverItems));
-        }
-      } catch (e) {
-        debugPrint('PaymentProvider server load failed: $e');
-      }
-
-      if (gotServer) {
-        final cachedOrders = await cachedPaymentOrdersDao.getCachedOrders(
-          query: query.isEmpty ? null : query,
-        );
-        for (final o in cachedOrders) {
-          if (pendingFinishServerIds.contains(o.serverId)) {
-            final alreadyAdded = mergedItems.any((item) => _toInt(item['server_id'] ?? item['id']) == o.serverId);
-            if (!alreadyAdded) {
-              mergedItems.add(_normalizeCachedServerItem(o, pendingFinishServerIds));
-            }
-          }
-        }
-      } else {
-        final cachedOrders = await cachedPaymentOrdersDao.getCachedOrders(
-          query: query.isEmpty ? null : query,
-        );
-
-        mergedItems.addAll(
-          cachedOrders.map((o) => _normalizeCachedServerItem(o, pendingFinishServerIds)),
-        );
-      }
+      mergedItems.addAll(
+        cachedOrders.map((o) => _normalizeCachedServerItem(o, pendingFinishServerIds)),
+      );
+      gotServer = cachedOrders.isNotEmpty;
 
       final localOrders = await localOrdersDao.getUnpaidOrders(
         query: query.isEmpty ? null : query,
@@ -782,15 +741,23 @@ class PaymentProvider extends ChangeNotifier {
     String? lastPaymentId,
     String? cashierProofImagePath,
   }) async {
-    return repo.paymentOrder(
-      id: id,
+    final cached = await cachedPaymentOrdersDao.getCachedOrderDetailMap(id);
+    final row = cached ?? <String, dynamic>{'id': id, 'server_id': id};
+
+    await confirmPaymentOffline(
+      order: row,
       paidAmount: paidAmount,
       changeAmount: changeAmount,
-      note: note,
-      email: email,
-      lastPaymentId: lastPaymentId,
+      selectedPaymentMethod: note,
       cashierProofImagePath: cashierProofImagePath,
+      lastPaymentId: lastPaymentId,
     );
+
+    return {
+      'status': true,
+      'message': 'Pembayaran diantrekan untuk sinkronisasi',
+      'saved_local': true,
+    };
   }
 
   Future<Map<String, dynamic>> getOrderDetailFromListItem(

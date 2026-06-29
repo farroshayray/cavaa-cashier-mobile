@@ -10,6 +10,7 @@ import '../config/app_config.dart';
 import '../storage/secure_storage_service.dart';
 import '../navigation/app_navigator.dart';
 import '../services/app_update_provider.dart';
+import 'api_debug_log.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 
 const _forcedLogoutMessageKey = 'forced_logout_message';
@@ -61,15 +62,23 @@ class DioClient {
             options.headers['Authorization'] = 'Bearer $token';
           }
 
-          // debugPrint('➡️ [REQ] ${options.method} ${options.path}');
-          // debugPrint('➡️ [REQ HEADERS] ${options.headers}');
-          // debugPrint('➡️ [REQ DATA] ${options.data}');
+          ApiDebugLog.httpRequest(
+            method: options.method,
+            path: options.uri.toString(),
+            headers: Map<String, dynamic>.from(options.headers),
+            body: options.data,
+          );
+
           handler.next(options);
         },
         onResponse: (response, handler) {
           _captureAppUpdate(response);
-          // debugPrint('✅ [RES] ${response.requestOptions.path}');
-          // debugPrint('✅ [RES DATA] ${response.data}');
+          ApiDebugLog.httpResponse(
+            method: response.requestOptions.method,
+            path: response.requestOptions.uri.toString(),
+            statusCode: response.statusCode,
+            data: response.data,
+          );
           handler.next(response);
         },
         onError: (e, handler) async {
@@ -79,6 +88,14 @@ class DioClient {
             '/api/v1/mobile/cashier/version-check',
           );
           final statusCode = e.response?.statusCode;
+
+          ApiDebugLog.httpError(
+            method: e.requestOptions.method,
+            path: e.requestOptions.uri.toString(),
+            statusCode: statusCode,
+            data: e.response?.data,
+            message: e.message,
+          );
 
           debugPrint('❌ DIO ERROR path=$path status=$statusCode');
 

@@ -52,14 +52,6 @@ class DoneProvider extends ChangeNotifier {
     }
 
     try {
-      if (connectivity.isOnline) {
-        try {
-          await _refreshDoneOrdersFromServer();
-        } catch (e) {
-          debugPrint('DoneProvider refresh cache failed: $e');
-        }
-      }
-
       final cachedRows = await cachedDoneOrdersDao.getAllActive();
 
       final remoteItems = cachedRows.map((row) {

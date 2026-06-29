@@ -9,15 +9,18 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
 
 class PurchaseProvider extends ChangeNotifier {
   final PurchaseRepository repo;
   final LocalOrdersDao localOrdersDao;
+  final SyncService? syncService;
   final Uuid _uuid = const Uuid();
 
   PurchaseProvider({
     required this.repo,
     required this.localOrdersDao,
+    this.syncService,
   });
 
   bool isLoading = false;
@@ -151,7 +154,13 @@ class PurchaseProvider extends ChangeNotifier {
 
       // ... logic lain (hot products, grouping, dst)
     } catch (e) {
-      error = e.toString();
+      final msg = e.toString();
+      if (msg.contains('404')) {
+        error =
+            'Data menu tidak dapat dimuat (endpoint tidak ditemukan). Pastikan backend sudah di-update dan coba lagi.';
+      } else {
+        error = msg;
+      }
     } finally {
       isLoading = false;
       notifyListeners();
@@ -166,49 +175,6 @@ class PurchaseProvider extends ChangeNotifier {
   }) async {
     final normalizedCustomerName = customerName;
 
-    final itemsPayload = cart.map((it) {
-      final optionIds = it.selected.values.expand((s) => s).toList();
-
-      return <String, dynamic>{
-        "product_id": it.product.id,
-        "qty": it.qty,
-        "note": it.note,
-        "option_ids": optionIds,
-        "promo_id": it.product.promotion?.id,
-      };
-    }).toList();
-
-    try {
-      final resp = await repo.api.checkout(
-        orderTable: table.id,
-        orderName: normalizedCustomerName,
-        paymentMethod: paymentMethod,
-        totalAmount: cartGrandTotal,
-        items: itemsPayload,
-      );
-
-      if (paymentMethod != "QRIS") {
-        cart.clear();
-      }
-      notifyListeners();
-
-      return {
-        ...resp,
-        'saved_local': false,
-      };
-    } on StockInsufficientException {
-      rethrow;
-    } on DioException catch (e) {
-      if (e.response != null) {
-        rethrow;
-      }
-
-      debugPrint('checkout network failed, saved locally only: $e');
-    } catch (e) {
-      debugPrint('checkout online failed: $e');
-      rethrow;
-    }
-
     final localOrderId = await _saveOrderToLocal(
       customerName: normalizedCustomerName,
       table: table,
@@ -216,12 +182,22 @@ class PurchaseProvider extends ChangeNotifier {
       payment: payment,
     );
 
-    cart.clear();
+    if (paymentMethod != 'QRIS') {
+      cart.clear();
+    }
     notifyListeners();
+
+    if (syncService != null) {
+      try {
+        await syncService!.syncPendingOrders();
+      } catch (e) {
+        debugPrint('checkout post-sync failed: $e');
+      }
+    }
 
     return {
       'status': true,
-      'message': 'Order disimpan lokal, menunggu sinkronisasi',
+      'message': 'Order disimpan, menunggu sinkronisasi',
       'local_order_id': localOrderId,
       'saved_local': true,
       'offline': true,

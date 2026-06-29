@@ -35,7 +35,8 @@ import 'features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
-import '/features/cashier/data/local/db/sync/local_reconciliation_service.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/sync/sync_api.dart';
 import 'core/services/app_update_provider.dart';
 import '/core/services/push_notification_service.dart';
 
@@ -68,7 +69,8 @@ class _CavaaAppState extends State<CavaaApp> {
   late final CachedPaymentMethodsDao cachedPaymentMethodsDao;
   late final CachedProcessOrdersDao cachedProcessOrdersDao;
   late final CachedDoneOrdersDao cachedDoneOrdersDao;
-  late final LocalReconciliationService reconciliationService;
+  late final BookingOrdersDao bookingOrdersDao;
+  late final SyncApi syncApi;
 
   @override
   void initState() {
@@ -84,18 +86,18 @@ class _CavaaAppState extends State<CavaaApp> {
     cachedPaymentMethodsDao = CachedPaymentMethodsDao(cashierDb);
     cachedProcessOrdersDao = CachedProcessOrdersDao(cashierDb);
     cachedDoneOrdersDao = CachedDoneOrdersDao(cashierDb);
-    reconciliationService = LocalReconciliationService(
-      localOrdersDao: localOrdersDao,
-      cachedPaymentOrdersDao: cachedPaymentOrdersDao,
-      cachedProcessOrdersDao: cachedProcessOrdersDao,
-      cachedDoneOrdersDao: cachedDoneOrdersDao,
-    );
+    bookingOrdersDao = BookingOrdersDao(cashierDb);
+    syncApi = SyncApi(dioClient.dio);
 
     authApi = AuthApi(dioClient);
     authRepo = AuthRepository(api: authApi, storage: storage);
 
     purchaseApi = PurchaseApi(dioClient.dio);
-    purchaseRepo = PurchaseRepository(api: purchaseApi, db: cashierDb);
+    purchaseRepo = PurchaseRepository(
+      api: purchaseApi,
+      db: cashierDb,
+      syncApi: syncApi,
+    );
 
     ordersApi = OrdersApi(dioClient.dio);
     ordersRepo = OrdersRepository(api: ordersApi);
@@ -167,12 +169,12 @@ class _CavaaAppState extends State<CavaaApp> {
         Provider(
           create: (_) => SyncService(
             localOrdersDao: localOrdersDao,
-            purchaseApi: purchaseApi,
-            ordersRepo: ordersRepo,
             cachedPaymentOrdersDao: cachedPaymentOrdersDao,
             cachedProcessOrdersDao: cachedProcessOrdersDao,
             cachedDoneOrdersDao: cachedDoneOrdersDao,
-            reconciliationService: reconciliationService,
+            bookingOrdersDao: bookingOrdersDao,
+            syncApi: syncApi,
+            db: cashierDb,
           ),
         ),
 
@@ -183,9 +185,10 @@ class _CavaaAppState extends State<CavaaApp> {
         ChangeNotifierProvider(create: (_) => AuthProvider(authRepo)),
 
         ChangeNotifierProvider(
-          create: (_) => PurchaseProvider(
+          create: (ctx) => PurchaseProvider(
             repo: purchaseRepo,
             localOrdersDao: localOrdersDao,
+            syncService: ctx.read<SyncService>(),
           ),
         ),
         ChangeNotifierProvider(
