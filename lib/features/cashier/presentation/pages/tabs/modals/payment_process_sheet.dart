@@ -13,8 +13,6 @@ import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
-import '/features/cashier/presentation/providers/process_provider.dart';
-import '/features/cashier/presentation/providers/done_provider.dart';
 
 Map<String, dynamic> _normalizePaymentInstruction(Map<String, dynamic> raw) {
   final type = (raw['payment_type'] ?? raw['type'] ?? '').toString();
@@ -585,7 +583,12 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                       ? const Center(child: CircularProgressIndicator())
                       : _error != null
                           ? _ErrorView(message: _error!, onRetry: _fetch)
-                          : _Body(
+                          : _order == null
+                              ? _ErrorView(
+                                  message: 'Detail order tidak tersedia.',
+                                  onRetry: _fetch,
+                                )
+                              : _Body(
                             order: _order!,
                             selectedPaymentMethod: _selectedPaymentMethod,
                             enrichedSelectedInstruction: _enrichedSelectedInstruction,
@@ -727,8 +730,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           orderSnapshot: _order,
           apiResponse: payResp,
           offline: false,
-          process: context.read<ProcessProvider>(),
-          done: context.read<DoneProvider>(),
+          reloadTabs: false,
+          backgroundSync: false,
           paidAmount: paid,
           changeAmount: change,
           paymentMethod:
@@ -753,8 +756,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           serverId: widget.orderId,
           orderSnapshot: offlineOrder,
           offline: true,
-          process: context.read<ProcessProvider>(),
-          done: context.read<DoneProvider>(),
+          reloadTabs: false,
+          backgroundSync: false,
           paidAmount: paid,
           changeAmount: change,
           paymentMethod:
@@ -794,7 +797,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       await showDialog<void>(
         context: context,
         useRootNavigator: true,
-        builder: (_) => AlertDialog(
+        builder: (dialogCtx) => AlertDialog(
           title: Text(
             !shouldPrint
                 ? 'Pembayaran berhasil'
@@ -811,7 +814,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogCtx),
               child: const Text('OK'),
             ),
           ],

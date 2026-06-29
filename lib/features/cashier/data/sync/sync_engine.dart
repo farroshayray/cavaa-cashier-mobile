@@ -134,7 +134,9 @@ class SyncEngine {
 
       final row = <String, dynamic>{
         'client_uuid': order.clientUuid,
-        'client_timestamp': (order.updatedAt ?? DateTime.now()).toIso8601String(),
+        // Use createdAt so idempotency key stays stable after failed retries bump updatedAt.
+        'client_timestamp':
+            (order.createdAt ?? order.updatedAt ?? DateTime.now()).toIso8601String(),
         'sync_intent': intent,
         'sync_version': order.syncVersion,
         if (order.serverId != null) 'id': order.serverId,
@@ -212,6 +214,21 @@ class SyncEngine {
       if (raw is Map) {
         await bookingOrdersDao.saveConflict(Map<String, dynamic>.from(raw));
       }
+    }
+
+    final errors = (response['errors'] as List?) ?? [];
+    for (final raw in errors) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      final clientUuid = map['client_uuid']?.toString();
+      final message = map['message']?.toString();
+      if (clientUuid == null ||
+          clientUuid.isEmpty ||
+          message == null ||
+          message.isEmpty) {
+        continue;
+      }
+      await bookingOrdersDao.markSyncErrorByClientUuid(clientUuid, message);
     }
 
     final pulled = response['pulled'];

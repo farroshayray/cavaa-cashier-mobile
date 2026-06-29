@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '/features/cashier/presentation/printing/receipt_action_service.dart';
 import '/features/cashier/presentation/widgets/receipt_action_icon_button.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
 
 // ✅ bikin provider khusus proses (contoh)
@@ -342,10 +343,11 @@ class _ProcessViewState extends State<_ProcessView> {
           child: RefreshIndicator(
             onRefresh: () async {
               await context.read<SyncService>().syncPendingOrders();
-              await Future.wait([
-                context.read<DoneProvider>().load(),
-                context.read<ProcessProvider>().load(),
-              ]);
+              await context.read<OrderTabCoordinator>().reloadAllTabs(
+                payment: context.read<PaymentProvider>(),
+                process: context.read<ProcessProvider>(),
+                done: context.read<DoneProvider>(),
+              );
             },
             child: Builder(
               builder: (_) {

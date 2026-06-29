@@ -15,6 +15,7 @@ import '/features/cashier/presentation/utils/order_tab_grouping.dart';
 import '/features/cashier/presentation/widgets/order_tab_section_widgets.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 
@@ -405,12 +406,23 @@ class _PaymentViewState extends State<_PaymentView> {
             );
 
             if (result == true && context.mounted) {
-              final paymentVM = context.read<PaymentProvider>();
-              final processVM = context.read<ProcessProvider>();
-              final doneVM = context.read<DoneProvider>();
-              await paymentVM.load(silent: true);
-              await processVM.load(silent: true);
-              await doneVM.load(silent: true);
+              debugPrint('payment_tab sheetClosed sync+reload');
+              try {
+                final connectivity = context.read<ConnectivityStatusProvider>();
+                if (connectivity.isOnline) {
+                  await context.read<SyncService>().syncPendingOrders();
+                }
+              } catch (e) {
+                debugPrint('payment_tab sync after sheet failed: $e');
+              }
+
+              if (!context.mounted) return;
+
+              await context.read<OrderTabCoordinator>().reloadAllTabs(
+                payment: context.read<PaymentProvider>(),
+                process: context.read<ProcessProvider>(),
+                done: context.read<DoneProvider>(),
+              );
             }
           },
         ),
@@ -466,7 +478,11 @@ class _PaymentViewState extends State<_PaymentView> {
           child: RefreshIndicator(
             onRefresh: () async {
               await context.read<SyncService>().syncPendingOrders();
-              await context.read<PaymentProvider>().load();
+              await context.read<OrderTabCoordinator>().reloadAllTabs(
+                payment: context.read<PaymentProvider>(),
+                process: context.read<ProcessProvider>(),
+                done: context.read<DoneProvider>(),
+              );
             },
             child: Builder(
               builder: (_) {

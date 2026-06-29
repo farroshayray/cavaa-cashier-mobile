@@ -32,6 +32,8 @@ class ConnectivityStatusProvider extends ChangeNotifier {
   }
 
   Future<void> Function()? onBackOnline;
+  Future<void> Function()? onInitialOnline;
+  bool _initialOnlineHandled = false;
 
   void _updateFromResults(List<ConnectivityResult> results) {
     final prev = _isOnline;
@@ -40,6 +42,17 @@ class ConnectivityStatusProvider extends ChangeNotifier {
     _isOnline = hasConnectionType;
     _isChecking = false;
     notifyListeners();
+
+    if (_isOnline && !_initialOnlineHandled) {
+      _initialOnlineHandled = true;
+      Future.microtask(() async {
+        try {
+          await onInitialOnline?.call();
+        } catch (e) {
+          debugPrint('Connectivity onInitialOnline error: $e');
+        }
+      });
+    }
 
     if (!prev && _isOnline) {
       Future.microtask(() async {

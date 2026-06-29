@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 
@@ -65,6 +66,8 @@ class _CashierHomePageState extends State<CashierHomePage>
   Timer? _allTabsReloadDebounce;
   Timer? _resumeReloadDebounce;
   Future<void>? _reloadTabsInFlight;
+  Future<void>? _syncAndReloadInFlight;
+  bool _bootstrapSyncHandled = false;
 
   bool? _lastOnlineState;
 
@@ -126,10 +129,7 @@ class _CashierHomePageState extends State<CashierHomePage>
         try {
           final conn = context.read<ConnectivityStatusProvider>();
           if (conn.isOnline && !conn.isChecking) {
-            await context.read<SyncService>().syncPendingOrders();
-
-            if (!mounted) return;
-            await _reloadAllOrderTabsSequentially();
+            await _syncAndReloadAllOrderTabs();
           }
         } catch (e) {
           debugPrint('❌ sync after resume failed: $e');
@@ -161,25 +161,48 @@ class _CashierHomePageState extends State<CashierHomePage>
 
   void _setupConnectivitySyncHook() {
     final connectivityProvider = context.read<ConnectivityStatusProvider>();
-    final syncService = context.read<SyncService>();
 
-    connectivityProvider.onBackOnline = () async {
-      debugPrint('🌐 koneksi kembali online, mulai sync pending orders...');
-      await syncService.syncPendingOrders();
-
-      if (!mounted) return;
-
-      await _reloadAllOrderTabsSequentially();
+    connectivityProvider.onBackOnline = _syncAndReloadAllOrderTabs;
+    connectivityProvider.onInitialOnline = () async {
+      if (_bootstrapSyncHandled) return;
+      await _syncAndReloadAllOrderTabs();
     };
+  }
+
+  Future<void> _waitForConnectivityReady({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final conn = context.read<ConnectivityStatusProvider>();
+    if (!conn.isChecking) return;
+
+    final completer = Completer<void>();
+    void listener() {
+      if (!conn.isChecking && !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+
+    conn.addListener(listener);
+    try {
+      if (!conn.isChecking) return;
+      await completer.future.timeout(timeout, onTimeout: () {});
+    } finally {
+      conn.removeListener(listener);
+    }
   }
 
   Future<void> _bootstrapAfterLogin() async {
     if (!mounted) return;
 
+    _bootstrapSyncHandled = true;
+    await _waitForConnectivityReady();
+    if (!mounted) return;
+
+    final conn = context.read<ConnectivityStatusProvider>();
+
     try {
-      final conn = context.read<ConnectivityStatusProvider>();
-      if (conn.isOnline && !conn.isChecking) {
-        await context.read<SyncService>().syncPendingOrders();
+      if (conn.isOnline) {
+        await _syncAndReloadAllOrderTabs();
       }
     } catch (e) {
       debugPrint('bootstrap sync failed: $e');
@@ -189,7 +212,9 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     try {
       await context.read<PurchaseProvider>().load();
-      await _reloadAllOrderTabsSequentially();
+      if (!conn.isOnline) {
+        await _reloadAllOrderTabsSequentially();
+      }
     } catch (e) {
       debugPrint('bootstrap load tabs failed: $e');
     }
@@ -213,16 +238,7 @@ class _CashierHomePageState extends State<CashierHomePage>
     _lastOnlineState = isOnlineNow;
 
     if (isOnlineNow) {
-      Future.microtask(() async {
-        try {
-          await context.read<SyncService>().syncPendingOrders();
-          if (!mounted) return;
-
-          await _reloadAllOrderTabsSequentially();
-        } catch (e) {
-          debugPrint('❌ auto sync on reconnect failed: $e');
-        }
-      });
+      Future.microtask(_syncAndReloadAllOrderTabs);
     }
   }
 
@@ -309,6 +325,7 @@ class _CashierHomePageState extends State<CashierHomePage>
   void dispose() {
     try {
       context.read<ConnectivityStatusProvider>().onBackOnline = null;
+      context.read<ConnectivityStatusProvider>().onInitialOnline = null;
     } catch (_) {}
 
     _focusTimer?.cancel();
@@ -669,6 +686,7 @@ class _CashierHomePageState extends State<CashierHomePage>
   Future<void> _reloadAllOrderTabsSequentiallyImpl() async {
     if (!mounted) return;
 
+    final coordinator = context.read<OrderTabCoordinator>();
     final payVm = context.read<PaymentProvider>();
     final procVm = context.read<ProcessProvider>();
     final doneVm = context.read<DoneProvider>();
@@ -677,13 +695,11 @@ class _CashierHomePageState extends State<CashierHomePage>
     procVm.setQuery('');
     doneVm.setQuery('');
 
-    // Proses dulu agar cache proses terbaru sebelum pembayaran membaca filter-nya.
-    await procVm.load(silent: true);
-    if (!mounted) return;
-    await Future.wait([
-      payVm.load(silent: true),
-      doneVm.load(silent: true),
-    ]);
+    await coordinator.reloadAllTabs(
+      payment: payVm,
+      process: procVm,
+      done: doneVm,
+    );
   }
 
   void _debouncedSyncAndReloadAllOrderTabs() {
@@ -693,7 +709,14 @@ class _CashierHomePageState extends State<CashierHomePage>
     });
   }
 
-  Future<void> _syncAndReloadAllOrderTabs() async {
+  Future<void> _syncAndReloadAllOrderTabs() {
+    _syncAndReloadInFlight ??= _syncAndReloadAllOrderTabsImpl().whenComplete(() {
+      _syncAndReloadInFlight = null;
+    });
+    return _syncAndReloadInFlight!;
+  }
+
+  Future<void> _syncAndReloadAllOrderTabsImpl() async {
     try {
       final conn = context.read<ConnectivityStatusProvider>();
       if (conn.isOnline && !conn.isChecking) {
@@ -897,9 +920,11 @@ class _CashierHomePageState extends State<CashierHomePage>
     // final useSideNav = isLandscape && isTablet;
     final useSideNav = isLandscape;
 
-    final paymentCount = context.watch<PaymentProvider>().items.length;
-    final processCount = context.watch<ProcessProvider>().items.length;
-    final doneCount = context.watch<DoneProvider>().items.length;
+    final paymentCount =
+        context.select<PaymentProvider, int>((p) => p.items.length);
+    final processCount =
+        context.select<ProcessProvider, int>((p) => p.items.length);
+    final doneCount = context.select<DoneProvider, int>((p) => p.items.length);
 
     final content = IndexedStack(
       index: _index,

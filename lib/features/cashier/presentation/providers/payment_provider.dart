@@ -147,6 +147,12 @@ class PaymentProvider extends ChangeNotifier {
         query: query.isEmpty ? null : query,
       );
 
+      final mirroredClientUuids = mirrorOrders
+          .map((o) => o['local_client_uuid']?.toString())
+          .whereType<String>()
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
       mergedItems.addAll(
         mirrorOrders.map((o) => _normalizeMirrorPaymentItem(o, pendingFinishServerIds)),
       );
@@ -189,7 +195,8 @@ class PaymentProvider extends ChangeNotifier {
         return !(alreadyMirroredOnServer ||
             hiddenByProcess ||
             hiddenByDoneId ||
-            hiddenByDoneCode);
+            hiddenByDoneCode ||
+            mirroredClientUuids.contains(o.localId));
       }).toList();
 
       final localItems = visibleLocalOrders.map((o) {
@@ -440,6 +447,8 @@ class PaymentProvider extends ChangeNotifier {
     num? paidAmount,
     num? changeAmount,
     String? paymentMethod,
+    bool reloadTabs = true,
+    bool backgroundSync = true,
   }) async {
     final snapshot = orderSnapshot ?? <String, dynamic>{};
     final nextStatus = OrderStageResolver.resolveAfterPayment(
@@ -466,10 +475,11 @@ class PaymentProvider extends ChangeNotifier {
 
     debugPrint(
       'afterPaymentSuccess resolved_status=$nextStatus '
-      'openbill=${isOpenBillOrder(snapshot)} serverId=$serverId',
+      'openbill=${isOpenBillOrder(snapshot)} serverId=$serverId '
+      'reloadTabs=$reloadTabs backgroundSync=$backgroundSync',
     );
 
-    if (process != null && done != null) {
+    if (reloadTabs && process != null && done != null) {
       await tabCoordinator.transitionAndReload(
         serverId: serverId,
         orderStatus: nextStatus,
@@ -490,11 +500,18 @@ class PaymentProvider extends ChangeNotifier {
         extras: extras.isEmpty ? null : extras,
         orderSnapshot: updatedSnapshot,
       );
-      await load(silent: true);
+      if (reloadTabs) {
+        await load(silent: true);
+      } else {
+        debugPrint('afterPaymentSuccess mirrorOnly serverId=$serverId status=$nextStatus');
+      }
     }
 
-    if (!offline) {
-      unawaited(_backgroundSyncAndReload(process: process, done: done));
+    if (!offline && backgroundSync) {
+      unawaited(_backgroundSyncAndReload(
+        process: reloadTabs ? process : null,
+        done: reloadTabs ? done : null,
+      ));
     }
   }
 

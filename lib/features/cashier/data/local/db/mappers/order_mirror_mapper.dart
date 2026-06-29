@@ -30,6 +30,8 @@ class OrderMirrorMapper {
       'payment_flag': row.paymentFlag,
       'sync_version': row.syncVersion,
       'sync_dirty': row.syncDirty,
+      'sync_error': row.syncError,
+      'sync_intent': row.syncIntent,
       'paid_amount_local': row.paidAmountLocal,
       'change_amount_local': row.changeAmountLocal,
       'cash_rounding_amount': row.cashRoundingAmount,

@@ -364,6 +364,16 @@ class BookingOrdersDao {
     await _upsertDetailFromServer(row, parent.clientUuid, bookingOrderServerId);
   }
 
+  Future<void> markSyncErrorByClientUuid(String clientUuid, String message) async {
+    if (clientUuid.isEmpty) return;
+
+    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
+          BookingOrdersCompanion(
+            syncError: Value(message),
+          ),
+        );
+  }
+
   Future<void> applyAppliedResult(Map<String, dynamic> applied) async {
     final clientUuid = applied['client_uuid']?.toString();
     if (clientUuid == null || clientUuid.isEmpty) return;

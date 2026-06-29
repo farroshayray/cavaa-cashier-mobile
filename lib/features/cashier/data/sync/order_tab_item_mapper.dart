@@ -34,6 +34,7 @@ class OrderTabItemMapper {
       'is_local_only': false,
       'is_cached_server': true,
       'sync_status': row['sync_dirty'] == true ? 'PENDING' : 'SYNCED',
+      'last_error': row['sync_error']?.toString(),
       'sort_time': row['created_at']?.toString() ?? row['updated_at']?.toString(),
     };
   }

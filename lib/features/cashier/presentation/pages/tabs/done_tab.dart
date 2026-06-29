@@ -6,8 +6,11 @@ import 'dart:async';
 import '/features/cashier/presentation/printing/receipt_action_service.dart';
 import '/features/cashier/presentation/widgets/receipt_action_icon_button.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
 
 import '../../providers/done_provider.dart';
+import '../../providers/payment_provider.dart';
+import '../../providers/process_provider.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
 
 class DoneTab extends StatefulWidget {
@@ -210,7 +213,11 @@ class _DoneViewState extends State<_DoneView> {
           child: RefreshIndicator(
             onRefresh: () async {
               await context.read<SyncService>().syncPendingOrders();
-              await context.read<DoneProvider>().load();
+              await context.read<OrderTabCoordinator>().reloadAllTabs(
+                payment: context.read<PaymentProvider>(),
+                process: context.read<ProcessProvider>(),
+                done: context.read<DoneProvider>(),
+              );
             },
             child: Builder(
               builder: (_) {
