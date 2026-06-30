@@ -36,38 +36,63 @@ class SyncEngine {
 
     _isRunning = true;
     try {
-      final push = await _buildPushPayload();
-      final lastToken = await bookingOrdersDao.getSyncMeta('last_sync_token') ?? '';
+      SyncResult? lastResult;
+      const maxPasses = 8;
 
-      final bookingPush = (push['booking_orders'] as List?) ?? [];
-      final detailPush = (push['order_details'] as List?) ?? [];
-      ApiDebugLog.sync(
-        'push payload',
-        'booking_orders=${bookingPush.length} '
-        'order_details=${detailPush.length} '
-        'deletes=${(push['deletes'] as List?)?.length ?? 0} '
-        'last_sync_token=${lastToken.isEmpty ? '(empty)' : lastToken}',
-      );
+      for (var pass = 0; pass < maxPasses; pass++) {
+        final hasDirty = await hasPendingData();
+        final push = await _buildPushPayload();
+        final bookingPush = (push['booking_orders'] as List?) ?? [];
 
-      if (bookingPush.isNotEmpty) {
-        ApiDebugLog.sync('first push order', _safeJson(bookingPush.first));
+        if (pass > 0) {
+          if (!hasDirty || bookingPush.isEmpty) {
+            break;
+          }
+        } else if (bookingPush.isEmpty) {
+          ApiDebugLog.sync(
+            hasDirty
+                ? 'push guard blocked all dirty orders on pass 0 — pull-only'
+                : 'pull-only sync (no pending local changes)',
+          );
+        }
+
+        final lastToken = await bookingOrdersDao.getSyncMeta('last_sync_token') ?? '';
+        final detailPush = (push['order_details'] as List?) ?? [];
+        ApiDebugLog.sync(
+          'push payload pass=$pass',
+          'booking_orders=${bookingPush.length} '
+          'order_details=${detailPush.length} '
+          'deletes=${(push['deletes'] as List?)?.length ?? 0} '
+          'last_sync_token=${lastToken.isEmpty ? '(empty)' : lastToken}',
+        );
+
+        if (bookingPush.isNotEmpty) {
+          ApiDebugLog.sync('first push order', _safeJson(bookingPush.first));
+        }
+
+        final idempotencyKey = _buildBatchIdempotencyKey(push);
+        final response = await syncApi.sync(
+          payload: {
+            'device_id': await bookingOrdersDao.getSyncMeta('device_id') ?? 'mobile',
+            'last_sync_token': lastToken,
+            'push': push,
+            'pull_scopes': pass == 0 ? pullScopes : const ['orders'],
+          },
+          idempotencyKey: idempotencyKey,
+        );
+
+        _logSyncResponse(response);
+        await _applyResponse(response);
+
+        lastResult = SyncResult.fromJson(response, raw: response);
+
+        final applied = ((response['applied'] as List?) ?? []).length;
+        if (applied == 0) {
+          break;
+        }
       }
 
-      final idempotencyKey = _buildBatchIdempotencyKey(push);
-      final response = await syncApi.sync(
-        payload: {
-          'device_id': await bookingOrdersDao.getSyncMeta('device_id') ?? 'mobile',
-          'last_sync_token': lastToken,
-          'push': push,
-          'pull_scopes': pullScopes,
-        },
-        idempotencyKey: idempotencyKey,
-      );
-
-      _logSyncResponse(response);
-      await _applyResponse(response);
-
-      return SyncResult.fromJson(response, raw: response);
+      return lastResult ?? SyncResult(success: true, message: 'nothing to sync');
     } catch (e, st) {
       ApiDebugLog.syncError('sync failed', '$e\n$st');
       return SyncResult.failed(e.toString());
@@ -124,17 +149,27 @@ class SyncEngine {
     final deletes = <Map<String, dynamic>>[];
 
     for (final order in dirtyOrders) {
-      final intent = order.syncIntent ?? 'CREATE';
+      final storedIntent = order.syncIntent ?? 'CREATE';
+      final effectiveIntent = OrderStageSyncGuard.resolvePushIntent(
+        storedIntent: storedIntent,
+        orderStatus: order.orderStatus,
+        serverId: order.serverId,
+      );
+      final neverSynced = order.serverId == null || order.serverId! <= 0;
+      final offlineCatchUp = neverSynced ||
+          storedIntent.toUpperCase() != effectiveIntent.toUpperCase();
       final guardError = OrderStageSyncGuard.validateIntent(
         currentStatus: order.orderStatus,
-        syncIntent: intent,
+        syncIntent: effectiveIntent,
+        neverSynced: neverSynced,
+        offlineCatchUp: offlineCatchUp || !neverSynced,
       );
       if (guardError != null) {
         ApiDebugLog.syncError('push guard', '${order.clientUuid}: $guardError');
         continue;
       }
 
-      if (intent == 'DELETE' && order.serverId != null) {
+      if (effectiveIntent == 'DELETE' && order.serverId != null) {
         deletes.add({'table': 'booking_orders', 'server_id': order.serverId});
         continue;
       }
@@ -148,7 +183,8 @@ class SyncEngine {
         // Use createdAt so idempotency key stays stable after failed retries bump updatedAt.
         'client_timestamp':
             (order.createdAt ?? order.updatedAt ?? DateTime.now()).toIso8601String(),
-        'sync_intent': intent,
+        'sync_intent': effectiveIntent,
+        'stored_sync_intent': storedIntent,
         'sync_version': order.syncVersion,
         if (order.serverId != null) 'id': order.serverId,
         'order_table': order.tableId,
@@ -159,6 +195,7 @@ class SyncEngine {
         'openbill_flag': order.openbillFlag,
         'total_amount': subtotal,
         'total_order_value': subtotal,
+        'order_status': order.orderStatus,
         'items': items,
         if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
         if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
@@ -169,20 +206,37 @@ class SyncEngine {
       bookingOrdersPayload.add(row);
 
       final dirtyDetails = await bookingOrdersDao.getDirtyDetailsForOrder(order.clientUuid);
-      final skipDetailPush = intent == 'CREATE' ||
-          intent == 'CONFIRM_OPENBILL' ||
-          order.serverId == null;
+      final skipDetailPush = effectiveIntent == 'CREATE' ||
+          effectiveIntent == 'CONFIRM_OPENBILL' ||
+          neverSynced;
       for (final detail in dirtyDetails) {
-        if (skipDetailPush || detail.serverId == null) continue;
-        orderDetailsPayload.add({
-          'id': detail.serverId,
-          'client_detail_uuid': detail.clientDetailUuid,
-          'sync_version': detail.syncVersion,
-          'status': detail.status,
-          'cashier_process_id': detail.cashierProcessId,
-          'kitchen_process_id': detail.kitchenProcessId,
-          'quantity': detail.quantity,
-        });
+        if (skipDetailPush) continue;
+
+        if (detail.serverId != null) {
+          orderDetailsPayload.add({
+            'id': detail.serverId,
+            'client_detail_uuid': detail.clientDetailUuid,
+            'sync_version': detail.syncVersion,
+            'status': detail.status,
+            'cashier_process_id': detail.cashierProcessId,
+            'kitchen_process_id': detail.kitchenProcessId,
+            'quantity': detail.quantity,
+          });
+          continue;
+        }
+
+        if (order.serverId != null) {
+          orderDetailsPayload.add({
+            'client_detail_uuid': detail.clientDetailUuid,
+            'booking_order_id': order.serverId,
+            'sync_version': detail.syncVersion,
+            'status': detail.status,
+            'cashier_process_id': detail.cashierProcessId,
+            'kitchen_process_id': detail.kitchenProcessId,
+            'quantity': detail.quantity,
+            'product_id': detail.partnerProductId,
+          });
+        }
       }
     }
 
@@ -239,6 +293,10 @@ class SyncEngine {
       if (raw is Map) {
         final map = Map<String, dynamic>.from(raw);
         await bookingOrdersDao.applyAppliedResult(map);
+        await bookingOrdersDao.queueRemainingSyncIntentIfNeeded(
+          clientUuid: map['client_uuid']?.toString() ?? '',
+          appliedIntent: map['sync_intent']?.toString() ?? '',
+        );
         ApiDebugLog.sync(
           'applied locally',
           '${map['sync_intent']} client=${map['client_uuid']} server_id=${map['server_id']}',

@@ -68,13 +68,54 @@ void main() {
       }
     });
 
-    test('PAY rejected after PAID', () {
+    test('PAY rejected after PAID when already synced online', () {
       expect(
         OrderStageSyncGuard.validateIntent(
           currentStatus: 'PAID',
           syncIntent: 'PAY',
         ),
         isNotNull,
+      );
+    });
+
+    test('PAY allowed for offline catch-up when local is PAID', () {
+      expect(
+        OrderStageSyncGuard.validateIntent(
+          currentStatus: 'PAID',
+          syncIntent: 'PAY',
+          offlineCatchUp: true,
+        ),
+        isNull,
+      );
+    });
+
+    test('FINISH allowed for offline catch-up when local is SERVED', () {
+      expect(
+        OrderStageSyncGuard.validateIntent(
+          currentStatus: 'SERVED',
+          syncIntent: 'FINISH',
+          offlineCatchUp: true,
+        ),
+        isNull,
+      );
+    });
+
+    test('never-synced order always pushes CREATE first', () {
+      expect(
+        OrderStageSyncGuard.resolvePushIntent(
+          storedIntent: 'FINISH',
+          orderStatus: 'SERVED',
+          serverId: null,
+        ),
+        'CREATE',
+      );
+      expect(
+        OrderStageSyncGuard.validateIntent(
+          currentStatus: 'SERVED',
+          syncIntent: 'CREATE',
+          neverSynced: true,
+        ),
+        isNull,
       );
     });
 

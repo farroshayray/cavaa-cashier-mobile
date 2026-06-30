@@ -609,6 +609,9 @@ class BookingOrdersDao {
     final clientUuid = applied['client_uuid']?.toString();
     if (clientUuid == null || clientUuid.isEmpty) return;
 
+    final localBefore = await getByClientUuid(clientUuid);
+    final appliedIntent = applied['sync_intent']?.toString().toUpperCase() ?? '';
+
     await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
           BookingOrdersCompanion(
             serverId: applied['server_id'] != null
@@ -617,9 +620,11 @@ class BookingOrdersDao {
             bookingOrderCode: applied['booking_order_code'] != null
                 ? Value(applied['booking_order_code'].toString())
                 : const Value.absent(),
-            orderStatus: applied['order_status'] != null
-                ? Value(applied['order_status'].toString())
-                : const Value.absent(),
+            orderStatus: localBefore != null
+                ? Value(localBefore.orderStatus)
+                : applied['order_status'] != null
+                    ? Value(applied['order_status'].toString())
+                    : const Value.absent(),
             syncVersion: applied['sync_version'] != null
                 ? Value(_toInt(applied['sync_version']))
                 : const Value.absent(),
@@ -628,6 +633,128 @@ class BookingOrdersDao {
             syncedAt: Value(DateTime.now()),
           ),
         );
+
+    if (appliedIntent == 'CREATE' && applied['server_id'] != null) {
+      await _linkDetailServerIdsFromApplied(
+        clientUuid: clientUuid,
+        applied: applied,
+      );
+    }
+
+    if (appliedIntent == 'PROCESS' || appliedIntent == 'FINISH') {
+      await _clearDetailSyncDirty(clientUuid);
+    }
+  }
+
+  Future<void> _clearDetailSyncDirty(String bookingClientUuid) async {
+    await (db.update(db.orderDetails)
+          ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid)))
+        .write(
+      const OrderDetailsCompanion(
+        syncDirty: Value(false),
+      ),
+    );
+  }
+
+  Future<void> _linkDetailServerIdsFromApplied({
+    required String clientUuid,
+    required Map<String, dynamic> applied,
+  }) async {
+    final details = applied['order_details'];
+    if (details is! List) return;
+
+    for (final raw in details) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      final clientDetailUuid = map['client_detail_uuid']?.toString();
+      final serverDetailId = _toIntOrNull(map['id'] ?? map['detail_id']);
+      if (clientDetailUuid == null ||
+          clientDetailUuid.isEmpty ||
+          serverDetailId == null) {
+        continue;
+      }
+
+      await (db.update(db.orderDetails)
+            ..where((t) => t.clientDetailUuid.equals(clientDetailUuid)))
+          .write(
+        OrderDetailsCompanion(
+          serverId: Value(serverDetailId),
+          bookingOrderServerId: applied['server_id'] != null
+              ? Value(_toInt(applied['server_id']))
+              : const Value.absent(),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    }
+  }
+
+  /// Re-queues the next lifecycle intent after a partial offline sync apply.
+  Future<void> queueRemainingSyncIntentIfNeeded({
+    required String clientUuid,
+    required String appliedIntent,
+  }) async {
+    if (clientUuid.isEmpty) return;
+
+    final order = await getByClientUuid(clientUuid);
+    if (order == null) return;
+
+    final nextIntent = _resolveNextSyncIntent(
+      order: order,
+      appliedIntent: appliedIntent,
+    );
+    if (nextIntent == null) return;
+
+    await markIntent(
+      clientUuid,
+      nextIntent,
+      extras: {
+        'order_status': order.orderStatus,
+        if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
+        if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
+        if (order.paymentMethod != null) 'payment_method': order.paymentMethod,
+      },
+    );
+  }
+
+  String? _resolveNextSyncIntent({
+    required BookingOrder order,
+    required String appliedIntent,
+  }) {
+    final localStatus = (order.orderStatus).toUpperCase();
+    final storedIntent = (order.syncIntent ?? '').toUpperCase();
+    final applied = appliedIntent.toUpperCase();
+
+    switch (applied) {
+      case 'CREATE':
+        if (localStatus == 'PAID' || order.paidAmountLocal != null) {
+          return 'PAY';
+        }
+        if (localStatus == 'OPENBILL_WAITING_ORDER') {
+          return 'CONFIRM_OPENBILL';
+        }
+        return null;
+      case 'CONFIRM_OPENBILL':
+        if (localStatus == 'OPENBILL_WAITING_ORDER' ||
+            storedIntent == 'PROCESS') {
+          return 'PROCESS';
+        }
+        return null;
+      case 'PAY':
+        if (storedIntent == 'FINISH' || localStatus == 'SERVED') {
+          return 'FINISH';
+        }
+        if (storedIntent == 'PROCESS' || localStatus == 'PROCESSED') {
+          return 'PROCESS';
+        }
+        return null;
+      case 'PROCESS':
+        if (storedIntent == 'FINISH' || localStatus == 'SERVED') {
+          return 'FINISH';
+        }
+        return null;
+      default:
+        return null;
+    }
   }
 
   Future<void> saveConflict(Map<String, dynamic> conflict) async {

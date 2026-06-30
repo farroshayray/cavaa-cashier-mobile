@@ -222,9 +222,7 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     try {
       await context.read<PurchaseProvider>().load();
-      if (!conn.isOnline) {
-        await _reloadAllOrderTabsSequentially();
-      }
+      await _reloadAllOrderTabsSequentially();
     } catch (e) {
       debugPrint('bootstrap load tabs failed: $e');
     }
