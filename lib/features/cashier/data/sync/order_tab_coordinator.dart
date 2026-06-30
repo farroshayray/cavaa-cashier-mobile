@@ -1,20 +1,16 @@
 import '/core/network/api_debug_log.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
-import '/features/cashier/data/sync/legacy_cache_bridge.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 
-/// Keeps booking_orders mirror, legacy tab caches, and UI providers in sync
-/// after a local stage transition (pay / process / finish).
+/// Keeps booking_orders mirror and UI providers in sync after stage transitions.
 class OrderTabCoordinator {
   OrderTabCoordinator({
     required this.bookingOrdersDao,
-    required this.bridge,
   });
 
   final BookingOrdersDao bookingOrdersDao;
-  final LegacyCacheBridge bridge;
 
   Future<void> transitionOrderStage({
     required int serverId,
@@ -53,10 +49,30 @@ class OrderTabCoordinator {
       );
     }
 
-    await bridge.refreshAll();
     ApiDebugLog.sync(
       'OrderTabCoordinator stage transition',
       'serverId=$serverId status=$orderStatus syncDirty=$syncDirty intent=$syncIntent',
+    );
+  }
+
+  Future<void> transitionOrderStageByClientUuid({
+    required String clientUuid,
+    required String orderStatus,
+    String? syncIntent,
+    bool syncDirty = true,
+    Map<String, dynamic>? extras,
+  }) async {
+    await bookingOrdersDao.markIntent(
+      clientUuid,
+      syncIntent ?? 'UPDATE',
+      extras: {
+        ...?extras,
+        'order_status': orderStatus,
+      },
+    );
+    ApiDebugLog.sync(
+      'OrderTabCoordinator client transition',
+      'clientUuid=$clientUuid status=$orderStatus syncDirty=$syncDirty intent=$syncIntent',
     );
   }
 
@@ -74,7 +90,6 @@ class OrderTabCoordinator {
       await bookingOrdersDao.removeOrderMirrorByClientUuid(clientUuid);
     }
 
-    await bridge.refreshAll();
     ApiDebugLog.sync(
       'OrderTabCoordinator order deleted',
       'serverId=$serverId clientUuid=$clientUuid hardRemove=$hardRemove',
@@ -88,7 +103,10 @@ class OrderTabCoordinator {
     if (mirror != null) {
       await bookingOrdersDao.markIntent(mirror.clientUuid, 'DELETE');
     }
-    await bridge.refreshAll();
+  }
+
+  Future<void> markOrderPendingDeleteByClientUuid(String clientUuid) async {
+    await bookingOrdersDao.markIntent(clientUuid, 'DELETE');
   }
 
   Future<void> reloadAllTabs({

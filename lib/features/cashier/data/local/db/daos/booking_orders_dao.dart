@@ -8,6 +8,18 @@ import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 
 const _uuid = Uuid();
 
+class MirrorPendingStockLine {
+  const MirrorPendingStockLine({
+    required this.productId,
+    required this.qty,
+    required this.optionIds,
+  });
+
+  final int productId;
+  final int qty;
+  final List<int> optionIds;
+}
+
 class BookingOrderBundle {
   final BookingOrder order;
   final List<OrderDetail> details;
@@ -496,6 +508,327 @@ class BookingOrdersDao {
   Future<void> setSyncMeta(String key, String value) async {
     await db.into(db.syncMeta).insertOnConflictUpdate(
           SyncMetaCompanion(key: Value(key), value: Value(value)),
+        );
+  }
+
+  Future<String> ensureDeviceId() async {
+    final existing = await getSyncMeta('device_id');
+    if (existing != null && existing.isNotEmpty && existing != 'mobile') {
+      return existing;
+    }
+    final id = _uuid.v4();
+    await setSyncMeta('device_id', id);
+    return id;
+  }
+
+  Future<void> clearSessionData({bool keepDeviceId = true}) async {
+    final deviceId = keepDeviceId ? await getSyncMeta('device_id') : null;
+
+    await db.transaction(() async {
+      await db.delete(db.orderDetailOptions).go();
+      await db.delete(db.orderDetails).go();
+      await db.delete(db.orderPayments).go();
+      await db.delete(db.bookingOrders).go();
+      await db.delete(db.syncConflicts).go();
+      await db.delete(db.syncMeta).go();
+    });
+
+    if (deviceId != null && deviceId.isNotEmpty) {
+      await setSyncMeta('device_id', deviceId);
+    }
+  }
+
+  Future<List<SyncConflict>> getUnresolvedConflicts() {
+    return (db.select(db.syncConflicts)..where((t) => t.isResolved.equals(false)))
+        .get();
+  }
+
+  Future<void> applyConflictResolution({
+    required int conflictId,
+    required String choice,
+  }) async {
+    final row = await (db.select(db.syncConflicts)..where((t) => t.id.equals(conflictId)))
+        .getSingleOrNull();
+    if (row == null) return;
+
+    if (choice == 'SERVER_WINS' && row.serverSnapshotJson != null) {
+      try {
+        final server = jsonDecode(row.serverSnapshotJson!) as Map<String, dynamic>;
+        if (row.entityTable == 'booking_orders') {
+          await upsertFromServer(server);
+        } else if (row.entityTable == 'order_details') {
+          await upsertDetailFromServerRow(server);
+        }
+        final clientUuid = row.clientUuid;
+        if (clientUuid != null && clientUuid.isNotEmpty) {
+          await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
+              .write(
+            const BookingOrdersCompanion(
+              syncDirty: Value(false),
+              syncError: Value(null),
+              syncIntent: Value(null),
+            ),
+          );
+        }
+      } catch (_) {}
+    }
+
+    await resolveConflict(conflictId, choice);
+  }
+
+  /// Creates a full checkout order in the mirror (single write path).
+  Future<String> createCheckoutOrder({
+    required String customerName,
+    required int tableId,
+    String? tableNo,
+    required String paymentMethodSelected,
+    required String paymentMethodEffective,
+    required bool openbillFlag,
+    required double subtotal,
+    required double grandTotal,
+    double ppn = 0,
+    bool isPpnActive = false,
+    double cashRoundingAmount = 0,
+    int cashRoundingUnit = 0,
+    int? partnerId,
+    String? partnerName,
+    String? manualPaymentRawJson,
+    required List<Map<String, dynamic>> cartItems,
+  }) async {
+    final clientUuid = _uuid.v4();
+    final now = DateTime.now();
+    final orderStatus = openbillFlag ? 'OPENBILL_CONFIRMATION' : 'UNPAID';
+
+    await db.into(db.bookingOrders).insert(
+          BookingOrdersCompanion.insert(
+            clientUuid: clientUuid,
+            customerName: customerName,
+            tableId: Value(tableId),
+            tableNo: Value(tableNo),
+            paymentMethod: Value(paymentMethodSelected),
+            openbillFlag: Value(openbillFlag),
+            orderStatus: Value(orderStatus),
+            totalOrderValue: Value(subtotal),
+            ppn: Value(ppn),
+            isPpnActive: Value(isPpnActive),
+            cashRoundingAmount: Value(cashRoundingAmount),
+            cashRoundingUnit: Value(cashRoundingUnit),
+            partnerId: Value(partnerId),
+            partnerName: Value(partnerName),
+            latestPaymentJson: Value(manualPaymentRawJson),
+            syncDirty: const Value(true),
+            syncIntent: const Value('CREATE'),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
+
+    for (final cartItem in cartItems) {
+      await addDetail(
+        bookingOrderClientUuid: clientUuid,
+        partnerProductId: cartItem['product_id'] as int,
+        productName: cartItem['product_name']?.toString() ?? '',
+        basePrice: (cartItem['base_price'] as num).toDouble(),
+        quantity: cartItem['qty'] as int,
+        optionsPrice: (cartItem['options_price'] as num?)?.toDouble() ?? 0,
+        customerNote: cartItem['note']?.toString(),
+        promoId: cartItem['promo_id'] as int?,
+        promoType: cartItem['promo_type']?.toString(),
+        promoAmount: (cartItem['promo_amount'] as num?)?.toDouble(),
+        options: (cartItem['options'] as List?)?.cast<Map<String, dynamic>>() ?? const [],
+      );
+    }
+
+    return clientUuid;
+  }
+
+  Future<String> ensureEditMirror({
+    required int serverId,
+    required String bookingOrderCode,
+    required String customerName,
+    int? tableServerId,
+    String? tableNoSnapshot,
+    required String orderStatus,
+    String? paymentMethodEffective,
+    required double subtotal,
+    required double grandTotal,
+    bool isPpnActive = false,
+    double ppn = 0,
+  }) async {
+    final existing = await getByServerId(serverId);
+    if (existing != null) return existing.clientUuid;
+
+    final clientUuid = _uuid.v4();
+    final now = DateTime.now();
+    await db.into(db.bookingOrders).insert(
+          BookingOrdersCompanion.insert(
+            clientUuid: clientUuid,
+            serverId: Value(serverId),
+            bookingOrderCode: Value(bookingOrderCode),
+            customerName: customerName,
+            tableId: Value(tableServerId),
+            tableNo: Value(tableNoSnapshot),
+            orderStatus: Value(orderStatus),
+            paymentMethod: Value(paymentMethodEffective),
+            totalOrderValue: Value(subtotal),
+            ppn: Value(ppn),
+            isPpnActive: Value(isPpnActive),
+            syncDirty: const Value(true),
+            syncIntent: const Value('UPDATE'),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
+    return clientUuid;
+  }
+
+  Future<void> replaceDetailsFromEdit({
+    required String clientUuid,
+    required List<Map<String, dynamic>> lines,
+    required double subtotal,
+    required double grandTotal,
+    String syncIntent = 'UPDATE',
+  }) async {
+    await db.transaction(() async {
+      final details = await (db.select(db.orderDetails)
+            ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
+          .get();
+      for (final detail in details) {
+        await (db.delete(db.orderDetailOptions)
+              ..where((t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid)))
+            .go();
+      }
+      await (db.delete(db.orderDetails)
+            ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
+          .go();
+
+      final now = DateTime.now();
+      for (final line in lines) {
+        final detailUuid = line['local_id']?.toString() ?? _uuid.v4();
+        await db.into(db.orderDetails).insert(
+              OrderDetailsCompanion.insert(
+                clientDetailUuid: detailUuid,
+                bookingOrderClientUuid: clientUuid,
+                serverId: Value(_toIntOrNull(line['server_order_detail_id'])),
+                partnerProductId: _toInt(line['product_server_id']),
+                productName: Value(line['product_name_snapshot']?.toString()),
+                basePrice: Value(_toDouble(line['base_price'])),
+                quantity: Value(_toInt(line['qty'], fallback: 1)),
+                optionsPrice: Value(_toDouble(line['options_price'])),
+                customerNote: Value(line['customer_note']?.toString()),
+                promoId: Value(_toIntOrNull(line['promo_id'])),
+                promoType: Value(line['promo_type']?.toString()),
+                promoAmount: Value(_toDouble(line['promo_amount'])),
+                status: Value(line['detail_status']?.toString()),
+                syncDirty: const Value(true),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
+
+        final options = (line['options'] as List?) ?? [];
+        for (final opt in options) {
+          if (opt is! Map) continue;
+          await db.into(db.orderDetailOptions).insert(
+                OrderDetailOptionsCompanion.insert(
+                  clientOptionUuid: _uuid.v4(),
+                  orderDetailClientUuid: detailUuid,
+                  optionId: _toInt(opt['option_server_id']),
+                  partnerProductOptionName:
+                      Value(opt['option_name_snapshot']?.toString()),
+                  parentName: Value(opt['parent_name_snapshot']?.toString()),
+                  price: Value(_toDouble(opt['price'])),
+                  createdAt: Value(now),
+                  updatedAt: Value(now),
+                ),
+              );
+        }
+      }
+
+      await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
+          .write(
+        BookingOrdersCompanion(
+          totalOrderValue: Value(subtotal),
+          syncDirty: const Value(true),
+          syncIntent: Value(syncIntent),
+          syncError: const Value(null),
+          updatedAt: Value(now),
+        ),
+      );
+    });
+  }
+
+  Future<List<MirrorPendingStockLine>> getPendingStockLines() async {
+    final dirtyOrders = await (db.select(db.bookingOrders)
+          ..where((t) => t.serverId.isNull())
+          ..where((t) => t.syncDirty.equals(true))
+          ..where((t) => t.deletedAt.isNull()))
+        .get();
+
+    final lines = <MirrorPendingStockLine>[];
+    for (final order in dirtyOrders) {
+      final details = await (db.select(db.orderDetails)
+            ..where((t) => t.bookingOrderClientUuid.equals(order.clientUuid)))
+          .get();
+
+      for (final detail in details) {
+        final opts = await (db.select(db.orderDetailOptions)
+              ..where((t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid)))
+            .get();
+        lines.add(
+          MirrorPendingStockLine(
+            productId: detail.partnerProductId,
+            qty: detail.quantity,
+            optionIds: opts.map((o) => o.optionId).toList(),
+          ),
+        );
+      }
+    }
+    return lines;
+  }
+
+  Future<void> upsertPaymentFromServer(Map<String, dynamic> row) async {
+    final serverId = _toIntOrNull(row['id']);
+    if (serverId == null) return;
+
+    final bookingOrderServerId = _toIntOrNull(row['booking_order_id']);
+    if (bookingOrderServerId == null) return;
+
+    final parent = await getByServerId(bookingOrderServerId);
+    if (parent == null) return;
+
+    final existing = await (db.select(db.orderPayments)..where((t) => t.serverId.equals(serverId)))
+        .getSingleOrNull();
+
+    final clientPaymentUuid = existing?.clientPaymentUuid ?? _uuid.v4();
+    final now = DateTime.now();
+
+    await db.into(db.orderPayments).insertOnConflictUpdate(
+          OrderPaymentsCompanion(
+            clientPaymentUuid: Value(clientPaymentUuid),
+            serverId: Value(serverId),
+            bookingOrderClientUuid: Value(parent.clientUuid),
+            bookingOrderServerId: Value(bookingOrderServerId),
+            employeeId: Value(_toIntOrNull(row['employee_id'])),
+            customerId: Value(_toIntOrNull(row['customer_id'])),
+            customerName: Value(row['customer_name']?.toString()),
+            paymentType: Value(row['payment_type']?.toString() ?? 'CASH'),
+            paidAmount: Value(_toDouble(row['paid_amount'])),
+            changeAmount: Value(_toDouble(row['change_amount'])),
+            paymentStatus: Value(row['payment_status']?.toString() ?? 'PAID'),
+            note: Value(row['note']?.toString()),
+            ppn: Value(_toDouble(row['ppn'])),
+            amountBeforePpn: Value(_toDouble(row['amount_before_ppn'])),
+            roundingAmount: Value(_toDouble(row['rounding_amount'])),
+            ownerManualPaymentId: Value(_toIntOrNull(row['owner_manual_payment_id'])),
+            manualProviderName: Value(row['manual_provider_name']?.toString()),
+            manualProviderAccountName:
+                Value(row['manual_provider_account_name']?.toString()),
+            manualProviderAccountNo: Value(row['manual_provider_account_no']?.toString()),
+            syncDirty: const Value(false),
+            createdAt: Value(_parseDate(row['created_at']) ?? now),
+            updatedAt: Value(_parseDate(row['updated_at']) ?? now),
+          ),
         );
   }
 

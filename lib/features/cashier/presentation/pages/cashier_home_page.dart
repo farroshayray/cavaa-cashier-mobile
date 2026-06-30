@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/data/local/db/sync/sync_worker.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import 'tabs/modals/sync_conflicts_sheet.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
@@ -68,6 +71,8 @@ class _CashierHomePageState extends State<CashierHomePage>
   Future<void>? _reloadTabsInFlight;
   Future<void>? _syncAndReloadInFlight;
   bool _bootstrapSyncHandled = false;
+  int _conflictCount = 0;
+  SyncWorker? _syncWorker;
 
   bool? _lastOnlineState;
 
@@ -99,6 +104,11 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (!mounted) return;
       _setupConnectivitySyncHook();
       _bootstrapAfterLogin();
+      _syncWorker = SyncWorker(
+        syncService: context.read<SyncService>(),
+        connectivity: context.read<ConnectivityStatusProvider>(),
+      )..start();
+      _refreshConflictCount();
     });
 
     Future.microtask(() async {
@@ -339,6 +349,8 @@ class _CashierHomePageState extends State<CashierHomePage>
     _fcmTapSub?.cancel();
 
     _updateProgressNotifier.dispose();
+
+    _syncWorker?.dispose();
 
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -726,6 +738,23 @@ class _CashierHomePageState extends State<CashierHomePage>
       debugPrint('sync before tab reload failed: $e');
     }
 
+    await _refreshConflictCount();
+
+    if (!mounted) return;
+    await _reloadAllOrderTabsSequentially();
+  }
+
+  Future<void> _refreshConflictCount() async {
+    try {
+      final count = await context.read<BookingOrdersDao>().countUnresolvedConflicts();
+      if (!mounted) return;
+      setState(() => _conflictCount = count);
+    } catch (_) {}
+  }
+
+  Future<void> _openSyncConflicts() async {
+    await SyncConflictsSheet.show(context);
+    await _refreshConflictCount();
     if (!mounted) return;
     await _reloadAllOrderTabsSequentially();
   }
@@ -1020,6 +1049,15 @@ class _CashierHomePageState extends State<CashierHomePage>
             ],
           ),
           actions: [
+            if (_conflictCount > 0)
+              IconButton(
+                tooltip: 'Konflik sinkronisasi',
+                onPressed: _openSyncConflicts,
+                icon: Badge(
+                  label: Text('$_conflictCount'),
+                  child: const Icon(Icons.warning_amber_rounded),
+                ),
+              ),
             const OnlineStatusChip(),
             const PrinterStatusDot(),
             NotifBellButton(onTapItem: _handleNotifTap),

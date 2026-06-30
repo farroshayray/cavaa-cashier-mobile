@@ -7,19 +7,18 @@ import '/features/cashier/data/local/db/cashier_db.dart';
 import 'dart:convert';
 
 import 'package:uuid/uuid.dart';
-import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
-import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 
 class PurchaseProvider extends ChangeNotifier {
   final PurchaseRepository repo;
-  final LocalOrdersDao localOrdersDao;
+  final BookingOrdersDao bookingOrdersDao;
   final SyncService? syncService;
   final Uuid _uuid = const Uuid();
 
   PurchaseProvider({
     required this.repo,
-    required this.localOrdersDao,
+    required this.bookingOrdersDao,
     this.syncService,
   });
 
@@ -32,7 +31,7 @@ class PurchaseProvider extends ChangeNotifier {
   List<PaymentOption> paymentOptions = [];
   PartnerData? partnerData;
 
-  List<LocalPendingStockLine> _pendingStockLines = [];
+  List<MirrorPendingStockLine> _pendingStockLines = [];
   List<CartItem> _stockOverlayLines = [];
 
   /// Lines from edit-order sheet counted toward stock validation.
@@ -146,7 +145,7 @@ class PurchaseProvider extends ChangeNotifier {
       tables = payload.tables;
       partnerData = payload.partnerData;
       try {
-        _pendingStockLines = await localOrdersDao.getPendingStockLines();
+        _pendingStockLines = await bookingOrdersDao.getPendingStockLines();
       } catch (e) {
         debugPrint('Failed to load local pending stock usage: $e');
         _pendingStockLines = [];
@@ -175,7 +174,7 @@ class PurchaseProvider extends ChangeNotifier {
   }) async {
     final normalizedCustomerName = customerName;
 
-    final localOrderId = await _saveOrderToLocal(
+    final localOrderId = await _saveOrderToMirror(
       customerName: normalizedCustomerName,
       table: table,
       paymentMethod: paymentMethod,
@@ -204,20 +203,15 @@ class PurchaseProvider extends ChangeNotifier {
     };
   }
 
-  Future<String> _saveOrderToLocal({
+  Future<String> _saveOrderToMirror({
     required String customerName,
     required StoreTable table,
     required String paymentMethod,
     required PaymentOption payment,
   }) async {
-    final localOrderId = _uuid.v4();
-    final clientOrderCode = _buildClientOrderCode();
-
     final subtotal = cartSubtotal.toDouble();
     final ppn = ppnPercent.toDouble();
     final grandTotal = cartGrandTotalRounded.toDouble();
-    final cashRoundingAmount = 0.0;
-    final cashRoundingUnitValue = cashRoundingUnit;
 
     final selectedPaymentMethod = paymentMethod;
     final effectivePaymentMethod =
@@ -242,108 +236,73 @@ class PurchaseProvider extends ChangeNotifier {
       });
     }
 
-    final order = LocalOrderMapper.toLocalOrder(
-      localId: localOrderId,
-      clientOrderCode: clientOrderCode,
-      customerName: customerName,
-      partnerId: partnerData?.id,
-      partnerName: partnerData?.name,
-      tableServerId: table.id,
-      tableNoSnapshot: table.tableNo,
-
-      paymentMethodSelected: selectedPaymentMethod,   // untuk backend, contoh "3"
-      paymentMethodEffective: effectivePaymentMethod, // untuk UI, contoh "manual_qris"
-
-      manualPaymentRawJson: manualPaymentRawJson,
-      subtotal: subtotal,
-      discountValue: 0,
-      ppnPercent: ppn,
-      isPpnActive: isPpnActive,
-      grandTotal: grandTotal,
-      cashRoundingAmount: cashRoundingAmount,
-      cashRoundingUnit: cashRoundingUnitValue,
-      orderStatusLocal: effectivePaymentMethod == 'OPENBILL' ? 'OPENBILL_CONFIRMATION' : 'UNPAID',
-      syncStatus: 'PENDING',
-    );
-
-    final items = <LocalOrderItemsCompanion>[];
-    final itemOptions = <String, List<LocalOrderItemOptionsCompanion>>{};
-
+    final cartItems = <Map<String, dynamic>>[];
     for (final cartItem in cart) {
-      final itemLocalId = _uuid.v4();
-
       num optionsPrice = 0;
-      final optionsForThisItem = <LocalOrderItemOptionsCompanion>[];
+      final optionsForThisItem = <Map<String, dynamic>>[];
 
       for (final group in cartItem.product.optionGroups) {
         final selectedIds = cartItem.selected[group.id] ?? <int>{};
-
         for (final optId in selectedIds) {
           final opt = group.items.cast<OptionItem?>().firstWhere(
                 (x) => x?.id == optId,
                 orElse: () => null,
               );
-
           if (opt != null) {
             optionsPrice += opt.price;
-
-            optionsForThisItem.add(
-              LocalOrderMapper.toLocalOption(
-                localId: _uuid.v4(),
-                orderItemLocalId: itemLocalId,
-                optionServerId: opt.id,
-                optionNameSnapshot: opt.name,
-                price: opt.price.toDouble(),
-                parentNameSnapshot: group.name,
-              ),
-            );
+            optionsForThisItem.add({
+              'option_id': opt.id,
+              'name': opt.name,
+              'parent_name': group.name,
+              'price': opt.price,
+            });
           }
         }
       }
 
       final promo = cartItem.product.promotion;
-      final category = categories.cast<Category?>().firstWhere(
-        (c) => c?.id == cartItem.product.categoryId,
-        orElse: () => null,
-      );
-
       num promoAmount = 0;
       if (promo != null) {
         if (promo.type == 'percentage') {
-          promoAmount = cartItem.product.price.toDouble() - _promoFinalUnitPrice(cartItem.product).toDouble();
+          promoAmount = cartItem.product.price.toDouble() -
+              _promoFinalUnitPrice(cartItem.product).toDouble();
         } else {
           promoAmount = promo.value;
         }
       }
 
-      final item = LocalOrderMapper.toLocalItem(
-        localId: itemLocalId,
-        orderLocalId: localOrderId,
-        productServerId: cartItem.product.id,
-        productNameSnapshot: cartItem.product.name,
-        basePrice: cartItem.product.price.toDouble(),
-        qty: cartItem.qty,
-        customerNote: cartItem.note.isEmpty ? null : cartItem.note,
-        optionsPrice: optionsPrice.toDouble(),
-        lineTotal: cartItem.lineTotal.toDouble(),
-        promoId: promo?.id,
-        promoType: promo?.type,
-        promoAmount: promoAmount.toDouble(),
-        categoryServerId: category?.id,
-        categoryNameSnapshot: category?.name,
-      );
-
-      items.add(item);
-      itemOptions[itemLocalId] = optionsForThisItem;
+      cartItems.add({
+        'product_id': cartItem.product.id,
+        'product_name': cartItem.product.name,
+        'base_price': cartItem.product.price.toDouble(),
+        'qty': cartItem.qty,
+        'note': cartItem.note.isEmpty ? null : cartItem.note,
+        'options_price': optionsPrice.toDouble(),
+        'promo_id': promo?.id,
+        'promo_type': promo?.type,
+        'promo_amount': promoAmount.toDouble(),
+        'options': optionsForThisItem,
+      });
     }
 
-    await localOrdersDao.createOrderWithItems(
-      order: order,
-      items: items,
-      itemOptions: itemOptions,
+    return bookingOrdersDao.createCheckoutOrder(
+      customerName: customerName,
+      tableId: table.id,
+      tableNo: table.tableNo,
+      paymentMethodSelected: selectedPaymentMethod,
+      paymentMethodEffective: effectivePaymentMethod,
+      openbillFlag: payment.isOpenbill,
+      subtotal: subtotal,
+      grandTotal: grandTotal,
+      ppn: ppn,
+      isPpnActive: isPpnActive,
+      cashRoundingAmount: 0,
+      cashRoundingUnit: cashRoundingUnit,
+      partnerId: partnerData?.id,
+      partnerName: partnerData?.name,
+      manualPaymentRawJson: manualPaymentRawJson,
+      cartItems: cartItems,
     );
-
-    return localOrderId;
   }
 
 

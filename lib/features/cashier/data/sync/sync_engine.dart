@@ -4,6 +4,7 @@ import '/core/network/api_debug_log.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/sync/master_cache_service.dart';
+import '/features/cashier/data/sync/order_stage_sync_guard.dart';
 import '/features/cashier/data/sync/sync_api.dart';
 
 class SyncEngine {
@@ -124,6 +125,15 @@ class SyncEngine {
 
     for (final order in dirtyOrders) {
       final intent = order.syncIntent ?? 'CREATE';
+      final guardError = OrderStageSyncGuard.validateIntent(
+        currentStatus: order.orderStatus,
+        syncIntent: intent,
+      );
+      if (guardError != null) {
+        ApiDebugLog.syncError('push guard', '${order.clientUuid}: $guardError');
+        continue;
+      }
+
       if (intent == 'DELETE' && order.serverId != null) {
         deletes.add({'table': 'booking_orders', 'server_id': order.serverId});
         continue;
@@ -291,11 +301,21 @@ class SyncEngine {
           );
         }
 
+        final orderPayments = (orders['order_payments'] as List?) ?? [];
+        for (final raw in orderPayments) {
+          if (raw is Map) {
+            await bookingOrdersDao.upsertPaymentFromServer(
+              Map<String, dynamic>.from(raw),
+            );
+          }
+        }
+
         ApiDebugLog.sync(
           'pull applied',
           'booking_orders=${bookingOrders.length} '
           'standalone_details=${standaloneDetails.length} '
-          'deleted_orders=${deletedOrders.length}',
+          'deleted_orders=${deletedOrders.length} '
+          'order_payments=${orderPayments.length}',
         );
       }
 
@@ -335,12 +355,15 @@ class SyncEngine {
       );
     }
 
-    final first = Map<String, dynamic>.from(orders.first as Map);
-    return SyncApi.buildIdempotencyKey(
-      clientUuid: first['client_uuid']?.toString() ?? 'batch',
-      syncIntent: first['sync_intent']?.toString() ?? 'SYNC',
-      clientTimestamp: first['client_timestamp']?.toString() ?? DateTime.now().toIso8601String(),
-    );
+    final parts = <String>[];
+    for (final raw in orders) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      parts.add(
+        '${map['client_uuid']}|${map['sync_intent']}|${map['client_timestamp']}',
+      );
+    }
+    return SyncApi.buildBatchIdempotencyKey(parts);
   }
 
   String _checkoutOrderName(String customerName) {
@@ -394,15 +417,21 @@ class SyncResult {
     final errorCount = ((json['errors'] as List?) ?? []).length;
     final conflictCount = ((json['conflicts'] as List?) ?? []).length;
 
+    final hasIssues = errorCount > 0 || conflictCount > 0;
+    String? message;
+    if (errorCount > 0) {
+      message = 'Sync selesai dengan $errorCount error';
+    } else if (conflictCount > 0) {
+      message = 'Sync selesai dengan $conflictCount konflik';
+    }
+
     return SyncResult(
-      success: errorCount == 0,
+      success: !hasIssues,
       syncToken: json['sync_token']?.toString(),
       appliedCount: ((json['applied'] as List?) ?? []).length,
       conflictCount: conflictCount,
       errorCount: errorCount,
-      message: errorCount > 0
-          ? 'Sync selesai dengan $errorCount error'
-          : (conflictCount > 0 ? 'Sync selesai dengan $conflictCount konflik' : null),
+      message: message,
       rawResponse: raw ?? json,
     );
   }

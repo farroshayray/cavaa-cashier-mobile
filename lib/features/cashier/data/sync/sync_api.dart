@@ -39,4 +39,16 @@ class SyncApi {
     final raw = '$clientUuid|${syncIntent.toUpperCase()}|$clientTimestamp';
     return sha256.convert(utf8.encode(raw)).toString();
   }
+
+  static String buildBatchIdempotencyKey(List<String> parts) {
+    if (parts.isEmpty) {
+      return buildIdempotencyKey(
+        clientUuid: 'batch',
+        syncIntent: 'PULL',
+        clientTimestamp: DateTime.now().toIso8601String(),
+      );
+    }
+    final raw = parts.join('||');
+    return sha256.convert(utf8.encode(raw)).toString();
+  }
 }

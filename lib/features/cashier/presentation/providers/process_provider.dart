@@ -1,16 +1,12 @@
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../data/models/orders_repository.dart';
-import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
-import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
-import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
-import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
-import 'dart:convert';
-import 'package:dio/dio.dart';
-import 'package:drift/drift.dart';
 import '/core/services/connectivity_status_provider.dart';
-import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
-import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
@@ -18,24 +14,18 @@ import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class ProcessProvider extends ChangeNotifier {
   final OrdersRepository repo;
-  final LocalOrdersDao localOrdersDao;
-  final CachedProcessOrdersDao cachedProcessOrdersDao;
   final ConnectivityStatusProvider connectivity;
-  final CachedDoneOrdersDao cachedDoneOrdersDao;
-  final CachedPaymentOrdersDao cachedPaymentOrdersDao;
   final BookingOrdersDao bookingOrdersDao;
   final OrderTabCoordinator tabCoordinator;
+  final SyncService? syncService;
 
   ProcessProvider(
     this.repo,
-    this.localOrdersDao,
-    this.cachedProcessOrdersDao,
-    this.cachedDoneOrdersDao,
-    this.cachedPaymentOrdersDao,
     this.connectivity,
     this.bookingOrdersDao,
-    this.tabCoordinator,
-  );
+    this.tabCoordinator, {
+    this.syncService,
+  });
 
   bool isLoading = false;
   String? error;
@@ -114,53 +104,7 @@ class ProcessProvider extends ChangeNotifier {
         }
       }
 
-      final localRows = await localOrdersDao.getLocalProcessOrders();
-      final localItems = localRows.map((e) {
-        final item = mapLocalOrderToProcessItem(e);
-
-        return <String, dynamic>{
-          ...item,
-          'processed_by_kitchen': false,
-          'is_local_only': true,
-          'is_synced': false,
-          'pending_action': 'LOCAL_ONLY',
-          'pending_sync': true,
-          'sync_status': e.syncStatus,
-          'last_error': e.lastError,
-          'sort_time': item['created_at']?.toString() ?? e.createdAtLocal.toIso8601String(),
-        };
-      }).toList();
-
-      final remoteIds = remoteItems
-          .map((e) => int.tryParse('${e['id']}'))
-          .whereType<int>()
-          .toSet();
-
-      final filteredLocalItems = localItems.where((e) {
-        final id = e['id'];
-        final code = (e['booking_order_code'] ?? '').toString().trim();
-        final localId = (e['local_id'] ?? '').toString();
-
-        if (localId.isNotEmpty && mirroredClientUuids.contains(localId)) {
-          return false;
-        }
-
-        if (id is int && id > 0) {
-          if (remoteIds.contains(id)) return false;
-          if (doneIds.contains(id)) return false;
-        }
-
-        if (code.isNotEmpty && doneCodes.contains(code)) {
-          return false;
-        }
-
-        return true;
-      }).toList();
-
-      items = [
-        ...filteredLocalItems,
-        ...remoteItems,
-      ];
+      items = remoteItems;
 
       if (query.trim().isNotEmpty) {
         final q = query.trim().toLowerCase();
@@ -214,42 +158,10 @@ class ProcessProvider extends ChangeNotifier {
     final raw = res['items'];
     if (raw is! List) return;
 
-    final rows = raw.whereType<Map>().map((e) {
-      final map = Map<String, dynamic>.from(e);
-
-      String? tableNo;
-      final table = map['table'];
-      if (table is Map) {
-        tableNo = table['table_no']?.toString();
-      } else {
-        tableNo = map['table_no_snapshot']?.toString();
-      }
-
-      return CachedProcessOrdersCompanion(
-        serverId: Value(_toId(map['id'])),
-        bookingOrderCode: Value((map['booking_order_code'] ?? '').toString()),
-        customerName: Value((map['customer_name'] ?? '').toString()),
-        tableNo: Value(tableNo),
-        processRequestJson: Value(jsonEncode(map)),
-        latestProcessJson: Value(jsonEncode(map)),
-        paymentMethod: Value(map['payment_method']?.toString()),
-        orderStatus: Value((map['order_status'] ?? '').toString()),
-        subtotal: Value(
-          double.tryParse((map['total_order_value'] ?? '0').toString()) ?? 0,
-        ),
-        ppnPercent: Value(
-          double.tryParse((map['ppn'] ?? '0').toString()) ?? 0,
-        ),
-        isPpnActive: Value((map['is_ppn_active'] ?? 0) == 1),
-        processedByKitchen: Value(_toBool(map['processed_by_kitchen'])),
-        pendingAction: const Value(null),
-        isSynced: const Value(true),
-        deletedLocally: const Value(false),
-        syncedAt: Value(DateTime.now()),
-      );
-    }).toList();
-
-    await cachedProcessOrdersDao.mergeServerRows(rows);
+    for (final item in raw) {
+      if (item is! Map) continue;
+      await bookingOrdersDao.upsertFromServer(Map<String, dynamic>.from(item));
+    }
   }
 
   Future<void> _prefetchProcessDetails(List<Map<String, dynamic>> items) async {
@@ -258,20 +170,8 @@ class ProcessProvider extends ChangeNotifier {
       if (serverId <= 0) continue;
 
       try {
-        final existing = await cachedProcessOrdersDao.findByServerId(serverId);
-        final status = item['order_status']?.toString();
-
-        if (status != 'OPENBILL_CONFIRMATION' &&
-            existing?.detailJson != null &&
-            existing!.detailJson!.trim().isNotEmpty) {
-          continue;
-        }
-
         final detail = await repo.fetchOrderDetail(serverId);
-        await cachedProcessOrdersDao.saveDetailJson(
-          serverId,
-          jsonEncode(detail),
-        );
+        await bookingOrdersDao.upsertFromServer(detail);
       } catch (e) {
         debugPrint('ProcessProvider prefetch detail failed for $serverId: $e');
       }
@@ -289,134 +189,28 @@ class ProcessProvider extends ChangeNotifier {
     query = '';
     items = [];
     actionLoadingIds.clear();
-
-    await cachedProcessOrdersDao.clearAll();
     notifyListeners();
   }
 
+  Future<Map<String, dynamic>?> _getMirrorDetailMap(int serverId) async {
+    final order = await bookingOrdersDao.getByServerId(serverId);
+    if (order == null) return null;
 
-  Future<Map<String, dynamic>?> _getCachedProcessDetailMap(int serverId) async {
-    final row = await cachedProcessOrdersDao.findByServerId(serverId);
-    if (row == null) return null;
+    final bundle = await bookingOrdersDao.getBundleByClientUuid(order.clientUuid);
+    if (bundle == null) return null;
 
-    final decoded = _decodeCachedJson(row.detailJson) ??
-        _decodeCachedJson(row.latestProcessJson) ??
-        _decodeCachedJson(row.processRequestJson);
-
-    if (decoded != null) {
-      final map = _normalizeCachedOrderMap(decoded);
-      map['id'] = row.serverId;
-      map['booking_order_code'] = row.bookingOrderCode;
-      map['customer_name'] = row.customerName;
-      map['payment_method'] = row.paymentMethod;
-      map['order_status'] = row.orderStatus;
-      map['total_order_value'] = row.subtotal;
-      map['ppn'] = row.ppnPercent;
-      map['is_ppn_active'] = row.isPpnActive;
-      map['table'] ??= {'table_no': row.tableNo ?? '-'};
-      map['order_details'] ??= <dynamic>[];
-      return map;
-    }
-
-    return {
-      'id': row.serverId,
-      'booking_order_code': row.bookingOrderCode,
-      'customer_name': row.customerName,
-      'payment_method': row.paymentMethod,
-      'order_status': row.orderStatus,
-      'total_order_value': row.subtotal,
-      'ppn': row.ppnPercent,
-      'is_ppn_active': row.isPpnActive,
-      'table': {
-        'table_no': row.tableNo ?? '-',
-      },
-      'payment': <String, dynamic>{},
-      'order_details': <dynamic>[],
-    };
-  }
-
-  Future<Map<String, dynamic>> getOrderDetailFromListItem(
-    Map<String, dynamic> row,
-  ) async {
-    final isLocalOnly = row['is_local_only'] == true;
-
-    if (isLocalOnly) {
-      final localId = (row['local_id'] ?? '').toString();
-      if (localId.isEmpty) {
-        throw Exception('Local ID order tidak valid');
-      }
-
-      final localDetail = await localOrdersDao.getOrderDetailMapByLocalId(localId);
-      if (localDetail != null) return localDetail;
-
-      throw Exception('Detail order lokal tidak ditemukan');
-    }
-
-    final serverId = _toId(row['id']);
-    if (serverId <= 0) {
-      throw Exception('Order ID tidak valid');
-    }
-
-    if (!connectivity.isOnline) {
-      final cached = await _getCachedProcessDetailMap(serverId);
-      if (cached != null) return cached;
-      throw Exception('Detail offline tidak tersedia di cache');
-    }
-
-    try {
-      final detail = await repo.fetchOrderDetail(serverId);
-      await cachedProcessOrdersDao.saveDetailJson(
-        serverId,
-        jsonEncode(detail),
-      );
-      return detail;
-    } catch (_) {
-      final cached = await _getCachedProcessDetailMap(serverId);
-      if (cached != null) return cached;
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>> getPrintDetailFromListItem(
-    Map<String, dynamic> row,
-  ) async {
-    final isLocalOnly = row['is_local_only'] == true;
-
-    if (isLocalOnly) {
-      final localId = (row['local_id'] ?? '').toString();
-      if (localId.isEmpty) {
-        throw Exception('Local ID order tidak valid');
-      }
-
-      final localDetail = await localOrdersDao.getOrderDetailMapByLocalId(localId);
-      if (localDetail != null) return localDetail;
-
-      throw Exception('Detail print lokal tidak ditemukan');
-    }
-
-    final serverId = _toId(row['id']);
-    if (serverId <= 0) {
-      throw Exception('Order ID tidak valid');
-    }
-
-    if (!connectivity.isOnline) {
-      final cached = await _getCachedProcessDetailMap(serverId);
-      if (cached != null) return cached;
-      throw Exception('Data print offline tidak tersedia di cache');
-    }
-
-    try {
-      final detail = await repo.fetchPrintDetail(serverId);
-      await cachedProcessOrdersDao.saveDetailJson(
-        serverId,
-        jsonEncode(detail),
-      );
-      return detail;
-    } catch (_) {
-      final cached = await _getCachedProcessDetailMap(serverId);
-      if (cached != null) return cached;
-      rethrow;
-    }
+    final map = OrderTabItemMapper.toProcessItem(
+      OrderMirrorMapper.orderToUiMap(order),
+    );
+    map['order_details'] = bundle.details.map((d) {
+      final detailMap = OrderMirrorMapper.detailToUiMap(d);
+      detailMap['order_detail_options'] =
+          (bundle.optionsByDetailUuid[d.clientDetailUuid] ?? [])
+              .map(OrderMirrorMapper.optionToUiMap)
+              .toList();
+      return detailMap;
+    }).toList();
+    return map;
   }
 
   Map<String, dynamic>? _decodeCachedJson(String? rawJson) {
@@ -430,40 +224,69 @@ class ProcessProvider extends ChangeNotifier {
     return null;
   }
 
-  Map<String, dynamic> _normalizeCachedOrderMap(Map<String, dynamic> map) {
-    final normalized = Map<String, dynamic>.from(map);
+  final Set<int> actionLoadingIds = <int>{};
 
-    normalized['booking_order_code'] =
-        normalized['booking_order_code'] ?? '-';
-    normalized['customer_name'] =
-        normalized['customer_name'] ?? '-';
-    normalized['order_status'] =
-        normalized['order_status'] ?? 'PROCESSED';
-    normalized['payment_method'] = normalized['payment_method'] ??
-        (_toBool(normalized['openbill_flag']) ? 'OPENBILL' : 'CASH');
-    normalized['total_order_value'] =
-        normalized['total_order_value'] ?? 0;
-    normalized['ppn'] = normalized['ppn'] ?? 0;
-    normalized['is_ppn_active'] = normalized['is_ppn_active'] ?? false;
-
-    if (normalized['table'] == null) {
-      normalized['table'] = {
-        'table_no': normalized['table_no_snapshot'] ?? '-',
-      };
+  Future<Map<String, dynamic>> getOrderDetailFromListItem(
+    Map<String, dynamic> row,
+  ) async {
+    final clientUuid =
+        (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+    if (clientUuid.isNotEmpty) {
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+      if (bundle != null) {
+        return _bundleToDetailMap(bundle);
+      }
     }
 
-    if (normalized['payment'] == null) {
-      normalized['payment'] = <String, dynamic>{};
+    final serverId = _toId(row['id']);
+    if (serverId <= 0) {
+      throw Exception('Order ID tidak valid');
     }
 
-    if (normalized['order_details'] == null) {
-      normalized['order_details'] = <dynamic>[];
+    if (!connectivity.isOnline) {
+      final cached = await _getMirrorDetailMap(serverId);
+      if (cached != null) return cached;
+      throw Exception('Detail offline tidak tersedia di cache');
     }
 
-    return normalized;
+    try {
+      final detail = await repo.fetchOrderDetail(serverId);
+      await bookingOrdersDao.upsertFromServer(detail);
+      return detail;
+    } catch (_) {
+      final cached = await _getMirrorDetailMap(serverId);
+      if (cached != null) return cached;
+      rethrow;
+    }
   }
 
-  final Set<int> actionLoadingIds = <int>{};
+  Future<Map<String, dynamic>> getPrintDetailFromListItem(
+    Map<String, dynamic> row,
+  ) async {
+    final detail = await getOrderDetailFromListItem(row);
+    final serverId = _toId(row['id']);
+    if (serverId > 0 && connectivity.isOnline) {
+      try {
+        return await repo.fetchPrintDetail(serverId);
+      } catch (_) {}
+    }
+    return detail;
+  }
+
+  Map<String, dynamic> _bundleToDetailMap(BookingOrderBundle bundle) {
+    final map = OrderTabItemMapper.toProcessItem(
+      OrderMirrorMapper.orderToUiMap(bundle.order),
+    );
+    map['order_details'] = bundle.details.map((d) {
+      final detailMap = OrderMirrorMapper.detailToUiMap(d);
+      detailMap['order_detail_options'] =
+          (bundle.optionsByDetailUuid[d.clientDetailUuid] ?? [])
+              .map(OrderMirrorMapper.optionToUiMap)
+              .toList();
+      return detailMap;
+    }).toList();
+    return map;
+  }
 
   bool isActionLoading(int id) => actionLoadingIds.contains(id);
 
@@ -519,43 +342,24 @@ class ProcessProvider extends ChangeNotifier {
       final isConfirmingOpenbill = currentStatus == 'OPENBILL_CONFIRMATION';
       final targetStatus = isConfirmingOpenbill ? 'OPENBILL_WAITING_ORDER' : 'PROCESSED';
 
-      if (isLocalOnly) {
-        final localId = (row['local_id'] ?? '').toString();
-        if (localId.isEmpty) {
-          throw Exception('Local ID tidak valid');
-        }
+      final clientUuid =
+          (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+      final isMirrorOnly = clientUuid.isNotEmpty && id <= 0;
 
-        await localOrdersDao.updateOrderStatusLocal(
-          localId: localId,
-          status: targetStatus,
-          preserveStockConflict: isStockConflict,
+      if (isMirrorOnly) {
+        await tabCoordinator.transitionOrderStageByClientUuid(
+          clientUuid: clientUuid,
+          orderStatus: targetStatus,
+          syncIntent: isConfirmingOpenbill ? 'CONFIRM_OPENBILL' : 'PROCESS',
         );
-
-        if (isConfirmingOpenbill) {
-          await localOrdersDao.updateBackendSyncStage(localId, 'CONFIRMED');
-        }
-
-        final idx = items.indexWhere((e) => e['local_id'] == localId);
-        if (idx >= 0) {
-          items[idx] = {
-            ...items[idx],
-            'order_status': targetStatus,
-            'is_synced': false,
-            'pending_action': 'LOCAL_ONLY',
-            'pending_sync': true,
-            'sync_status': isStockConflict ? 'STOCK_CONFLICT' : 'PENDING',
-          };
-          notifyListeners();
-        }
-
+        await load();
         return {
           'status': 'offline_success',
           'offline': true,
-          'message': 'Order lokal diubah ke $targetStatus dan tetap pending sync',
+          'message': 'Order diubah ke $targetStatus dan menunggu sinkronisasi',
         };
       }
 
-      final cached = await cachedProcessOrdersDao.findByServerId(id);
       final forceOffline = isStockConflict;
 
       if (connectivity.isOnline && !forceOffline) {
@@ -567,16 +371,6 @@ class ProcessProvider extends ChangeNotifier {
           return res;
         }
 
-        await cachedProcessOrdersDao.markProcessedOnline(
-          id,
-          latestJson: cached?.latestProcessJson,
-        );
-
-        await localOrdersDao.updateOrderStatusByServerId(
-          serverId: id,
-          status: targetStatus,
-        );
-
         await tabCoordinator.transitionOrderStage(
           serverId: id,
           orderStatus: targetStatus,
@@ -587,12 +381,6 @@ class ProcessProvider extends ChangeNotifier {
         _setStatusLocal(id, targetStatus);
         return res;
       } else {
-        await cachedProcessOrdersDao.markProcessedOffline(
-          id,
-          cached?.latestProcessJson ?? cached?.processRequestJson ?? '{}',
-          orderStatus: targetStatus,
-        );
-
         await tabCoordinator.transitionOrderStage(
           serverId: id,
           orderStatus: targetStatus,
@@ -623,64 +411,43 @@ class ProcessProvider extends ChangeNotifier {
 
     _setActionLoading(actionKey, true);
     try {
-      if (isLocalOnly) {
-        final localId = (row['local_id'] ?? '').toString();
-        if (localId.isEmpty) {
-          throw Exception('Local ID tidak valid');
-        }
-
-        await localOrdersDao.updateOrderStatusLocal(
-          localId: localId,
-          status: 'PAID',
-          preserveStockConflict: isStockConflict,
+      final clientUuid =
+          (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+      if (clientUuid.isNotEmpty && id <= 0) {
+        await tabCoordinator.transitionOrderStageByClientUuid(
+          clientUuid: clientUuid,
+          orderStatus: 'PAID',
+          syncIntent: 'UPDATE',
         );
-
-        final idx = items.indexWhere((e) => e['local_id'] == localId);
-        if (idx >= 0) {
-          items[idx] = {
-            ...items[idx],
-            'order_status': 'PAID',
-            'is_synced': false,
-            'pending_action': 'LOCAL_ONLY',
-            'pending_sync': true,
-            'sync_status': isStockConflict ? 'STOCK_CONFLICT' : 'PENDING',
-          };
-          notifyListeners();
-        }
-
+        await load();
         return {
           'status': 'offline_success',
           'offline': true,
-          'message': 'Status lokal dikembalikan ke PAID',
+          'message': 'Status dikembalikan ke PAID',
         };
       }
 
-      final cached = await cachedProcessOrdersDao.findByServerId(id);
       final forceOffline = isStockConflict;
 
       if (connectivity.isOnline && !forceOffline) {
         final res = await repo.cancelProcessOrder(id);
-
-        await cachedProcessOrdersDao.markCancelProcessOnline(
-          id,
-          latestJson: cached?.latestProcessJson,
-        );
-
-        await localOrdersDao.updateOrderStatusByServerId(
+        await tabCoordinator.transitionOrderStage(
           serverId: id,
-          status: 'PAID',
+          orderStatus: 'PAID',
+          syncDirty: false,
+          orderSnapshot: row,
         );
-
         _setStatusLocal(id, 'PAID');
         return res;
       } else {
-        await cachedProcessOrdersDao.markCancelProcessOffline(
-          id,
-          cached?.latestProcessJson ?? cached?.processRequestJson ?? '{}',
+        await tabCoordinator.transitionOrderStage(
+          serverId: id,
+          orderStatus: 'PAID',
+          syncIntent: 'UPDATE',
+          syncDirty: true,
+          orderSnapshot: row,
         );
-
         _setStatusLocal(id, 'PAID');
-
         return {
           'status': 'offline_success',
           'offline': true,
@@ -708,35 +475,19 @@ class ProcessProvider extends ChangeNotifier {
         throw Exception('Pilih minimal satu item');
       }
 
-      if (isLocalOnly) {
-        final localId = (row['local_id'] ?? '').toString();
-        if (localId.isEmpty) {
-          throw Exception('Local ID tidak valid');
+      if (isLocalOnly || id <= 0) {
+        final clientUuid =
+            (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+        final mirror = clientUuid.isNotEmpty
+            ? await bookingOrdersDao.getByClientUuid(clientUuid)
+            : null;
+        if (mirror?.serverId != null) {
+          return actionServeItems(
+            {...row, 'id': mirror!.serverId, 'is_local_only': false},
+            detailIds: detailIds,
+          );
         }
-
-        final result = await localOrdersDao.markLocalOrderItemsServed(
-          localId: localId,
-          detailIds: detailIds,
-        );
-
-        await load();
-
-        final allServed = result['all_served'] == true;
-        final isOpenbill =
-            _toBool(row['openbill_flag']) ||
-            row['payment_method']?.toString() == 'OPENBILL' ||
-            (row['order_status'] ?? '').toString().startsWith('OPENBILL');
-
-        return {
-          'status': 'offline_success',
-          'offline': true,
-          'all_served': allServed,
-          'message': allServed
-              ? (isOpenbill
-                  ? 'Semua item served, order dipindahkan ke pembayaran'
-                  : 'Semua item served')
-              : 'Item terpilih berhasil ditandai served',
-        };
+        throw Exception('Sinkronkan order terlebih dahulu sebelum serve item');
       }
 
       if (isStockConflict) {
@@ -814,25 +565,19 @@ class ProcessProvider extends ChangeNotifier {
       throw Exception('Item tidak valid');
     }
 
-    if (isLocalOnly) {
-      final localId = (row['local_id'] ?? '').toString();
-      if (localId.isEmpty) {
-        throw Exception('Local ID tidak valid');
+    if (isLocalOnly || id <= 0) {
+      final clientUuid =
+          (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+      final mirror = clientUuid.isNotEmpty
+          ? await bookingOrdersDao.getByClientUuid(clientUuid)
+          : null;
+      if (mirror?.serverId != null) {
+        return actionMarkKitchenServed(
+          {...row, 'id': mirror!.serverId, 'is_local_only': false},
+          detailId: detailId,
+        );
       }
-
-      final result = await localOrdersDao.markLocalOrderItemsServedByKitchen(
-        localId: localId,
-        detailIds: [detailId],
-      );
-
-      await load();
-
-      return {
-        'status': 'offline_success',
-        'offline': true,
-        'message': 'Status item berhasil diperbarui',
-        ...result,
-      };
+      throw Exception('Sinkronkan order terlebih dahulu');
     }
 
     if (isStockConflict) {
@@ -877,8 +622,7 @@ class ProcessProvider extends ChangeNotifier {
         detailIds: [detailId],
       );
 
-      await cachedPaymentOrdersDao.upsertDetailFromApi(updated);
-      await cachedProcessOrdersDao.saveDetailJson(id, jsonEncode(updated));
+      await bookingOrdersDao.upsertFromServer(updated);
       await load();
 
       return {
@@ -906,186 +650,60 @@ class ProcessProvider extends ChangeNotifier {
 
     _setActionLoading(actionKey, true);
     try {
-      if (isLocalOnly) {
-        final localId = (row['local_id'] ?? '').toString();
-        if (localId.isEmpty) {
+      if (id <= 0) {
+        final clientUuid =
+            (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+        if (clientUuid.isEmpty) {
           throw Exception('Local ID tidak valid');
         }
-
-        final localOrder = await localOrdersDao.getOrderByLocalId(localId);
-        final isOpenbill =
-            _toBool(row['openbill_flag']) ||
-            row['payment_method']?.toString() == 'OPENBILL' ||
-            (row['order_status'] ?? '').toString().startsWith('OPENBILL') ||
-            (localOrder?.paymentMethodSelected ?? '').toUpperCase() ==
-                'OPENBILL' ||
-            (localOrder?.paymentMethodEffective ?? '').toUpperCase() ==
-                'OPENBILL';
-
-        if (isOpenbill) {
-          await localOrdersDao.updateOrderStatusByLocalId(
-            localId: localId,
-            status: 'UNPAID',
-            syncStatus: isStockConflict ? 'STOCK_CONFLICT' : 'PENDING_FINISH',
-          );
-          await localOrdersDao.updateBackendSyncStage(localId, 'OPENBILL_SERVED');
-
-          items.removeWhere((e) => e['local_id'] == localId);
-          notifyListeners();
-
-          return {
-            'status': 'offline_success',
-            'offline': true,
-            'message': 'Order open bill selesai dan dipindahkan ke pembayaran',
-          };
-        }
-
-        await localOrdersDao.updateOrderStatusLocal(
-          localId: localId,
-          status: 'SERVED',
-          preserveStockConflict: isStockConflict,
-        );
-
-        final idx = items.indexWhere((e) => e['local_id'] == localId);
-        if (idx >= 0) {
-          items[idx] = {
-            ...items[idx],
-            'order_status': 'SERVED',
-            'is_synced': false,
-            'pending_action': 'LOCAL_ONLY',
-            'pending_sync': true,
-            'sync_status': isStockConflict ? 'STOCK_CONFLICT' : 'PENDING',
-          };
-          notifyListeners();
-        }
-
-        return {
-          'status': 'offline_success',
-          'offline': true,
-          'message': 'Order lokal ditandai selesai dan tetap pending sync',
-        };
-      }
-
-      final cached = await cachedProcessOrdersDao.findByServerId(id);
-      final forceOffline = isStockConflict;
-
-      if (connectivity.isOnline && !forceOffline) {
-        final res = await repo.finishOrder(id);
-
-        final nextStatus = OrderStageResolver.resolveAfterFinish(
-          order: row,
-          apiResponse: res,
-        );
-
-        await tabCoordinator.transitionOrderStage(
-          serverId: id,
+        final nextStatus = OrderStageResolver.resolveAfterFinish(order: row);
+        await tabCoordinator.transitionOrderStageByClientUuid(
+          clientUuid: clientUuid,
           orderStatus: nextStatus,
           syncIntent: 'FINISH',
-          syncDirty: false,
-          orderSnapshot: {
-            ...row,
-            'order_status': nextStatus,
-          },
         );
-
-        await cachedProcessOrdersDao.deleteByServerId(id);
-        if (nextStatus == 'SERVED') {
-          await localOrdersDao.deleteOrderByServerId(id);
-        }
-
-        items.removeWhere((e) => _toId(e['id']) == id);
-        notifyListeners();
-
-        return res;
-      } else {
-        final rawJson =
-            cached?.latestProcessJson ?? cached?.processRequestJson ?? '{}';
-
-        await cachedProcessOrdersDao.markFinishedOffline(
-          id,
-          rawJson,
-        );
-
-        final isOpenbill =
-            _toBool(row['openbill_flag']) ||
-            row['payment_method']?.toString() == 'OPENBILL' ||
-            (row['order_status'] ?? '').toString().startsWith('OPENBILL');
-
-        if (isOpenbill) {
-          Map<String, dynamic> detailMap = {};
-          if (cached?.detailJson != null && cached!.detailJson!.trim().isNotEmpty) {
-            try {
-              detailMap = Map<String, dynamic>.from(jsonDecode(cached.detailJson!));
-            } catch (_) {}
-          }
-          if (detailMap.isEmpty) {
-            try {
-              detailMap = Map<String, dynamic>.from(jsonDecode(rawJson));
-            } catch (_) {}
-          }
-
-          detailMap['id'] ??= id;
-          detailMap['booking_order_code'] ??= row['booking_order_code'];
-          detailMap['customer_name'] ??= row['customer_name'];
-          detailMap['table'] ??= row['table'] ?? {'table_no': row['table_no_snapshot'] ?? '-'};
-          detailMap['payment_method'] = 'OPENBILL';
-          detailMap['openbill_flag'] = true;
-          detailMap['order_status'] = 'UNPAID';
-          detailMap['total_order_value'] ??= row['total_order_value'] ?? 0;
-          detailMap['ppn'] ??= row['ppn'] ?? 0;
-          detailMap['is_ppn_active'] ??= row['is_ppn_active'] ?? 0;
-          detailMap['created_at'] ??= row['created_at'] ?? row['sort_time'] ?? row['cached_at'] ?? DateTime.now().toIso8601String();
-
-          await cachedPaymentOrdersDao.upsertDetailFromApi(detailMap);
-
-          await tabCoordinator.transitionOrderStage(
-            serverId: id,
-            orderStatus: 'UNPAID',
-            syncIntent: 'FINISH',
-            syncDirty: true,
-            orderSnapshot: detailMap,
-          );
-
-          items.removeWhere((e) => _toId(e['id']) == id);
-          notifyListeners();
-
-          return {
-            'status': 'offline_success',
-            'offline': true,
-            'message': 'Order open bill dipindahkan ke pembayaran',
-          };
-        } else {
-          await cachedDoneOrdersDao.upsertPendingFinishFromProcess(
-            serverId: id,
-            bookingOrderCode: (row['booking_order_code'] ?? '').toString(),
-            customerName: (row['customer_name'] ?? '').toString(),
-            tableNo: row['table'] is Map
-                ? row['table']['table_no']?.toString()
-                : row['table_no_snapshot']?.toString(),
-            paymentMethod: row['payment_method']?.toString(),
-            subtotal: _toDouble(row['total_order_value']),
-            ppnPercent: _toDouble(row['ppn']),
-            isPpnActive: _toBool(row['is_ppn_active']),
-            rawJson: rawJson,
-          );
-        }
-
-        await tabCoordinator.transitionOrderStage(
-          serverId: id,
-          orderStatus: 'SERVED',
-          syncIntent: 'FINISH',
-          syncDirty: true,
-          orderSnapshot: row,
-        );
-
-        _setStatusLocal(id, 'SERVED');
-
+        await load();
         return {
           'status': 'offline_success',
           'offline': true,
           'message': 'Order ditandai selesai dan menunggu sinkronisasi',
         };
       }
+
+      final forceOffline = isStockConflict;
+
+      if (connectivity.isOnline && !forceOffline) {
+        final res = await repo.finishOrder(id);
+        final nextStatus = OrderStageResolver.resolveAfterFinish(
+          order: row,
+          apiResponse: res,
+        );
+        await tabCoordinator.transitionOrderStage(
+          serverId: id,
+          orderStatus: nextStatus,
+          syncIntent: 'FINISH',
+          syncDirty: false,
+          orderSnapshot: {...row, 'order_status': nextStatus},
+        );
+        items.removeWhere((e) => _toId(e['id']) == id);
+        notifyListeners();
+        return res;
+      }
+
+      final nextStatus = OrderStageResolver.resolveAfterFinish(order: row);
+      await tabCoordinator.transitionOrderStage(
+        serverId: id,
+        orderStatus: nextStatus,
+        syncIntent: 'FINISH',
+        syncDirty: true,
+        orderSnapshot: {...row, 'order_status': nextStatus},
+      );
+      _setStatusLocal(id, nextStatus);
+      return {
+        'status': 'offline_success',
+        'offline': true,
+        'message': 'Order ditandai selesai dan menunggu sinkronisasi',
+      };
     } finally {
       _setActionLoading(actionKey, false);
     }
@@ -1119,7 +737,7 @@ class ProcessProvider extends ChangeNotifier {
     required int serverId,
     required List<int> detailIds,
   }) async {
-    final detail = await _getCachedProcessDetailMap(serverId);
+    final detail = await _getMirrorDetailMap(serverId);
     if (detail == null) {
       throw Exception('Detail order tidak tersedia di cache offline');
     }
@@ -1157,10 +775,12 @@ class ProcessProvider extends ChangeNotifier {
     detail['order_details'] = details;
     detail['order_status'] = nextStatus;
 
-    await cachedProcessOrdersDao.markServeItemsOffline(
+    await tabCoordinator.transitionOrderStage(
       serverId: serverId,
-      detailJson: jsonEncode(detail),
       orderStatus: nextStatus,
+      syncIntent: allServed ? 'FINISH' : 'PROCESS',
+      syncDirty: true,
+      orderSnapshot: detail,
     );
 
     return {
@@ -1174,7 +794,7 @@ class ProcessProvider extends ChangeNotifier {
     required int serverId,
     required List<int> detailIds,
   }) async {
-    final detail = await _getCachedProcessDetailMap(serverId);
+    final detail = await _getMirrorDetailMap(serverId);
     if (detail == null) {
       throw Exception('Detail order tidak tersedia di cache offline');
     }
@@ -1214,11 +834,12 @@ class ProcessProvider extends ChangeNotifier {
     detail['order_details'] = details;
     detail['order_status'] = nextStatus;
 
-    await cachedProcessOrdersDao.markServeItemsOffline(
+    await tabCoordinator.transitionOrderStage(
       serverId: serverId,
-      detailJson: jsonEncode(detail),
       orderStatus: nextStatus,
-      pendingAction: 'MARK_KITCHEN_SERVED',
+      syncIntent: allServed ? 'FINISH' : 'PROCESS',
+      syncDirty: true,
+      orderSnapshot: detail,
     );
 
     return {
@@ -1232,63 +853,25 @@ class ProcessProvider extends ChangeNotifier {
     int serverId,
     Map<String, dynamic> row,
   ) async {
-    final cached = await cachedProcessOrdersDao.findByServerId(serverId);
-    Map<String, dynamic> detailMap = {};
-
-    if (cached?.detailJson != null && cached!.detailJson!.trim().isNotEmpty) {
-      try {
-        detailMap = Map<String, dynamic>.from(jsonDecode(cached.detailJson!));
-      } catch (_) {}
-    }
-
-    if (detailMap.isEmpty) {
-      final fallback = await _getCachedProcessDetailMap(serverId);
-      if (fallback != null) detailMap = fallback;
-    }
-
-    detailMap['id'] ??= serverId;
-    detailMap['booking_order_code'] ??= row['booking_order_code'];
-    detailMap['customer_name'] ??= row['customer_name'];
-    detailMap['table'] ??=
-        row['table'] ?? {'table_no': row['table_no_snapshot'] ?? '-'};
-    detailMap['payment_method'] = 'OPENBILL';
-    detailMap['openbill_flag'] = true;
-    detailMap['order_status'] = 'UNPAID';
-    detailMap['total_order_value'] ??= row['total_order_value'] ?? 0;
-    detailMap['ppn'] ??= row['ppn'] ?? 0;
-    detailMap['is_ppn_active'] ??= row['is_ppn_active'] ?? 0;
-    detailMap['created_at'] ??=
-        row['created_at'] ??
-        row['sort_time'] ??
-        row['cached_at'] ??
-        DateTime.now().toIso8601String();
-
-    await cachedPaymentOrdersDao.upsertDetailFromApi(detailMap);
+    await tabCoordinator.transitionOrderStage(
+      serverId: serverId,
+      orderStatus: 'UNPAID',
+      syncIntent: 'FINISH',
+      syncDirty: true,
+      orderSnapshot: row,
+    );
   }
 
   Future<void> _stageServedOrderForDoneCache(
     int serverId,
     Map<String, dynamic> row,
   ) async {
-    final cached = await cachedProcessOrdersDao.findByServerId(serverId);
-    final rawJson =
-        cached?.detailJson ??
-        cached?.latestProcessJson ??
-        cached?.processRequestJson ??
-        '{}';
-
-    await cachedDoneOrdersDao.upsertPendingFinishFromProcess(
+    await tabCoordinator.transitionOrderStage(
       serverId: serverId,
-      bookingOrderCode: (row['booking_order_code'] ?? '').toString(),
-      customerName: (row['customer_name'] ?? '').toString(),
-      tableNo: row['table'] is Map
-          ? row['table']['table_no']?.toString()
-          : row['table_no_snapshot']?.toString(),
-      paymentMethod: row['payment_method']?.toString(),
-      subtotal: _toDouble(row['total_order_value']),
-      ppnPercent: _toDouble(row['ppn']),
-      isPpnActive: _toBool(row['is_ppn_active']),
-      rawJson: rawJson,
+      orderStatus: 'SERVED',
+      syncIntent: 'FINISH',
+      syncDirty: true,
+      orderSnapshot: row,
     );
   }
 }

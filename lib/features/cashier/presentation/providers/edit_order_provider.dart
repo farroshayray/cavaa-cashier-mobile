@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
-import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
-import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/data/models/checkout_exceptions.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/features/cashier/data/models/purchase_models.dart';
@@ -43,15 +42,13 @@ class EditableCartItem {
 class EditOrderProvider extends ChangeNotifier {
   EditOrderProvider({
     required this.ordersRepo,
-    required this.localOrdersDao,
-    required this.cachedPaymentOrdersDao,
-    required this.cachedProcessOrdersDao,
+    required this.bookingOrdersDao,
+    required this.tabCoordinator,
   });
 
   final OrdersRepository ordersRepo;
-  final LocalOrdersDao localOrdersDao;
-  final CachedPaymentOrdersDao cachedPaymentOrdersDao;
-  final CachedProcessOrdersDao cachedProcessOrdersDao;
+  final BookingOrdersDao bookingOrdersDao;
+  final OrderTabCoordinator tabCoordinator;
   final Uuid _uuid = const Uuid();
 
   bool isLoading = false;
@@ -323,23 +320,11 @@ class EditOrderProvider extends ChangeNotifier {
           items: payload,
         );
 
-        if (localId != null && localId!.isNotEmpty) {
-          await localOrdersDao.replaceLocalOrderItemsFromEdit(
-            localId: localId!,
-            lines: lines,
-            subtotal: subtotalValue,
-            grandTotal: grandTotalValue,
-            orderSnapshotJson: snapshotJson,
-            syncStatus: 'SYNCED',
-          );
-        }
+        await bookingOrdersDao.upsertFromServer(updated);
 
         if (allItemsServed) {
           return _transitionOrderAfterAllServed(updated, isOnline: isOnline);
         }
-
-        await cachedPaymentOrdersDao.upsertDetailFromApi(updated);
-        await cachedProcessOrdersDao.saveDetailJson(serverId!, jsonEncode(updated));
 
         if (sendToProcess) {
           return _sendOrderToProcess(
@@ -351,30 +336,22 @@ class EditOrderProvider extends ChangeNotifier {
         return updated;
       }
 
-      final effectiveLocalId = await _resolveLocalIdForOfflineSave(
+      final effectiveClientUuid = await _resolveClientUuidForOfflineSave(
         snapshotJson: snapshotJson,
         subtotalValue: subtotalValue,
         grandTotalValue: grandTotalValue,
       );
 
-      await localOrdersDao.replaceLocalOrderItemsFromEdit(
-        localId: effectiveLocalId,
+      await bookingOrdersDao.replaceDetailsFromEdit(
+        clientUuid: effectiveClientUuid,
         lines: lines,
         subtotal: subtotalValue,
         grandTotal: grandTotalValue,
-        orderSnapshotJson: snapshotJson,
-        syncStatus: serverId != null && serverId! > 0 ? 'PENDING_UPDATE' : 'PENDING',
-        tableServerId: tableServerId,
-        customerName: customerName,
+        syncIntent: serverId != null && serverId! > 0 ? 'UPDATE' : 'CREATE',
       );
 
       if (allItemsServed) {
         return _transitionOrderAfterAllServed(snapshot, isOnline: isOnline);
-      }
-
-      if (serverId != null && serverId! > 0) {
-        await cachedPaymentOrdersDao.upsertDetailFromApi(snapshot);
-        await cachedProcessOrdersDao.saveDetailJson(serverId!, snapshotJson);
       }
 
       if (sendToProcess) {
@@ -398,7 +375,7 @@ class EditOrderProvider extends ChangeNotifier {
     }
   }
 
-  Future<String> _resolveLocalIdForOfflineSave({
+  Future<String> _resolveClientUuidForOfflineSave({
     required String snapshotJson,
     required double subtotalValue,
     required double grandTotalValue,
@@ -406,7 +383,7 @@ class EditOrderProvider extends ChangeNotifier {
     if (localId != null && localId!.isNotEmpty) return localId!;
 
     if (serverId != null && serverId! > 0) {
-      await localOrdersDao.ensureShadowEditOrder(
+      final uuid = await bookingOrdersDao.ensureEditMirror(
         serverId: serverId!,
         bookingOrderCode: (jsonDecode(snapshotJson) as Map)['booking_order_code']
                 ?.toString() ??
@@ -414,19 +391,18 @@ class EditOrderProvider extends ChangeNotifier {
         customerName: customerName,
         tableServerId: tableServerId,
         tableNoSnapshot: tableNoSnapshot,
-        orderStatusLocal: orderStatus,
+        orderStatus: orderStatus,
         paymentMethodEffective: paymentMethodEffective,
         subtotal: subtotalValue,
         grandTotal: grandTotalValue,
         isPpnActive: isPpnActive,
-        ppnPercent: ppnPercent.toDouble(),
-        orderSnapshotJson: snapshotJson,
+        ppn: ppnPercent.toDouble(),
       );
-      localId = 'shadow_edit_$serverId';
-      return localId!;
+      localId = uuid;
+      return uuid;
     }
 
-    throw Exception('Order lokal tidak ditemukan');
+    throw Exception('Order mirror tidak ditemukan');
   }
 
   Future<Map<String, dynamic>> _buildSnapshotMap() async {
@@ -482,36 +458,34 @@ class EditOrderProvider extends ChangeNotifier {
     };
   }
 
-  List<LocalOrderEditLine> _buildLocalLines() {
+  List<Map<String, dynamic>> _buildLocalLines() {
     return items.map((item) {
-      final optionLines = <LocalOrderEditOptionLine>[];
+      final optionLines = <Map<String, dynamic>>[];
       for (final group in item.product.optionGroups) {
         final selectedIds = item.selected[group.id] ?? {};
         for (final opt in group.items.where((o) => selectedIds.contains(o.id))) {
-          optionLines.add(
-            LocalOrderEditOptionLine(
-              localId: _uuid.v4(),
-              optionServerId: opt.id,
-              optionNameSnapshot: opt.name,
-              price: opt.price.toDouble(),
-              parentNameSnapshot: group.name,
-            ),
-          );
+          optionLines.add({
+            'option_server_id': opt.id,
+            'option_name_snapshot': opt.name,
+            'parent_name_snapshot': group.name,
+            'price': opt.price.toDouble(),
+          });
         }
       }
 
-      return LocalOrderEditLine(
-        serverOrderDetailId: item.detailId,
-        productServerId: item.product.id,
-        productNameSnapshot: item.product.name,
-        basePrice: item.product.price.toDouble(),
-        qty: item.qty,
-        customerNote: item.note,
-        optionsPrice: (item.unitFinalPrice - item.product.price).toDouble(),
-        lineTotal: item.lineTotal.toDouble(),
-        promoId: item.product.promotion?.id,
-        options: optionLines,
-      );
+      return {
+        if (item.detailId != null) 'server_order_detail_id': item.detailId,
+        'product_server_id': item.product.id,
+        'product_name_snapshot': item.product.name,
+        'base_price': item.product.price.toDouble(),
+        'qty': item.qty,
+        'customer_note': item.note,
+        'options_price': (item.unitFinalPrice - item.product.price).toDouble(),
+        'promo_id': item.product.promotion?.id,
+        if (item.detailStatusSnapshot != null)
+          'detail_status': item.detailStatusSnapshot,
+        'options': optionLines,
+      };
     }).toList();
   }
 
@@ -632,39 +606,19 @@ class EditOrderProvider extends ChangeNotifier {
     orderStatus = status;
 
     if (serverId != null && serverId! > 0) {
-      await cachedProcessOrdersDao.deleteByServerId(serverId!);
-
-      if (status == 'UNPAID' ||
-          status == 'EXPIRED' ||
-          status == 'PAYMENT REQUEST') {
-        await cachedPaymentOrdersDao.upsertDetailFromApi(normalized);
-      }
-
-      await localOrdersDao.updateOrderStatusByServerId(
+      await tabCoordinator.transitionOrderStage(
         serverId: serverId!,
-        status: status,
+        orderStatus: status,
+        syncIntent: isOnline ? null : 'UPDATE',
+        syncDirty: !isOnline,
+        orderSnapshot: normalized,
       );
-    }
-
-    final effectiveLocalId = localId;
-    if (effectiveLocalId != null && effectiveLocalId.isNotEmpty) {
-      if (openbill && status == 'UNPAID') {
-        final current = await localOrdersDao.getOrderByLocalId(effectiveLocalId);
-        final nextSync = !isOnline && current?.syncStatus == 'PENDING_UPDATE'
-            ? 'PENDING_UPDATE'
-            : (isOnline ? 'SYNCED' : 'PENDING_FINISH');
-
-        await localOrdersDao.updateOrderStatusByLocalId(
-          localId: effectiveLocalId,
-          status: status,
-          syncStatus: nextSync,
-        );
-      } else {
-        await localOrdersDao.updateOrderStatusLocal(
-          localId: effectiveLocalId,
-          status: status,
-        );
-      }
+    } else if (localId != null && localId!.isNotEmpty) {
+      await tabCoordinator.transitionOrderStageByClientUuid(
+        clientUuid: localId!,
+        orderStatus: status,
+        syncIntent: isOnline ? 'UPDATE' : 'FINISH',
+      );
     }
 
     return normalized;
@@ -683,33 +637,22 @@ class EditOrderProvider extends ChangeNotifier {
           serverId!,
           sendToKitchenWaiting: true,
         );
-        final processedJson = jsonEncode(processed);
-
-        await cachedPaymentOrdersDao.upsertDetailFromApi(processed);
-        await cachedProcessOrdersDao.markProcessedOnline(
-          serverId!,
-          latestJson: processedJson,
-          orderStatus: targetStatus,
-        );
-        await cachedProcessOrdersDao.saveDetailJson(serverId!, processedJson);
-        await localOrdersDao.updateOrderStatusByServerId(
+        await bookingOrdersDao.upsertFromServer(processed);
+        await tabCoordinator.transitionOrderStage(
           serverId: serverId!,
-          status: targetStatus,
+          orderStatus: targetStatus,
+          syncDirty: false,
+          orderSnapshot: processed,
         );
-
         return processed;
       }
 
-      final json = snapshotJson ?? jsonEncode(currentSnapshot);
-      await cachedProcessOrdersDao.markProcessedOffline(
-        serverId!,
-        json,
-        orderStatus: targetStatus,
-      );
-      await cachedProcessOrdersDao.saveDetailJson(serverId!, json);
-      await localOrdersDao.updateOrderStatusByServerId(
+      await tabCoordinator.transitionOrderStage(
         serverId: serverId!,
-        status: targetStatus,
+        orderStatus: targetStatus,
+        syncIntent: 'CONFIRM_OPENBILL',
+        syncDirty: true,
+        orderSnapshot: currentSnapshot,
       );
 
       return {
@@ -720,16 +663,18 @@ class EditOrderProvider extends ChangeNotifier {
     }
 
     if (localId != null && localId!.isNotEmpty) {
-      await localOrdersDao.updateOrderStatusLocal(
-        localId: localId!,
-        status: targetStatus,
+      await tabCoordinator.transitionOrderStageByClientUuid(
+        clientUuid: localId!,
+        orderStatus: targetStatus,
+        syncIntent: 'CONFIRM_OPENBILL',
       );
+
       return {
         ...currentSnapshot,
         'order_status': targetStatus,
+        'pending_process': true,
       };
     }
-
     return currentSnapshot;
   }
 

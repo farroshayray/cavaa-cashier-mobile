@@ -11,24 +11,13 @@ import 'tables/cached_option_items_table.dart';
 import 'tables/cached_tables_table.dart';
 import 'tables/cached_payment_methods_table.dart';
 import 'tables/cached_partner_settings_table.dart';
-import 'tables/cached_payment_orders_table.dart';
-import 'tables/cached_payment_order_items_table.dart';
-import 'tables/cached_payment_order_item_options_table.dart';
-import 'tables/local_orders_table.dart';
-import 'tables/local_order_items_table.dart';
-import 'tables/local_order_item_options_table.dart';
-import 'tables/local_payments_table.dart';
-import 'tables/sync_queue_table.dart';
-import 'tables/cached_process_orders_table.dart';
-import 'tables/cached_done_orders_table.dart';
 import 'tables/booking_orders_table.dart';
 import 'tables/order_details_table.dart';
 import 'tables/order_detail_options_table.dart';
 import 'tables/order_payments_table.dart';
 import 'tables/sync_conflicts_table.dart';
 import 'tables/sync_meta_table.dart';
-import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
-import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
+import '/features/cashier/data/sync/legacy_session_migrator.dart';
 
 part 'cashier_db.g.dart';
 
@@ -49,16 +38,6 @@ LazyDatabase _openConnection() {
     CachedTables,
     CachedPaymentMethods,
     CachedPartnerSettings,
-    LocalOrders,
-    LocalOrderItems,
-    LocalOrderItemOptions,
-    LocalPayments,
-    SyncQueue,
-    CachedPaymentOrders,
-    CachedProcessOrders,
-    CachedPaymentOrderItems,
-    CachedPaymentOrderItemOptions,
-    CachedDoneOrders,
     BookingOrders,
     OrderDetails,
     OrderDetailOptions,
@@ -66,16 +45,12 @@ LazyDatabase _openConnection() {
     SyncConflicts,
     SyncMeta,
   ],
-  daos: [
-    CachedProcessOrdersDao,
-    CachedDoneOrdersDao,
-  ],
 )
 class CashierDb extends _$CashierDb {
   CashierDb() : super(_openConnection());
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -84,8 +59,12 @@ class CashierDb extends _$CashierDb {
         },
         onUpgrade: (m, from, to) async {
           if (from < 12) {
-            await m.addColumn(localOrders, localOrders.cashRoundingAmount);
-            await m.addColumn(localOrders, localOrders.cashRoundingUnit);
+            await m.database.customStatement(
+              'ALTER TABLE local_orders ADD COLUMN cash_rounding_amount REAL',
+            );
+            await m.database.customStatement(
+              'ALTER TABLE local_orders ADD COLUMN cash_rounding_unit INTEGER',
+            );
           }
           if (from < 13) {
             await m.createTable(cachedPartnerSettings);
@@ -97,6 +76,10 @@ class CashierDb extends _$CashierDb {
             await m.createTable(orderPayments);
             await m.createTable(syncConflicts);
             await m.createTable(syncMeta);
+          }
+          if (from < 15) {
+            await LegacySessionMigrator.migrateBeforeDrop(m.database);
+            await LegacySessionMigrator.dropLegacyTables(m.database);
           }
         },
       );
