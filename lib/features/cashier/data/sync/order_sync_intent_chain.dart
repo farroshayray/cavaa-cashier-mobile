@@ -27,7 +27,10 @@ class OrderSyncIntentChain {
         }
         return null;
       case 'PAY':
-        if (intent == 'FINISH' || status == 'SERVED') {
+        if (status == 'SERVED') {
+          return 'PROCESS';
+        }
+        if (intent == 'FINISH') {
           return 'FINISH';
         }
         if (intent == 'PROCESS' || status == 'PROCESSED') {

@@ -91,6 +91,38 @@ void main() {
       );
     });
 
+    test('PAY allowed for offline catch-up when local is PROCESSED', () {
+      expect(
+        OrderStageSyncGuard.validateIntent(
+          currentStatus: 'PROCESSED',
+          syncIntent: 'PAY',
+          offlineCatchUp: true,
+        ),
+        isNull,
+      );
+    });
+
+    test('PAY allowed for offline catch-up when local is SERVED', () {
+      expect(
+        OrderStageSyncGuard.validateIntent(
+          currentStatus: 'SERVED',
+          syncIntent: 'PAY',
+          offlineCatchUp: true,
+        ),
+        isNull,
+      );
+    });
+
+    test('PAY rejected for SERVED without offline catch-up', () {
+      expect(
+        OrderStageSyncGuard.validateIntent(
+          currentStatus: 'SERVED',
+          syncIntent: 'PAY',
+        ),
+        isNotNull,
+      );
+    });
+
     test('FINISH allowed for offline catch-up when local is SERVED', () {
       expect(
         OrderStageSyncGuard.validateIntent(
@@ -313,12 +345,23 @@ void main() {
       );
     });
 
-    test('PAY on SERVED leads to FINISH', () {
+    test('PAY on SERVED leads to PROCESS', () {
       expect(
         OrderSyncIntentChain.resolveNext(
           localStatus: 'SERVED',
           storedIntent: 'FINISH',
           appliedIntent: 'PAY',
+        ),
+        'PROCESS',
+      );
+    });
+
+    test('PROCESS on SERVED leads to FINISH', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'SERVED',
+          storedIntent: 'FINISH',
+          appliedIntent: 'PROCESS',
         ),
         'FINISH',
       );

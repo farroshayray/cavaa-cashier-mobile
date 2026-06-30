@@ -20,7 +20,7 @@ class OrderStageSyncGuard {
         }
         return null;
       case 'PAY':
-        if (catchUp && status == 'PAID') {
+        if (catchUp && {'PAID', 'PROCESSED', 'SERVED'}.contains(status)) {
           return null;
         }
         if (!{'UNPAID', 'EXPIRED', 'PAYMENT REQUEST'}.contains(status)) {
