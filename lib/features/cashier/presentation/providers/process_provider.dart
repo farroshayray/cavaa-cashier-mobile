@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '/features/auth/presentation/auth_provider.dart';
 import '../../data/models/orders_repository.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
@@ -34,13 +35,15 @@ class ProcessProvider extends ChangeNotifier {
   final ConnectivityStatusProvider connectivity;
   final BookingOrdersDao bookingOrdersDao;
   final OrderTabCoordinator tabCoordinator;
+  final AuthProvider auth;
   final SyncService? syncService;
 
   ProcessProvider(
     this.repo,
     this.connectivity,
     this.bookingOrdersDao,
-    this.tabCoordinator, {
+    this.tabCoordinator,
+    this.auth, {
     this.syncService,
   });
 
@@ -255,6 +258,7 @@ class ProcessProvider extends ChangeNotifier {
     final updatedCount = await bookingOrdersDao.markOrderDetailsServedLocally(
       detailClientUuids: clientDetailUuids,
       detailServerIds: serverDetailIds,
+      cashierProcessId: auth.user?.id,
     );
     if (updatedCount == 0) {
       throw Exception('Item yang dipilih tidak ditemukan');

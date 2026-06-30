@@ -209,6 +209,7 @@ class _CavaaAppState extends State<CavaaApp> {
             ctx.read<ConnectivityStatusProvider>(),
             bookingOrdersDao,
             ctx.read<OrderTabCoordinator>(),
+            ctx.read<AuthProvider>(),
             syncService: syncService,
           ),
         ),

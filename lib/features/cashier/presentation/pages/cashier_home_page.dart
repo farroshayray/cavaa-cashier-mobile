@@ -103,6 +103,7 @@ class _CashierHomePageState extends State<CashierHomePage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _setupConnectivitySyncHook();
+      _setupSyncCallbacks();
       _bootstrapAfterLogin();
       _syncWorker = SyncWorker(
         syncService: context.read<SyncService>(),
@@ -177,6 +178,16 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (_bootstrapSyncHandled) return;
       await _syncAndReloadAllOrderTabs();
     };
+  }
+
+  void _setupSyncCallbacks() {
+    context.read<SyncService>().configureSyncCallbacks(
+      onSyncCompleted: (_) async {
+        if (!mounted) return;
+        await _reloadAllOrderTabsSequentially();
+      },
+      resolveCashierProcessId: () => context.read<AuthProvider>().user?.id,
+    );
   }
 
   Future<void> _waitForConnectivityReady({
@@ -334,6 +345,10 @@ class _CashierHomePageState extends State<CashierHomePage>
     try {
       context.read<ConnectivityStatusProvider>().onBackOnline = null;
       context.read<ConnectivityStatusProvider>().onInitialOnline = null;
+      context.read<SyncService>().configureSyncCallbacks(
+        onSyncCompleted: null,
+        resolveCashierProcessId: null,
+      );
     } catch (_) {}
 
     _focusTimer?.cancel();

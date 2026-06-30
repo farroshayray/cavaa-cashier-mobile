@@ -268,6 +268,24 @@ void main() {
         isTrue,
       );
     });
+
+    test('isTerminalStatus recognizes served lifecycle end states', () {
+      expect(OrderStageRank.isTerminalStatus('SERVED'), isTrue);
+      expect(OrderStageRank.isTerminalStatus('DONE'), isTrue);
+      expect(OrderStageRank.isTerminalStatus('PAID'), isFalse);
+      expect(OrderStageRank.isTerminalStatus('UNPAID'), isFalse);
+    });
+
+    test('SERVED local equals server is not ahead but is terminal', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'SERVED',
+          serverStatus: 'SERVED',
+        ),
+        isFalse,
+      );
+      expect(OrderStageRank.isTerminalStatus('SERVED'), isTrue);
+    });
   });
 
   group('OrderSyncIntentChain — after CREATE', () {

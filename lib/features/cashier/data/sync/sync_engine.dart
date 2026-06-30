@@ -20,6 +20,9 @@ class SyncEngine {
   final CashierDb db;
   final MasterCacheService masterCacheService;
 
+  /// Resolves logged-in cashier id for offline detail push fallback.
+  int? Function()? resolveCashierProcessId;
+
   bool _isRunning = false;
   bool get isRunning => _isRunning;
 
@@ -212,28 +215,20 @@ class SyncEngine {
       for (final detail in dirtyDetails) {
         if (skipDetailPush) continue;
 
+        final detailPayload = _buildDetailPushPayload(
+          detail: detail,
+          order: order,
+        );
+
         if (detail.serverId != null) {
-          orderDetailsPayload.add({
-            'id': detail.serverId,
-            'client_detail_uuid': detail.clientDetailUuid,
-            'sync_version': detail.syncVersion,
-            'status': detail.status,
-            'cashier_process_id': detail.cashierProcessId,
-            'kitchen_process_id': detail.kitchenProcessId,
-            'quantity': detail.quantity,
-          });
+          orderDetailsPayload.add(detailPayload);
           continue;
         }
 
         if (order.serverId != null) {
           orderDetailsPayload.add({
-            'client_detail_uuid': detail.clientDetailUuid,
+            ...detailPayload,
             'booking_order_id': order.serverId,
-            'sync_version': detail.syncVersion,
-            'status': detail.status,
-            'cashier_process_id': detail.cashierProcessId,
-            'kitchen_process_id': detail.kitchenProcessId,
-            'quantity': detail.quantity,
             'product_id': detail.partnerProductId,
           });
         }
@@ -438,6 +433,33 @@ class SyncEngine {
     final method = (order.paymentMethod ?? '').trim();
     if (method.isEmpty) return 'CASH';
     return method;
+  }
+
+  Map<String, dynamic> _buildDetailPushPayload({
+    required OrderDetail detail,
+    required BookingOrder order,
+  }) {
+    final status = (detail.status ?? '').trim().toUpperCase();
+    var cashierProcessId = detail.cashierProcessId;
+
+    if ((cashierProcessId == null || cashierProcessId <= 0) &&
+        status == 'SERVED BY CASHIER') {
+      final fallback = order.cashierProcessId ?? resolveCashierProcessId?.call();
+      if (fallback != null && fallback > 0) {
+        cashierProcessId = fallback;
+      }
+    }
+
+    return {
+      if (detail.serverId != null) 'id': detail.serverId,
+      'client_detail_uuid': detail.clientDetailUuid,
+      'sync_version': detail.syncVersion,
+      'status': detail.status,
+      if (cashierProcessId != null && cashierProcessId > 0)
+        'cashier_process_id': cashierProcessId,
+      'kitchen_process_id': detail.kitchenProcessId,
+      'quantity': detail.quantity,
+    };
   }
 
   String _safeJson(Object? value) {

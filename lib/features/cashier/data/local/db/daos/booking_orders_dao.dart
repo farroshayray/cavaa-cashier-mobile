@@ -375,15 +375,19 @@ class BookingOrdersDao {
     final now = DateTime.now();
     final serverStatus = row['order_status']?.toString() ?? 'UNPAID';
 
-    final preserveLocalLifecycle = existing != null &&
-        (existing.syncDirty ||
-            OrderStageRank.isLocalAheadOfServer(
-              localStatus: existing.orderStatus,
-              serverStatus: serverStatus,
-              openbillFlag: existing.openbillFlag,
-              syncIntent: existing.syncIntent,
-              paidAmountLocal: existing.paidAmountLocal,
-            ));
+    final localAhead = existing != null &&
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: existing.orderStatus,
+          serverStatus: serverStatus,
+          openbillFlag: existing.openbillFlag,
+          syncIntent: existing.syncIntent,
+          paidAmountLocal: existing.paidAmountLocal,
+        );
+    final terminalMatch = existing != null &&
+        existing.orderStatus.toUpperCase() == serverStatus.toUpperCase() &&
+        OrderStageRank.isTerminalStatus(serverStatus);
+    final preserveLocalLifecycle = localAhead ||
+        (existing != null && existing.syncDirty && !terminalMatch);
 
     final companion = BookingOrdersCompanion(
       clientUuid: Value(clientUuid),
@@ -425,12 +429,16 @@ class BookingOrdersDao {
       latestPaymentJson:
           Value(row['latest_payment'] != null ? jsonEncode(row['latest_payment']) : null),
       syncVersion: Value(_toInt(row['sync_version'])),
-      syncDirty: preserveLocalLifecycle
-          ? Value(existing!.syncDirty)
-          : const Value(false),
-      syncIntent: preserveLocalLifecycle
-          ? Value(existing!.syncIntent)
-          : const Value(null),
+      syncDirty: terminalMatch
+          ? const Value(false)
+          : (preserveLocalLifecycle
+              ? Value(existing!.syncDirty)
+              : const Value(false)),
+      syncIntent: terminalMatch
+          ? const Value(null)
+          : (preserveLocalLifecycle
+              ? Value(existing!.syncIntent)
+              : const Value(null)),
       syncError: preserveLocalLifecycle && existing!.syncError != null
           ? Value(existing.syncError)
           : const Value(null),
@@ -536,6 +544,7 @@ class BookingOrdersDao {
   Future<int> markOrderDetailsServedLocally({
     List<String> detailClientUuids = const [],
     List<int> detailServerIds = const [],
+    int? cashierProcessId,
   }) async {
     final now = DateTime.now();
     var updatedCount = 0;
@@ -548,6 +557,9 @@ class BookingOrdersDao {
           .write(
         OrderDetailsCompanion(
           status: const Value('SERVED BY CASHIER'),
+          cashierProcessId: cashierProcessId != null
+              ? Value(cashierProcessId)
+              : const Value.absent(),
           syncDirty: const Value(true),
           updatedAt: Value(now),
         ),
@@ -561,6 +573,9 @@ class BookingOrdersDao {
           .write(
         OrderDetailsCompanion(
           status: const Value('SERVED BY CASHIER'),
+          cashierProcessId: cashierProcessId != null
+              ? Value(cashierProcessId)
+              : const Value.absent(),
           syncDirty: const Value(true),
           updatedAt: Value(now),
         ),
@@ -663,6 +678,7 @@ class BookingOrdersDao {
                 : const Value.absent(),
             syncDirty: const Value(false),
             syncError: const Value(null),
+            syncIntent: const Value(null),
             syncedAt: Value(DateTime.now()),
           ),
         );

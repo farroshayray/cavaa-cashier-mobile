@@ -67,6 +67,10 @@ class OrderStageRank {
     return localRank > serverRank;
   }
 
+  static bool isTerminalStatus(String status) {
+    return {'SERVED', 'DONE', 'FINISHED'}.contains(status.trim().toUpperCase());
+  }
+
   static bool _intentIs(String? intent, String expected) =>
       (intent ?? '').trim().toUpperCase() == expected;
 }

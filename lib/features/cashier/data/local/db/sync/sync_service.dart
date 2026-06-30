@@ -20,12 +20,23 @@ class SyncService {
   final BookingOrdersDao _bookingOrdersDao;
   final SyncEngine _engine;
 
+  /// Called after a sync run completes (not when skipped).
+  Future<void> Function(SyncResult result)? onSyncCompleted;
+
   bool get isRunning => _engine.isRunning;
 
   Future<void> ensureDeviceId() => _bookingOrdersDao.ensureDeviceId();
 
   Future<int> countUnresolvedConflicts() =>
       _bookingOrdersDao.countUnresolvedConflicts();
+
+  void configureSyncCallbacks({
+    Future<void> Function(SyncResult result)? onSyncCompleted,
+    int? Function()? resolveCashierProcessId,
+  }) {
+    this.onSyncCompleted = onSyncCompleted;
+    _engine.resolveCashierProcessId = resolveCashierProcessId;
+  }
 
   Future<bool> hasPendingData() async {
     final mirrorDirty = await _engine.hasPendingData();
@@ -47,6 +58,14 @@ class SyncService {
       'success=${result.success} applied=${result.appliedCount} '
       'conflicts=${result.conflictCount} errors=${result.errorCount}',
     );
+
+    if (result.message != 'skipped') {
+      try {
+        await onSyncCompleted?.call(result);
+      } catch (e) {
+        ApiDebugLog.syncError('onSyncCompleted failed', e.toString());
+      }
+    }
 
     return result;
   }
