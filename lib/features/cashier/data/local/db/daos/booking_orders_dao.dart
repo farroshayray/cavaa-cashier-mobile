@@ -160,8 +160,60 @@ class BookingOrdersDao {
     Map<String, dynamic> order, {
     required int serverId,
   }) async {
-    final existing = await getByServerId(serverId);
+    if (serverId <= 0) {
+      final localUuid = order['local_client_uuid']?.toString().trim();
+      if (localUuid != null && localUuid.isNotEmpty) {
+        final existing = await getByClientUuid(localUuid);
+        if (existing != null) return;
+      }
+      return;
+    }
+
+    var existing = await getByServerId(serverId);
     if (existing != null) return;
+
+    final localUuid = order['local_client_uuid']?.toString().trim();
+    if (localUuid != null && localUuid.isNotEmpty) {
+      existing = await getByClientUuid(localUuid);
+      if (existing != null) {
+        if (existing.serverId == null) {
+          await (db.update(db.bookingOrders)
+                ..where((t) => t.clientUuid.equals(localUuid)))
+              .write(
+            BookingOrdersCompanion(
+              serverId: Value(serverId),
+              updatedAt: Value(DateTime.now()),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    final code = order['booking_order_code']?.toString().trim();
+    if (code != null && code.isNotEmpty) {
+      final byCode = await (db.select(db.bookingOrders)
+            ..where((t) => t.bookingOrderCode.equals(code))
+            ..where((t) => t.deletedAt.isNull()))
+          .get();
+      if (byCode.isNotEmpty) {
+        final keeper = byCode.firstWhere(
+          (row) => row.clientUuid == localUuid,
+          orElse: () => byCode.first,
+        );
+        if (keeper.serverId == null) {
+          await (db.update(db.bookingOrders)
+                ..where((t) => t.clientUuid.equals(keeper.clientUuid)))
+              .write(
+            BookingOrdersCompanion(
+              serverId: Value(serverId),
+              updatedAt: Value(DateTime.now()),
+            ),
+          );
+        }
+        return;
+      }
+    }
 
     final clientUuid = _uuid.v4();
     final now = DateTime.now();
@@ -446,6 +498,98 @@ class BookingOrdersDao {
 
       await (db.delete(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).go();
     });
+  }
+
+  Future<int> markOrderDetailsServedLocally({
+    List<String> detailClientUuids = const [],
+    List<int> detailServerIds = const [],
+  }) async {
+    final now = DateTime.now();
+    var updatedCount = 0;
+
+    for (final uuid in detailClientUuids) {
+      final trimmed = uuid.trim();
+      if (trimmed.isEmpty) continue;
+      updatedCount += await (db.update(db.orderDetails)
+            ..where((t) => t.clientDetailUuid.equals(trimmed)))
+          .write(
+        OrderDetailsCompanion(
+          status: const Value('SERVED BY CASHIER'),
+          syncDirty: const Value(true),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+
+    for (final id in detailServerIds) {
+      if (id <= 0) continue;
+      updatedCount += await (db.update(db.orderDetails)
+            ..where((t) => t.serverId.equals(id)))
+          .write(
+        OrderDetailsCompanion(
+          status: const Value('SERVED BY CASHIER'),
+          syncDirty: const Value(true),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+
+    return updatedCount;
+  }
+
+  /// Merges duplicate mirror headers that share the same booking order code.
+  Future<int> reconcileDuplicateMirrors() async {
+    final rows = await (db.select(db.bookingOrders)
+          ..where((t) => t.deletedAt.isNull()))
+        .get();
+
+    final byCode = <String, List<BookingOrder>>{};
+    for (final row in rows) {
+      final code = row.bookingOrderCode?.trim();
+      if (code == null || code.isEmpty) continue;
+      byCode.putIfAbsent(code, () => []).add(row);
+    }
+
+    var removed = 0;
+    for (final group in byCode.values) {
+      if (group.length < 2) continue;
+
+      BookingOrder keeper = group.first;
+      var bestScore = -1;
+
+      for (final row in group) {
+        final detailCount = await (db.select(db.orderDetails)
+              ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
+            .get()
+            .then((value) => value.length);
+
+        var score = detailCount * 3;
+        if (row.syncIntent == 'CREATE') score += 4;
+        if (row.serverId != null) score += 2;
+        if (!row.syncDirty) score += 1;
+
+        if (score > bestScore) {
+          bestScore = score;
+          keeper = row;
+        }
+      }
+
+      for (final row in group) {
+        if (row.clientUuid == keeper.clientUuid) continue;
+
+        final detailCount = await (db.select(db.orderDetails)
+              ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
+            .get()
+            .then((value) => value.length);
+
+        if (detailCount == 0 || (row.serverId == null && keeper.serverId != null)) {
+          await removeOrderMirrorByClientUuid(row.clientUuid);
+          removed++;
+        }
+      }
+    }
+
+    return removed;
   }
 
   Future<void> applyAppliedResult(Map<String, dynamic> applied) async {

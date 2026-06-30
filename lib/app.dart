@@ -180,6 +180,7 @@ class _CavaaAppState extends State<CavaaApp> {
           create: (ctx) => PurchaseProvider(
             repo: purchaseRepo,
             bookingOrdersDao: bookingOrdersDao,
+            connectivity: ctx.read<ConnectivityStatusProvider>(),
             syncService: syncService,
           ),
         ),

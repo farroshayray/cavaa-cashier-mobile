@@ -9,6 +9,7 @@ import '/features/cashier/presentation/pages/tabs/modals/cart_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/checkout_sheet.dart';
 import '../../../presentation/providers/payment_provider.dart';
 import '../../../presentation/providers/process_provider.dart';
+import '/core/services/connectivity_status_provider.dart';
 
 class PurchaseTab extends StatefulWidget {
   const PurchaseTab({super.key});
@@ -317,13 +318,24 @@ class _MiniCartBar extends StatelessWidget {
                     final refreshTarget =
                         (result['refresh_target'] ?? '').toString();
                     final isSuccess = result['success'] == true;
+                    final checkoutOffline = result['offline'] == true;
+                    final isOnline =
+                        context.read<ConnectivityStatusProvider>().isOnline;
 
                     if (isSuccess && refreshTarget == 'payment') {
                       await context.read<PaymentProvider>().load();
-                      await purchaseVm.load();
+                      if (checkoutOffline || !isOnline) {
+                        await purchaseVm.refreshPendingStockOnly();
+                      } else {
+                        await purchaseVm.load();
+                      }
                     } else if (isSuccess && refreshTarget == 'process') {
                       await context.read<ProcessProvider>().load();
-                      await purchaseVm.load();
+                      if (checkoutOffline || !isOnline) {
+                        await purchaseVm.refreshPendingStockOnly();
+                      } else {
+                        await purchaseVm.load();
+                      }
                     }
                   }
                 },

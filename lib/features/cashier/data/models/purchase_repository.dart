@@ -19,7 +19,18 @@ class PurchaseRepository {
 
   MasterCacheService get _masterCache => MasterCacheService(db);
 
-  Future<PurchasePayload> fetchPurchaseData() async {
+  Future<PurchasePayload?> loadFromLocalCache() async {
+    return _masterCache.loadFromLocalCache();
+  }
+
+  Future<PurchasePayload> fetchPurchaseData({bool preferCache = false}) async {
+    if (preferCache) {
+      final cached = await _masterCache.loadFromLocalCache();
+      if (cached != null) {
+        return cached;
+      }
+    }
+
     if (syncApi != null) {
       try {
         final response = await syncApi!.sync(

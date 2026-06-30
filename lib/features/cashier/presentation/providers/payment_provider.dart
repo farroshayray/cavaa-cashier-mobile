@@ -68,6 +68,8 @@ class PaymentProvider extends ChangeNotifier {
     }
 
     try {
+      await bookingOrdersDao.reconcileDuplicateMirrors();
+
       final processRows = await bookingOrdersDao.getProcessTabOrders();
       final doneRows = await bookingOrdersDao.getDoneTabOrders();
 
@@ -232,19 +234,32 @@ class PaymentProvider extends ChangeNotifier {
       'reloadTabs=$reloadTabs backgroundSync=$backgroundSync',
     );
 
-    if (reloadTabs && process != null && done != null) {
-      await tabCoordinator.transitionAndReload(
-        serverId: serverId,
-        orderStatus: nextStatus,
-        syncIntent: offline ? 'PAY' : null,
-        syncDirty: offline,
-        extras: extras.isEmpty ? null : extras,
-        orderSnapshot: updatedSnapshot,
-        payment: this,
-        process: process,
-        done: done,
-      );
-    } else {
+    final clientUuid = (snapshot['local_client_uuid'] ??
+            snapshot['local_id'] ??
+            '')
+        .toString()
+        .trim();
+    final useClientUuid = serverId <= 0 && clientUuid.isNotEmpty;
+
+    Future<void> applyTransition() async {
+      if (useClientUuid) {
+        await tabCoordinator.transitionOrderStageByClientUuid(
+          clientUuid: clientUuid,
+          orderStatus: nextStatus,
+          syncIntent: offline ? 'PAY' : null,
+          syncDirty: offline,
+          extras: extras.isEmpty ? null : extras,
+        );
+        return;
+      }
+
+      if (serverId <= 0) {
+        debugPrint(
+          'afterPaymentSuccess skipped transition: no serverId or clientUuid',
+        );
+        return;
+      }
+
       await tabCoordinator.transitionOrderStage(
         serverId: serverId,
         orderStatus: nextStatus,
@@ -253,6 +268,41 @@ class PaymentProvider extends ChangeNotifier {
         extras: extras.isEmpty ? null : extras,
         orderSnapshot: updatedSnapshot,
       );
+    }
+
+    if (reloadTabs && process != null && done != null) {
+      if (useClientUuid) {
+        await applyTransition();
+        await bookingOrdersDao.reconcileDuplicateMirrors();
+        await tabCoordinator.reloadAllTabs(
+          payment: this,
+          process: process,
+          done: done,
+        );
+      } else if (serverId > 0) {
+        await tabCoordinator.transitionAndReload(
+          serverId: serverId,
+          orderStatus: nextStatus,
+          syncIntent: offline ? 'PAY' : null,
+          syncDirty: offline,
+          extras: extras.isEmpty ? null : extras,
+          orderSnapshot: updatedSnapshot,
+          payment: this,
+          process: process,
+          done: done,
+        );
+      } else {
+        await tabCoordinator.reloadAllTabs(
+          payment: this,
+          process: process,
+          done: done,
+        );
+      }
+    } else {
+      await applyTransition();
+      if (useClientUuid) {
+        await bookingOrdersDao.reconcileDuplicateMirrors();
+      }
       if (reloadTabs) {
         await load(silent: true);
       } else {

@@ -31,7 +31,7 @@ class OrderTabItemMapper {
       'openbill_flag': _toBool(row['openbill_flag']) ||
           row['payment_method']?.toString() == 'OPENBILL' ||
           (row['order_status'] ?? '').toString().startsWith('OPENBILL'),
-      'is_local_only': false,
+      'is_local_only': row['is_local_only'] == true || serverId == null,
       'is_cached_server': true,
       'sync_status': _mirrorSyncStatus(row),
       'last_error': row['sync_error']?.toString(),
@@ -69,7 +69,7 @@ class OrderTabItemMapper {
       'sync_status': _mirrorSyncStatus(row),
       'last_error': row['sync_error']?.toString(),
       'pending_action': row['sync_dirty'] == true ? row['sync_intent'] : null,
-      'is_local_only': false,
+      'is_local_only': row['is_local_only'] == true || serverId == null,
       'sort_time': row['created_at']?.toString() ?? row['updated_at']?.toString(),
     };
   }

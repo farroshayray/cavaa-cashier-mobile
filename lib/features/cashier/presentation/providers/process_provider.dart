@@ -12,6 +12,23 @@ import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
+class ServeItemSelection {
+  const ServeItemSelection({
+    this.serverDetailId,
+    this.clientDetailUuid,
+  });
+
+  final int? serverDetailId;
+  final String? clientDetailUuid;
+
+  bool get isValid {
+    final hasServerId = serverDetailId != null && serverDetailId! > 0;
+    final hasClientUuid =
+        clientDetailUuid != null && clientDetailUuid!.trim().isNotEmpty;
+    return hasServerId || hasClientUuid;
+  }
+}
+
 class ProcessProvider extends ChangeNotifier {
   final OrdersRepository repo;
   final ConnectivityStatusProvider connectivity;
@@ -57,15 +74,13 @@ class ProcessProvider extends ChangeNotifier {
     }
 
     try {
+      await bookingOrdersDao.reconcileDuplicateMirrors();
+
       final mirrorRows = await bookingOrdersDao.getProcessTabOrders(
         query: query.isEmpty ? null : query,
       );
 
-      final mirroredClientUuids = mirrorRows
-          .map((o) => o['local_client_uuid']?.toString())
-          .whereType<String>()
-          .where((s) => s.isNotEmpty)
-          .toSet();
+      final dedupedMirrorRows = _dedupeProcessMirrorRows(mirrorRows);
 
       final doneRows = await bookingOrdersDao.getDoneTabOrders();
       final doneIds = doneRows
@@ -77,7 +92,7 @@ class ProcessProvider extends ChangeNotifier {
           .where((e) => e.isNotEmpty)
           .toSet();
 
-      final remoteItems = mirrorRows
+      final remoteItems = dedupedMirrorRows
           .where((row) {
             final status = (row['order_status'] ?? '').toString();
             if (status == 'SERVED') return false;
@@ -213,6 +228,73 @@ class ProcessProvider extends ChangeNotifier {
     return map;
   }
 
+  Future<Map<String, dynamic>?> _getMirrorDetailMapByClientUuid(
+    String clientUuid,
+  ) async {
+    final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+    if (bundle == null) return null;
+
+    final map = OrderMirrorMapper.orderToUiMap(bundle.order);
+    map['order_details'] = bundle.details.map((d) {
+      final detailMap = OrderMirrorMapper.detailToUiMap(d);
+      detailMap['order_detail_options'] =
+          (bundle.optionsByDetailUuid[d.clientDetailUuid] ?? [])
+              .map(OrderMirrorMapper.optionToUiMap)
+              .toList();
+      return detailMap;
+    }).toList();
+    return map;
+  }
+
+  Future<Map<String, dynamic>> _serveMirrorItemsLocally({
+    required Map<String, dynamic> row,
+    required String clientUuid,
+    required List<int> serverDetailIds,
+    required List<String> clientDetailUuids,
+  }) async {
+    final updatedCount = await bookingOrdersDao.markOrderDetailsServedLocally(
+      detailClientUuids: clientDetailUuids,
+      detailServerIds: serverDetailIds,
+    );
+    if (updatedCount == 0) {
+      throw Exception('Item yang dipilih tidak ditemukan');
+    }
+
+    final detail = await _getMirrorDetailMapByClientUuid(clientUuid);
+    if (detail == null) {
+      throw Exception('Detail order tidak tersedia di cache offline');
+    }
+
+    final details = ((detail['order_details'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    final allServed = details.isNotEmpty &&
+        details.every(
+          (item) => isDetailServedStatus(detailStatusOf(item)),
+        );
+    final nextStatus = OrderStageResolver.resolveAfterServeItems(
+      order: {...row, ...detail, 'order_details': details},
+    );
+    final syncIntent = allServed ? 'FINISH' : 'PROCESS';
+
+    await tabCoordinator.transitionOrderStageByClientUuid(
+      clientUuid: clientUuid,
+      orderStatus: nextStatus,
+      syncIntent: syncIntent,
+      syncDirty: true,
+    );
+
+    await load();
+
+    return {
+      'all_served': allServed,
+      'order_status': nextStatus,
+      'detail_count': updatedCount,
+    };
+  }
+
   Map<String, dynamic>? _decodeCachedJson(String? rawJson) {
     if (rawJson == null || rawJson.trim().isEmpty) return null;
     try {
@@ -318,6 +400,62 @@ class ProcessProvider extends ChangeNotifier {
   }
 
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
+
+  List<Map<String, dynamic>> _dedupeProcessMirrorRows(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final byKey = <String, Map<String, dynamic>>{};
+
+    for (final row in rows) {
+      final key = _processMirrorDedupeKey(row);
+      final existing = byKey[key];
+      if (existing == null || _preferProcessMirrorRow(row, existing)) {
+        byKey[key] = row;
+      }
+    }
+
+    return byKey.values.toList();
+  }
+
+  String _processMirrorDedupeKey(Map<String, dynamic> row) {
+    final clientUuid = row['local_client_uuid']?.toString().trim();
+    if (clientUuid != null && clientUuid.isNotEmpty) {
+      return 'uuid:$clientUuid';
+    }
+
+    final code = (row['booking_order_code'] ?? '').toString().trim();
+    if (code.isNotEmpty) return 'code:$code';
+
+    final id = _toId(row['id']);
+    if (id > 0) return 'id:$id';
+
+    return 'row:${row.hashCode}';
+  }
+
+  bool _preferProcessMirrorRow(
+    Map<String, dynamic> candidate,
+    Map<String, dynamic> current,
+  ) {
+    final candidateServerId = _toId(candidate['id']);
+    final currentServerId = _toId(current['id']);
+    if (candidateServerId > 0 && currentServerId <= 0) return true;
+    if (candidateServerId <= 0 && currentServerId > 0) return false;
+
+    final candidateDirty = candidate['sync_dirty'] == true || candidate['sync_dirty'] == 1;
+    final currentDirty = current['sync_dirty'] == true || current['sync_dirty'] == 1;
+    if (!candidateDirty && currentDirty) return true;
+    if (candidateDirty && !currentDirty) return false;
+
+    final candidateUpdated = DateTime.tryParse(
+          (candidate['updated_at'] ?? candidate['created_at'] ?? '').toString(),
+        ) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final currentUpdated = DateTime.tryParse(
+          (current['updated_at'] ?? current['created_at'] ?? '').toString(),
+        ) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    return candidateUpdated.isAfter(currentUpdated);
+  }
 
   int _indexById(int id) {
     return items.indexWhere((e) => _toId(e['id']) == id);
@@ -462,33 +600,75 @@ class ProcessProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> actionServeItems(
     Map<String, dynamic> row, {
-    required List<int> detailIds,
+    List<int> detailIds = const [],
+    List<ServeItemSelection> selections = const [],
   }) async {
-    final isLocalOnly = row['is_local_only'] == true;
+    final resolvedSelections = selections.isNotEmpty
+        ? selections.where((item) => item.isValid).toList()
+        : detailIds
+            .where((id) => id > 0)
+            .map((id) => ServeItemSelection(serverDetailId: id))
+            .toList();
+
     final isStockConflict =
         (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
     final id = _toId(row['id']);
     final actionKey = _actionKey(row);
+    final clientUuid =
+        (row['local_client_uuid'] ?? row['local_id'] ?? '').toString().trim();
+    final serverDetailIds = resolvedSelections
+        .map((item) => item.serverDetailId)
+        .whereType<int>()
+        .where((detailId) => detailId > 0)
+        .toList();
+    final clientDetailUuids = resolvedSelections
+        .map((item) => item.clientDetailUuid?.trim())
+        .whereType<String>()
+        .where((uuid) => uuid.isNotEmpty)
+        .toList();
 
     _setActionLoading(actionKey, true);
     try {
-      if (detailIds.isEmpty) {
+      if (resolvedSelections.isEmpty) {
         throw Exception('Pilih minimal satu item');
       }
 
-      if (isLocalOnly || id <= 0) {
-        final clientUuid =
-            (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
-        final mirror = clientUuid.isNotEmpty
-            ? await bookingOrdersDao.getByClientUuid(clientUuid)
-            : null;
-        if (mirror?.serverId != null) {
+      if (id <= 0) {
+        if (clientUuid.isEmpty) {
+          throw Exception('Order ID tidak valid');
+        }
+
+        final mirror = await bookingOrdersDao.getByClientUuid(clientUuid);
+        if (mirror?.serverId != null && mirror!.serverId! > 0) {
           return actionServeItems(
-            {...row, 'id': mirror!.serverId, 'is_local_only': false},
-            detailIds: detailIds,
+            {...row, 'id': mirror.serverId, 'is_local_only': false},
+            selections: resolvedSelections,
           );
         }
-        throw Exception('Sinkronkan order terlebih dahulu sebelum serve item');
+
+        final result = await _serveMirrorItemsLocally(
+          row: row,
+          clientUuid: clientUuid,
+          serverDetailIds: serverDetailIds,
+          clientDetailUuids: clientDetailUuids,
+        );
+
+        final allServed = result['all_served'] == true;
+        final isOpenbill =
+            _toBool(row['openbill_flag']) ||
+            row['payment_method']?.toString() == 'OPENBILL' ||
+            (row['order_status'] ?? '').toString().startsWith('OPENBILL');
+
+        return {
+          'status': 'offline_success',
+          'offline': true,
+          'all_served': allServed,
+          'message': allServed
+              ? (isOpenbill
+                  ? 'Semua item served, order dipindahkan ke pembayaran'
+                  : 'Semua item served')
+              : 'Item terpilih berhasil ditandai served',
+        };
       }
 
       if (isStockConflict) {
@@ -498,7 +678,10 @@ class ProcessProvider extends ChangeNotifier {
       if (!connectivity.isOnline) {
         final result = await _markCachedOrderItemsServed(
           serverId: id,
-          detailIds: detailIds,
+          detailIds: serverDetailIds.isNotEmpty
+              ? serverDetailIds
+              : detailIds.where((detailId) => detailId > 0).toList(),
+          detailClientUuids: clientDetailUuids,
         );
 
         await load();
@@ -528,7 +711,13 @@ class ProcessProvider extends ChangeNotifier {
       }
 
       try {
-        final res = await repo.serveOrderItems(id: id, detailIds: detailIds);
+        final onlineDetailIds = serverDetailIds.isNotEmpty
+            ? serverDetailIds
+            : detailIds.where((detailId) => detailId > 0).toList();
+        final res = await repo.serveOrderItems(
+          id: id,
+          detailIds: onlineDetailIds,
+        );
         final status = (res['status'] ?? '').toString();
 
         if (status == 'warning' || res['already_processed'] == true) {
@@ -746,7 +935,16 @@ class ProcessProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> _markCachedOrderItemsServed({
     required int serverId,
     required List<int> detailIds,
+    List<String> detailClientUuids = const [],
   }) async {
+    final updatedCount = await bookingOrdersDao.markOrderDetailsServedLocally(
+      detailServerIds: detailIds,
+      detailClientUuids: detailClientUuids,
+    );
+    if (updatedCount == 0) {
+      throw Exception('Item yang dipilih tidak ditemukan');
+    }
+
     final detail = await _getMirrorDetailMap(serverId);
     if (detail == null) {
       throw Exception('Detail order tidak tersedia di cache offline');
@@ -757,30 +955,16 @@ class ProcessProvider extends ChangeNotifier {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    var updatedCount = 0;
-
-    for (final item in details) {
-      final itemId = orderDetailId(item);
-      if (itemId == null || !detailIds.contains(itemId)) continue;
-      if (isDetailServedStatus(detailStatusOf(item))) continue;
-      if (!isItemAwaitingCashierServe(item)) continue;
-
-      item['status'] = 'SERVED BY CASHIER';
-      item['cashier_process_id'] = item['cashier_process_id'] ?? -1;
-      updatedCount++;
-    }
-
-    if (updatedCount == 0) {
-      throw Exception('Item yang dipilih tidak ditemukan');
-    }
-
-    final allServed = details.every(
-      (item) => isDetailServedStatus(detailStatusOf(item)),
+    final allServed = details.isNotEmpty &&
+        details.every(
+          (item) => isDetailServedStatus(detailStatusOf(item)),
+        );
+    final nextStatus = OrderStageResolver.resolveAfterServeItems(
+      order: {
+        ...detail,
+        'order_details': details,
+      },
     );
-    final isOpenbill = isOpenBillOrder(detail);
-    final nextStatus = allServed
-        ? (isOpenbill ? 'UNPAID' : 'SERVED')
-        : (detail['order_status'] ?? 'PROCESSED').toString();
 
     detail['order_details'] = details;
     detail['order_status'] = nextStatus;

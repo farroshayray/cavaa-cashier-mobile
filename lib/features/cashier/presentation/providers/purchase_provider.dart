@@ -9,16 +9,19 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/core/services/connectivity_status_provider.dart';
 
 class PurchaseProvider extends ChangeNotifier {
   final PurchaseRepository repo;
   final BookingOrdersDao bookingOrdersDao;
+  final ConnectivityStatusProvider connectivity;
   final SyncService? syncService;
   final Uuid _uuid = const Uuid();
 
   PurchaseProvider({
     required this.repo,
     required this.bookingOrdersDao,
+    required this.connectivity,
     this.syncService,
   });
 
@@ -130,33 +133,86 @@ class PurchaseProvider extends ChangeNotifier {
     return 'guest-$cleaned';
   }
 
+  bool _isConnectionError(Object e) {
+    if (e is DioException) {
+      return e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.unknown;
+    }
+    final msg = e.toString().toLowerCase();
+    return msg.contains('socketexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('connection error');
+  }
+
+  Future<void> _applyPendingStockLines() async {
+    try {
+      _pendingStockLines = await bookingOrdersDao.getPendingStockLines();
+    } catch (e) {
+      debugPrint('Failed to load local pending stock usage: $e');
+      _pendingStockLines = [];
+    }
+  }
+
+  void _applyPayload(PurchasePayload payload) {
+    products = payload.products;
+    categories = payload.categories;
+    paymentOptions = payload.paymentOptions;
+    tables = payload.tables;
+    partnerData = payload.partnerData;
+  }
+
+  /// Refresh pending stock reservation counts without a network catalog fetch.
+  Future<void> refreshPendingStockOnly() async {
+    await _applyPendingStockLines();
+    notifyListeners();
+  }
+
   // ===== LOAD =====
   Future<void> load() async {
+    final hadCatalog = products.isNotEmpty;
     isLoading = true;
     error = null;
     notifyListeners();
 
     try {
-      final payload = await repo.fetchPurchaseData();
-
-      products = payload.products;
-      categories = payload.categories;
-      paymentOptions = payload.paymentOptions;
-      tables = payload.tables;
-      partnerData = payload.partnerData;
-      try {
-        _pendingStockLines = await bookingOrdersDao.getPendingStockLines();
-      } catch (e) {
-        debugPrint('Failed to load local pending stock usage: $e');
-        _pendingStockLines = [];
+      if (!connectivity.isOnline) {
+        final cached = await repo.loadFromLocalCache();
+        if (cached != null) {
+          _applyPayload(cached);
+        } else if (!hadCatalog) {
+          error =
+              'Mode offline — data menu belum tersedia. Sambungkan internet untuk memuat menu.';
+        }
+        await _applyPendingStockLines();
+        return;
       }
 
-      // ... logic lain (hot products, grouping, dst)
+      final payload = await repo.fetchPurchaseData();
+      _applyPayload(payload);
+      await _applyPendingStockLines();
     } catch (e) {
+      final cached = await repo.loadFromLocalCache();
+      if (cached != null) {
+        _applyPayload(cached);
+        await _applyPendingStockLines();
+        if (_isConnectionError(e)) {
+          error = hadCatalog || products.isNotEmpty
+              ? null
+              : 'Mode offline — menampilkan data cache.';
+        }
+        return;
+      }
+
       final msg = e.toString();
       if (msg.contains('404')) {
         error =
             'Data menu tidak dapat dimuat (endpoint tidak ditemukan). Pastikan backend sudah di-update dan coba lagi.';
+      } else if (_isConnectionError(e) && (hadCatalog || products.isNotEmpty)) {
+        error = null;
+        await _applyPendingStockLines();
+      } else if (_isConnectionError(e)) {
+        error = 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
       } else {
         error = msg;
       }

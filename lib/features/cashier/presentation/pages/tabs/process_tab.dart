@@ -157,7 +157,7 @@ class _ProcessViewState extends State<_ProcessView> {
     final detail = await provider.getOrderDetailFromListItem(row);
     if (!mounted) return;
 
-    final selectedIds = await showModalBottomSheet<List<int>>(
+    final selectedSelections = await showModalBottomSheet<List<ServeItemSelection>>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
@@ -165,11 +165,14 @@ class _ProcessViewState extends State<_ProcessView> {
       builder: (_) => _ServeItemsSheet(order: detail),
     );
 
-    if (selectedIds == null || selectedIds.isEmpty) {
+    if (selectedSelections == null || selectedSelections.isEmpty) {
       return;
     }
 
-    final res = await provider.actionServeItems(row, detailIds: selectedIds);
+    final res = await provider.actionServeItems(
+      row,
+      selections: selectedSelections,
+    );
     if (!mounted) return;
 
     await context.read<OrderTabCoordinator>().reloadAllTabs(
@@ -1314,7 +1317,29 @@ class _ServeItemsSheet extends StatefulWidget {
 }
 
 class _ServeItemsSheetState extends State<_ServeItemsSheet> {
-  final Set<int> _selectedIds = <int>{};
+  final Set<String> _selectedKeys = <String>{};
+
+  String _selectionKey(Map<String, dynamic> item) {
+    final id = orderDetailId(item);
+    if (id != null && id > 0) return 'id:$id';
+    final uuid = (item['local_detail_uuid'] ?? '').toString().trim();
+    if (uuid.isNotEmpty) return 'uuid:$uuid';
+    return '';
+  }
+
+  List<ServeItemSelection> _buildSelections() {
+    return _selectedKeys.map((key) {
+      if (key.startsWith('id:')) {
+        return ServeItemSelection(
+          serverDetailId: int.tryParse(key.substring(3)),
+        );
+      }
+      if (key.startsWith('uuid:')) {
+        return ServeItemSelection(clientDetailUuid: key.substring(5));
+      }
+      return const ServeItemSelection();
+    }).where((item) => item.isValid).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1378,14 +1403,15 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                           itemBuilder: (_, index) {
                             final item = details[index];
-                            final itemId = _toId(item['id']);
+                            final selectionKey = _selectionKey(item);
                             final qty = _toNum(item['quantity']).toInt();
                             final name = (item['product_name'] ?? 'Produk').toString();
                             final note = (item['customer_note'] ?? '').toString().trim();
                             final optionLines = _orderDetailOptionLines(item, qty);
                             final state = _resolveProcessItemState(item, order);
-                            final isSelectable = isItemAwaitingCashierServe(item);
-                            final checked = _selectedIds.contains(itemId);
+                            final isSelectable = isItemAwaitingCashierServe(item) &&
+                                selectionKey.isNotEmpty;
+                            final checked = _selectedKeys.contains(selectionKey);
 
                             return Opacity(
                               opacity: isSelectable ? 1 : 0.55,
@@ -1395,9 +1421,9 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                                   ? () {
                                 setState(() {
                                   if (checked) {
-                                    _selectedIds.remove(itemId);
+                                    _selectedKeys.remove(selectionKey);
                                   } else {
-                                    _selectedIds.add(itemId);
+                                    _selectedKeys.add(selectionKey);
                                   }
                                 });
                               }
@@ -1426,9 +1452,9 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                                         onChanged: (_) {
                                           setState(() {
                                             if (checked) {
-                                              _selectedIds.remove(itemId);
+                                              _selectedKeys.remove(selectionKey);
                                             } else {
-                                              _selectedIds.add(itemId);
+                                              _selectedKeys.add(selectionKey);
                                             }
                                           });
                                         },
@@ -1522,9 +1548,9 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _selectedIds.isEmpty
+                      onPressed: _selectedKeys.isEmpty
                           ? null
-                          : () => Navigator.of(context).pop(_selectedIds.toList()),
+                          : () => Navigator.of(context).pop(_buildSelections()),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF7C3AED),
                         foregroundColor: Colors.white,
@@ -1534,9 +1560,9 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                         ),
                       ),
                       child: Text(
-                        _selectedIds.isEmpty
+                        _selectedKeys.isEmpty
                             ? 'Pilih item dulu'
-                            : 'Tandai Served (${_selectedIds.length})',
+                            : 'Tandai Served (${_selectedKeys.length})',
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),

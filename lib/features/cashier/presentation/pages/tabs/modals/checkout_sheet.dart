@@ -462,6 +462,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                                 Navigator.pop(context, {
                                   'success': true,
                                   'refresh_target': refreshTarget,
+                                  if (resp['offline'] == true) 'offline': true,
                                 });
                               }
                             } on StockInsufficientException catch (e) {
