@@ -1,4 +1,6 @@
+import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_rank.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_sync_guard.dart';
+import 'package:cavaa_cashier/features/cashier/data/sync/order_sync_intent_chain.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_api.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -177,6 +179,159 @@ void main() {
       expect(
         SyncApi.buildBatchIdempotencyKey(parts),
         SyncApi.buildBatchIdempotencyKey(parts),
+      );
+    });
+  });
+
+  group('OrderStageRank — pull merge policy', () {
+    test('cash local PAID is ahead of server UNPAID', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'PAID',
+          serverStatus: 'UNPAID',
+        ),
+        isTrue,
+      );
+    });
+
+    test('cash local SERVED is ahead of server UNPAID', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'SERVED',
+          serverStatus: 'UNPAID',
+        ),
+        isTrue,
+      );
+    });
+
+    test('server SERVED is not behind local UNPAID', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'UNPAID',
+          serverStatus: 'SERVED',
+        ),
+        isFalse,
+      );
+    });
+
+    test('openbill OPENBILL_CONFIRMATION is ahead of server UNPAID', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'OPENBILL_CONFIRMATION',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('openbill UNPAID with PAY intent is ahead of server UNPAID', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'UNPAID',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+          syncIntent: 'PAY',
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('OrderSyncIntentChain — after CREATE', () {
+    test('cash PROCESSED queues PAY', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'PROCESSED',
+          storedIntent: 'PROCESS',
+        ),
+        'PAY',
+      );
+    });
+
+    test('cash SERVED queues PAY', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'SERVED',
+          storedIntent: 'FINISH',
+        ),
+        'PAY',
+      );
+    });
+
+    test('openbill OPENBILL_CONFIRMATION queues CONFIRM_OPENBILL', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'OPENBILL_CONFIRMATION',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+        ),
+        'CONFIRM_OPENBILL',
+      );
+    });
+
+    test('openbill UNPAID ready to pay queues PAY only when flagged', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'UNPAID',
+          storedIntent: 'PAY',
+          openbillFlag: true,
+        ),
+        'PAY',
+      );
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'UNPAID',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+        ),
+        isNull,
+      );
+    });
+
+    test('fresh UNPAID checkout does not queue follow-up intent', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'UNPAID',
+          storedIntent: 'CREATE',
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('OrderSyncIntentChain — multi-pass chain', () {
+    test('CONFIRM_OPENBILL leads to PROCESS', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          storedIntent: 'PROCESS',
+          appliedIntent: 'CONFIRM_OPENBILL',
+          openbillFlag: true,
+        ),
+        'PROCESS',
+      );
+    });
+
+    test('PAY on SERVED leads to FINISH', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'SERVED',
+          storedIntent: 'FINISH',
+          appliedIntent: 'PAY',
+        ),
+        'FINISH',
+      );
+    });
+
+    test('PAY on PROCESSED leads to PROCESS', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'PROCESSED',
+          storedIntent: 'PROCESS',
+          appliedIntent: 'PAY',
+        ),
+        'PROCESS',
       );
     });
   });

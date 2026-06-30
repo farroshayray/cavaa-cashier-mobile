@@ -6,6 +6,9 @@ import 'package:uuid/uuid.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/local/db/daos/cache_dao.dart';
+import '/features/cashier/data/sync/order_stage_rank.dart';
+import '/features/cashier/data/sync/order_sync_intent_chain.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 const _uuid = Uuid();
 
@@ -370,6 +373,17 @@ class BookingOrdersDao {
     final existing = await getByServerId(serverId);
     final clientUuid = existing?.clientUuid ?? _uuid.v4();
     final now = DateTime.now();
+    final serverStatus = row['order_status']?.toString() ?? 'UNPAID';
+
+    final preserveLocalLifecycle = existing != null &&
+        (existing.syncDirty ||
+            OrderStageRank.isLocalAheadOfServer(
+              localStatus: existing.orderStatus,
+              serverStatus: serverStatus,
+              openbillFlag: existing.openbillFlag,
+              syncIntent: existing.syncIntent,
+              paidAmountLocal: existing.paidAmountLocal,
+            ));
 
     final companion = BookingOrdersCompanion(
       clientUuid: Value(clientUuid),
@@ -383,9 +397,13 @@ class BookingOrdersDao {
       employeeOrderId: Value(_toIntOrNull(row['employee_order_id'])),
       orderBy: Value(row['order_by']?.toString()),
       customerName: Value(row['customer_name']?.toString() ?? 'guest'),
-      orderStatus: Value(row['order_status']?.toString() ?? 'UNPAID'),
-      paymentMethod: Value(row['payment_method']?.toString()),
-      openbillFlag: Value(_toBool(row['openbill_flag'])),
+      orderStatus: preserveLocalLifecycle
+          ? Value(existing!.orderStatus)
+          : Value(serverStatus),
+      paymentMethod: preserveLocalLifecycle && existing!.paymentMethod != null
+          ? Value(existing.paymentMethod)
+          : Value(row['payment_method']?.toString()),
+      openbillFlag: Value(_toBool(row['openbill_flag']) || (existing?.openbillFlag ?? false)),
       discountId: Value(_toIntOrNull(row['discount_id'])),
       discountValue: Value(_toDouble(row['discount_value'])),
       totalOrderValue: Value(_toDouble(row['total_order_value'])),
@@ -407,10 +425,25 @@ class BookingOrdersDao {
       latestPaymentJson:
           Value(row['latest_payment'] != null ? jsonEncode(row['latest_payment']) : null),
       syncVersion: Value(_toInt(row['sync_version'])),
-      syncDirty: const Value(false),
-      syncError: const Value(null),
+      syncDirty: preserveLocalLifecycle
+          ? Value(existing!.syncDirty)
+          : const Value(false),
+      syncIntent: preserveLocalLifecycle
+          ? Value(existing!.syncIntent)
+          : const Value(null),
+      syncError: preserveLocalLifecycle && existing!.syncError != null
+          ? Value(existing.syncError)
+          : const Value(null),
+      paidAmountLocal: preserveLocalLifecycle
+          ? Value(existing!.paidAmountLocal)
+          : const Value.absent(),
+      changeAmountLocal: preserveLocalLifecycle
+          ? Value(existing!.changeAmountLocal)
+          : const Value.absent(),
       createdAt: Value(_parseDate(row['created_at']) ?? now),
-      updatedAt: Value(_parseDate(row['updated_at']) ?? now),
+      updatedAt: preserveLocalLifecycle
+          ? Value(existing!.updatedAt)
+          : Value(_parseDate(row['updated_at']) ?? now),
       deletedAt: Value(_parseDate(row['deleted_at'])),
       syncedAt: Value(now),
     );
@@ -698,9 +731,12 @@ class BookingOrdersDao {
     final order = await getByClientUuid(clientUuid);
     if (order == null) return;
 
-    final nextIntent = _resolveNextSyncIntent(
-      order: order,
+    final nextIntent = OrderSyncIntentChain.resolveNext(
+      localStatus: order.orderStatus,
+      storedIntent: order.syncIntent,
       appliedIntent: appliedIntent,
+      openbillFlag: order.openbillFlag,
+      paidAmountLocal: order.paidAmountLocal,
     );
     if (nextIntent == null) return;
 
@@ -714,47 +750,6 @@ class BookingOrdersDao {
         if (order.paymentMethod != null) 'payment_method': order.paymentMethod,
       },
     );
-  }
-
-  String? _resolveNextSyncIntent({
-    required BookingOrder order,
-    required String appliedIntent,
-  }) {
-    final localStatus = (order.orderStatus).toUpperCase();
-    final storedIntent = (order.syncIntent ?? '').toUpperCase();
-    final applied = appliedIntent.toUpperCase();
-
-    switch (applied) {
-      case 'CREATE':
-        if (localStatus == 'PAID' || order.paidAmountLocal != null) {
-          return 'PAY';
-        }
-        if (localStatus == 'OPENBILL_WAITING_ORDER') {
-          return 'CONFIRM_OPENBILL';
-        }
-        return null;
-      case 'CONFIRM_OPENBILL':
-        if (localStatus == 'OPENBILL_WAITING_ORDER' ||
-            storedIntent == 'PROCESS') {
-          return 'PROCESS';
-        }
-        return null;
-      case 'PAY':
-        if (storedIntent == 'FINISH' || localStatus == 'SERVED') {
-          return 'FINISH';
-        }
-        if (storedIntent == 'PROCESS' || localStatus == 'PROCESSED') {
-          return 'PROCESS';
-        }
-        return null;
-      case 'PROCESS':
-        if (storedIntent == 'FINISH' || localStatus == 'SERVED') {
-          return 'FINISH';
-        }
-        return null;
-      default:
-        return null;
-    }
   }
 
   Future<void> saveConflict(Map<String, dynamic> conflict) async {
@@ -1218,6 +1213,13 @@ class BookingOrdersDao {
 
     final clientDetailUuid = existing?.clientDetailUuid ?? _uuid.v4();
     final now = DateTime.now();
+    final incomingStatus = row['status']?.toString();
+    final existingStatus = existing?.status;
+    final preserveLocalDetail = existing != null &&
+        (existing.syncDirty ||
+            (existingStatus != null &&
+                (isDetailServedStatus(existingStatus) ||
+                    isDetailProcessingStatus(existingStatus))));
 
     await db.into(db.orderDetails).insertOnConflictUpdate(
           OrderDetailsCompanion(
@@ -1236,13 +1238,19 @@ class BookingOrdersDao {
             promoId: Value(_toIntOrNull(row['promo_id'])),
             promoAmount: Value(_toDouble(row['promo_amount'])),
             promoType: Value(row['promo_type']?.toString()),
-            status: Value(row['status']?.toString()),
+            status: preserveLocalDetail && existingStatus != null
+                ? Value(existingStatus)
+                : Value(incomingStatus),
             cashierProcessId: Value(_toIntOrNull(row['cashier_process_id'])),
             kitchenProcessId: Value(_toIntOrNull(row['kitchen_process_id'])),
             syncVersion: Value(_toInt(row['sync_version'])),
-            syncDirty: const Value(false),
+            syncDirty: preserveLocalDetail
+                ? Value(existing!.syncDirty)
+                : const Value(false),
             createdAt: Value(_parseDate(row['created_at']) ?? now),
-            updatedAt: Value(_parseDate(row['updated_at']) ?? now),
+            updatedAt: preserveLocalDetail
+                ? Value(existing!.updatedAt)
+                : Value(_parseDate(row['updated_at']) ?? now),
           ),
         );
 

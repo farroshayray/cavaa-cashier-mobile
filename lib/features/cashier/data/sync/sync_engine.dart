@@ -87,7 +87,7 @@ class SyncEngine {
         lastResult = SyncResult.fromJson(response, raw: response);
 
         final applied = ((response['applied'] as List?) ?? []).length;
-        if (applied == 0) {
+        if (applied == 0 && !await hasPendingData()) {
           break;
         }
       }
