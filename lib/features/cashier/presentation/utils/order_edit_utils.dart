@@ -47,12 +47,17 @@ bool isDetailInKitchenProcessing(Map<String, dynamic> item) {
   return isDetailWithKitchenHands(item);
 }
 
-bool isItemAwaitingCashierServe(Map<String, dynamic> item) {
+bool isItemTakenByStaff(Map<String, dynamic> item) {
   final status = detailStatusOf(item);
-  if (status.isEmpty) return true;
-  if (isDetailServedStatus(status)) return false;
-  if (isDetailInKitchenProcessing(item)) return false;
-  return true;
+  if (status.isEmpty) return false;
+  if (isDetailServedStatus(status)) return true;
+  if (isDetailProcessingStatus(status)) return true;
+  if (isDetailInKitchenProcessing(item)) return true;
+  return false;
+}
+
+bool isItemAwaitingCashierServe(Map<String, dynamic> item) {
+  return !isItemTakenByStaff(item);
 }
 
 bool canEditOrder(Map<String, dynamic> order) {

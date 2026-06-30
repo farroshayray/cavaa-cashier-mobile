@@ -63,6 +63,51 @@ class CashRoundingHelpers {
     return base + rounding;
   }
 
+  static int resolveCashRoundingUnit(
+    Map<String, dynamic> order, {
+    int? partnerCashRoundingUnit,
+  }) {
+    final fromOrder = normalizeUnit(_num(order['cash_rounding_unit']).toInt());
+    if (fromOrder > 0) return fromOrder;
+
+    final partnerData = order['partner_data'];
+    if (partnerData is Map) {
+      final fromPartnerData =
+          normalizeUnit(_num(partnerData['cash_rounding_unit']).toInt());
+      if (fromPartnerData > 0) return fromPartnerData;
+    }
+
+    if (partnerCashRoundingUnit != null) {
+      final fromPartner = normalizeUnit(partnerCashRoundingUnit);
+      if (fromPartner > 0) return fromPartner;
+    }
+
+    return 0;
+  }
+
+  static int cashRoundingAmountForOrder(
+    Map<String, dynamic> order,
+    num baseTotal, {
+    int? partnerCashRoundingUnit,
+  }) {
+    final stored = _num(order['cash_rounding_amount']);
+    if (stored > 0) return stored.ceil();
+
+    final unit = resolveCashRoundingUnit(
+      order,
+      partnerCashRoundingUnit: partnerCashRoundingUnit,
+    );
+    if (unit <= 0) return 0;
+
+    return paymentRoundingAmount(
+      'CASH',
+      _num(order['total_order_value']),
+      _toBool(order['is_ppn_active']),
+      _num(order['ppn']),
+      unit,
+    );
+  }
+
   static Map<String, dynamic> roundingFieldsFromLocalOrder({
     required double subtotal,
     required double grandTotal,

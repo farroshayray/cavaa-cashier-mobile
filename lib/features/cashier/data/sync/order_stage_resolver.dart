@@ -35,7 +35,39 @@ class OrderStageResolver {
     return 'PAID';
   }
 
-  /// Open bill finish → UNPAID (payment tab); regular finish → SERVED (done tab).
+  /// After marking items served: open bill all served → UNPAID; else keep or SERVED.
+  static String resolveAfterServeItems({
+    required Map<String, dynamic> order,
+    Map<String, dynamic>? apiResponse,
+  }) {
+    final fromApi = _statusFromApi(apiResponse);
+    if (fromApi != null) return fromApi;
+
+    if (_isAllServed(apiResponse, order)) {
+      return isOpenBillOrder(order) ? 'UNPAID' : 'SERVED';
+    }
+
+    return (order['order_status'] ?? 'PROCESSED').toString();
+  }
+
+  static bool _isAllServed(
+    Map<String, dynamic>? apiResponse,
+    Map<String, dynamic> order,
+  ) {
+    if (apiResponse != null) {
+      if (apiResponse['all_served'] == true) return true;
+      final data = apiResponse['data'];
+      if (data is Map && data['all_served'] == true) return true;
+    }
+
+    final details = (order['order_details'] as List?) ?? [];
+    if (details.isEmpty) return false;
+    return details.every((raw) {
+      if (raw is! Map) return false;
+      return isDetailServedStatus(detailStatusOf(Map<String, dynamic>.from(raw)));
+    });
+  }
+
   static String resolveAfterFinish({
     required Map<String, dynamic> order,
     Map<String, dynamic>? apiResponse,

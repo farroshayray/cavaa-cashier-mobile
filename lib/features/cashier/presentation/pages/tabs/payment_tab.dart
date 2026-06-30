@@ -1130,17 +1130,17 @@ num _calcDisplayGrandTotal(Map<String, dynamic> data) {
 }
 
 num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
-  final stored = _pickNum(data, ['cash_rounding_amount']) ??
-      _pickNum(data, ['rounding_amount']) ??
-      _pickNum(data, ['payment', 'rounding_amount']) ??
-      _pickNum(data, ['latest_payment', 'rounding_amount']);
-  if (stored != null && stored > 0) return stored.ceil();
-
   final method = (_toBool(data['openbill_flag']) &&
           ((data['payment_method'] ?? '').toString().trim().isEmpty))
       ? 'OPENBILL'
       : (data['payment_method'] ?? '').toString().toUpperCase();
   if (method != 'CASH') return 0;
+
+  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+      _pickNum(data, ['rounding_amount']) ??
+      _pickNum(data, ['payment', 'rounding_amount']) ??
+      _pickNum(data, ['latest_payment', 'rounding_amount']);
+  if (stored != null && stored > 0) return stored.ceil();
 
   final effectiveBaseTotal = baseTotal ?? _baseGrandTotal(data);
   final snap = _toNum(data['grand_total_local'] ?? data['grand_total']);

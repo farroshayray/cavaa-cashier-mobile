@@ -58,4 +58,9 @@ class CacheDao {
     if (rows.isEmpty) return null;
     return rows.first;
   }
+
+  Future<int> getPartnerCashRoundingUnit() async {
+    final settings = await getPartnerSettings();
+    return settings?.cashRoundingUnit ?? 0;
+  }
 }

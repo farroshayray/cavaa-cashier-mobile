@@ -691,12 +691,17 @@ class _ItemsCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       ...opts.map((o) {
                         final om = (o as Map).cast<String, dynamic>();
-                        final optName = (om['option'] is Map ? (om['option']['name'] ?? '-') : '-').toString();
+                        final optName = (om['option'] is Map
+                                ? (om['option']['name'] ?? '-')
+                                : (om['partner_product_option_name'] ??
+                                    om['name'] ??
+                                    '-'))
+                            .toString();
                         final parentName = (om['option'] is Map &&
                                 (om['option']['parent'] is Map) &&
                                 om['option']['parent']['name'] != null)
                             ? om['option']['parent']['name'].toString()
-                            : 'Opsi';
+                            : (om['parent_name'] ?? 'Opsi').toString();
                         final price = _num(om['price']) * qty;
 
                         return Padding(

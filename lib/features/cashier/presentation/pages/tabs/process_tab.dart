@@ -170,10 +170,13 @@ class _ProcessViewState extends State<_ProcessView> {
     }
 
     final res = await provider.actionServeItems(row, detailIds: selectedIds);
-    await Future.wait([
-      context.read<DoneProvider>().load(),
-      context.read<PaymentProvider>().load(),
-    ]);
+    if (!mounted) return;
+
+    await context.read<OrderTabCoordinator>().reloadAllTabs(
+      payment: context.read<PaymentProvider>(),
+      process: context.read<ProcessProvider>(),
+      done: context.read<DoneProvider>(),
+    );
 
     if (!mounted) return;
     final message = (res['message'] ?? 'Item berhasil ditandai served').toString();
@@ -272,9 +275,13 @@ class _ProcessViewState extends State<_ProcessView> {
             try {
               final res = await context.read<ProcessProvider>().actionFinish(data);
 
-              await _refreshKeepScroll();
-              await context.read<DoneProvider>().load();
-              await context.read<PaymentProvider>().load();
+              if (!mounted) return;
+
+              await context.read<OrderTabCoordinator>().reloadAllTabs(
+                payment: context.read<PaymentProvider>(),
+                process: context.read<ProcessProvider>(),
+                done: context.read<DoneProvider>(),
+              );
 
               if (!mounted) return;
 
@@ -1317,7 +1324,8 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    final selectableItems = details.where(isItemAwaitingCashierServe).toList();
+    final hasSelectableItems =
+        details.any(isItemAwaitingCashierServe);
 
     return SafeArea(
       top: false,
@@ -1356,11 +1364,11 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                   ),
                 ),
                 Flexible(
-                  child: selectableItems.isEmpty
+                  child: details.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(
-                            'Semua item pada order ini sudah diproses.',
+                            'Tidak ada menu pada order ini.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.black.withOpacity(0.65)),
                           ),
@@ -1369,18 +1377,22 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                           shrinkWrap: true,
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                           itemBuilder: (_, index) {
-                            final item = selectableItems[index];
+                            final item = details[index];
                             final itemId = _toId(item['id']);
                             final qty = _toNum(item['quantity']).toInt();
                             final name = (item['product_name'] ?? 'Produk').toString();
                             final note = (item['customer_note'] ?? '').toString().trim();
                             final optionLines = _orderDetailOptionLines(item, qty);
                             final state = _resolveProcessItemState(item, order);
+                            final isSelectable = isItemAwaitingCashierServe(item);
                             final checked = _selectedIds.contains(itemId);
 
-                            return InkWell(
+                            return Opacity(
+                              opacity: isSelectable ? 1 : 0.55,
+                              child: InkWell(
                               borderRadius: BorderRadius.circular(14),
-                              onTap: () {
+                              onTap: isSelectable
+                                  ? () {
                                 setState(() {
                                   if (checked) {
                                     _selectedIds.remove(itemId);
@@ -1388,29 +1400,54 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                                     _selectedIds.add(itemId);
                                   }
                                 });
-                              },
+                              }
+                                  : null,
                               child: Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: Colors.black.withOpacity(0.08)),
-                                  color: checked ? const Color(0xFFFFF7ED) : Colors.white,
+                                  border: Border.all(
+                                    color: isSelectable
+                                        ? Colors.black.withOpacity(0.08)
+                                        : Colors.black.withOpacity(0.05),
+                                  ),
+                                  color: !isSelectable
+                                      ? const Color(0xFFF3F4F6)
+                                      : checked
+                                          ? const Color(0xFFFFF7ED)
+                                          : Colors.white,
                                 ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Checkbox(
-                                      value: checked,
-                                      onChanged: (_) {
-                                        setState(() {
-                                          if (checked) {
-                                            _selectedIds.remove(itemId);
-                                          } else {
-                                            _selectedIds.add(itemId);
-                                          }
-                                        });
-                                      },
-                                    ),
+                                    if (isSelectable)
+                                      Checkbox(
+                                        value: checked,
+                                        onChanged: (_) {
+                                          setState(() {
+                                            if (checked) {
+                                              _selectedIds.remove(itemId);
+                                            } else {
+                                              _selectedIds.add(itemId);
+                                            }
+                                          });
+                                        },
+                                      )
+                                    else
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 4,
+                                          right: 8,
+                                          top: 2,
+                                        ),
+                                        child: Icon(
+                                          state == _ProcessItemState.served
+                                              ? Icons.check_circle_rounded
+                                              : Icons.lock_outline_rounded,
+                                          size: 22,
+                                          color: Colors.black.withOpacity(0.35),
+                                        ),
+                                      ),
                                     const SizedBox(width: 4),
                                     Expanded(
                                       child: Column(
@@ -1461,12 +1498,25 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                                   ],
                                 ),
                               ),
+                            ),
                             );
                           },
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
-                          itemCount: selectableItems.length,
+                          itemCount: details.length,
                         ),
                 ),
+                if (!hasSelectableItems && details.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: Text(
+                      'Semua item sudah diambil kitchen atau kasir lain.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.55),
+                      ),
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   child: SizedBox(
@@ -1600,9 +1650,8 @@ _ProcessItemState? _resolveProcessItemState(
   Map<String, dynamic> order,
 ) {
   final status = detailStatusOf(item);
-  final orderStatus = (order['order_status'] ?? '').toString();
 
-  if (isDetailServedStatus(status) || orderStatus == 'SERVED') {
+  if (isDetailServedStatus(status)) {
     return _ProcessItemState.served;
   }
 

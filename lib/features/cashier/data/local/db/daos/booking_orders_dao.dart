@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
+import '/features/cashier/data/local/db/daos/cache_dao.dart';
 
 const _uuid = Uuid();
 
@@ -293,8 +294,10 @@ class BookingOrdersDao {
           ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
         .get();
 
+    final dedupedDetails = _dedupeDetailRows(details);
+
     final optionsByDetailUuid = <String, List<OrderDetailOption>>{};
-    for (final detail in details) {
+    for (final detail in dedupedDetails) {
       final opts = await (db.select(db.orderDetailOptions)
             ..where((t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid)))
           .get();
@@ -303,7 +306,7 @@ class BookingOrdersDao {
 
     return BookingOrderBundle(
       order: order,
-      details: details,
+      details: dedupedDetails,
       optionsByDetailUuid: optionsByDetailUuid,
     );
   }
@@ -342,6 +345,10 @@ class BookingOrdersDao {
       kitchenProcessId: Value(_toIntOrNull(row['kitchen_process_id'])),
       paymentId: Value(_toIntOrNull(row['payment_id'])),
       paymentFlag: Value(_toBool(row['payment_flag'])),
+      cashRoundingAmount: Value(_toDouble(row['cash_rounding_amount'])),
+      cashRoundingUnit: Value(
+        await _resolveCashRoundingUnitForRow(row),
+      ),
       wifiSnapshotJson: Value(row['wifi_snapshot'] != null ? jsonEncode(row['wifi_snapshot']) : null),
       paymentRequestJson:
           Value(row['payment_request'] != null ? jsonEncode(row['payment_request']) : null),
@@ -359,10 +366,22 @@ class BookingOrdersDao {
     await db.into(db.bookingOrders).insertOnConflictUpdate(companion);
 
     final details = (row['order_details'] as List?) ?? [];
+    final incomingServerIds = <int>{};
     for (final raw in details) {
       if (raw is! Map) continue;
-      await _upsertDetailFromServer(Map<String, dynamic>.from(raw), clientUuid, serverId);
+      final map = Map<String, dynamic>.from(raw);
+      final detailServerId = _detailServerIdFromRow(map);
+      if (detailServerId != null) incomingServerIds.add(detailServerId);
+      await _upsertDetailFromServer(map, clientUuid, serverId);
     }
+
+    if (incomingServerIds.isNotEmpty) {
+      await _pruneOrderDetailsAfterServerUpsert(
+        bookingClientUuid: clientUuid,
+        keepServerIds: incomingServerIds,
+      );
+    }
+    await _deduplicateOrderDetailsByServerId(clientUuid);
   }
 
   /// Upsert satu baris order_details dari pull (tanpa parent row di batch yang sama).
@@ -374,6 +393,7 @@ class BookingOrdersDao {
     if (parent == null) return;
 
     await _upsertDetailFromServer(row, parent.clientUuid, bookingOrderServerId);
+    await _deduplicateOrderDetailsByServerId(parent.clientUuid);
   }
 
   Future<void> markSyncErrorByClientUuid(String clientUuid, String message) async {
@@ -860,9 +880,11 @@ class BookingOrdersDao {
     for (final row in rows) {
       final map = OrderMirrorMapper.orderToUiMap(row);
 
-      final details = await (db.select(db.orderDetails)
-            ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
-          .get();
+      final details = _dedupeDetailRows(
+        await (db.select(db.orderDetails)
+              ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
+            .get(),
+      );
 
       map['order_details'] = await Future.wait(details.map((d) async {
         final detailMap = OrderMirrorMapper.detailToUiMap(d);
@@ -911,11 +933,17 @@ class BookingOrdersDao {
     String bookingClientUuid,
     int bookingServerId,
   ) async {
-    final serverId = _toIntOrNull(row['id']);
+    final serverId = _detailServerIdFromRow(row);
     if (serverId == null) return;
 
-    final existing = await (db.select(db.orderDetails)..where((t) => t.serverId.equals(serverId)))
+    var existing = await (db.select(db.orderDetails)
+          ..where((t) => t.serverId.equals(serverId)))
         .getSingleOrNull();
+
+    existing ??= await _findOrphanDetailForServerRow(
+      bookingClientUuid: bookingClientUuid,
+      row: row,
+    );
 
     final clientDetailUuid = existing?.clientDetailUuid ?? _uuid.v4();
     final now = DateTime.now();
@@ -973,6 +1001,151 @@ class BookingOrdersDao {
             ),
           );
     }
+  }
+
+  int? _detailServerIdFromRow(Map<String, dynamic> row) =>
+      _toIntOrNull(row['id']) ?? _toIntOrNull(row['order_detail_id']);
+
+  Future<OrderDetail?> _findOrphanDetailForServerRow({
+    required String bookingClientUuid,
+    required Map<String, dynamic> row,
+  }) async {
+    final partnerProductId = _toIntOrNull(row['partner_product_id']);
+    if (partnerProductId == null) return null;
+
+    final orphans = await (db.select(db.orderDetails)
+          ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid))
+          ..where((t) => t.serverId.isNull())
+          ..where((t) => t.partnerProductId.equals(partnerProductId)))
+        .get();
+
+    if (orphans.length == 1) return orphans.first;
+    return null;
+  }
+
+  List<OrderDetail> _dedupeDetailRows(List<OrderDetail> details) {
+    if (details.length <= 1) return details;
+
+    final withServerId = <int, OrderDetail>{};
+    final withoutServerId = <OrderDetail>[];
+
+    for (final detail in details) {
+      final sid = detail.serverId;
+      if (sid == null) {
+        withoutServerId.add(detail);
+        continue;
+      }
+
+      final existing = withServerId[sid];
+      if (existing == null) {
+        withServerId[sid] = detail;
+        continue;
+      }
+
+      final existingUpdated = existing.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final candidateUpdated = detail.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      if (candidateUpdated.isAfter(existingUpdated)) {
+        withServerId[sid] = detail;
+      }
+    }
+
+    final dedupedOrphans = <String, OrderDetail>{};
+    for (final detail in withoutServerId) {
+      final key =
+          '${detail.partnerProductId}|${detail.quantity}|${detail.basePrice}|${detail.optionsPrice}';
+      final existing = dedupedOrphans[key];
+      if (existing == null) {
+        dedupedOrphans[key] = detail;
+        continue;
+      }
+
+      final existingUpdated = existing.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final candidateUpdated = detail.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      if (candidateUpdated.isAfter(existingUpdated)) {
+        dedupedOrphans[key] = detail;
+      }
+    }
+
+    final result = <OrderDetail>[
+      ...withServerId.values,
+      ...dedupedOrphans.values,
+    ];
+    result.sort((a, b) {
+      final aDate = a.createdAt ?? a.updatedAt;
+      final bDate = b.createdAt ?? b.updatedAt;
+      if (aDate == null && bDate == null) return 0;
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      return aDate.compareTo(bDate);
+    });
+    return result;
+  }
+
+  Future<void> _deleteDetailAndOptions(String clientDetailUuid) async {
+    await (db.delete(db.orderDetailOptions)
+          ..where((t) => t.orderDetailClientUuid.equals(clientDetailUuid)))
+        .go();
+    await (db.delete(db.orderDetails)
+          ..where((t) => t.clientDetailUuid.equals(clientDetailUuid)))
+        .go();
+  }
+
+  Future<void> _pruneOrderDetailsAfterServerUpsert({
+    required String bookingClientUuid,
+    required Set<int> keepServerIds,
+  }) async {
+    final existing = await (db.select(db.orderDetails)
+          ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid)))
+        .get();
+
+    for (final detail in existing) {
+      final sid = detail.serverId;
+      final shouldDelete = sid != null
+          ? !keepServerIds.contains(sid)
+          : keepServerIds.isNotEmpty;
+      if (shouldDelete) {
+        await _deleteDetailAndOptions(detail.clientDetailUuid);
+      }
+    }
+  }
+
+  Future<void> _deduplicateOrderDetailsByServerId(String bookingClientUuid) async {
+    final existing = await (db.select(db.orderDetails)
+          ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid)))
+        .get();
+
+    final groups = <int, List<OrderDetail>>{};
+    for (final detail in existing) {
+      final sid = detail.serverId;
+      if (sid == null) continue;
+      groups.putIfAbsent(sid, () => []).add(detail);
+    }
+
+    for (final group in groups.values) {
+      if (group.length <= 1) continue;
+      group.sort((a, b) {
+        final aDate = a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bDate = b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bDate.compareTo(aDate);
+      });
+      for (final duplicate in group.skip(1)) {
+        await _deleteDetailAndOptions(duplicate.clientDetailUuid);
+      }
+    }
+  }
+
+  Future<int> _resolveCashRoundingUnitForRow(Map<String, dynamic> row) async {
+    final fromRow = _toIntOrNull(row['cash_rounding_unit']);
+    if (fromRow != null && fromRow > 0) return fromRow;
+
+    final partnerData = row['partner_data'];
+    if (partnerData is Map) {
+      final fromPartner = _toIntOrNull(partnerData['cash_rounding_unit']);
+      if (fromPartner != null && fromPartner > 0) return fromPartner;
+    }
+
+    final settings = await CacheDao(db).getPartnerSettings();
+    return settings?.cashRoundingUnit ?? 0;
   }
 
   bool _toBool(dynamic v) {

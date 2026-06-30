@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import '../../data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/local/db/daos/cache_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
@@ -14,6 +15,7 @@ import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
@@ -330,6 +332,9 @@ class PaymentProvider extends ChangeNotifier {
         orderSnapshot: row,
         apiResponse: payResp,
         offline: false,
+        paidAmount: paidAmount,
+        changeAmount: changeAmount,
+        paymentMethod: paymentMethod,
       );
       return;
     }
@@ -490,21 +495,22 @@ class PaymentProvider extends ChangeNotifier {
         .toString();
     final serverId = _toInt(row['server_id'] ?? row['id']);
 
-    if (clientUuid.isNotEmpty) {
-      final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
-      if (bundle != null) {
-        final map = await _bundleToDetailMap(bundle);
-        return _enrichOrderDetailPaymentData(map);
-      }
-    }
-
     if (serverId == null || serverId <= 0) {
-      throw Exception('Order ID tidak valid');
+      if (clientUuid.isEmpty) {
+        throw Exception('Order ID tidak valid');
+      }
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+      if (bundle == null) {
+        throw Exception('Detail order offline tidak tersedia');
+      }
+      final map = await _bundleToDetailMap(bundle);
+      return _enrichOrderDetailPaymentData(map);
     }
 
     if (connectivity.isOnline) {
       try {
         final detail = await repo.fetchOrderDetail(serverId);
+        await bookingOrdersDao.upsertFromServer(detail);
         await _cacheManualPaymentMethodFromDetail(detail);
         return _enrichOrderDetailPaymentData(detail);
       } catch (_) {
@@ -567,6 +573,8 @@ class PaymentProvider extends ChangeNotifier {
       cloned['available_payment_methods'] = cachedMethods;
     }
 
+    await _applyCashRoundingFields(cloned);
+
     final method = (cloned['payment_method'] ?? '').toString();
 
     if (method != 'manual_qris' &&
@@ -615,6 +623,18 @@ class PaymentProvider extends ChangeNotifier {
     cloned['latest_payment'] = latest;
 
     return cloned;
+  }
+
+  Future<void> _applyCashRoundingFields(Map<String, dynamic> detail) async {
+    final partnerUnit = await CacheDao(cachedPaymentMethodsDao.db)
+        .getPartnerCashRoundingUnit();
+    final unit = CashRoundingHelpers.resolveCashRoundingUnit(
+      detail,
+      partnerCashRoundingUnit: partnerUnit,
+    );
+    if (unit > 0) {
+      detail['cash_rounding_unit'] = unit;
+    }
   }
 
   Future<Map<String, dynamic>> enrichPaymentMethodInstruction(

@@ -231,33 +231,34 @@ class ProcessProvider extends ChangeNotifier {
   ) async {
     final clientUuid =
         (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
-    if (clientUuid.isNotEmpty) {
+    final serverId = _toId(row['server_id'] ?? row['id']);
+
+    if (serverId <= 0) {
+      if (clientUuid.isEmpty) {
+        throw Exception('Order ID tidak valid');
+      }
       final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
-      if (bundle != null) {
-        return _bundleToDetailMap(bundle);
+      if (bundle == null) {
+        throw Exception('Detail order offline tidak tersedia');
+      }
+      return _bundleToDetailMap(bundle);
+    }
+
+    if (connectivity.isOnline) {
+      try {
+        final detail = await repo.fetchOrderDetail(serverId);
+        await bookingOrdersDao.upsertFromServer(detail);
+        return detail;
+      } catch (_) {
+        final cached = await _getMirrorDetailMap(serverId);
+        if (cached != null) return cached;
+        rethrow;
       }
     }
 
-    final serverId = _toId(row['id']);
-    if (serverId <= 0) {
-      throw Exception('Order ID tidak valid');
-    }
-
-    if (!connectivity.isOnline) {
-      final cached = await _getMirrorDetailMap(serverId);
-      if (cached != null) return cached;
-      throw Exception('Detail offline tidak tersedia di cache');
-    }
-
-    try {
-      final detail = await repo.fetchOrderDetail(serverId);
-      await bookingOrdersDao.upsertFromServer(detail);
-      return detail;
-    } catch (_) {
-      final cached = await _getMirrorDetailMap(serverId);
-      if (cached != null) return cached;
-      rethrow;
-    }
+    final cached = await _getMirrorDetailMap(serverId);
+    if (cached != null) return cached;
+    throw Exception('Detail offline tidak tersedia di cache');
   }
 
   Future<Map<String, dynamic>> getPrintDetailFromListItem(
@@ -531,10 +532,20 @@ class ProcessProvider extends ChangeNotifier {
         final status = (res['status'] ?? '').toString();
 
         if (status == 'warning' || res['already_processed'] == true) {
+          await _syncServeResultToMirror(
+            serverId: id,
+            row: row,
+            apiResponse: res,
+          );
           await load();
           return res;
         }
 
+        await _syncServeResultToMirror(
+          serverId: id,
+          row: row,
+          apiResponse: res,
+        );
         await load();
         return res;
       } on DioException catch (e) {
@@ -685,8 +696,7 @@ class ProcessProvider extends ChangeNotifier {
           syncDirty: false,
           orderSnapshot: {...row, 'order_status': nextStatus},
         );
-        items.removeWhere((e) => _toId(e['id']) == id);
-        notifyListeners();
+        await load();
         return res;
       }
 
@@ -872,6 +882,44 @@ class ProcessProvider extends ChangeNotifier {
       syncIntent: 'FINISH',
       syncDirty: true,
       orderSnapshot: row,
+    );
+  }
+
+  Future<void> _syncServeResultToMirror({
+    required int serverId,
+    required Map<String, dynamic> row,
+    Map<String, dynamic>? apiResponse,
+  }) async {
+    Map<String, dynamic> detail = Map<String, dynamic>.from(row);
+
+    try {
+      final fresh = await repo.fetchOrderDetail(serverId);
+      await bookingOrdersDao.upsertFromServer(fresh);
+      detail = fresh;
+    } catch (e) {
+      debugPrint('ProcessProvider serve mirror fetch failed for $serverId: $e');
+      final cached = await _getMirrorDetailMap(serverId);
+      if (cached != null) {
+        detail = cached;
+      }
+    }
+
+    final nextStatus = OrderStageResolver.resolveAfterServeItems(
+      order: detail,
+      apiResponse: apiResponse,
+    );
+    final allServed = OrderStageResolver.movesToDoneTab(nextStatus) ||
+        (isOpenBillOrder(detail) && nextStatus == 'UNPAID');
+
+    await tabCoordinator.transitionOrderStage(
+      serverId: serverId,
+      orderStatus: nextStatus,
+      syncIntent: allServed ? 'FINISH' : 'PROCESS',
+      syncDirty: false,
+      orderSnapshot: {
+        ...detail,
+        'order_status': nextStatus,
+      },
     );
   }
 }

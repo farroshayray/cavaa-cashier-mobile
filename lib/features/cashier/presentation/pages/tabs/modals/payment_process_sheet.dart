@@ -13,6 +13,7 @@ import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 Map<String, dynamic> _normalizePaymentInstruction(Map<String, dynamic> raw) {
   final type = (raw['payment_type'] ?? raw['type'] ?? '').toString();
@@ -503,7 +504,6 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       // mirip web: kalau PAYMENT REQUEST dan ada payment_request → auto isi paid = total
       final status = (o['order_status'] ?? '').toString();
       final pr = o['payment_request'];
-      final total = _grandTotalFromOrder(o);
       final method = (o['payment_method'] ?? '').toString();
       final availableMethods = _availablePaymentMethods;
 
@@ -848,7 +848,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final ok = await _validateBeforePrint();
     if (!ok) return;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final total = _currentBillTotal;
     final paid  = _num(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
@@ -887,7 +887,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
 
   Future<bool> _validateBeforePrint() async {
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
+    final total = _currentBillTotal;
     final paid  = _num(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
@@ -1037,7 +1037,6 @@ class _Body extends StatelessWidget {
         _toBool(order['openbill_flag']) ||
         method == 'OPENBILL' ||
         status.startsWith('OPENBILL');
-    final total = _calcGrandTotalFromMap(order);
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
 
@@ -1084,10 +1083,10 @@ class _Body extends StatelessWidget {
     final cashRoundingUnit = _num(order['cash_rounding_unit']).toInt();
     final effectiveCashRounding = isCashPayment
         ? _cashRoundingAmountForOrder(order, basePayable)
-        : _num(order['cash_rounding_amount']);
+        : 0;
     final orderInfoTotal = isCashPayment
         ? basePayable + effectiveCashRounding
-        : total;
+        : basePayable;
 
     final isQrisXendit = effectiveMethodType == 'QRIS' &&
         canChooseFinalPaymentMethod &&
@@ -1193,21 +1192,6 @@ class _Body extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  num _calcGrandTotalFromMap(Map<String, dynamic> order) {
-    if (order['grand_total_local'] != null) {
-      return _num(order['grand_total_local']).ceil();
-    }
-    final subtotal = _num(order['total_order_value']);
-    final isPpnActive = _toBool(order['is_ppn_active']);
-    final ppnPercent = _num(order['ppn']);
-    final roundingAmount = _num(order['cash_rounding_amount']);
-
-    final baseTotal = isPpnActive
-        ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
-        : subtotal.ceil();
-    return baseTotal + roundingAmount;
   }
 
   num _calcBillTotalFromMap(Map<String, dynamic> order, String paymentType) {
@@ -1641,21 +1625,6 @@ class _OrderInfoCard extends StatelessWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 8),
-          ] else if (roundingAmount > 0) ...[
-            Row(
-              children: [
-                Text(
-                  'Pembulatan Cash',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
-                ),
-                const Spacer(),
-                Text(
-                  'Rp ${_rupiah(roundingAmount)}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-                ),
-              ],
-            ),
             const SizedBox(height: 8),
           ],
 
@@ -2838,14 +2807,7 @@ int _roundedCashPayable(num baseTotal, int unit) {
 }
 
 num _cashRoundingAmountForOrder(Map<String, dynamic> order, num baseTotal) {
-  final stored = _num(order['cash_rounding_amount']);
-  if (stored > 0) return stored;
-
-  final unit = _num(order['cash_rounding_unit']).toInt();
-  if (unit <= 0) return 0;
-
-  final rounded = _roundedCashPayable(baseTotal, unit);
-  return rounded - baseTotal.ceil();
+  return CashRoundingHelpers.cashRoundingAmountForOrder(order, baseTotal);
 }
 
 num _basePayableFromOrder(Map<String, dynamic> order) {
@@ -2903,21 +2865,6 @@ String _paymentMethodMessage(Map<String, dynamic> order) {
 
   // Default fallback
   return 'Order ini menggunakan metode $method. Modal ini menampilkan detail pembayaran (jika ada).';
-}
-
-num _grandTotalFromOrder(Map<String, dynamic> order) {
-  if (order['grand_total_local'] != null) {
-    return _num(order['grand_total_local']).ceil();
-  }
-  final subtotal = _num(order['total_order_value']);
-  final isPpnActive = _toBool(order['is_ppn_active']);
-  final ppnPercent = _num(order['ppn']);
-  final roundingAmount = _num(order['cash_rounding_amount']);
-
-  final baseTotal = isPpnActive
-      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
-      : subtotal.ceil();
-  return baseTotal + roundingAmount;
 }
 
 String _manualTypeLabel(String type) {
