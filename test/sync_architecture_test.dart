@@ -1,5 +1,6 @@
 import 'package:cavaa_cashier/features/cashier/data/local/db/cashier_db.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/offline_catch_up_policy.dart';
+import 'package:cavaa_cashier/features/cashier/data/sync/order_catch_up_sync_policy.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_rank.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_sync_guard.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_sync_intent_chain.dart';
@@ -639,6 +640,72 @@ void main() {
           serverId: 10,
         ),
         'OFFLINE_CATCH_UP',
+      );
+    });
+  });
+
+  group('OrderCatchUpSyncPolicy', () {
+    test('openbill UNPAID synced with server UNPAID needs no catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'UNPAID',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+          hasDirtyServedDetails: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('dirty served details still need catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'SERVED',
+          serverStatus: 'SERVED',
+          openbillFlag: true,
+          hasDirtyServedDetails: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('openbill SERVED local ahead of server UNPAID needs catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'SERVED',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+        ),
+        isTrue,
+      );
+    });
+
+    test('openbill SERVED local and server both SERVED needs no catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'SERVED',
+          serverStatus: 'SERVED',
+          openbillFlag: true,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+        ),
+        isFalse,
+      );
+    });
+
+    test('openbill UNPAID with PAY intent still needs catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'UNPAID',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+          syncIntent: 'PAY',
+        ),
+        isTrue,
       );
     });
   });

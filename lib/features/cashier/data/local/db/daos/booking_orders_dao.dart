@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/local/db/daos/cache_dao.dart';
+import '/features/cashier/data/sync/order_catch_up_sync_policy.dart';
 import '/features/cashier/data/sync/order_stage_rank.dart';
 import '/features/cashier/data/sync/order_sync_intent_chain.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
@@ -558,47 +559,14 @@ class BookingOrdersDao {
     required BookingOrder local,
     String? serverStatus,
   }) async {
-    final server = (serverStatus ?? '').trim().toUpperCase();
-    if (server.isEmpty) return false;
-
-    final localStatus = local.orderStatus.trim().toUpperCase();
-
-    if (await hasDirtyServedDetails(local.clientUuid)) {
-      return true;
-    }
-
-    if (local.openbillFlag &&
-        localStatus == 'UNPAID' &&
-        server == 'OPENBILL_WAITING_ORDER') {
-      return true;
-    }
-
-    if (local.paidAmountLocal != null) {
-      if (localStatus == 'SERVED' && server != 'SERVED') {
-        return true;
-      }
-      if (localStatus == 'UNPAID' &&
-          {'UNPAID', 'OPENBILL_WAITING_ORDER'}.contains(server)) {
-        return true;
-      }
-    }
-
-    // Openbill serve synced: local + server both UNPAID, no payment queued yet.
-    if (local.openbillFlag && localStatus == 'UNPAID' && server == 'UNPAID') {
-      return false;
-    }
-
-    if (OrderStageRank.isLocalAheadOfServer(
+    return OrderCatchUpSyncPolicy.needsCatchUp(
       localStatus: local.orderStatus,
-      serverStatus: server,
+      serverStatus: serverStatus ?? '',
       openbillFlag: local.openbillFlag,
-      syncIntent: local.syncIntent,
+      hasDirtyServedDetails: await hasDirtyServedDetails(local.clientUuid),
       paidAmountLocal: local.paidAmountLocal,
-    )) {
-      return true;
-    }
-
-    return false;
+      syncIntent: local.syncIntent,
+    );
   }
 
   /// Links offline dirty mirrors to an existing server row for the same checkout.
@@ -1111,6 +1079,23 @@ class BookingOrdersDao {
     final localBefore = await getByClientUuid(clientUuid);
     final appliedIntent = applied['sync_intent']?.toString().toUpperCase() ?? '';
     final serverApplied = applied['order_status']?.toString();
+
+    if (appliedIntent == 'PROCESS' ||
+        appliedIntent == 'FINISH' ||
+        appliedIntent == 'SERVE_ITEMS' ||
+        appliedIntent == 'OFFLINE_CATCH_UP') {
+      await _clearDetailSyncDirty(clientUuid);
+    }
+
+    if ((appliedIntent == 'CREATE' || appliedIntent == 'OFFLINE_CATCH_UP') &&
+        applied['server_id'] != null) {
+      await _linkDetailServerIdsFromApplied(
+        clientUuid: clientUuid,
+        applied: applied,
+      );
+      await reconcileDuplicateMirrors();
+    }
+
     final stillNeedsSync = localBefore != null &&
         await orderNeedsCatchUpSync(
           local: localBefore,
@@ -1139,23 +1124,6 @@ class BookingOrdersDao {
             syncedAt: Value(DateTime.now()),
           ),
         );
-
-    if ((appliedIntent == 'CREATE' || appliedIntent == 'OFFLINE_CATCH_UP') &&
-        applied['server_id'] != null) {
-      if (appliedIntent == 'CREATE') {
-        await _linkDetailServerIdsFromApplied(
-          clientUuid: clientUuid,
-          applied: applied,
-        );
-      }
-      await reconcileDuplicateMirrors();
-    }
-
-    if (appliedIntent == 'PROCESS' ||
-        appliedIntent == 'FINISH' ||
-        appliedIntent == 'SERVE_ITEMS') {
-      await _clearDetailSyncDirty(clientUuid);
-    }
   }
 
   Future<void> _clearDetailSyncDirty(String bookingClientUuid) async {
@@ -1175,19 +1143,33 @@ class BookingOrdersDao {
     final details = applied['order_details'];
     if (details is! List) return;
 
+    final unlinked = await (db.select(db.orderDetails)
+          ..where((t) => t.bookingOrderClientUuid.equals(clientUuid))
+          ..where((t) => t.serverId.isNull())
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
+    var unlinkedIndex = 0;
+
     for (final raw in details) {
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
       final clientDetailUuid = map['client_detail_uuid']?.toString();
       final serverDetailId = _toIntOrNull(map['id'] ?? map['detail_id']);
-      if (clientDetailUuid == null ||
-          clientDetailUuid.isEmpty ||
-          serverDetailId == null) {
-        continue;
+      if (serverDetailId == null) continue;
+
+      String? targetClientUuid;
+      if (clientDetailUuid != null && clientDetailUuid.isNotEmpty) {
+        targetClientUuid = clientDetailUuid;
+      } else if (unlinkedIndex < unlinked.length) {
+        targetClientUuid = unlinked[unlinkedIndex].clientDetailUuid;
+        unlinkedIndex++;
       }
 
+      if (targetClientUuid == null || targetClientUuid.isEmpty) continue;
+      final detailUuid = targetClientUuid;
+
       await (db.update(db.orderDetails)
-            ..where((t) => t.clientDetailUuid.equals(clientDetailUuid)))
+            ..where((t) => t.clientDetailUuid.equals(detailUuid)))
           .write(
         OrderDetailsCompanion(
           serverId: Value(serverDetailId),

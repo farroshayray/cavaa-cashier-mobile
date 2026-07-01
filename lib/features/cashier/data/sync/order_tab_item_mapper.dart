@@ -93,6 +93,8 @@ class OrderTabItemMapper {
       'table': {'table_no': tableNo},
       'is_synced': row['sync_dirty'] != true,
       'is_local_only': false,
+      'sync_status': _mirrorSyncStatus(row),
+      'last_error': row['sync_error']?.toString(),
       'sort_time': row['created_at']?.toString() ?? row['updated_at']?.toString(),
     };
   }
