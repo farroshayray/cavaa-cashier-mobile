@@ -8,7 +8,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
-import '/features/cashier/presentation/printing/receipt_amount_helpers.dart';
+import '/features/cashier/presentation/printing/receipt_order_enricher.dart';
+import '/features/cashier/presentation/printing/receipt_totals.dart';
 import '/features/cashier/presentation/printing/receipt_pdf_builder.dart';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
@@ -47,8 +48,7 @@ class ReceiptActionService {
 
       final bytes = await ReceiptPrinter().buildReceiptBytes(
         order: prepared.order,
-        paidAmount: prepared.paid,
-        changeAmount: prepared.change,
+        totals: prepared.totals,
       );
 
       await pm.write(bytes);
@@ -76,8 +76,7 @@ class ReceiptActionService {
           (prepared.order['booking_order_code'] ?? 'order').toString();
       final pdfBytes = await ReceiptPdfBuilder().buildReceiptPdf(
         order: prepared.order,
-        paidAmount: prepared.paid,
-        changeAmount: prepared.change,
+        totals: prepared.totals,
       );
 
       final dir = await getTemporaryDirectory();
@@ -99,15 +98,15 @@ class ReceiptActionService {
   Future<
       ({
         Map<String, dynamic> order,
-        num paid,
-        num change,
+        ReceiptTotals totals,
       })> _prepareOrder({
     required Map<String, dynamic> row,
     required FetchOrderDetail fetchOrder,
   }) async {
-    final order = await fetchOrder(row);
-    final amounts = receiptPaidChangeAmounts(order);
-    return (order: order, paid: amounts.paid, change: amounts.change);
+    final raw = await fetchOrder(row);
+    final order = enrichReceiptOrder(raw);
+    final totals = buildReceiptTotals(order);
+    return (order: order, totals: totals);
   }
 
   void _snack(String message) {

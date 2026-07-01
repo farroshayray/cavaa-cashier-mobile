@@ -2,18 +2,18 @@
 import 'dart:typed_data';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'receipt_format_helpers.dart';
+import 'receipt_order_enricher.dart';
+import 'receipt_totals.dart';
 
 class ReceiptPrinter {
   Future<Uint8List> buildReceiptBytes({
     required Map<String, dynamic> order,
-    required num paidAmount,
-    required num changeAmount,
+    ReceiptTotals? totals,
     PaperSize paperSize = PaperSize.mm58,
   }) async {
     final bytes = await _buildReceiptBytes(
       order: order,
-      paidAmount: paidAmount,
-      changeAmount: changeAmount,
+      totals: totals ?? buildReceiptTotals(order),
       paperSize: paperSize,
     );
     return Uint8List.fromList(bytes);
@@ -21,8 +21,7 @@ class ReceiptPrinter {
 
   Future<List<int>> _buildReceiptBytes({
     required Map<String, dynamic> order,
-    required num paidAmount,
-    required num changeAmount,
+    required ReceiptTotals totals,
     required PaperSize paperSize,
   }) async {
     final profile = await CapabilityProfile.load();
@@ -32,29 +31,21 @@ class ReceiptPrinter {
 
     final code = (order['booking_order_code'] ?? '-').toString();
     final customer = (order['customer_name'] ?? '-').toString();
-    final subtotal = receiptNum(order['total_order_value']);
-    final isPpnActive = receiptToBool(order['is_ppn_active']);
-    final ppnPercent = receiptNum(order['ppn']);
-    final ppnAmount = isPpnActive ? (subtotal * ppnPercent / 100) : 0;
-    final baseGrandTotal = isPpnActive
-        ? (subtotal + ppnAmount).ceil()
-        : subtotal.ceil();
-    final payment = order['payment'] is Map ? order['payment'] as Map : null;
-    final latestPayment =
-        order['latest_payment'] is Map ? order['latest_payment'] as Map : null;
-    final roundingAmount = receiptNum(
-      order['cash_rounding_amount'] ??
-          payment?['rounding_amount'] ??
-          latestPayment?['rounding_amount'],
-    );
-    final grandTotal = baseGrandTotal + roundingAmount;
+    final subtotal = totals.subtotal;
+    final isPpnActive = totals.isPpnActive;
+    final ppnPercent = totals.ppnPercent;
+    final ppnAmount = totals.ppnAmount;
+    final roundingAmount = totals.roundingAmount;
+    final grandTotal = totals.grandTotal;
+    final paidAmount = totals.paid;
+    final changeAmount = totals.change;
 
     bytes.addAll(gen.reset());
     final storeName = (order['store_name'] ?? 'CAVAA').toString().trim();
     final cashierName = (order['employee_name'] ?? '-').toString();
     final storeAddress = (order['store_address'] ?? '').toString().trim();
 
-    final wifiShown = receiptNum(order['store_is_wifi_shown']).toInt() == 1;
+    final wifiShown = receiptWifiShown(order);
     final wifiUser = (order['store_wifi_user'] ?? '').toString().trim();
     final wifiPass = (order['store_wifi_password'] ?? '').toString().trim();
 
@@ -103,14 +94,7 @@ class ReceiptPrinter {
 
     bytes.addAll(gen.text('Order  : $code'));
 
-    final paidAtRaw =
-        (order['payment'] is Map) ? (order['payment']['updated_at']) : null;
-
-    final latestPaidAtRaw = (order['latest_payment'] is Map)
-        ? (order['latest_payment']['updated_at'])
-        : null;
-
-    final paidAtStr = receiptFormatTime(paidAtRaw ?? latestPaidAtRaw);
+    final paidAtStr = receiptFormatTime(receiptPaidAtRaw(order));
 
     if (paidAtStr.isNotEmpty) {
       bytes.addAll(gen.text('Waktu  : $paidAtStr'));

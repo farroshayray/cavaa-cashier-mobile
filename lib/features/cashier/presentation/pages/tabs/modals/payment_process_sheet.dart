@@ -7,6 +7,7 @@ import '/core/utils/open_url.dart';
 import '/features/cashier/data/orders_api.dart';
 import '/features/cashier/data/sync/payment_submit_recovery.dart';
 import '/core/storage/secure_storage_service.dart';
+import '/features/cashier/presentation/printing/receipt_order_enricher.dart';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
@@ -918,11 +919,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       final p = pm.defaultPrinter;
       if (p == null) throw Exception('Default printer belum dipilih');
 
-      // 1) build bytes
       final bytes = await ReceiptPrinter().buildReceiptBytes(
-        order: _order!,
-        paidAmount: paid,
-        changeAmount: change,
+        order: _orderForReceiptPrint(_order!, paid: paid, change: change),
       );
 
       // 2) kirim via printer manager (yang pegang koneksi)
@@ -1011,12 +1009,25 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (p == null) throw Exception('Default printer belum dipilih');
 
     final bytes = await ReceiptPrinter().buildReceiptBytes(
-      order: order,
-      paidAmount: paid,
-      changeAmount: change,
+      order: _orderForReceiptPrint(order, paid: paid, change: change),
     );
 
     await pm.write(bytes);
+  }
+
+  Map<String, dynamic> _orderForReceiptPrint(
+    Map<String, dynamic> order, {
+    required num paid,
+    required num change,
+  }) {
+    final enriched = enrichReceiptOrder(order);
+    enriched['payment'] = {
+      if (enriched['payment'] is Map)
+        ...Map<String, dynamic>.from(enriched['payment'] as Map),
+      'paid_amount': paid,
+      'change_amount': change,
+    };
+    return enriched;
   }
 }
 

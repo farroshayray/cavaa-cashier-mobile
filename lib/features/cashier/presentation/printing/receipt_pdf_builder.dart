@@ -1,16 +1,15 @@
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '/core/config/env.dart';
 import 'receipt_format_helpers.dart';
+import 'receipt_order_enricher.dart';
+import 'receipt_totals.dart';
 
-/// Mirror layout/data dari `resources/views/pages/employee/cashier/pdf/receipt.blade.php`
-/// yang dipakai web customer saat download struk.
+/// PDF receipt aligned with thermal output in [ReceiptPrinter].
 class ReceiptPdfBuilder {
-  static const _pageWidth = 227.0; // 80mm thermal, sama seperti web
+  static const _pageWidth = 227.0;
   static const _marginH = 10.0;
   static const _marginV = 10.0;
   static const _lineHeight = 13.0;
@@ -18,75 +17,20 @@ class ReceiptPdfBuilder {
   static final _mono = pw.TextStyle(font: pw.Font.courier(), fontSize: 10);
   static final _monoBold =
       pw.TextStyle(font: pw.Font.courier(), fontSize: 10, fontWeight: pw.FontWeight.bold);
-  static final _subtitle =
-      pw.TextStyle(font: pw.Font.courier(), fontSize: 8, color: PdfColors.black);
-  static final _thankYou =
-      pw.TextStyle(font: pw.Font.courier(), fontSize: 8.5, color: PdfColors.black);
-  static final _thankYouItalic = pw.TextStyle(
-    font: pw.Font.courier(),
-    fontSize: 8.5,
-    fontStyle: pw.FontStyle.italic,
-    color: PdfColors.black,
-  );
 
   Future<Uint8List> buildReceiptPdf({
     required Map<String, dynamic> order,
-    required num paidAmount,
-    required num changeAmount,
+    ReceiptTotals? totals,
   }) async {
-    final payment = order['payment'] is Map
-        ? Map<String, dynamic>.from(order['payment'] as Map)
-        : null;
-    final latestPayment = order['latest_payment'] is Map
-        ? Map<String, dynamic>.from(order['latest_payment'] as Map)
-        : null;
-
-    final total = receiptNum(order['total_order_value']).toInt();
-    final isPpnActive = receiptToBool(order['is_ppn_active']);
-    final ppnPercent = receiptNum(order['ppn']);
-    var grandTotalBeforeRounding = total;
-    if (isPpnActive) {
-      grandTotalBeforeRounding =
-          (total + (total * ppnPercent / 100)).ceil();
-    }
-
-    final roundingAmount = receiptNum(
-      order['cash_rounding_amount'] ??
-          payment?['rounding_amount'] ??
-          latestPayment?['rounding_amount'],
-    ).toInt();
-    final grandTotal = grandTotalBeforeRounding + roundingAmount;
-
-    final storeName = (order['store_name'] ?? 'CAVAA').toString().trim();
-    final storeAddress = (order['store_address'] ?? '').toString().trim();
-    final customer = (order['customer_name'] ?? '—').toString();
-    final code = (order['booking_order_code'] ?? '-').toString();
-    final cashierName = (order['employee_name'] ?? '').toString().trim();
-    final createdAt = receiptFormatTime(order['created_at']);
-    final tableNo = _tableNo(order);
-    final paymentMethod =
-        receiptPaymentMethodLabel(order['payment_method']);
-
-    final wifiShown = receiptToBool(order['store_is_wifi_shown']);
-    final wifiUser = (order['store_wifi_user'] ?? '').toString().trim();
-    final wifiPass = (order['store_wifi_password'] ?? '').toString().trim();
-
-    final logo = await _loadPartnerLogo(order);
+    final resolvedTotals = totals ?? buildReceiptTotals(order);
+    final widgets = _buildContent(order: order, totals: resolvedTotals);
     final pageHeight = _estimatePageHeight(
       order: order,
-      hasLogo: logo != null,
-      hasAddress: storeAddress.isNotEmpty,
-      hasTable: tableNo != null,
-      hasCashier: cashierName.isNotEmpty,
-      isPpnActive: isPpnActive,
-      roundingAmount: roundingAmount,
-      wifiShown: wifiShown,
-      wifiUser: wifiUser,
-      wifiPass: wifiPass,
+      totals: resolvedTotals,
+      widgetCount: widgets.length,
     );
 
     final doc = pw.Document();
-
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat(
@@ -99,68 +43,7 @@ class ReceiptPdfBuilder {
         ),
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-          children: [
-            if (logo != null) ...[
-              pw.Center(
-                child: pw.ClipRRect(
-                  horizontalRadius: 6,
-                  verticalRadius: 6,
-                  child: pw.Image(logo, width: 50, height: 50, fit: pw.BoxFit.contain),
-                ),
-              ),
-              pw.SizedBox(height: 6),
-            ],
-            pw.Center(
-              child: pw.Text(storeName, style: _monoBold, textAlign: pw.TextAlign.center),
-            ),
-            if (storeAddress.isNotEmpty) ...[
-              pw.SizedBox(height: 2),
-              pw.Center(
-                child: pw.Text(storeAddress, style: _subtitle, textAlign: pw.TextAlign.center),
-              ),
-            ],
-            _dashedSep(),
-            _metaRow('Kode', code),
-            _metaRow('Nama', customer),
-            if (tableNo != null) _metaRow('Meja', tableNo),
-            if (createdAt.isNotEmpty) _metaRow('Waktu', createdAt),
-            if (cashierName.isNotEmpty) _metaRow('Kasir', cashierName),
-            _dashedSep(),
-            _itemsHeader(),
-            ..._buildLineItems(order),
-            _dashedSep(),
-            _totalsBlock(
-              total: total,
-              isPpnActive: isPpnActive,
-              ppnPercent: ppnPercent,
-              roundingAmount: roundingAmount,
-              grandTotal: grandTotal,
-            ),
-            _metaRow('Metode Pembayaran', paymentMethod),
-            _metaRow('Jumlah Dibayarkan', receiptFormatMoney(paidAmount)),
-            _metaRow('Kembalian', receiptFormatMoney(changeAmount)),
-            if (wifiShown && (wifiUser.isNotEmpty || wifiPass.isNotEmpty)) ...[
-              _dashedSep(),
-              _wifiBox(wifiUser: wifiUser, wifiPass: wifiPass),
-            ],
-            _dashedSep(),
-            pw.Center(
-              child: pw.Text(
-                'Terima kasih atas kunjungan Anda!',
-                style: _thankYou,
-                textAlign: pw.TextAlign.center,
-              ),
-            ),
-            pw.SizedBox(height: 4),
-            pw.Center(
-              child: pw.Text(
-                'Sampai jumpa kembali',
-                style: _thankYouItalic,
-                textAlign: pw.TextAlign.center,
-              ),
-            ),
-            _dashedSep(),
-          ],
+          children: widgets,
         ),
       ),
     );
@@ -168,125 +51,73 @@ class ReceiptPdfBuilder {
     return doc.save();
   }
 
-  String? _tableNo(Map<String, dynamic> order) {
-    final table = order['table'];
-    if (table is Map) {
-      final no = table['table_no']?.toString().trim();
-      if (no != null && no.isNotEmpty) return no;
-    }
-    final snap = order['table_no_snapshot']?.toString().trim();
-    if (snap != null && snap.isNotEmpty && snap != '-') return snap;
-    return null;
-  }
-
-  Future<pw.MemoryImage?> _loadPartnerLogo(Map<String, dynamic> order) async {
-    final partner = order['partner'];
-    if (partner is! Map) return null;
-
-    final logo = partner['logo']?.toString().trim();
-    if (logo == null || logo.isEmpty) return null;
-
-    final url = logo.startsWith('http') ? logo : '${Env.baseUrl}/storage/$logo';
-
-    try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
-        return pw.MemoryImage(response.bodyBytes);
-      }
-    } catch (_) {}
-
-    return null;
-  }
-
-  double _estimatePageHeight({
+  List<pw.Widget> _buildContent({
     required Map<String, dynamic> order,
-    required bool hasLogo,
-    required bool hasAddress,
-    required bool hasTable,
-    required bool hasCashier,
-    required bool isPpnActive,
-    required int roundingAmount,
-    required bool wifiShown,
-    required String wifiUser,
-    required String wifiPass,
+    required ReceiptTotals totals,
   }) {
-    var lines = 18.0;
-    if (hasLogo) lines += 4;
-    if (hasAddress) lines += 1;
-    if (hasTable) lines += 1;
-    if (hasCashier) lines += 1;
-    if (isPpnActive) lines += 2;
-    if (roundingAmount > 0) lines += 1;
-    if (wifiShown && (wifiUser.isNotEmpty || wifiPass.isNotEmpty)) {
-      lines += 4;
-      if (wifiUser.isNotEmpty) lines += 1;
-      if (wifiPass.isNotEmpty) lines += 1;
-    }
+    final code = (order['booking_order_code'] ?? '-').toString();
+    final customer = (order['customer_name'] ?? '-').toString();
+    final storeName = (order['store_name'] ?? 'CAVAA').toString().trim();
+    final storeAddress = (order['store_address'] ?? '').toString().trim();
+    final cashierName = (order['employee_name'] ?? '-').toString();
+    final paidAtStr = receiptFormatTime(receiptPaidAtRaw(order));
 
-    final details = (order['order_details'] as List?) ?? [];
-    for (final it in details) {
-      lines += 1.8;
-      final m = (it as Map).cast<String, dynamic>();
-      final opts = (m['order_detail_options'] as List?) ?? [];
-      lines += opts.length * 0.9;
-    }
+    final wifiShown = receiptWifiShown(order);
+    final wifiUser = (order['store_wifi_user'] ?? '').toString().trim();
+    final wifiPass = (order['store_wifi_password'] ?? '').toString().trim();
 
-    const minHeight = 280.0;
-    const maxHeight = 1600.0;
-    return ((_marginV * 2) + (lines * _lineHeight)).clamp(minHeight, maxHeight);
-  }
-
-  pw.Widget _dashedSep() {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 6),
-      child: pw.Text(
-        '-' * 34,
-        style: _subtitle,
-        textAlign: pw.TextAlign.center,
+    return [
+      pw.Center(
+        child: pw.Text(storeName, style: _monoBold, textAlign: pw.TextAlign.center),
       ),
-    );
-  }
-
-  pw.Widget _metaRow(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 1),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.SizedBox(
-            width: _pageWidth * 0.34,
-            child: pw.Text(label, style: _mono),
-          ),
-          pw.Expanded(
-            child: pw.Text(
-              value,
-              style: _mono,
-              textAlign: pw.TextAlign.right,
-            ),
-          ),
-        ],
+      pw.SizedBox(height: 4),
+      pw.Center(child: pw.Text('=' * 28, style: _mono)),
+      if (storeAddress.isNotEmpty) ...[
+        pw.SizedBox(height: 2),
+        pw.Center(
+          child: pw.Text(storeAddress, style: _mono, textAlign: pw.TextAlign.center),
+        ),
+      ],
+      pw.SizedBox(height: 2),
+      pw.Center(
+        child: pw.Text('Struk Pembayaran', style: _mono, textAlign: pw.TextAlign.center),
       ),
-    );
-  }
-
-  pw.Widget _itemsHeader() {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 3),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Expanded(child: pw.Text('Item', style: _monoBold)),
-          pw.SizedBox(width: 12),
-          pw.SizedBox(
-            width: _subtotalColWidth,
-            child: pw.Text('Subtotal', style: _monoBold, textAlign: pw.TextAlign.right),
-          ),
-        ],
+      _hr(),
+      _line('Order  : $code'),
+      if (paidAtStr.isNotEmpty) _line('Waktu  : $paidAtStr'),
+      _line('Nama   : $customer'),
+      _line('Kasir  : $cashierName'),
+      _hr(),
+      ..._buildLineItems(order),
+      _hr(),
+      _amountRow('TOTAL', receiptRupiah(totals.subtotal.ceil())),
+      if (totals.isPpnActive)
+        _amountRow(
+          'PPN (${receiptFormatPercent(totals.ppnPercent)}%)',
+          receiptRupiah(totals.ppnAmount.ceil()),
+        ),
+      if (totals.roundingAmount > 0)
+        _amountRow('PEMBULATAN', receiptRupiah(totals.roundingAmount)),
+      _amountRow('GRAND TOTAL', receiptRupiah(totals.grandTotal), bold: true),
+      _amountRow('BAYAR', receiptRupiah(totals.paid)),
+      _amountRow('KEMBALI', receiptRupiah(totals.change)),
+      if (wifiShown && (wifiUser.isNotEmpty || wifiPass.isNotEmpty)) ...[
+        _hr(),
+        pw.Text('WiFi', style: _monoBold),
+        if (wifiUser.isNotEmpty) _line('User : $wifiUser'),
+        if (wifiPass.isNotEmpty) _line('Pass : $wifiPass'),
+        _hr(),
+      ],
+      _hr(),
+      pw.Center(
+        child: pw.Text('Terima kasih', style: _mono, textAlign: pw.TextAlign.center),
       ),
-    );
+      pw.SizedBox(height: 8),
+      pw.Center(
+        child: pw.Text('-' * 29, style: _mono, textAlign: pw.TextAlign.center),
+      ),
+    ];
   }
-
-  static const _subtotalColWidth = 76.0;
 
   List<pw.Widget> _buildLineItems(Map<String, dynamic> order) {
     final widgets = <pw.Widget>[];
@@ -295,56 +126,28 @@ class ReceiptPdfBuilder {
     for (final it in details) {
       final m = Map<String, dynamic>.from(it as Map);
       final qty = receiptNum(m['quantity']).toInt();
-      final name = receiptProductName(m);
-      final withPromo =
-          (receiptNum(m['base_price']) - receiptNum(m['promo_amount'])).toInt();
-      final optSum = receiptNum(m['options_price']).toInt();
-      final line = qty * (withPromo + optSum);
+      final name = (m['product_name'] ?? 'Produk').toString();
+      final basePrice = receiptNum(m['base_price']);
+      final promoAmount = receiptNum(m['promo_amount']);
+      final priceEach = basePrice - promoAmount;
+      final lineTotal = priceEach * qty;
 
+      widgets.add(pw.SizedBox(height: 4));
+      widgets.add(pw.Text(name, style: _monoBold));
       widgets.add(
-        pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 8),
-          child: pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      '$qty x $name ${receiptFormatMoney(withPromo)}',
-                      style: _mono,
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(width: 12),
-              pw.SizedBox(
-                width: _subtotalColWidth,
-                child: pw.Text(
-                  receiptFormatMoney(line),
-                  style: _mono,
-                  textAlign: pw.TextAlign.right,
-                ),
-              ),
-            ],
-          ),
-        ),
+        _amountRow('$qty x ${receiptRupiah(priceEach)}', receiptRupiah(lineTotal)),
       );
 
       final opts = (m['order_detail_options'] as List?) ?? [];
       for (final o in opts) {
         final om = Map<String, dynamic>.from(o as Map);
-        final optName = receiptOptionName(om);
-        final optPrice = receiptNum(om['price']).toInt();
+        final optName = (om['option'] is Map
+                ? (om['option']['name'] ?? '-')
+                : '-')
+            .toString();
+        final optPrice = receiptNum(om['price']) * qty;
         widgets.add(
-          pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 10, top: 2, bottom: 2),
-            child: pw.Text(
-              '- $optName ${receiptFormatMoney(optPrice)}',
-              style: _mono,
-            ),
-          ),
+          _amountRow('  + $optName', receiptRupiah(optPrice)),
         );
       }
     }
@@ -352,41 +155,24 @@ class ReceiptPdfBuilder {
     return widgets;
   }
 
-  pw.Widget _totalsBlock({
-    required int total,
-    required bool isPpnActive,
-    required num ppnPercent,
-    required int roundingAmount,
-    required int grandTotal,
-  }) {
-    final rows = <pw.Widget>[];
-
-    if (isPpnActive) {
-      rows
-        ..add(_totalRow('TOTAL', receiptFormatMoney(total)))
-        ..add(_totalRow('PPN', '${receiptFormatPercent(ppnPercent)}%'));
-    }
-    if (roundingAmount > 0) {
-      rows.add(_totalRow('PEMBULATAN CASH', receiptFormatMoney(roundingAmount)));
-    }
-    rows.add(_totalRow('GRAND TOTAL', receiptFormatMoney(grandTotal), bold: true));
-
-    return pw.Container(
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          top: pw.BorderSide(color: PdfColors.black, width: 0.8),
-          bottom: pw.BorderSide(color: PdfColors.black, width: 0.8),
-        ),
-      ),
-      padding: const pw.EdgeInsets.symmetric(vertical: 4),
-      child: pw.Column(children: rows),
+  pw.Widget _line(String text) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 1),
+      child: pw.Text(text, style: _mono),
     );
   }
 
-  pw.Widget _totalRow(String label, String value, {bool bold = false}) {
+  pw.Widget _hr() {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Text('-' * 34, style: _mono),
+    );
+  }
+
+  pw.Widget _amountRow(String label, String value, {bool bold = false}) {
     final style = bold ? _monoBold : _mono;
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      padding: const pw.EdgeInsets.symmetric(vertical: 1),
       child: pw.Row(
         children: [
           pw.Expanded(child: pw.Text(label, style: style)),
@@ -396,23 +182,37 @@ class ReceiptPdfBuilder {
     );
   }
 
-  pw.Widget _wifiBox({
-    required String wifiUser,
-    required String wifiPass,
+  double _estimatePageHeight({
+    required Map<String, dynamic> order,
+    required ReceiptTotals totals,
+    required int widgetCount,
   }) {
-    return pw.Column(
-      children: [
-        pw.Center(child: pw.Text('WIFI', style: _monoBold)),
-        pw.SizedBox(height: 6),
-        if (wifiUser.isNotEmpty)
-          pw.Center(
-            child: pw.Text('Username: $wifiUser', style: _subtitle),
-          ),
-        if (wifiPass.isNotEmpty)
-          pw.Center(
-            child: pw.Text('Password: $wifiPass', style: _subtitle),
-          ),
-      ],
-    );
+    var lines = 16.0;
+    if ((order['store_address'] ?? '').toString().trim().isNotEmpty) lines += 1;
+    if (receiptFormatTime(receiptPaidAtRaw(order)).isNotEmpty) lines += 1;
+    if (totals.isPpnActive) lines += 1;
+    if (totals.roundingAmount > 0) lines += 1;
+
+    final wifiShown = receiptWifiShown(order);
+    final wifiUser = (order['store_wifi_user'] ?? '').toString().trim();
+    final wifiPass = (order['store_wifi_password'] ?? '').toString().trim();
+    if (wifiShown && (wifiUser.isNotEmpty || wifiPass.isNotEmpty)) {
+      lines += 4;
+    }
+
+    final details = (order['order_details'] as List?) ?? [];
+    for (final it in details) {
+      lines += 2.2;
+      final m = (it as Map).cast<String, dynamic>();
+      final opts = (m['order_detail_options'] as List?) ?? [];
+      lines += opts.length * 1.1;
+    }
+
+    lines += widgetCount * 0.15;
+
+    const minHeight = 320.0;
+    const maxHeight = 2000.0;
+    final estimated = (_marginV * 2) + (lines * _lineHeight);
+    return (estimated * 1.2).clamp(minHeight, maxHeight);
   }
 }
