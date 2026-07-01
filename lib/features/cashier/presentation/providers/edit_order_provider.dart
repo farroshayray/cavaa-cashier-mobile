@@ -119,7 +119,9 @@ class EditOrderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      localId = (order['local_id'] ?? '').toString().trim();
+      localId = (order['local_id'] ?? order['local_client_uuid'] ?? '')
+          .toString()
+          .trim();
       if (localId != null && localId!.isEmpty) localId = null;
 
       serverId = _toInt(order['server_id']) ?? _toInt(order['id']);
@@ -382,11 +384,33 @@ class EditOrderProvider extends ChangeNotifier {
   }) async {
     if (localId != null && localId!.isNotEmpty) return localId!;
 
+    final snapshotMap = jsonDecode(snapshotJson) as Map<String, dynamic>;
+    final fromSnapshot = (snapshotMap['local_id'] ??
+            snapshotMap['local_client_uuid'] ??
+            '')
+        .toString()
+        .trim();
+    if (fromSnapshot.isNotEmpty) {
+      localId = fromSnapshot;
+      return fromSnapshot;
+    }
+
     if (serverId != null && serverId! > 0) {
+      final existing = await bookingOrdersDao.getByServerId(serverId!);
+      if (existing != null) {
+        localId = existing.clientUuid;
+        return existing.clientUuid;
+      }
+
+      final details = (snapshotMap['order_details'] as List?)
+              ?.whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList() ??
+          <Map<String, dynamic>>[];
+
       final uuid = await bookingOrdersDao.ensureEditMirror(
         serverId: serverId!,
-        bookingOrderCode: (jsonDecode(snapshotJson) as Map)['booking_order_code']
-                ?.toString() ??
+        bookingOrderCode: snapshotMap['booking_order_code']?.toString() ??
             'ORDER-$serverId',
         customerName: customerName,
         tableServerId: tableServerId,
@@ -397,6 +421,10 @@ class EditOrderProvider extends ChangeNotifier {
         grandTotal: grandTotalValue,
         isPpnActive: isPpnActive,
         ppn: ppnPercent.toDouble(),
+        openbillFlag: openbillFlag,
+        orderBy: snapshotMap['order_by']?.toString(),
+        syncVersion: _toInt(snapshotMap['sync_version']),
+        seedDetails: details.isNotEmpty ? details : null,
       );
       localId = uuid;
       return uuid;
@@ -439,7 +467,10 @@ class EditOrderProvider extends ChangeNotifier {
 
     return {
       'id': serverId ?? -1,
-      if (localId != null) 'local_id': localId,
+      if (localId != null) ...{
+        'local_id': localId,
+        'local_client_uuid': localId,
+      },
       'server_id': serverId,
       'customer_name': customerName,
       'order_status': orderStatus,

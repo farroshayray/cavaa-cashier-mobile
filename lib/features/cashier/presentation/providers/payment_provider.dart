@@ -8,6 +8,7 @@ import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cache_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/sync/manual_payment_image_cache.dart';
+import '/features/cashier/data/sync/order_detail_resolver.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
@@ -645,6 +646,19 @@ class PaymentProvider extends ChangeNotifier {
       }
     }
 
+    if (OrderDetailResolver.hasEmbeddedDetails(row)) {
+      return _enrichOrderDetailPaymentData(
+        OrderDetailResolver.detailFromListRow(row),
+      );
+    }
+
+    if (clientUuid.isNotEmpty) {
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+      if (bundle != null) {
+        return _enrichOrderDetailPaymentData(await _bundleToDetailMap(bundle));
+      }
+    }
+
     final mirror = await bookingOrdersDao.getByServerId(serverId);
     if (mirror != null) {
       final bundle = await bookingOrdersDao.getBundleByClientUuid(
@@ -672,7 +686,7 @@ class PaymentProvider extends ChangeNotifier {
               .toList();
       return detailMap;
     }).toList();
-    return map;
+    return OrderDetailResolver.detailFromListRow(map);
   }
 
   /// Order detail dari API tetap dipakai untuk status/items,

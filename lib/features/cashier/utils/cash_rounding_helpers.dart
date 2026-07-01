@@ -202,6 +202,9 @@ String? localSyncStatusMessage(Map<String, dynamic> data) {
 
   if (syncStatus == 'PENDING' || syncStatus == 'PENDING_UPDATE') {
     if (lastError.isNotEmpty) return 'Menunggu sinkron: $lastError';
+    if (syncStatus == 'PENDING_UPDATE') {
+      return 'Perubahan menu belum tersinkron';
+    }
     return 'Perubahan lokal belum tersinkron';
   }
 

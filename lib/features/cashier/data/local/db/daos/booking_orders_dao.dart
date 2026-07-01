@@ -10,6 +10,7 @@ import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/local/db/daos/cache_dao.dart';
 import '/features/cashier/data/sync/order_catch_up_sync_policy.dart';
+import '/features/cashier/data/sync/order_edit_conflict_detector.dart';
 import '/features/cashier/data/sync/order_stage_rank.dart';
 import '/features/cashier/data/sync/order_sync_intent_chain.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
@@ -595,6 +596,13 @@ class BookingOrdersDao {
       );
     }
     await _deduplicateOrderDetailsByServerId(clientUuid);
+
+    if (preserveLocalLifecycle) {
+      await detectEditDivergenceAfterPull(
+        clientUuid: clientUuid,
+        serverRow: row,
+      );
+    }
   }
 
   /// Upsert satu baris order_details dari pull (tanpa parent row di batch yang sama).
@@ -1428,6 +1436,11 @@ class BookingOrdersDao {
           );
         }
       } catch (_) {}
+    } else if (choice == 'LOCAL_WINS') {
+      final clientUuid = row.clientUuid;
+      if (clientUuid != null && clientUuid.isNotEmpty) {
+        await markForcePushUpdate(clientUuid);
+      }
     }
 
     await resolveConflict(conflictId, choice);
@@ -1512,6 +1525,10 @@ class BookingOrdersDao {
     required double grandTotal,
     bool isPpnActive = false,
     double ppn = 0,
+    bool openbillFlag = false,
+    String? orderBy,
+    int? syncVersion,
+    List<Map<String, dynamic>>? seedDetails,
   }) async {
     final existing = await getByServerId(serverId);
     if (existing != null) return existing.clientUuid;
@@ -1528,16 +1545,155 @@ class BookingOrdersDao {
             tableNo: Value(tableNoSnapshot),
             orderStatus: Value(orderStatus),
             paymentMethod: Value(paymentMethodEffective),
+            openbillFlag: Value(openbillFlag),
+            orderBy: Value(orderBy),
             totalOrderValue: Value(subtotal),
             ppn: Value(ppn),
             isPpnActive: Value(isPpnActive),
+            syncVersion: Value(syncVersion ?? 0),
             syncDirty: const Value(true),
             syncIntent: const Value('UPDATE'),
             createdAt: Value(now),
             updatedAt: Value(now),
           ),
         );
+
+    if (seedDetails != null && seedDetails.isNotEmpty) {
+      await _seedDetailsFromUiList(
+        clientUuid: clientUuid,
+        serverId: serverId,
+        details: seedDetails,
+      );
+    }
+
     return clientUuid;
+  }
+
+  Future<void> _seedDetailsFromUiList({
+    required String clientUuid,
+    required int serverId,
+    required List<Map<String, dynamic>> details,
+  }) async {
+    final now = DateTime.now();
+    for (final raw in details) {
+      if (raw is! Map) continue;
+      final detail = Map<String, dynamic>.from(raw);
+      final detailUuid = detail['local_detail_uuid']?.toString() ?? _uuid.v4();
+      final options = (detail['order_detail_options'] as List?) ?? [];
+
+      await db.into(db.orderDetails).insert(
+            OrderDetailsCompanion.insert(
+              clientDetailUuid: detailUuid,
+              bookingOrderClientUuid: clientUuid,
+              bookingOrderServerId: Value(serverId),
+              serverId: Value(_toIntOrNull(detail['id'])),
+              partnerProductId: _toInt(
+                detail['partner_product_id'] ?? detail['product_id'],
+                fallback: 0,
+              ),
+              productName: Value(detail['product_name']?.toString()),
+              basePrice: Value(_toDouble(detail['base_price'])),
+              quantity: Value(_toInt(detail['quantity'] ?? detail['qty'], fallback: 1)),
+              optionsPrice: Value(_toDouble(detail['options_price'])),
+              customerNote: Value(detail['customer_note']?.toString()),
+              promoId: Value(_toIntOrNull(detail['promo_id'])),
+              promoAmount: Value(_toDouble(detail['promo_amount'])),
+              promoType: Value(detail['promo_type']?.toString()),
+              status: Value(detail['status']?.toString()),
+              cashierProcessId: Value(_toIntOrNull(detail['cashier_process_id'])),
+              kitchenProcessId: Value(_toIntOrNull(detail['kitchen_process_id'])),
+              syncDirty: const Value(false),
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+
+      for (final optRaw in options) {
+        if (optRaw is! Map) continue;
+        final opt = Map<String, dynamic>.from(optRaw);
+        await db.into(db.orderDetailOptions).insert(
+              OrderDetailOptionsCompanion.insert(
+                clientOptionUuid: _uuid.v4(),
+                orderDetailClientUuid: detailUuid,
+                optionId: _toInt(opt['option_id'] ?? opt['id'], fallback: 0),
+                partnerProductOptionName:
+                    Value(opt['partner_product_option_name']?.toString()),
+                parentName: Value(opt['parent_name']?.toString()),
+                price: Value(_toDouble(opt['price'])),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
+      }
+    }
+  }
+
+  Future<void> detectEditDivergenceAfterPull({
+    required String clientUuid,
+    required Map<String, dynamic> serverRow,
+  }) async {
+    final local = await getByClientUuid(clientUuid);
+    if (local == null || !local.syncDirty) return;
+    if ((local.syncIntent ?? '').toUpperCase() != 'UPDATE') return;
+
+    final bundle = await getBundleByClientUuid(clientUuid);
+    if (bundle == null) return;
+
+    final localDetails = bundle.details
+        .map((d) => OrderMirrorMapper.detailToUiMap(d))
+        .toList();
+    final serverDetails = ((serverRow['order_details'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    final result = OrderEditConflictDetector.compare(
+      localDetails: localDetails,
+      serverDetails: serverDetails,
+    );
+    if (!result.hasDivergence) return;
+
+    await saveConflict({
+      'table': 'booking_orders',
+      'server_id': serverRow['id'],
+      'client_uuid': clientUuid,
+      'reason': 'EDIT_DIVERGENCE',
+      'local': {
+        'order_status': local.orderStatus,
+        'booking_order_code': local.bookingOrderCode,
+        'order_details': localDetails,
+        'diffs': result.editableDiffs,
+        'locked': result.lockedConflicts,
+      },
+      'server': serverRow,
+      'suggested_resolution': 'MANUAL_RESOLVE',
+    });
+  }
+
+  Future<void> markForcePushUpdate(String clientUuid) async {
+    final existing = await getByClientUuid(clientUuid);
+    if (existing == null) return;
+
+    final merged = <String, dynamic>{};
+    if (existing.localFilePathsJson != null &&
+        existing.localFilePathsJson!.trim().isNotEmpty) {
+      final decoded = jsonDecode(existing.localFilePathsJson!);
+      if (decoded is Map) {
+        merged.addAll(Map<String, dynamic>.from(decoded));
+      }
+    }
+    merged['force_push_update'] = true;
+
+    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
+        .write(
+      BookingOrdersCompanion(
+        syncDirty: const Value(true),
+        syncIntent: const Value('UPDATE'),
+        syncError: const Value(null),
+        localFilePathsJson: Value(jsonEncode(merged)),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> replaceDetailsFromEdit({
@@ -1977,11 +2133,19 @@ class BookingOrdersDao {
     required String bookingClientUuid,
     required Set<int> keepServerIds,
   }) async {
+    final parent = await getByClientUuid(bookingClientUuid);
     final existing = await (db.select(db.orderDetails)
           ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid)))
         .get();
 
     for (final detail in existing) {
+      if (detail.syncDirty == true) continue;
+      if (detail.serverId == null &&
+          parent != null &&
+          parent.syncDirty == true) {
+        continue;
+      }
+
       final sid = detail.serverId;
       final shouldDelete = sid != null
           ? !keepServerIds.contains(sid)

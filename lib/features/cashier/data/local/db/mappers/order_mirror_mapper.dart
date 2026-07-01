@@ -5,6 +5,7 @@ class OrderMirrorMapper {
     return {
       'id': row.serverId,
       'local_client_uuid': row.clientUuid,
+      'local_id': row.clientUuid,
       'booking_order_code': row.bookingOrderCode,
       'partner_id': row.partnerId,
       'partner_name': row.partnerName,

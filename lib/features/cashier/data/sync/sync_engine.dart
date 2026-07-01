@@ -4,6 +4,7 @@ import 'dart:io';
 import '/core/network/api_debug_log.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/orders_api.dart';
 import '/features/cashier/data/sync/master_cache_service.dart';
 import '/features/cashier/data/sync/offline_catch_up_policy.dart';
@@ -178,6 +179,14 @@ class SyncEngine {
     }
 
     final dirtyOrders = await bookingOrdersDao.getAllDirtyBookingOrders();
+    dirtyOrders.sort((a, b) {
+      final aIsUpdate = (a.syncIntent ?? '').toUpperCase() == 'UPDATE' ? 0 : 1;
+      final bIsUpdate = (b.syncIntent ?? '').toUpperCase() == 'UPDATE' ? 0 : 1;
+      if (aIsUpdate != bIsUpdate) return aIsUpdate.compareTo(bIsUpdate);
+      final aTime = a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return aTime.compareTo(bTime);
+    });
     final bookingOrdersPayload = <Map<String, dynamic>>[];
     final orderDetailsPayload = <Map<String, dynamic>>[];
     final deletes = <Map<String, dynamic>>[];
@@ -394,7 +403,24 @@ class SyncEngine {
     final conflicts = (response['conflicts'] as List?) ?? [];
     for (final raw in conflicts) {
       if (raw is Map) {
-        await bookingOrdersDao.saveConflict(Map<String, dynamic>.from(raw));
+        final map = Map<String, dynamic>.from(raw);
+        final clientUuid = map['client_uuid']?.toString();
+        if ((map['local'] == null || map['local'] is! Map) &&
+            clientUuid != null &&
+            clientUuid.isNotEmpty) {
+          final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+          if (bundle != null) {
+            map['local'] = {
+              'order_status': bundle.order.orderStatus,
+              'booking_order_code': bundle.order.bookingOrderCode,
+              'sync_version': bundle.order.syncVersion,
+              'order_details': bundle.details
+                  .map((d) => OrderMirrorMapper.detailToUiMap(d))
+                  .toList(),
+            };
+          }
+        }
+        await bookingOrdersDao.saveConflict(map);
       }
     }
 

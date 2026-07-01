@@ -59,7 +59,7 @@ class _SyncConflictsSheetState extends State<SyncConflictsSheet> {
 
   Future<void> _resolve(SyncConflict conflict, String choice) async {
     await _dao.applyConflictResolution(conflictId: conflict.id, choice: choice);
-    if (choice == 'PULL_AND_RETRY' && mounted) {
+    if ((choice == 'PULL_AND_RETRY' || choice == 'LOCAL_WINS') && mounted) {
       try {
         await context.read<SyncService>().syncPendingOrders();
       } catch (_) {}
@@ -101,7 +101,7 @@ class _SyncConflictsSheetState extends State<SyncConflictsSheet> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Data lokal berbeda dengan server. Pilih tindakan untuk setiap konflik.',
+                'Order ini juga diubah di server atau kitchen. Pilih versi mana yang dipakai.',
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
@@ -122,6 +122,8 @@ class _SyncConflictsSheetState extends State<SyncConflictsSheet> {
                                     conflict: c,
                                     onServerWins: () =>
                                         _resolve(c, 'SERVER_WINS'),
+                                    onLocalWins: () =>
+                                        _resolve(c, 'LOCAL_WINS'),
                                     onPullRetry: () =>
                                         _resolve(c, 'PULL_AND_RETRY'),
                                   );
@@ -140,11 +142,13 @@ class _ConflictTile extends StatelessWidget {
   const _ConflictTile({
     required this.conflict,
     required this.onServerWins,
+    required this.onLocalWins,
     required this.onPullRetry,
   });
 
   final SyncConflict conflict;
   final VoidCallback onServerWins;
+  final VoidCallback onLocalWins;
   final VoidCallback onPullRetry;
 
   @override
@@ -178,10 +182,15 @@ class _ConflictTile extends StatelessWidget {
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
+          runSpacing: 8,
           children: [
             OutlinedButton(
               onPressed: onServerWins,
               child: const Text('Gunakan server'),
+            ),
+            OutlinedButton(
+              onPressed: onLocalWins,
+              child: const Text('Gunakan perubahan saya'),
             ),
             FilledButton(
               onPressed: onPullRetry,

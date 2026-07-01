@@ -11,6 +11,7 @@ import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/order_detail_resolver.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
 import '/features/cashier/presentation/utils/order_tab_sort.dart';
@@ -318,7 +319,7 @@ class ProcessProvider extends ChangeNotifier {
     Map<String, dynamic> row,
   ) async {
     final clientUuid =
-        (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+        (row['local_client_uuid'] ?? row['local_id'] ?? '').toString().trim();
     final serverId = _toId(row['server_id'] ?? row['id']);
 
     if (serverId <= 0) {
@@ -342,6 +343,15 @@ class ProcessProvider extends ChangeNotifier {
         if (cached != null) return cached;
         rethrow;
       }
+    }
+
+    if (OrderDetailResolver.hasEmbeddedDetails(row)) {
+      return OrderDetailResolver.detailFromListRow(row);
+    }
+
+    if (clientUuid.isNotEmpty) {
+      final cached = await _getMirrorDetailMapByClientUuid(clientUuid);
+      if (cached != null) return cached;
     }
 
     final cached = await _getMirrorDetailMap(serverId);
@@ -374,7 +384,7 @@ class ProcessProvider extends ChangeNotifier {
               .toList();
       return detailMap;
     }).toList();
-    return map;
+    return OrderDetailResolver.detailFromListRow(map);
   }
 
   bool isActionLoading(int id) => actionLoadingIds.contains(id);

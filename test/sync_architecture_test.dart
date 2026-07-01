@@ -1,6 +1,7 @@
 import 'package:cavaa_cashier/features/cashier/data/local/db/cashier_db.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/offline_catch_up_policy.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_catch_up_sync_policy.dart';
+import 'package:cavaa_cashier/features/cashier/data/sync/order_edit_conflict_detector.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_payment_helpers.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_rank.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_sync_guard.dart';
@@ -708,6 +709,62 @@ void main() {
         ),
         isTrue,
       );
+    });
+  });
+
+  group('OfflineCatchUpPolicy UPDATE exemption', () {
+    test('UPDATE intent does not use offline catch-up on UNPAID openbill', () async {
+      final order = BookingOrder(
+        clientUuid: 'uuid-1',
+        customerName: 'guest',
+        orderStatus: 'UNPAID',
+        openbillFlag: true,
+        syncDirty: true,
+        syncIntent: 'UPDATE',
+        paidAmountLocal: 50000,
+        discountValue: 0,
+        totalOrderValue: 0,
+        isPpnActive: false,
+        paymentFlag: false,
+        syncVersion: 0,
+        createdAt: DateTime(2026, 6, 30, 10),
+        updatedAt: DateTime(2026, 6, 30, 10),
+      );
+
+      final useCatchUp = await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+        order: order,
+        hasDirtyServedDetails: (_) async => true,
+      );
+
+      expect(useCatchUp, isFalse);
+    });
+  });
+
+  group('OrderEditConflictDetector', () {
+    test('detects qty divergence on same detail id', () {
+      final result = OrderEditConflictDetector.compare(
+        localDetails: [
+          {'id': 10, 'product_name': 'Nasi', 'quantity': 2},
+        ],
+        serverDetails: [
+          {'id': 10, 'product_name': 'Nasi', 'quantity': 1},
+        ],
+      );
+
+      expect(result.hasDivergence, isTrue);
+      expect(result.editableDiffs, isNotEmpty);
+    });
+
+    test('detects new local line without server id', () {
+      final result = OrderEditConflictDetector.compare(
+        localDetails: [
+          {'product_name': 'Teh', 'quantity': 1},
+        ],
+        serverDetails: const [],
+      );
+
+      expect(result.hasDivergence, isTrue);
+      expect(result.editableDiffs.first, contains('Baris baru lokal'));
     });
   });
 

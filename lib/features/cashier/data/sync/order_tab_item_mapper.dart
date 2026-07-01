@@ -35,6 +35,7 @@ class OrderTabItemMapper {
       'is_cached_server': true,
       'sync_status': _mirrorSyncStatus(row),
       'last_error': row['sync_error']?.toString(),
+      'pending_action': row['sync_dirty'] == true ? row['sync_intent'] : null,
       'sort_time': row['created_at']?.toString() ?? row['updated_at']?.toString(),
     };
   }
@@ -123,6 +124,9 @@ class OrderTabItemMapper {
     final intent = (row['sync_intent'] ?? '').toString().toUpperCase();
     if (intent == 'DELETE' && _toBool(row['sync_dirty'])) {
       return 'PENDING_DELETE';
+    }
+    if (_toBool(row['sync_dirty']) && intent == 'UPDATE') {
+      return 'PENDING_UPDATE';
     }
     return row['sync_dirty'] == true ? 'PENDING' : 'SYNCED';
   }

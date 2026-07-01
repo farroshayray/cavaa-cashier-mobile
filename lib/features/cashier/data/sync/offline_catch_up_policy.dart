@@ -13,6 +13,7 @@ class OfflineCatchUpPolicy {
     final intent = (order.syncIntent ?? '').trim().toUpperCase();
     if (intent == 'OFFLINE_CATCH_UP') return true;
     if (intent == 'DELETE') return false;
+    if (intent == 'UPDATE') return false;
 
     final status = order.orderStatus.trim().toUpperCase();
     final neverSynced = order.serverId == null || order.serverId! <= 0;
