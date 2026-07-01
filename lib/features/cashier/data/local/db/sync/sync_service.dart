@@ -1,6 +1,7 @@
 import '/core/network/api_debug_log.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/orders_api.dart';
 import '/features/cashier/data/sync/sync_api.dart';
 import '/features/cashier/data/sync/sync_engine.dart';
 
@@ -10,11 +11,13 @@ class SyncService {
     required BookingOrdersDao bookingOrdersDao,
     required SyncApi syncApi,
     required CashierDb db,
+    OrdersApi? ordersApi,
   })  : _bookingOrdersDao = bookingOrdersDao,
         _engine = SyncEngine(
           bookingOrdersDao: bookingOrdersDao,
           syncApi: syncApi,
           db: db,
+          ordersApi: ordersApi,
         );
 
   final BookingOrdersDao _bookingOrdersDao;

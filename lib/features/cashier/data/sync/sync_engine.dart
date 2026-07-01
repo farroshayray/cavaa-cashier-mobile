@@ -1,12 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 
 import '/core/network/api_debug_log.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/features/cashier/data/orders_api.dart';
 import '/features/cashier/data/sync/master_cache_service.dart';
 import '/features/cashier/data/sync/offline_catch_up_policy.dart';
 import '/features/cashier/data/sync/order_stage_sync_guard.dart';
 import '/features/cashier/data/sync/sync_api.dart';
+import '/features/cashier/data/sync/sync_payment_helpers.dart';
 
 class SyncEngine {
   SyncEngine({
@@ -14,12 +17,15 @@ class SyncEngine {
     required this.syncApi,
     required this.db,
     MasterCacheService? masterCacheService,
-  })  : masterCacheService = masterCacheService ?? MasterCacheService(db);
+    OrdersApi? ordersApi,
+  })  : masterCacheService = masterCacheService ?? MasterCacheService(db),
+        ordersApi = ordersApi;
 
   final BookingOrdersDao bookingOrdersDao;
   final SyncApi syncApi;
   final CashierDb db;
   final MasterCacheService masterCacheService;
+  final OrdersApi? ordersApi;
 
   /// Resolves logged-in cashier id for offline detail push fallback.
   int? Function()? resolveCashierProcessId;
@@ -238,9 +244,15 @@ class SyncEngine {
         'items': items,
         if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
         if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
-        if (order.latestPaymentServerId != null)
-          'last_payment_id': order.latestPaymentServerId,
       };
+
+      final lastPaymentId = resolveLastPaymentIdForPush(
+        latestPaymentServerId: order.latestPaymentServerId,
+        paymentId: order.paymentId,
+      );
+      if (lastPaymentId != null) {
+        row['last_payment_id'] = lastPaymentId;
+      }
 
       if (effectiveIntent == 'OFFLINE_CATCH_UP') {
         row['order_details'] = _buildOrderDetailsCatchUpPayload(bundle);
@@ -473,6 +485,54 @@ class SyncEngine {
     final syncToken = response['sync_token']?.toString();
     if (syncToken != null && syncToken.isNotEmpty) {
       await bookingOrdersDao.setSyncMeta('last_sync_token', syncToken);
+    }
+
+    await _uploadPendingCashierProofs();
+  }
+
+  Future<void> _uploadPendingCashierProofs() async {
+    final api = ordersApi;
+    if (api == null) return;
+
+    final pending = await bookingOrdersDao.getOrdersWithPendingCashierProof();
+    for (final order in pending) {
+      final proofPath = bookingOrdersDao.readCashierProofPath(order);
+      final serverId = order.serverId;
+      final paymentId = resolveLastPaymentIdForPush(
+        latestPaymentServerId: order.latestPaymentServerId,
+        paymentId: order.paymentId,
+      );
+      if (proofPath == null ||
+          serverId == null ||
+          serverId <= 0 ||
+          paymentId == null) {
+        continue;
+      }
+      if (!File(proofPath).existsSync()) {
+        await bookingOrdersDao.clearCashierProofPath(order.clientUuid);
+        continue;
+      }
+
+      try {
+        await api.paymentOrder(
+          id: serverId,
+          paidAmount: order.paidAmountLocal ?? order.totalOrderValue,
+          changeAmount: order.changeAmountLocal ?? 0,
+          paymentMethod: order.paymentMethod,
+          lastPaymentId: paymentId.toString(),
+          cashierProofImagePath: proofPath,
+        );
+        await bookingOrdersDao.clearCashierProofPath(order.clientUuid);
+        try {
+          await File(proofPath).delete();
+        } catch (_) {}
+        ApiDebugLog.sync(
+          'cashier proof uploaded',
+          'order=$serverId payment=$paymentId',
+        );
+      } catch (e) {
+        ApiDebugLog.syncError('cashier proof upload failed', e.toString());
+      }
     }
   }
 

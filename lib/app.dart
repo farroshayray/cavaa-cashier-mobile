@@ -78,10 +78,12 @@ class _CavaaAppState extends State<CavaaApp> {
     cachedPaymentMethodsDao = CachedPaymentMethodsDao(cashierDb);
     bookingOrdersDao = BookingOrdersDao(cashierDb);
     syncApi = SyncApi(dioClient.dio);
+    ordersApi = OrdersApi(dioClient.dio);
     syncService = SyncService(
       bookingOrdersDao: bookingOrdersDao,
       syncApi: syncApi,
       db: cashierDb,
+      ordersApi: ordersApi,
     );
 
     authApi = AuthApi(dioClient);
@@ -94,7 +96,6 @@ class _CavaaAppState extends State<CavaaApp> {
       syncApi: syncApi,
     );
 
-    ordersApi = OrdersApi(dioClient.dio);
     ordersRepo = OrdersRepository(api: ordersApi);
 
     () async {

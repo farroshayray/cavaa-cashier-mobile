@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '/features/cashier/data/local/db/cashier_db.dart';
@@ -137,6 +140,21 @@ class BookingOrdersDao {
   }
 
   Future<void> markIntent(String clientUuid, String syncIntent, {Map<String, dynamic>? extras}) async {
+    Value<String?> localFilePaths = const Value.absent();
+    if (extras?['local_file_paths'] is Map) {
+      final existing = await getByClientUuid(clientUuid);
+      final merged = <String, dynamic>{};
+      if (existing?.localFilePathsJson != null &&
+          existing!.localFilePathsJson!.trim().isNotEmpty) {
+        final decoded = jsonDecode(existing.localFilePathsJson!);
+        if (decoded is Map) {
+          merged.addAll(Map<String, dynamic>.from(decoded));
+        }
+      }
+      merged.addAll(Map<String, dynamic>.from(extras!['local_file_paths'] as Map));
+      localFilePaths = Value(jsonEncode(merged));
+    }
+
     final companion = BookingOrdersCompanion(
       syncDirty: const Value(true),
       syncIntent: Value(syncIntent),
@@ -153,10 +171,90 @@ class BookingOrdersDao {
       orderStatus: extras?['order_status'] != null
           ? Value(extras!['order_status'].toString())
           : const Value.absent(),
+      localFilePathsJson: localFilePaths,
     );
 
     await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
         .write(companion);
+  }
+
+  Future<String?> persistCashierProofImage({
+    required String clientUuid,
+    required String sourcePath,
+  }) async {
+    final source = File(sourcePath);
+    if (!await source.exists()) return null;
+
+    final dir = await getApplicationDocumentsDirectory();
+    final folder = Directory(p.join(dir.path, 'payment_proofs'));
+    if (!await folder.exists()) {
+      await folder.create(recursive: true);
+    }
+
+    final destPath = p.join(folder.path, '$clientUuid.jpg');
+    await source.copy(destPath);
+    return destPath;
+  }
+
+  String? readCashierProofPath(BookingOrder order) {
+    final raw = order.localFilePathsJson;
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final path = decoded['cashier_proof']?.toString().trim();
+      if (path == null || path.isEmpty) return null;
+      return path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> clearCashierProofPath(String clientUuid) async {
+    final existing = await getByClientUuid(clientUuid);
+    if (existing == null) return;
+
+    Map<String, dynamic> merged = {};
+    if (existing.localFilePathsJson != null &&
+        existing.localFilePathsJson!.trim().isNotEmpty) {
+      final decoded = jsonDecode(existing.localFilePathsJson!);
+      if (decoded is Map) {
+        merged = Map<String, dynamic>.from(decoded);
+      }
+    }
+    merged.remove('cashier_proof');
+
+    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
+        .write(
+      BookingOrdersCompanion(
+        localFilePathsJson: Value(merged.isEmpty ? null : jsonEncode(merged)),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<List<BookingOrder>> getOrdersWithPendingCashierProof() async {
+    final rows = await (db.select(db.bookingOrders)
+          ..where((t) => t.deletedAt.isNull())
+          ..where((t) => t.localFilePathsJson.isNotNull()))
+        .get();
+
+    return rows.where((row) {
+      final path = readCashierProofPath(row);
+      if (path == null || path.isEmpty) return false;
+      return File(path).existsSync();
+    }).toList();
+  }
+
+  int? _resolveLatestPaymentServerId(
+    Map<String, dynamic> row,
+    BookingOrder? existing,
+  ) {
+    final paymentId = _toIntOrNull(row['payment_id']);
+    if (paymentId != null && paymentId > 0) {
+      return paymentId;
+    }
+    return existing?.latestPaymentServerId ?? existing?.paymentId;
   }
 
   /// Ensures a mirror row exists for a server order shown in tab UI.
@@ -443,6 +541,7 @@ class BookingOrdersDao {
       cashierProcessId: Value(_toIntOrNull(row['cashier_process_id'])),
       kitchenProcessId: Value(_toIntOrNull(row['kitchen_process_id'])),
       paymentId: Value(_toIntOrNull(row['payment_id'])),
+      latestPaymentServerId: Value(_resolveLatestPaymentServerId(row, existing)),
       paymentFlag: Value(_toBool(row['payment_flag'])),
       cashRoundingAmount: Value(_toDouble(row['cash_rounding_amount'])),
       cashRoundingUnit: Value(
@@ -1115,6 +1214,12 @@ class BookingOrdersDao {
                 : applied['order_status'] != null
                     ? Value(applied['order_status'].toString())
                     : const Value.absent(),
+            paymentId: applied['payment_id'] != null
+                ? Value(_toInt(applied['payment_id']))
+                : const Value.absent(),
+            latestPaymentServerId: applied['payment_id'] != null
+                ? Value(_toInt(applied['payment_id']))
+                : const Value.absent(),
             syncVersion: applied['sync_version'] != null
                 ? Value(_toInt(applied['sync_version']))
                 : const Value.absent(),
@@ -1578,11 +1683,29 @@ class BookingOrdersDao {
             manualProviderAccountName:
                 Value(row['manual_provider_account_name']?.toString()),
             manualProviderAccountNo: Value(row['manual_provider_account_no']?.toString()),
+            localFilePathsJson: row['manual_payment_image'] != null
+                ? Value(jsonEncode({
+                    'manual_payment_image': row['manual_payment_image'].toString(),
+                  }))
+                : const Value.absent(),
             syncDirty: const Value(false),
             createdAt: Value(_parseDate(row['created_at']) ?? now),
             updatedAt: Value(_parseDate(row['updated_at']) ?? now),
           ),
         );
+
+    final paymentStatus = row['payment_status']?.toString().toUpperCase() ?? '';
+    if (paymentStatus == 'PENDING' || paymentStatus == 'PAID') {
+      await (db.update(db.bookingOrders)
+            ..where((t) => t.clientUuid.equals(parent.clientUuid)))
+          .write(
+        BookingOrdersCompanion(
+          latestPaymentServerId: Value(serverId),
+          paymentId: parent.paymentId == null ? Value(serverId) : const Value.absent(),
+          updatedAt: Value(now),
+        ),
+      );
+    }
   }
 
   Future<List<Map<String, dynamic>>> _queryTabOrders({

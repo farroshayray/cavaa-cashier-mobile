@@ -84,6 +84,28 @@ class CachedPaymentMethodsDao {
     });
   }
 
+  Future<void> updateQrisLocalPath({
+    int? serverManualPaymentId,
+    required String kind,
+    required String qrisImageLocalPath,
+  }) async {
+    final query = db.update(db.cachedPaymentMethods)
+      ..where((t) => t.isActive.equals(true));
+
+    if (serverManualPaymentId != null) {
+      query.where((t) => t.serverManualPaymentId.equals(serverManualPaymentId));
+    } else {
+      query.where((t) => t.kind.equals(kind));
+    }
+
+    await query.write(
+      CachedPaymentMethodsCompanion(
+        qrisImageLocalPath: Value(qrisImageLocalPath),
+        cachedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<CachedPaymentMethod?> getByServerManualPaymentId(int id) async {
     final rows = await (db.select(db.cachedPaymentMethods)
           ..where((t) => t.serverManualPaymentId.equals(id))

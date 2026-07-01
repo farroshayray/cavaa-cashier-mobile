@@ -5,6 +5,8 @@ import '/features/cashier/data/local/db/daos/cache_dao.dart';
 import '/features/cashier/data/local/db/mappers/purchase_cache_mapper.dart';
 import '/features/cashier/data/models/purchase_models.dart';
 
+import '/features/cashier/data/sync/manual_payment_image_cache.dart';
+
 /// Persists master catalog JSON (from GET /products or sync pull master) into Drift cache.
 class MasterCacheService {
   MasterCacheService(this.db);
@@ -46,6 +48,11 @@ class MasterCacheService {
 
     debugPrint(
       'MasterCacheService saved: products=${productRows.length} tables=${tableRows.length}',
+    );
+
+    await ManualPaymentImageCache.prefetchPaymentOptions(
+      db: db,
+      options: payload.allPaymentOptionsForCache,
     );
 
     return payload;

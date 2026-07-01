@@ -7,6 +7,7 @@ import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/daos/cache_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
+import '/features/cashier/data/sync/manual_payment_image_cache.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
@@ -70,6 +71,11 @@ class PaymentProvider extends ChangeNotifier {
 
     try {
       await bookingOrdersDao.reconcileDuplicateMirrors();
+      if (connectivity.isOnline) {
+        unawaited(
+          ManualPaymentImageCache.prefetchMissingFromCache(bookingOrdersDao.db),
+        );
+      }
 
       final processRows = await bookingOrdersDao.getProcessTabOrders();
       final doneRows = await bookingOrdersDao.getDoneTabOrders();
@@ -478,6 +484,17 @@ class PaymentProvider extends ChangeNotifier {
         (selectedPaymentMethod ?? order['payment_method'] ?? 'CASH').toString();
 
     if (clientUuid.isNotEmpty) {
+      Map<String, dynamic>? localFilePaths;
+      if (cashierProofImagePath != null && cashierProofImagePath.trim().isNotEmpty) {
+        final persisted = await bookingOrdersDao.persistCashierProofImage(
+          clientUuid: clientUuid,
+          sourcePath: cashierProofImagePath,
+        );
+        if (persisted != null) {
+          localFilePaths = {'cashier_proof': persisted};
+        }
+      }
+
       await bookingOrdersDao.markIntent(
         clientUuid,
         'PAY',
@@ -488,6 +505,7 @@ class PaymentProvider extends ChangeNotifier {
           'order_status': OrderStageResolver.resolveAfterPayment(
             orderBeforePay: order,
           ),
+          if (localFilePaths != null) 'local_file_paths': localFilePaths,
         },
       );
       return;
@@ -875,40 +893,8 @@ class PaymentProvider extends ChangeNotifier {
     debugPrint('✅ manual payment method cached: $cacheKey');
   }
 
-  Future<String?> _downloadManualPaymentImageToLocal(String rawPath) async {
-    try {
-      if (rawPath.trim().isEmpty) return null;
-
-      final imageUrl = rawPath.startsWith('http')
-          ? rawPath
-          : '${Env.baseUrl}/storage/${rawPath.replaceFirst(RegExp(r'^\/?storage\/?'), '')}';
-
-      final dir = await getApplicationDocumentsDirectory();
-      final folder = Directory(p.join(dir.path, 'manual_payment_images'));
-      if (!await folder.exists()) {
-        await folder.create(recursive: true);
-      }
-
-      final ext = p.extension(Uri.parse(imageUrl).path);
-      final safeExt = ext.isEmpty ? '.jpg' : ext;
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${rawPath.hashCode}$safeExt';
-
-      final filePath = p.join(folder.path, fileName);
-
-      final dio = Dio();
-      await dio.download(imageUrl, filePath);
-
-      final file = File(filePath);
-      if (await file.exists()) {
-        return file.path;
-      }
-
-      return null;
-    } catch (e) {
-      debugPrint('❌ download manual payment image failed: $e');
-      return null;
-    }
+  Future<String?> _downloadManualPaymentImageToLocal(String rawPath) {
+    return ManualPaymentImageCache.downloadToLocal(rawPath);
   }
 
   int? _toInt(dynamic v) {

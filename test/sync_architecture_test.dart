@@ -1,6 +1,7 @@
 import 'package:cavaa_cashier/features/cashier/data/local/db/cashier_db.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/offline_catch_up_policy.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_catch_up_sync_policy.dart';
+import 'package:cavaa_cashier/features/cashier/data/sync/sync_payment_helpers.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_rank.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_sync_guard.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_sync_intent_chain.dart';
@@ -706,6 +707,38 @@ void main() {
           syncIntent: 'PAY',
         ),
         isTrue,
+      );
+    });
+  });
+
+  group('resolveLastPaymentIdForPush', () {
+    test('prefers latestPaymentServerId over paymentId', () {
+      expect(
+        resolveLastPaymentIdForPush(
+          latestPaymentServerId: 99,
+          paymentId: 12,
+        ),
+        99,
+      );
+    });
+
+    test('falls back to paymentId when latest is null', () {
+      expect(
+        resolveLastPaymentIdForPush(
+          latestPaymentServerId: null,
+          paymentId: 12,
+        ),
+        12,
+      );
+    });
+
+    test('returns null when both ids missing', () {
+      expect(
+        resolveLastPaymentIdForPush(
+          latestPaymentServerId: null,
+          paymentId: null,
+        ),
+        isNull,
       );
     });
   });
