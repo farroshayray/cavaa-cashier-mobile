@@ -50,7 +50,7 @@ class CashierDb extends _$CashierDb {
   CashierDb() : super(_openConnection());
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -80,6 +80,13 @@ class CashierDb extends _$CashierDb {
           if (from < 15) {
             await LegacySessionMigrator.migrateBeforeDrop(m.database);
             await LegacySessionMigrator.dropLegacyTables(m.database);
+          }
+          if (from < 16) {
+            // Re-pull order headers so SERVED updated_at matches server
+            // (payment sync used to bump updated_at to now() locally).
+            await m.database.customStatement(
+              "DELETE FROM sync_meta WHERE key = 'last_sync_token'",
+            );
           }
         },
       );

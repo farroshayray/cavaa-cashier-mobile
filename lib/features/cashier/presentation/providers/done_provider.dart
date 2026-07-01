@@ -79,35 +79,6 @@ class DoneProvider extends ChangeNotifier {
       }
       notifyListeners();
     }
-
-    final hasPendingSync = items.any(
-      (e) => e['sync_status'] == 'PENDING' || e['is_synced'] == false,
-    );
-    if (connectivity.isOnline && items.isNotEmpty && !hasPendingSync) {
-      unawaited(_prefetchDoneDetailsInBackground());
-    }
-  }
-
-  Future<void> _prefetchDoneDetailsInBackground() async {
-    final snapshot = List<Map<String, dynamic>>.from(items);
-    try {
-      await _prefetchDoneDetails(snapshot);
-    } catch (e) {
-      debugPrint('DoneProvider prefetch done details failed: $e');
-    }
-  }
-
-  Future<void> _prefetchDoneDetails(List<Map<String, dynamic>> items) async {
-    for (final item in items) {
-      final serverId = int.tryParse('${item['id']}');
-      if (serverId == null || serverId <= 0) continue;
-      try {
-        final detail = await repo.fetchOrderDetail(serverId);
-        await bookingOrdersDao.upsertFromServer(detail);
-      } catch (e) {
-        debugPrint('DoneProvider prefetch failed for $serverId: $e');
-      }
-    }
   }
 
   void setQuery(String q) {

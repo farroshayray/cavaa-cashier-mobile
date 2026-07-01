@@ -53,6 +53,15 @@ class OrderStageRank {
     String? syncIntent,
     double? paidAmountLocal,
   }) {
+    final local = localStatus.trim().toUpperCase();
+    final server = serverStatus.trim().toUpperCase();
+
+    // Customer added items on web: server returns OPENBILL_CONFIRMATION and
+    // must override local payment-ready open bill UNPAID.
+    if (openbillFlag && local == 'UNPAID' && server == 'OPENBILL_CONFIRMATION') {
+      return false;
+    }
+
     final localRank = rankFor(
       status: localStatus,
       openbillFlag: openbillFlag,

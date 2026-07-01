@@ -11,6 +11,7 @@ import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/order_detail_prefetch_policy.dart';
 import '/features/cashier/data/sync/order_detail_resolver.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
@@ -80,6 +81,8 @@ class ProcessProvider extends ChangeNotifier {
       notifyListeners();
     }
 
+    List<Map<String, dynamic>> dedupedMirrorRows = [];
+
     try {
       await bookingOrdersDao.reconcileDuplicateMirrors();
 
@@ -87,7 +90,7 @@ class ProcessProvider extends ChangeNotifier {
         query: query.isEmpty ? null : query,
       );
 
-      final dedupedMirrorRows = _dedupeProcessMirrorRows(mirrorRows);
+      dedupedMirrorRows = _dedupeProcessMirrorRows(mirrorRows);
 
       final doneRows = await bookingOrdersDao.getDoneTabOrders();
       final doneIds = doneRows
@@ -153,13 +156,17 @@ class ProcessProvider extends ChangeNotifier {
           e['is_synced'] == false ||
           e['is_local_only'] == true,
     );
-    if (connectivity.isOnline && items.isNotEmpty && !hasPendingSync) {
-      unawaited(_prefetchProcessDetailsInBackground());
+    if (connectivity.isOnline && dedupedMirrorRows.isNotEmpty && !hasPendingSync) {
+      unawaited(_prefetchProcessDetailsInBackground(dedupedMirrorRows));
     }
   }
 
-  Future<void> _prefetchProcessDetailsInBackground() async {
-    final snapshot = List<Map<String, dynamic>>.from(items);
+  Future<void> _prefetchProcessDetailsInBackground(
+    List<Map<String, dynamic>> mirrorRows,
+  ) async {
+    final snapshot = OrderDetailPrefetchPolicy.selectForPrefetch(mirrorRows);
+    if (snapshot.isEmpty) return;
+
     try {
       await _prefetchProcessDetails(snapshot);
     } catch (e) {
@@ -182,9 +189,9 @@ class ProcessProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _prefetchProcessDetails(List<Map<String, dynamic>> items) async {
-    for (final item in items) {
-      final serverId = _toId(item['id']);
+  Future<void> _prefetchProcessDetails(List<Map<String, dynamic>> mirrorRows) async {
+    for (final row in mirrorRows) {
+      final serverId = _toId(row['id']);
       if (serverId <= 0) continue;
 
       try {

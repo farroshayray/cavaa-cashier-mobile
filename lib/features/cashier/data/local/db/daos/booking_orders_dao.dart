@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/local/db/daos/cache_dao.dart';
+import '/features/cashier/data/local/db/local_date_utils.dart';
 import '/features/cashier/data/sync/order_catch_up_sync_policy.dart';
 import '/features/cashier/data/sync/order_edit_conflict_detector.dart';
 import '/features/cashier/data/sync/order_stage_rank.dart';
@@ -423,18 +424,20 @@ class BookingOrdersDao {
   }
 
   Future<List<Map<String, dynamic>>> getDoneTabOrders({String? query}) async {
-    final today = DateTime.now();
-    final start = DateTime(today.year, today.month, today.day);
-    final end = start.add(const Duration(days: 1));
+    final now = DateTime.now();
 
     final rows = await (db.select(db.bookingOrders)
           ..where((t) => t.orderStatus.equals('SERVED'))
-          ..where((t) => t.deletedAt.isNull())
-          ..where((t) => t.updatedAt.isBiggerOrEqualValue(start))
-          ..where((t) => t.updatedAt.isSmallerThanValue(end)))
+          ..where((t) => t.deletedAt.isNull()))
         .get();
 
-    return _mapRowsWithDetails(rows, query: query);
+    final todayRows = rows.where((row) {
+      final updated = row.updatedAt;
+      if (updated == null) return false;
+      return isSameLocalDay(updated, now);
+    }).toList();
+
+    return _mapRowsWithDetails(todayRows, query: query);
   }
 
   Future<List<Map<String, dynamic>>> getDirtyOrders() async {
@@ -1858,7 +1861,6 @@ class BookingOrdersDao {
         BookingOrdersCompanion(
           latestPaymentServerId: Value(serverId),
           paymentId: parent.paymentId == null ? Value(serverId) : const Value.absent(),
-          updatedAt: Value(now),
         ),
       );
     }

@@ -122,11 +122,19 @@ class PaymentProvider extends ChangeNotifier {
           .where((e) => e.isNotEmpty)
           .toSet();
 
-      final mirrorOrders = await bookingOrdersDao.getPaymentTabOrders(
+      var mirrorOrders = await bookingOrdersDao.getPaymentTabOrders(
         query: query.isEmpty ? null : query,
       );
 
-      final dedupedMirrorOrders = _dedupePaymentMirrorRows(mirrorOrders);
+      var dedupedMirrorOrders = _dedupePaymentMirrorRows(mirrorOrders);
+
+      if (connectivity.isOnline &&
+          await _reconcileOpenbillPaymentReadyFromServer(dedupedMirrorOrders)) {
+        mirrorOrders = await bookingOrdersDao.getPaymentTabOrders(
+          query: query.isEmpty ? null : query,
+        );
+        dedupedMirrorOrders = _dedupePaymentMirrorRows(mirrorOrders);
+      }
 
       items = dedupedMirrorOrders
           .map((o) => _normalizeMirrorPaymentItem(o, pendingFinishServerIds))
@@ -176,6 +184,34 @@ class PaymentProvider extends ChangeNotifier {
         (e['payment_method'] ?? '').toString() == 'OPENBILL' ||
         status.startsWith('OPENBILL');
     return isOpenbill && status == 'UNPAID';
+  }
+
+  /// When customer adds items on web, server regresses to OPENBILL_CONFIRMATION
+  /// while local mirror may still be payment-ready UNPAID.
+  Future<bool> _reconcileOpenbillPaymentReadyFromServer(
+    List<Map<String, dynamic>> mirrorRows,
+  ) async {
+    var changed = false;
+
+    for (final row in mirrorRows) {
+      if (!_isOpenbillReadyForPayment(row)) continue;
+
+      final serverId = _toInt(row['id']);
+      if (serverId == null || serverId <= 0) continue;
+
+      try {
+        final detail = await repo.fetchOrderDetail(serverId);
+        final serverStatus = (detail['order_status'] ?? '').toString().toUpperCase();
+        if (serverStatus != 'OPENBILL_CONFIRMATION') continue;
+
+        await bookingOrdersDao.upsertFromServer(detail);
+        changed = true;
+      } catch (e) {
+        debugPrint('PaymentProvider openbill reconcile failed for $serverId: $e');
+      }
+    }
+
+    return changed;
   }
 
   List<Map<String, dynamic>> _dedupePaymentMirrorRows(
@@ -818,29 +854,6 @@ class PaymentProvider extends ChangeNotifier {
     if (method == 'manual_ewallet') return 'E-Wallet';
     if (method == 'manual_qris') return 'QR Statis';
     return method;
-  }
-
-  Future<void> _prefetchAndCacheDetails(List<Map<String, dynamic>> serverItems) async {
-    for (final item in serverItems) {
-      try {
-        final id = _toInt(item['id']);
-        if (id == null || id <= 0) continue;
-
-        final detail = await repo.fetchOrderDetail(id);
-
-        debugPrint('==== PREFETCH DETAIL $id ====');
-        debugPrint('method detail = ${detail['payment_method']}');
-        debugPrint('payment_request = ${detail['payment_request']}');
-        debugPrint('latest_payment = ${detail['latest_payment']}');
-
-        await bookingOrdersDao.upsertFromServer(detail);
-        await _cacheManualPaymentMethodFromDetail(detail);
-
-        debugPrint('✅ cached payment detail: $id');
-      } catch (e) {
-        debugPrint('⚠️ prefetch detail failed for payment order: $e');
-      }
-    }
   }
 
   Future<void> _cacheManualPaymentMethodFromDetail(Map<String, dynamic> detail) async {

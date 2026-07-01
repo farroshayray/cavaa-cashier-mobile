@@ -317,6 +317,17 @@ void main() {
       );
     });
 
+    test('openbill server OPENBILL_CONFIRMATION beats local payment-ready UNPAID', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'UNPAID',
+          serverStatus: 'OPENBILL_CONFIRMATION',
+          openbillFlag: true,
+        ),
+        isFalse,
+      );
+    });
+
     test('isTerminalStatus recognizes served lifecycle end states', () {
       expect(OrderStageRank.isTerminalStatus('SERVED'), isTrue);
       expect(OrderStageRank.isTerminalStatus('DONE'), isTrue);
