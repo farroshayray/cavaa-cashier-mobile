@@ -10,6 +10,7 @@ import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
+import '/features/cashier/presentation/utils/order_tab_sort.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
@@ -118,7 +119,9 @@ class PaymentProvider extends ChangeNotifier {
         query: query.isEmpty ? null : query,
       );
 
-      items = mirrorOrders
+      final dedupedMirrorOrders = _dedupePaymentMirrorRows(mirrorOrders);
+
+      items = dedupedMirrorOrders
           .map((o) => _normalizeMirrorPaymentItem(o, pendingFinishServerIds))
           .where((e) {
             final sid = _toInt(e['server_id'] ?? e['id']);
@@ -140,16 +143,7 @@ class PaymentProvider extends ChangeNotifier {
           })
           .toList();
 
-      items.sort((a, b) {
-        final aCreated = DateTime.tryParse((a['created_at'] ?? '').toString());
-        final bCreated = DateTime.tryParse((b['created_at'] ?? '').toString());
-
-        if (aCreated == null && bCreated == null) return 0;
-        if (aCreated == null) return 1;
-        if (bCreated == null) return -1;
-
-        return aCreated.compareTo(bCreated);
-      });
+      items.sort(compareOrdersOldestFirst);
     } catch (e) {
       error = e.toString();
     } finally {
@@ -175,6 +169,60 @@ class PaymentProvider extends ChangeNotifier {
         (e['payment_method'] ?? '').toString() == 'OPENBILL' ||
         status.startsWith('OPENBILL');
     return isOpenbill && status == 'UNPAID';
+  }
+
+  List<Map<String, dynamic>> _dedupePaymentMirrorRows(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final byKey = <String, Map<String, dynamic>>{};
+
+    for (final row in rows) {
+      final key = _paymentMirrorDedupeKey(row);
+      final existing = byKey[key];
+      if (existing == null || _preferPaymentMirrorRow(row, existing)) {
+        byKey[key] = row;
+      }
+    }
+
+    return byKey.values.toList();
+  }
+
+  String _paymentMirrorDedupeKey(Map<String, dynamic> row) {
+    final serverId = _toInt(row['id']);
+    if (serverId != null && serverId > 0) return 'id:$serverId';
+
+    final clientUuid = row['local_client_uuid']?.toString().trim();
+    if (clientUuid != null && clientUuid.isNotEmpty) {
+      return 'uuid:$clientUuid';
+    }
+
+    final code = (row['booking_order_code'] ?? '').toString().trim();
+    if (code.isNotEmpty) return 'code:$code';
+
+    final name = (row['customer_name'] ?? '').toString().trim().toLowerCase();
+    final table = (row['table_id'] ?? row['table_no'] ?? '').toString();
+    return 'name:$name|$table';
+  }
+
+  bool _preferPaymentMirrorRow(
+    Map<String, dynamic> candidate,
+    Map<String, dynamic> current,
+  ) {
+    final candidateServerId = _toInt(candidate['id']) ?? 0;
+    final currentServerId = _toInt(current['id']) ?? 0;
+    if (candidateServerId > 0 && currentServerId <= 0) return true;
+    if (candidateServerId <= 0 && currentServerId > 0) return false;
+
+    final candidateDirty =
+        candidate['sync_dirty'] == true || candidate['sync_dirty'] == 1;
+    final currentDirty = current['sync_dirty'] == true || current['sync_dirty'] == 1;
+    if (candidateDirty && !currentDirty) return true;
+    if (!candidateDirty && currentDirty) return false;
+
+    final candidateDetails =
+        ((candidate['order_details'] as List?) ?? []).length;
+    final currentDetails = ((current['order_details'] as List?) ?? []).length;
+    return candidateDetails > currentDetails;
   }
 
   Map<String, dynamic> _normalizeMirrorPaymentItem(

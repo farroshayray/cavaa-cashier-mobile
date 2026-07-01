@@ -38,10 +38,9 @@ class OrderStageRank {
     final table = openbillFlag ? _openbillRanks : _cashRanks;
     var rank = table[normalized] ?? 0;
 
-    if (openbillFlag &&
-        normalized == 'UNPAID' &&
-        (_intentIs(syncIntent, 'PAY') || paidAmountLocal != null)) {
-      rank = 25;
+    if (openbillFlag && normalized == 'UNPAID') {
+      // Openbill UNPAID after serve = payment-ready, ahead of WAITING_ORDER (18).
+      rank = 35;
     }
 
     return rank;
@@ -70,7 +69,4 @@ class OrderStageRank {
   static bool isTerminalStatus(String status) {
     return {'SERVED', 'DONE', 'FINISHED'}.contains(status.trim().toUpperCase());
   }
-
-  static bool _intentIs(String? intent, String expected) =>
-      (intent ?? '').trim().toUpperCase() == expected;
 }

@@ -4,6 +4,7 @@ import '/core/network/api_debug_log.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import '/features/cashier/data/sync/master_cache_service.dart';
+import '/features/cashier/data/sync/offline_catch_up_policy.dart';
 import '/features/cashier/data/sync/order_stage_sync_guard.dart';
 import '/features/cashier/data/sync/sync_api.dart';
 
@@ -146,20 +147,53 @@ class SyncEngine {
   }
 
   Future<Map<String, dynamic>> _buildPushPayload() async {
+    final linked = await bookingOrdersDao.linkDirtyMirrorsToKnownServerRows();
+    if (linked > 0) {
+      ApiDebugLog.sync(
+        'self-heal',
+        'linked $linked offline mirrors to existing server rows',
+      );
+    }
+
+    final redirty = await bookingOrdersDao.ensureHeaderDirtyForPendingDetails();
+    if (redirty > 0) {
+      ApiDebugLog.sync(
+        'self-heal',
+        're-dirtied $redirty orders with pending served details',
+      );
+    }
+
+    final healed = await bookingOrdersDao.healStuckCashierOpenbillSyncIntents();
+    if (healed > 0) {
+      ApiDebugLog.sync(
+        'self-heal',
+        'adjusted $healed stuck cashier openbill sync intents',
+      );
+    }
+
     final dirtyOrders = await bookingOrdersDao.getAllDirtyBookingOrders();
     final bookingOrdersPayload = <Map<String, dynamic>>[];
     final orderDetailsPayload = <Map<String, dynamic>>[];
     final deletes = <Map<String, dynamic>>[];
 
     for (final order in dirtyOrders) {
-      final storedIntent = order.syncIntent ?? 'CREATE';
-      final effectiveIntent = OrderStageSyncGuard.resolvePushIntent(
-        storedIntent: storedIntent,
-        orderStatus: order.orderStatus,
-        serverId: order.serverId,
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(order.clientUuid);
+      final useCatchUp = await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+        order: order,
+        hasDirtyServedDetails: bookingOrdersDao.hasDirtyServedDetails,
       );
+
+      final storedIntent = order.syncIntent ?? 'CREATE';
+      final effectiveIntent = useCatchUp
+          ? 'OFFLINE_CATCH_UP'
+          : OrderStageSyncGuard.resolvePushIntent(
+              storedIntent: storedIntent,
+              orderStatus: order.orderStatus,
+              serverId: order.serverId,
+            );
       final neverSynced = order.serverId == null || order.serverId! <= 0;
-      final offlineCatchUp = neverSynced ||
+      final offlineCatchUp = useCatchUp ||
+          neverSynced ||
           storedIntent.toUpperCase() != effectiveIntent.toUpperCase();
       final guardError = OrderStageSyncGuard.validateIntent(
         currentStatus: order.orderStatus,
@@ -177,7 +211,6 @@ class SyncEngine {
         continue;
       }
 
-      final bundle = await bookingOrdersDao.getBundleByClientUuid(order.clientUuid);
       final items = await _buildItemsPayload(bundle);
       final subtotal = _resolveSubtotalForPush(order, bundle);
 
@@ -196,9 +229,12 @@ class SyncEngine {
         'order_name': _checkoutOrderName(order.customerName),
         'payment_method': _checkoutPaymentMethod(order),
         'openbill_flag': order.openbillFlag,
+        if (order.orderBy != null && order.orderBy!.trim().isNotEmpty)
+          'order_by': order.orderBy,
         'total_amount': subtotal,
         'total_order_value': subtotal,
         'order_status': order.orderStatus,
+        'local_target_status': order.orderStatus,
         'items': items,
         if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
         if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
@@ -206,11 +242,23 @@ class SyncEngine {
           'last_payment_id': order.latestPaymentServerId,
       };
 
+      if (effectiveIntent == 'OFFLINE_CATCH_UP') {
+        row['order_details'] = _buildOrderDetailsCatchUpPayload(bundle);
+      }
+
+      if (effectiveIntent == 'SERVE_ITEMS') {
+        final detailIds = _collectServedDetailIdsForPush(bundle);
+        if (detailIds.isNotEmpty) {
+          row['detail_ids'] = detailIds;
+        }
+      }
+
       bookingOrdersPayload.add(row);
 
       final dirtyDetails = await bookingOrdersDao.getDirtyDetailsForOrder(order.clientUuid);
       final skipDetailPush = effectiveIntent == 'CREATE' ||
           effectiveIntent == 'CONFIRM_OPENBILL' ||
+          effectiveIntent == 'OFFLINE_CATCH_UP' ||
           neverSynced;
       for (final detail in dirtyDetails) {
         if (skipDetailPush) continue;
@@ -240,6 +288,19 @@ class SyncEngine {
       'order_details': orderDetailsPayload,
       'deletes': deletes,
     };
+  }
+
+  List<Map<String, dynamic>> _buildOrderDetailsCatchUpPayload(BookingOrderBundle? bundle) {
+    if (bundle == null) return [];
+
+    return bundle.details
+        .map((detail) => {
+              if (detail.serverId != null) 'id': detail.serverId,
+              'client_detail_uuid': detail.clientDetailUuid,
+              'status': detail.status ?? 'SERVED BY CASHIER',
+              'quantity': detail.quantity,
+            })
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> _buildItemsPayload(BookingOrderBundle? bundle) async {
@@ -282,16 +343,35 @@ class SyncEngine {
     });
   }
 
+  List<int> _collectServedDetailIdsForPush(BookingOrderBundle? bundle) {
+    if (bundle == null) return [];
+
+    return bundle.details
+        .where((detail) {
+          if (detail.syncDirty != true) return false;
+          final status = (detail.status ?? '').trim().toUpperCase();
+          return status.contains('SERVED');
+        })
+        .map((detail) => detail.serverId)
+        .whereType<int>()
+        .where((id) => id > 0)
+        .toList();
+  }
+
   Future<void> _applyResponse(Map<String, dynamic> response) async {
     final applied = (response['applied'] as List?) ?? [];
     for (final raw in applied) {
       if (raw is Map) {
         final map = Map<String, dynamic>.from(raw);
         await bookingOrdersDao.applyAppliedResult(map);
-        await bookingOrdersDao.queueRemainingSyncIntentIfNeeded(
-          clientUuid: map['client_uuid']?.toString() ?? '',
-          appliedIntent: map['sync_intent']?.toString() ?? '',
-        );
+        final appliedIntent = (map['sync_intent']?.toString() ?? '').toUpperCase();
+        if (appliedIntent != 'OFFLINE_CATCH_UP') {
+          await bookingOrdersDao.queueRemainingSyncIntentIfNeeded(
+            clientUuid: map['client_uuid']?.toString() ?? '',
+            appliedIntent: map['sync_intent']?.toString() ?? '',
+            appliedServerStatus: map['order_status']?.toString(),
+          );
+        }
         ApiDebugLog.sync(
           'applied locally',
           '${map['sync_intent']} client=${map['client_uuid']} server_id=${map['server_id']}',
@@ -370,6 +450,11 @@ class SyncEngine {
           'deleted_orders=${deletedOrders.length} '
           'order_payments=${orderPayments.length}',
         );
+
+        final reconciled = await bookingOrdersDao.reconcileDuplicateMirrors();
+        if (reconciled > 0) {
+          ApiDebugLog.sync('self-heal', 'reconciled $reconciled duplicate mirrors after pull');
+        }
       }
 
       final master = pulled['master'];
@@ -429,8 +514,15 @@ class SyncEngine {
   }
 
   String? _checkoutPaymentMethod(BookingOrder order) {
-    if (order.openbillFlag) return 'OPENBILL';
     final method = (order.paymentMethod ?? '').trim();
+    if (order.openbillFlag) {
+      if (order.paidAmountLocal != null &&
+          method.isNotEmpty &&
+          method.toUpperCase() != 'OPENBILL') {
+        return method;
+      }
+      return 'OPENBILL';
+    }
     if (method.isEmpty) return 'CASH';
     return method;
   }

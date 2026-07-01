@@ -100,6 +100,21 @@ bool isOpenBillOrder(Map<String, dynamic> order) {
       status.startsWith('OPENBILL');
 }
 
+bool isCashierOriginatedOrder(Map<String, dynamic> order) =>
+    (order['order_by'] ?? '').toString().toUpperCase() == 'CASHIER';
+
+bool isCashierOpenbillReadyToServe(Map<String, dynamic> order) =>
+    isOpenBillOrder(order) &&
+    (isCashierOriginatedOrder(order) ||
+        (order['is_local_only'] == true &&
+            (order['order_status'] ?? '').toString() !=
+                'OPENBILL_CONFIRMATION'));
+
+bool needsOpenbillConfirmation(Map<String, dynamic> order) {
+  final status = (order['order_status'] ?? '').toString();
+  return status == 'OPENBILL_CONFIRMATION' && !isCashierOpenbillReadyToServe(order);
+}
+
 /// Struk di tab proses hanya untuk order yang sudah tercatat bayar.
 bool canPrintProcessReceipt(Map<String, dynamic> order) {
   if (parseBool(order['payment_flag'])) return true;

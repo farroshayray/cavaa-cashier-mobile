@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../../data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
+import '/features/cashier/presentation/utils/order_tab_sort.dart';
 import '/core/services/connectivity_status_provider.dart';
 
 class DoneProvider extends ChangeNotifier {
@@ -46,16 +48,10 @@ class DoneProvider extends ChangeNotifier {
     }
 
     try {
+      await bookingOrdersDao.reconcileDuplicateMirrors();
+
       final mirrorRows = await bookingOrdersDao.getDoneTabOrders();
       items = mirrorRows.map(OrderTabItemMapper.toDoneItem).toList();
-
-      if (connectivity.isOnline && items.isNotEmpty) {
-        try {
-          await _prefetchDoneDetails(items);
-        } catch (e) {
-          debugPrint('DoneProvider prefetch done details failed: $e');
-        }
-      }
 
       if (query.trim().isNotEmpty) {
         final q = query.trim().toLowerCase();
@@ -74,22 +70,7 @@ class DoneProvider extends ChangeNotifier {
         }).toList();
       }
 
-      items.sort((a, b) {
-        final aCreated = DateTime.tryParse(
-          (a['sort_time'] ?? a['created_at'] ?? a['updated_at_local'] ?? '')
-              .toString(),
-        );
-        final bCreated = DateTime.tryParse(
-          (b['sort_time'] ?? b['created_at'] ?? b['updated_at_local'] ?? '')
-              .toString(),
-        );
-
-        if (aCreated == null && bCreated == null) return 0;
-        if (aCreated == null) return -1;
-        if (bCreated == null) return 1;
-
-        return aCreated.compareTo(bCreated);
-      });
+      items.sort(compareOrdersOldestFirst);
     } catch (e) {
       error = e.toString();
     } finally {
@@ -97,6 +78,22 @@ class DoneProvider extends ChangeNotifier {
         isLoading = false;
       }
       notifyListeners();
+    }
+
+    final hasPendingSync = items.any(
+      (e) => e['sync_status'] == 'PENDING' || e['is_synced'] == false,
+    );
+    if (connectivity.isOnline && items.isNotEmpty && !hasPendingSync) {
+      unawaited(_prefetchDoneDetailsInBackground());
+    }
+  }
+
+  Future<void> _prefetchDoneDetailsInBackground() async {
+    final snapshot = List<Map<String, dynamic>>.from(items);
+    try {
+      await _prefetchDoneDetails(snapshot);
+    } catch (e) {
+      debugPrint('DoneProvider prefetch done details failed: $e');
     }
   }
 

@@ -218,6 +218,28 @@ class BookingOrdersDao {
       }
     }
 
+    final offlineMatch = await _findOfflineMirrorForServerRow({
+      'customer_name': order['customer_name'],
+      'order_name': order['order_name'],
+      'table_id': order['table_id'],
+      'openbill_flag': order['openbill_flag'],
+      'created_at': order['created_at'],
+    });
+    if (offlineMatch != null) {
+      await (db.update(db.bookingOrders)
+            ..where((t) => t.clientUuid.equals(offlineMatch.clientUuid)))
+          .write(
+        BookingOrdersCompanion(
+          serverId: Value(serverId),
+          bookingOrderCode: order['booking_order_code'] != null
+              ? Value(order['booking_order_code'].toString())
+              : const Value.absent(),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      return;
+    }
+
     final clientUuid = _uuid.v4();
     final now = DateTime.now();
     final tableNo = order['table'] is Map
@@ -264,7 +286,8 @@ class BookingOrdersDao {
             orderStatus: Value(orderStatus),
             updatedAt: Value(now),
             syncDirty: Value(syncDirty),
-            syncIntent: syncIntent != null ? Value(syncIntent) : const Value.absent(),
+            syncIntent: Value(syncIntent),
+            syncError: syncDirty ? const Value.absent() : const Value(null),
             paidAmountLocal: extras?['paid_amount'] != null
                 ? Value(_toDouble(extras!['paid_amount']))
                 : const Value.absent(),
@@ -370,7 +393,8 @@ class BookingOrdersDao {
     final serverId = _toIntOrNull(row['id']);
     if (serverId == null) return;
 
-    final existing = await getByServerId(serverId);
+    var existing = await getByServerId(serverId);
+    existing ??= await _findOfflineMirrorForServerRow(row);
     final clientUuid = existing?.clientUuid ?? _uuid.v4();
     final now = DateTime.now();
     final serverStatus = row['order_status']?.toString() ?? 'UNPAID';
@@ -386,8 +410,8 @@ class BookingOrdersDao {
     final terminalMatch = existing != null &&
         existing.orderStatus.toUpperCase() == serverStatus.toUpperCase() &&
         OrderStageRank.isTerminalStatus(serverStatus);
-    final preserveLocalLifecycle = localAhead ||
-        (existing != null && existing.syncDirty && !terminalMatch);
+    final preserveLocalLifecycle = existing != null &&
+        (existing.syncDirty || localAhead);
 
     final companion = BookingOrdersCompanion(
       clientUuid: Value(clientUuid),
@@ -429,16 +453,12 @@ class BookingOrdersDao {
       latestPaymentJson:
           Value(row['latest_payment'] != null ? jsonEncode(row['latest_payment']) : null),
       syncVersion: Value(_toInt(row['sync_version'])),
-      syncDirty: terminalMatch
-          ? const Value(false)
-          : (preserveLocalLifecycle
-              ? Value(existing!.syncDirty)
-              : const Value(false)),
-      syncIntent: terminalMatch
-          ? const Value(null)
-          : (preserveLocalLifecycle
-              ? Value(existing!.syncIntent)
-              : const Value(null)),
+      syncDirty: preserveLocalLifecycle
+          ? Value(existing!.syncDirty)
+          : (terminalMatch ? const Value(false) : const Value(false)),
+      syncIntent: preserveLocalLifecycle
+          ? Value(existing!.syncIntent)
+          : (terminalMatch ? const Value(null) : const Value(null)),
       syncError: preserveLocalLifecycle && existing!.syncError != null
           ? Value(existing.syncError)
           : const Value(null),
@@ -499,6 +519,236 @@ class BookingOrdersDao {
         );
   }
 
+  /// Sets header dirty + SERVE_ITEMS when served details are still pending sync.
+  Future<int> ensureHeaderDirtyForPendingDetails() async {
+    final rows = await (db.select(db.bookingOrders)
+          ..where((t) => t.deletedAt.isNull())
+          ..where((t) => t.syncDirty.equals(false)))
+        .get();
+
+    var fixed = 0;
+    for (final order in rows) {
+      if (!await hasDirtyServedDetails(order.clientUuid)) continue;
+
+      await markIntent(
+        order.clientUuid,
+        'SERVE_ITEMS',
+        extras: {
+          'order_status': order.orderStatus,
+          if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
+          if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
+          if (order.paymentMethod != null) 'payment_method': order.paymentMethod,
+        },
+      );
+      fixed++;
+    }
+
+    return fixed;
+  }
+
+  Future<bool> hasDirtyServedDetails(String clientUuid) async {
+    final dirty = await getDirtyDetailsForOrder(clientUuid);
+    return dirty.any((detail) {
+      final status = (detail.status ?? '').trim().toUpperCase();
+      return status.contains('SERVED');
+    });
+  }
+
+  Future<bool> orderNeedsCatchUpSync({
+    required BookingOrder local,
+    String? serverStatus,
+  }) async {
+    final server = (serverStatus ?? '').trim().toUpperCase();
+    if (server.isEmpty) return false;
+
+    final localStatus = local.orderStatus.trim().toUpperCase();
+
+    if (await hasDirtyServedDetails(local.clientUuid)) {
+      return true;
+    }
+
+    if (local.openbillFlag &&
+        localStatus == 'UNPAID' &&
+        server == 'OPENBILL_WAITING_ORDER') {
+      return true;
+    }
+
+    if (local.paidAmountLocal != null) {
+      if (localStatus == 'SERVED' && server != 'SERVED') {
+        return true;
+      }
+      if (localStatus == 'UNPAID' &&
+          {'UNPAID', 'OPENBILL_WAITING_ORDER'}.contains(server)) {
+        return true;
+      }
+    }
+
+    // Openbill serve synced: local + server both UNPAID, no payment queued yet.
+    if (local.openbillFlag && localStatus == 'UNPAID' && server == 'UNPAID') {
+      return false;
+    }
+
+    if (OrderStageRank.isLocalAheadOfServer(
+      localStatus: local.orderStatus,
+      serverStatus: server,
+      openbillFlag: local.openbillFlag,
+      syncIntent: local.syncIntent,
+      paidAmountLocal: local.paidAmountLocal,
+    )) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Links offline dirty mirrors to an existing server row for the same checkout.
+  Future<int> linkDirtyMirrorsToKnownServerRows() async {
+    final dirty = await getAllDirtyBookingOrders();
+    var fixed = 0;
+
+    for (final order in dirty) {
+      if (order.serverId != null && order.serverId! > 0) continue;
+
+      final siblings = await (db.select(db.bookingOrders)
+            ..where((t) => t.deletedAt.isNull())
+            ..where((t) => t.serverId.isNotNull())
+            ..where((t) => t.customerName.equals(order.customerName))
+            ..where((t) => t.openbillFlag.equals(order.openbillFlag)))
+          .get();
+
+      BookingOrder? keeper;
+      for (final sibling in siblings) {
+        if (order.tableId != null &&
+            sibling.tableId != null &&
+            order.tableId != sibling.tableId) {
+          continue;
+        }
+        keeper = sibling;
+        break;
+      }
+      if (keeper == null) continue;
+
+      await (db.update(db.bookingOrders)
+            ..where((t) => t.clientUuid.equals(order.clientUuid)))
+          .write(
+        BookingOrdersCompanion(
+          serverId: Value(keeper.serverId),
+          bookingOrderCode: keeper.bookingOrderCode != null
+              ? Value(keeper.bookingOrderCode!)
+              : const Value.absent(),
+          syncError: const Value(null),
+        ),
+      );
+      fixed++;
+    }
+
+    return fixed;
+  }
+
+  /// Rewrites or clears redundant cashier openbill PROCESS intents before push.
+  Future<int> healStuckCashierOpenbillSyncIntents() async {
+    var healed = 0;
+
+    final dirty = await getAllDirtyBookingOrders();
+
+    for (final order in dirty) {
+      if (_isStuckCashierOpenbillProcessError(order)) {
+        await (db.update(db.bookingOrders)
+              ..where((t) => t.clientUuid.equals(order.clientUuid)))
+            .write(
+          const BookingOrdersCompanion(
+            syncIntent: Value('CONFIRM_OPENBILL'),
+            syncError: Value(null),
+            syncDirty: Value(true),
+          ),
+        );
+        healed++;
+        continue;
+      }
+
+      if (await _shouldDowngradePayToServeItems(order)) {
+        await markIntent(
+          order.clientUuid,
+          'OFFLINE_CATCH_UP',
+          extras: {'order_status': order.orderStatus},
+        );
+        healed++;
+        continue;
+      }
+
+      if (_isPrematureOpenbillPayIntent(order)) {
+        await markIntent(
+          order.clientUuid,
+          'OFFLINE_CATCH_UP',
+          extras: {'order_status': order.orderStatus},
+        );
+        healed++;
+        continue;
+      }
+
+      if (!_isRedundantCashierOpenbillProcessIntent(order)) {
+        continue;
+      }
+
+      await (db.update(db.bookingOrders)
+            ..where((t) => t.clientUuid.equals(order.clientUuid)))
+          .write(
+        const BookingOrdersCompanion(
+          syncDirty: Value(false),
+          syncIntent: Value(null),
+          syncError: Value(null),
+        ),
+      );
+      healed++;
+    }
+
+    return healed;
+  }
+
+  Future<bool> _shouldDowngradePayToServeItems(BookingOrder order) async {
+    if (!order.openbillFlag) return false;
+    if ((order.syncIntent ?? '').trim().toUpperCase() != 'PAY') return false;
+
+    final local = order.orderStatus.trim().toUpperCase();
+    if (!{'UNPAID', 'SERVED'}.contains(local)) return false;
+
+    if (await hasDirtyServedDetails(order.clientUuid)) {
+      return true;
+    }
+
+    final error = (order.syncError ?? '').toUpperCase();
+    if (error.contains('OPENBILL_WAITING_ORDER')) return true;
+    if (error.contains('PAID AMOUNT') && local == 'UNPAID') return true;
+
+    return false;
+  }
+
+  bool _isPrematureOpenbillPayIntent(BookingOrder order) {
+    if (!order.openbillFlag) return false;
+    if (order.orderStatus.trim().toUpperCase() != 'UNPAID') return false;
+    if ((order.syncIntent ?? '').trim().toUpperCase() != 'PAY') return false;
+    return order.paidAmountLocal == null;
+  }
+
+  bool _isRedundantCashierOpenbillProcessIntent(BookingOrder order) {
+    if (!order.openbillFlag) return false;
+    if ((order.orderBy ?? '').trim().toUpperCase() != 'CASHIER') return false;
+    if (order.orderStatus.trim().toUpperCase() != 'OPENBILL_WAITING_ORDER') {
+      return false;
+    }
+    if ((order.syncIntent ?? '').trim().toUpperCase() != 'PROCESS') return false;
+    return order.serverId != null && order.serverId! > 0;
+  }
+
+  bool _isStuckCashierOpenbillProcessError(BookingOrder order) {
+    if (!order.openbillFlag) return false;
+    if ((order.orderBy ?? '').trim().toUpperCase() != 'CASHIER') return false;
+    if ((order.syncIntent ?? '').trim().toUpperCase() != 'PROCESS') return false;
+
+    final error = (order.syncError ?? '').toUpperCase();
+    return error.contains('PROCESS') && error.contains('OPENBILL_CONFIRMATION');
+  }
+
   Future<void> markDeletedByServerId(int serverId, {DateTime? deletedAt}) async {
     await (db.update(db.bookingOrders)..where((t) => t.serverId.equals(serverId))).write(
           BookingOrdersCompanion(
@@ -519,6 +769,22 @@ class BookingOrdersDao {
             syncIntent: const Value(null),
           ),
         );
+  }
+
+  Future<void> _mergeDetailsIntoKeeper({
+    required String fromClientUuid,
+    required String toClientUuid,
+  }) async {
+    if (fromClientUuid == toClientUuid) return;
+
+    await (db.update(db.orderDetails)
+          ..where((t) => t.bookingOrderClientUuid.equals(fromClientUuid)))
+        .write(
+      OrderDetailsCompanion(
+        bookingOrderClientUuid: Value(toClientUuid),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> removeOrderMirrorByClientUuid(String clientUuid) async {
@@ -587,6 +853,9 @@ class BookingOrdersDao {
 
   /// Merges duplicate mirror headers that share the same booking order code.
   Future<int> reconcileDuplicateMirrors() async {
+    var removed = await _reconcileMirrorsByServerId();
+    removed += await _reconcileStaleOpenbillGhostMirrors();
+
     final rows = await (db.select(db.bookingOrders)
           ..where((t) => t.deletedAt.isNull()))
         .get();
@@ -598,7 +867,6 @@ class BookingOrdersDao {
       byCode.putIfAbsent(code, () => []).add(row);
     }
 
-    var removed = 0;
     for (final group in byCode.values) {
       if (group.length < 2) continue;
 
@@ -640,6 +908,189 @@ class BookingOrdersDao {
     return removed;
   }
 
+  Future<BookingOrder?> _findOfflineMirrorForServerRow(Map<String, dynamic> row) async {
+    final customerName = (row['customer_name'] ?? row['order_name'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (customerName.isEmpty) return null;
+
+    final tableId = _toIntOrNull(row['table_id'] ?? row['order_table']);
+    final isOpenbill = _toBool(row['openbill_flag']);
+    final serverCreated = _parseDate(row['created_at']);
+
+    final candidates = await (db.select(db.bookingOrders)
+          ..where((t) => t.deletedAt.isNull())
+          ..where((t) => t.serverId.isNull())
+          ..where((t) => t.syncDirty.equals(true)))
+        .get();
+
+    BookingOrder? best;
+    var bestScore = -1;
+
+    for (final candidate in candidates) {
+      if (candidate.customerName.trim().toLowerCase() != customerName) continue;
+      if (candidate.openbillFlag != isOpenbill) continue;
+      if (tableId != null &&
+          candidate.tableId != null &&
+          candidate.tableId != tableId) {
+        continue;
+      }
+
+      var score = 0;
+      final intent = (candidate.syncIntent ?? '').toUpperCase();
+      if (intent == 'CREATE' || intent == 'SERVE_ITEMS' || intent == 'PAY') {
+        score += 10;
+      }
+      if (await hasDirtyServedDetails(candidate.clientUuid)) score += 5;
+      if (candidate.paidAmountLocal != null) score += 3;
+
+      final detailCount = await (db.select(db.orderDetails)
+            ..where((t) => t.bookingOrderClientUuid.equals(candidate.clientUuid)))
+          .get()
+          .then((value) => value.length);
+      score += detailCount;
+
+      if (serverCreated != null && candidate.createdAt != null) {
+        final diff = serverCreated.difference(candidate.createdAt!).abs();
+        if (diff.inMinutes <= 60) score += 4;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    return bestScore > 0 ? best : null;
+  }
+
+  Future<int> _reconcileMirrorsByServerId() async {
+    final rows = await (db.select(db.bookingOrders)
+          ..where((t) => t.deletedAt.isNull())
+          ..where((t) => t.serverId.isNotNull()))
+        .get();
+
+    final byServerId = <int, List<BookingOrder>>{};
+    for (final row in rows) {
+      final serverId = row.serverId;
+      if (serverId == null || serverId <= 0) continue;
+      byServerId.putIfAbsent(serverId, () => []).add(row);
+    }
+
+    var removed = 0;
+    for (final group in byServerId.values) {
+      if (group.length < 2) continue;
+
+      final keeper = await _pickKeeperMirror(group);
+      for (final row in group) {
+        if (row.clientUuid == keeper.clientUuid) continue;
+        await removeOrderMirrorByClientUuid(row.clientUuid);
+        removed++;
+      }
+    }
+
+    return removed;
+  }
+
+  Future<int> _reconcileStaleOpenbillGhostMirrors() async {
+    final rows = await (db.select(db.bookingOrders)
+          ..where((t) => t.deletedAt.isNull()))
+        .get();
+
+    final keepersByKey = <String, BookingOrder>{};
+    for (final row in rows) {
+      if (row.serverId == null || row.serverId! <= 0) continue;
+      final key = _openbillReconcileKey(row);
+      final existing = keepersByKey[key];
+      if (existing == null || _preferKeeperMirror(row, existing)) {
+        keepersByKey[key] = row;
+      }
+    }
+
+    var removed = 0;
+    for (final row in rows) {
+      if (row.serverId != null && row.serverId! > 0) continue;
+      if (!row.openbillFlag) continue;
+
+      final key = _openbillReconcileKey(row);
+      final keeper = keepersByKey[key];
+      if (keeper == null) continue;
+      if (keeper.clientUuid == row.clientUuid) continue;
+
+      final ghostStatus = row.orderStatus.trim().toUpperCase();
+      const removableGhostStatuses = {
+        'OPENBILL_WAITING_ORDER',
+        'OPENBILL_CONFIRMATION',
+        'UNPAID',
+        'SERVED',
+      };
+      if (removableGhostStatuses.contains(ghostStatus)) {
+        await _mergeDetailsIntoKeeper(
+          fromClientUuid: row.clientUuid,
+          toClientUuid: keeper.clientUuid,
+        );
+        await removeOrderMirrorByClientUuid(row.clientUuid);
+        removed++;
+      }
+    }
+
+    return removed;
+  }
+
+  String _openbillReconcileKey(BookingOrder row) {
+    final name = row.customerName.trim().toLowerCase();
+    final table = row.tableId ?? 0;
+    return '$name|$table|${row.openbillFlag}';
+  }
+
+  Future<BookingOrder> _pickKeeperMirror(List<BookingOrder> group) async {
+    BookingOrder keeper = group.first;
+    var bestScore = -1;
+
+    for (final row in group) {
+      final detailCount = await (db.select(db.orderDetails)
+            ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
+          .get()
+          .then((value) => value.length);
+
+      var score = detailCount * 3;
+      if (row.syncDirty) score += 4;
+      if (row.paidAmountLocal != null) score += 3;
+      if (await hasDirtyServedDetails(row.clientUuid)) score += 2;
+
+      final status = row.orderStatus.trim().toUpperCase();
+      if (status == 'UNPAID' || status == 'SERVED') score += 2;
+
+      if (score > bestScore) {
+        bestScore = score;
+        keeper = row;
+      }
+    }
+
+    return keeper;
+  }
+
+  bool _preferKeeperMirror(BookingOrder candidate, BookingOrder current) {
+    final candidateStatus = candidate.orderStatus.trim().toUpperCase();
+    final currentStatus = current.orderStatus.trim().toUpperCase();
+    const preferred = ['SERVED', 'UNPAID', 'PROCESSED', 'PAID'];
+    final candidateRank = preferred.contains(candidateStatus)
+        ? preferred.indexOf(candidateStatus)
+        : -1;
+    final currentRank = preferred.contains(currentStatus)
+        ? preferred.indexOf(currentStatus)
+        : -1;
+    if (candidateRank != currentRank) {
+      return candidateRank > currentRank;
+    }
+    if (candidate.syncDirty != current.syncDirty) {
+      return candidate.syncDirty;
+    }
+    return (candidate.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+        .isAfter(current.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+  }
+
   Future<void> applyAppliedResult(Map<String, dynamic> applied) async {
     if (applied['deleted'] == true) {
       final serverId = _toIntOrNull(applied['server_id']);
@@ -659,6 +1110,12 @@ class BookingOrdersDao {
 
     final localBefore = await getByClientUuid(clientUuid);
     final appliedIntent = applied['sync_intent']?.toString().toUpperCase() ?? '';
+    final serverApplied = applied['order_status']?.toString();
+    final stillNeedsSync = localBefore != null &&
+        await orderNeedsCatchUpSync(
+          local: localBefore,
+          serverStatus: serverApplied,
+        );
 
     await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
           BookingOrdersCompanion(
@@ -676,21 +1133,27 @@ class BookingOrdersDao {
             syncVersion: applied['sync_version'] != null
                 ? Value(_toInt(applied['sync_version']))
                 : const Value.absent(),
-            syncDirty: const Value(false),
+            syncDirty: Value(stillNeedsSync),
             syncError: const Value(null),
             syncIntent: const Value(null),
             syncedAt: Value(DateTime.now()),
           ),
         );
 
-    if (appliedIntent == 'CREATE' && applied['server_id'] != null) {
-      await _linkDetailServerIdsFromApplied(
-        clientUuid: clientUuid,
-        applied: applied,
-      );
+    if ((appliedIntent == 'CREATE' || appliedIntent == 'OFFLINE_CATCH_UP') &&
+        applied['server_id'] != null) {
+      if (appliedIntent == 'CREATE') {
+        await _linkDetailServerIdsFromApplied(
+          clientUuid: clientUuid,
+          applied: applied,
+        );
+      }
+      await reconcileDuplicateMirrors();
     }
 
-    if (appliedIntent == 'PROCESS' || appliedIntent == 'FINISH') {
+    if (appliedIntent == 'PROCESS' ||
+        appliedIntent == 'FINISH' ||
+        appliedIntent == 'SERVE_ITEMS') {
       await _clearDetailSyncDirty(clientUuid);
     }
   }
@@ -741,18 +1204,23 @@ class BookingOrdersDao {
   Future<void> queueRemainingSyncIntentIfNeeded({
     required String clientUuid,
     required String appliedIntent,
+    String? appliedServerStatus,
   }) async {
     if (clientUuid.isEmpty) return;
 
     final order = await getByClientUuid(clientUuid);
     if (order == null) return;
 
+    final dirtyServed = await hasDirtyServedDetails(clientUuid);
     final nextIntent = OrderSyncIntentChain.resolveNext(
       localStatus: order.orderStatus,
       storedIntent: order.syncIntent,
       appliedIntent: appliedIntent,
       openbillFlag: order.openbillFlag,
       paidAmountLocal: order.paidAmountLocal,
+      orderBy: order.orderBy,
+      serverStatusAfterApply: appliedServerStatus,
+      hasDirtyServedDetails: dirtyServed,
     );
     if (nextIntent == null) return;
 
@@ -899,7 +1367,7 @@ class BookingOrdersDao {
   }) async {
     final clientUuid = _uuid.v4();
     final now = DateTime.now();
-    final orderStatus = openbillFlag ? 'OPENBILL_CONFIRMATION' : 'UNPAID';
+    final orderStatus = openbillFlag ? 'OPENBILL_WAITING_ORDER' : 'UNPAID';
 
     await db.into(db.bookingOrders).insert(
           BookingOrdersCompanion.insert(
@@ -909,6 +1377,7 @@ class BookingOrdersDao {
             tableNo: Value(tableNo),
             paymentMethod: Value(paymentMethodSelected),
             openbillFlag: Value(openbillFlag),
+            orderBy: Value(openbillFlag ? 'CASHIER' : null),
             orderStatus: Value(orderStatus),
             totalOrderValue: Value(subtotal),
             ppn: Value(ppn),
@@ -1192,9 +1661,23 @@ class BookingOrdersDao {
     }
 
     result.sort((a, b) {
-      final aDate = a['updated_at']?.toString() ?? '';
-      final bDate = b['updated_at']?.toString() ?? '';
-      return bDate.compareTo(aDate);
+      final aCreated = DateTime.tryParse((a['created_at'] ?? '').toString());
+      final bCreated = DateTime.tryParse((b['created_at'] ?? '').toString());
+
+      if (aCreated == null && bCreated == null) {
+        final aUuid = (a['client_uuid'] ?? '').toString();
+        final bUuid = (b['client_uuid'] ?? '').toString();
+        return aUuid.compareTo(bUuid);
+      }
+      if (aCreated == null) return -1;
+      if (bCreated == null) return 1;
+
+      final cmp = aCreated.compareTo(bCreated);
+      if (cmp != 0) return cmp;
+
+      final aUuid = (a['client_uuid'] ?? '').toString();
+      final bUuid = (b['client_uuid'] ?? '').toString();
+      return aUuid.compareTo(bUuid);
     });
 
     return result;

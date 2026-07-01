@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '/features/auth/presentation/auth_provider.dart';
@@ -11,6 +13,7 @@ import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
+import '/features/cashier/presentation/utils/order_tab_sort.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class ServeItemSelection {
@@ -114,14 +117,6 @@ class ProcessProvider extends ChangeNotifier {
           .map(OrderTabItemMapper.toProcessItem)
           .toList();
 
-      if (connectivity.isOnline && remoteItems.isNotEmpty) {
-        try {
-          await _prefetchProcessDetails(remoteItems);
-        } catch (e) {
-          debugPrint('ProcessProvider prefetch process details failed: $e');
-        }
-      }
-
       items = remoteItems;
 
       if (query.trim().isNotEmpty) {
@@ -141,22 +136,7 @@ class ProcessProvider extends ChangeNotifier {
         }).toList();
       }
 
-      items.sort((a, b) {
-        final aCreated = DateTime.tryParse(
-          (a['sort_time'] ?? a['created_at'] ?? a['updated_at_local'] ?? '')
-              .toString(),
-        );
-        final bCreated = DateTime.tryParse(
-          (b['sort_time'] ?? b['created_at'] ?? b['updated_at_local'] ?? '')
-              .toString(),
-        );
-
-        if (aCreated == null && bCreated == null) return 0;
-        if (aCreated == null) return -1;
-        if (bCreated == null) return 1;
-
-        return aCreated.compareTo(bCreated); // lama -> baru, terbaru di bawah
-      });
+      items.sort(compareOrdersOldestFirst);
     } catch (e) {
       error = e.toString();
     } finally {
@@ -164,6 +144,25 @@ class ProcessProvider extends ChangeNotifier {
         isLoading = false;
       }
       notifyListeners();
+    }
+
+    final hasPendingSync = items.any(
+      (e) =>
+          e['sync_status'] == 'PENDING' ||
+          e['is_synced'] == false ||
+          e['is_local_only'] == true,
+    );
+    if (connectivity.isOnline && items.isNotEmpty && !hasPendingSync) {
+      unawaited(_prefetchProcessDetailsInBackground());
+    }
+  }
+
+  Future<void> _prefetchProcessDetailsInBackground() async {
+    final snapshot = List<Map<String, dynamic>>.from(items);
+    try {
+      await _prefetchProcessDetails(snapshot);
+    } catch (e) {
+      debugPrint('ProcessProvider prefetch process details failed: $e');
     }
   }
 
@@ -281,7 +280,10 @@ class ProcessProvider extends ChangeNotifier {
     final nextStatus = OrderStageResolver.resolveAfterServeItems(
       order: {...row, ...detail, 'order_details': details},
     );
-    final syncIntent = allServed ? 'FINISH' : 'PROCESS';
+    final isOpenbill = isOpenBillOrder({...row, ...detail});
+    final syncIntent = allServed
+        ? (isOpenbill && nextStatus == 'UNPAID' ? 'SERVE_ITEMS' : 'FINISH')
+        : 'PROCESS';
 
     await tabCoordinator.transitionOrderStageByClientUuid(
       clientUuid: clientUuid,
@@ -422,6 +424,9 @@ class ProcessProvider extends ChangeNotifier {
   }
 
   String _processMirrorDedupeKey(Map<String, dynamic> row) {
+    final serverId = _toId(row['id']);
+    if (serverId > 0) return 'id:$serverId';
+
     final clientUuid = row['local_client_uuid']?.toString().trim();
     if (clientUuid != null && clientUuid.isNotEmpty) {
       return 'uuid:$clientUuid';
@@ -429,9 +434,6 @@ class ProcessProvider extends ChangeNotifier {
 
     final code = (row['booking_order_code'] ?? '').toString().trim();
     if (code.isNotEmpty) return 'code:$code';
-
-    final id = _toId(row['id']);
-    if (id > 0) return 'id:$id';
 
     return 'row:${row.hashCode}';
   }
@@ -697,7 +699,7 @@ class ProcessProvider extends ChangeNotifier {
             (row['order_status'] ?? '').toString().startsWith('OPENBILL');
 
         if (allServed && isOpenbill) {
-          await _stageOpenbillForPaymentCache(id, row);
+          await _stageOpenbillForPaymentCache(id, row, pendingServeSync: true);
         } else if (allServed) {
           await _stageServedOrderForDoneCache(id, row);
         }
@@ -803,10 +805,10 @@ class ProcessProvider extends ChangeNotifier {
           (row['order_status'] ?? '').toString().startsWith('OPENBILL');
 
       if (allServed && isOpenbill) {
-        await _stageOpenbillForPaymentCache(id, row);
-      } else if (allServed) {
-        await _stageServedOrderForDoneCache(id, row);
-      }
+          await _stageOpenbillForPaymentCache(id, row, pendingServeSync: true);
+        } else if (allServed) {
+          await _stageServedOrderForDoneCache(id, row);
+        }
 
       return {
         'status': 'offline_success',
@@ -973,10 +975,15 @@ class ProcessProvider extends ChangeNotifier {
     detail['order_details'] = details;
     detail['order_status'] = nextStatus;
 
+    final isOpenbill = isOpenBillOrder(detail);
+    final syncIntent = allServed
+        ? (isOpenbill && nextStatus == 'UNPAID' ? 'SERVE_ITEMS' : 'FINISH')
+        : 'PROCESS';
+
     await tabCoordinator.transitionOrderStage(
       serverId: serverId,
       orderStatus: nextStatus,
-      syncIntent: allServed ? 'FINISH' : 'PROCESS',
+      syncIntent: syncIntent,
       syncDirty: true,
       orderSnapshot: detail,
     );
@@ -1049,13 +1056,14 @@ class ProcessProvider extends ChangeNotifier {
 
   Future<void> _stageOpenbillForPaymentCache(
     int serverId,
-    Map<String, dynamic> row,
-  ) async {
+    Map<String, dynamic> row, {
+    bool pendingServeSync = false,
+  }) async {
     await tabCoordinator.transitionOrderStage(
       serverId: serverId,
       orderStatus: 'UNPAID',
-      syncIntent: 'FINISH',
-      syncDirty: true,
+      syncIntent: pendingServeSync ? 'SERVE_ITEMS' : null,
+      syncDirty: pendingServeSync,
       orderSnapshot: row,
     );
   }
@@ -1096,8 +1104,21 @@ class ProcessProvider extends ChangeNotifier {
       order: detail,
       apiResponse: apiResponse,
     );
+    final isOpenbill = isOpenBillOrder(detail);
+    final openbillReadyForPayment = isOpenbill && nextStatus == 'UNPAID';
     final allServed = OrderStageResolver.movesToDoneTab(nextStatus) ||
-        (isOpenBillOrder(detail) && nextStatus == 'UNPAID');
+        openbillReadyForPayment;
+
+    if (openbillReadyForPayment) {
+      await _stageOpenbillForPaymentCache(
+        serverId,
+        {
+          ...detail,
+          'order_status': nextStatus,
+        },
+      );
+      return;
+    }
 
     await tabCoordinator.transitionOrderStage(
       serverId: serverId,

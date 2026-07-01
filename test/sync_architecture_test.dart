@@ -1,8 +1,11 @@
+import 'package:cavaa_cashier/features/cashier/data/local/db/cashier_db.dart';
+import 'package:cavaa_cashier/features/cashier/data/sync/offline_catch_up_policy.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_rank.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_sync_guard.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_sync_intent_chain.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_api.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_engine.dart';
+import 'package:cavaa_cashier/features/cashier/presentation/utils/order_tab_sort.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -134,6 +137,17 @@ void main() {
       );
     });
 
+    test('SERVE_ITEMS allowed for offline catch-up when local is SERVED', () {
+      expect(
+        OrderStageSyncGuard.validateIntent(
+          currentStatus: 'SERVED',
+          syncIntent: 'SERVE_ITEMS',
+          offlineCatchUp: true,
+        ),
+        isNull,
+      );
+    });
+
     test('never-synced order always pushes CREATE first', () {
       expect(
         OrderStageSyncGuard.resolvePushIntent(
@@ -246,11 +260,19 @@ void main() {
       );
     });
 
-    test('openbill OPENBILL_CONFIRMATION is ahead of server UNPAID', () {
+    test('openbill OPENBILL_CONFIRMATION is ahead of server draft UNPAID rank', () {
       expect(
         OrderStageRank.isLocalAheadOfServer(
           localStatus: 'OPENBILL_CONFIRMATION',
-          serverStatus: 'UNPAID',
+          serverStatus: 'OPENBILL_CONFIRMATION',
+          openbillFlag: true,
+        ),
+        isFalse,
+      );
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          serverStatus: 'OPENBILL_CONFIRMATION',
           openbillFlag: true,
         ),
         isTrue,
@@ -265,7 +287,30 @@ void main() {
           openbillFlag: true,
           syncIntent: 'PAY',
         ),
-        isTrue,
+        isFalse,
+      );
+    });
+
+    test('openbill server UNPAID beats local OPENBILL_WAITING_ORDER', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+        ),
+        isFalse,
+      );
+      expect(
+        OrderStageRank.rankFor(
+          status: 'UNPAID',
+          openbillFlag: true,
+        ),
+        greaterThan(
+          OrderStageRank.rankFor(
+            status: 'OPENBILL_WAITING_ORDER',
+            openbillFlag: true,
+          ),
+        ),
       );
     });
 
@@ -320,19 +365,77 @@ void main() {
       );
     });
 
-    test('openbill UNPAID ready to pay queues PAY only when flagged', () {
+    test('cashier openbill WAITING_ORDER queues CONFIRM_OPENBILL when server still CONFIRMATION', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+          orderBy: 'CASHIER',
+          serverStatusAfterCreate: 'OPENBILL_CONFIRMATION',
+        ),
+        'CONFIRM_OPENBILL',
+      );
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          storedIntent: 'CONFIRM_OPENBILL',
+          openbillFlag: true,
+          orderBy: 'CASHIER',
+          serverStatusAfterCreate: 'OPENBILL_CONFIRMATION',
+        ),
+        isNull,
+      );
+    });
+
+    test('cashier openbill WAITING_ORDER needs no follow-up when server already WAITING', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+          orderBy: 'CASHIER',
+          serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
+        ),
+        isNull,
+      );
+    });
+
+    test('customer openbill WAITING_ORDER still queues CONFIRM_OPENBILL', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+          orderBy: 'CUSTOMER',
+        ),
+        'CONFIRM_OPENBILL',
+      );
+    });
+
+    test('openbill UNPAID ready to pay queues PAY only when paid locally', () {
       expect(
         OrderSyncIntentChain.firstIntentAfterCreate(
           localStatus: 'UNPAID',
           storedIntent: 'PAY',
           openbillFlag: true,
+          paidAmountLocal: 50000,
+        ),
+        isNull,
+      );
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'UNPAID',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+          paidAmountLocal: 50000,
         ),
         'PAY',
       );
       expect(
         OrderSyncIntentChain.firstIntentAfterCreate(
           localStatus: 'UNPAID',
-          storedIntent: 'CREATE',
+          storedIntent: 'PAY',
           openbillFlag: true,
         ),
         isNull,
@@ -351,7 +454,7 @@ void main() {
   });
 
   group('OrderSyncIntentChain — multi-pass chain', () {
-    test('CONFIRM_OPENBILL leads to PROCESS', () {
+    test('CONFIRM_OPENBILL on openbill WAITING_ORDER needs no PROCESS follow-up', () {
       expect(
         OrderSyncIntentChain.resolveNext(
           localStatus: 'OPENBILL_WAITING_ORDER',
@@ -359,7 +462,7 @@ void main() {
           appliedIntent: 'CONFIRM_OPENBILL',
           openbillFlag: true,
         ),
-        'PROCESS',
+        isNull,
       );
     });
 
@@ -394,6 +497,175 @@ void main() {
         ),
         'PROCESS',
       );
+    });
+
+    test('CREATE + local UNPAID + server WAITING + dirty served queues SERVE_ITEMS', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'UNPAID',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+          orderBy: 'CASHIER',
+          serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
+          hasDirtyServedDetails: true,
+        ),
+        'SERVE_ITEMS',
+      );
+    });
+
+    test('CREATE + local SERVED + paidAmount + server WAITING queues SERVE_ITEMS not PAY', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'SERVED',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+          paidAmountLocal: 50000,
+          orderBy: 'CASHIER',
+          serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
+          hasDirtyServedDetails: true,
+        ),
+        'SERVE_ITEMS',
+      );
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'SERVED',
+          storedIntent: 'CREATE',
+          openbillFlag: true,
+          paidAmountLocal: 50000,
+          orderBy: 'CASHIER',
+          serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
+          hasDirtyServedDetails: false,
+        ),
+        'SERVE_ITEMS',
+      );
+    });
+
+    test('SERVE_ITEMS applied + paidAmount + server UNPAID queues PAY', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'SERVED',
+          storedIntent: 'SERVE_ITEMS',
+          appliedIntent: 'SERVE_ITEMS',
+          openbillFlag: true,
+          paidAmountLocal: 50000,
+          serverStatusAfterApply: 'UNPAID',
+        ),
+        'PAY',
+      );
+    });
+  });
+
+  group('OfflineCatchUpPolicy', () {
+    BookingOrder _order({
+      required String clientUuid,
+      required String status,
+      bool syncDirty = true,
+      String? syncIntent,
+      bool openbillFlag = true,
+      String? orderBy = 'CASHIER',
+      int? serverId,
+      double? paidAmountLocal,
+    }) {
+      return BookingOrder(
+        clientUuid: clientUuid,
+        customerName: 'guest',
+        orderStatus: status,
+        syncDirty: syncDirty,
+        syncIntent: syncIntent,
+        openbillFlag: openbillFlag,
+        orderBy: orderBy,
+        serverId: serverId,
+        paidAmountLocal: paidAmountLocal,
+        discountValue: 0,
+        totalOrderValue: 0,
+        isPpnActive: false,
+        paymentFlag: false,
+        syncVersion: 0,
+        createdAt: DateTime(2026, 6, 30, 10),
+        updatedAt: DateTime(2026, 6, 30, 10),
+      );
+    }
+
+    test('simple openbill checkout still uses CREATE', () async {
+      final order = _order(
+        clientUuid: 'ob-1',
+        status: 'OPENBILL_WAITING_ORDER',
+        syncIntent: 'CREATE',
+        serverId: null,
+      );
+
+      expect(
+        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+          order: order,
+          hasDirtyServedDetails: (_) async => false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('openbill served offline uses OFFLINE_CATCH_UP', () async {
+      final order = _order(
+        clientUuid: 'ob-2',
+        status: 'SERVED',
+        syncIntent: 'PAY',
+        serverId: 42,
+        paidAmountLocal: 50000,
+      );
+
+      expect(
+        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+          order: order,
+          hasDirtyServedDetails: (_) async => false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('OFFLINE_CATCH_UP guard always allowed', () {
+      expect(
+        OrderStageSyncGuard.validateIntent(
+          currentStatus: 'SERVED',
+          syncIntent: 'OFFLINE_CATCH_UP',
+        ),
+        isNull,
+      );
+    });
+
+    test('resolvePushIntent preserves OFFLINE_CATCH_UP', () {
+      expect(
+        OrderStageSyncGuard.resolvePushIntent(
+          storedIntent: 'OFFLINE_CATCH_UP',
+          orderStatus: 'SERVED',
+          serverId: 10,
+        ),
+        'OFFLINE_CATCH_UP',
+      );
+    });
+  });
+
+  group('compareOrdersOldestFirst', () {
+    test('sorts by created_at ASC with stable tie-breaker', () {
+      final a = {
+        'created_at': '2026-01-01T10:00:00.000Z',
+        'updated_at': '2026-01-02T12:00:00.000Z',
+        'client_uuid': 'aaa',
+      };
+      final b = {
+        'created_at': '2026-01-01T10:00:00.000Z',
+        'updated_at': '2026-01-01T11:00:00.000Z',
+        'client_uuid': 'bbb',
+      };
+      final c = {
+        'created_at': '2026-01-01T09:00:00.000Z',
+        'client_uuid': 'ccc',
+      };
+
+      expect(compareOrdersOldestFirst(a, b), lessThan(0));
+      expect(compareOrdersOldestFirst(b, a), greaterThan(0));
+      expect(compareOrdersOldestFirst(c, a), lessThan(0));
+
+      final items = [b, c, a]..sort(compareOrdersOldestFirst);
+      expect(items.map((e) => e['client_uuid']).toList(), ['ccc', 'aaa', 'bbb']);
     });
   });
 }

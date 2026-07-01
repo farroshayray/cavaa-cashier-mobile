@@ -48,9 +48,24 @@ class OrderStageSyncGuard {
           return 'FINISH tidak valid untuk status $status';
         }
         return null;
+      case 'SERVE_ITEMS':
+        if (catchUp && status == 'SERVED') {
+          return null;
+        }
+        if (!{
+          'OPENBILL_WAITING_ORDER',
+          'OPENBILL_CONFIRMATION',
+          'PROCESSED',
+          'UNPAID',
+        }.contains(status)) {
+          return 'SERVE_ITEMS tidak valid untuk status $status';
+        }
+        return null;
       case 'DELETE':
         return null;
       case 'UPDATE':
+        return null;
+      case 'OFFLINE_CATCH_UP':
         return null;
       default:
         return null;
@@ -68,6 +83,7 @@ class OrderStageSyncGuard {
     }
 
     final intent = (storedIntent ?? 'UPDATE').toUpperCase();
+    if (intent == 'OFFLINE_CATCH_UP') return 'OFFLINE_CATCH_UP';
     if (intent.isEmpty) return 'UPDATE';
     return intent;
   }

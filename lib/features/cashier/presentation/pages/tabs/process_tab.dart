@@ -137,9 +137,8 @@ class _ProcessViewState extends State<_ProcessView> {
 
   Future<void> _handleProcessAction(Map<String, dynamic> row) async {
     final provider = context.read<ProcessProvider>();
-    final status = (row['order_status'] ?? '').toString();
 
-    if (status == 'OPENBILL_CONFIRMATION') {
+    if (needsOpenbillConfirmation(row)) {
       final res = await provider.actionProcess(row);
       if (!mounted) return;
 
@@ -1218,10 +1217,17 @@ class _ProcessOrderCard extends StatelessWidget {
       dot = const Color(0xFFEA580C);
       label = 'Siap proses';
     } else if (st == 'OPENBILL_CONFIRMATION') {
-      bg = const Color(0xFFFEF3C7);
-      border = const Color(0xFFFDE68A);
-      dot = const Color(0xFFD97706);
-      label = 'Konfirmasi';
+      if (needsOpenbillConfirmation(data)) {
+        bg = const Color(0xFFFEF3C7);
+        border = const Color(0xFFFDE68A);
+        dot = const Color(0xFFD97706);
+        label = 'Konfirmasi';
+      } else {
+        bg = const Color(0xFFFFF7ED);
+        border = const Color(0xFFFED7AA);
+        dot = const Color(0xFFEA580C);
+        label = 'Siap proses';
+      }
     } else if (st == 'PROCESSED') {
       label = 'Proses';
     } else if (st == 'SERVED') {
@@ -1263,7 +1269,7 @@ class _ProcessOrderCard extends StatelessWidget {
     final st = (data['order_status'] ?? '').toString();
 
     if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER' || st == 'PROCESSED') {
-      final buttonText = st == 'OPENBILL_CONFIRMATION' ? 'Konfirmasi' : 'Pilih Served';
+      final buttonText = needsOpenbillConfirmation(data) ? 'Konfirmasi' : 'Pilih Served';
       return Padding(
         padding: const EdgeInsets.only(right: 6),
         child: ElevatedButton(
@@ -1286,7 +1292,7 @@ class _ProcessOrderCard extends StatelessWidget {
     final st = (data['order_status'] ?? '').toString();
 
     if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER' || st == 'PROCESSED') {
-      final buttonText = st == 'OPENBILL_CONFIRMATION' ? 'Konfirmasi' : 'Pilih Served';
+      final buttonText = needsOpenbillConfirmation(data) ? 'Konfirmasi' : 'Pilih Served';
       return Padding(
         padding: const EdgeInsets.only(right: 4),
         child: ElevatedButton(
