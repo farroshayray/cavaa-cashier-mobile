@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+
+import '/core/config/app_config.dart';
 import 'models/checkout_exceptions.dart';
 
 class OrdersApi {
@@ -42,7 +44,12 @@ class OrdersApi {
   Future<Map<String, dynamic>> printDetail({
     required int id,
   }) async {
-    final resp = await dio.get('/api/v1/mobile/cashier/print-detail/$id');
+    final resp = await dio.get(
+      '/api/v1/mobile/cashier/print-detail/$id',
+      options: Options(
+        receiveTimeout: AppConfig.printDetailTimeout,
+      ),
+    );
 
     final data = resp.data;
     if (data is Map<String, dynamic>) return data;
@@ -120,6 +127,10 @@ class OrdersApi {
     final resp = await dio.post(
       '/api/v1/mobile/cashier/payment-order/$id',
       data: formData,
+      options: Options(
+        sendTimeout: AppConfig.paymentMultipartTimeout,
+        receiveTimeout: AppConfig.paymentMultipartTimeout,
+      ),
     );
 
     print('response payment-order: $resp');

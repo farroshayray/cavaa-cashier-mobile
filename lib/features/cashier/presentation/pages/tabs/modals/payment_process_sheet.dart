@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '/core/config/env.dart';
 import '/core/utils/open_url.dart';
 import '/features/cashier/data/orders_api.dart';
+import '/features/cashier/data/sync/payment_submit_recovery.dart';
 import '/core/storage/secure_storage_service.dart';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import 'package:provider/provider.dart';
@@ -699,10 +700,11 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
     setState(() => _paying = true);
 
+    final isOnline =
+        context.read<ConnectivityStatusProvider>().isOnline && !widget.forceOffline;
+
     try {
       final repo = widget.ordersRepo;
-      final isOnline =
-          context.read<ConnectivityStatusProvider>().isOnline && !widget.forceOffline;
 
       if (isOnline) {
         final payResp = await widget.ordersRepo.paymentOrder(
@@ -712,7 +714,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           paymentMethod: _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
           cashierProofImagePath: _cashierProofImage?.path,
-        ).timeout(const Duration(seconds: 15));
+        );
 
         final redirect = payResp['redirect'];
         if (redirect is String && redirect.trim().isNotEmpty) {
@@ -771,9 +773,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           Map<String, dynamic> printOrder;
 
           if (isOnline) {
-            printOrder = await repo
-                .fetchPrintDetail(widget.orderId)
-                .timeout(const Duration(seconds: 15));
+            printOrder = await repo.fetchPrintDetail(widget.orderId);
           } else {
             printOrder = _buildOfflinePrintableOrder(
               _order!,
@@ -825,6 +825,65 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
+
+      if (isOnline && isPaymentSubmitTimeout(e)) {
+        final recovery = await recoverPaymentAfterSubmitFailure(
+          fetchOrderDetail: widget.ordersRepo.fetchOrderDetail,
+          serverId: widget.orderId,
+        );
+        if (!mounted) return;
+
+        if (recovery.succeeded && recovery.orderDetail != null) {
+          await context.read<PaymentProvider>().afterPaymentSuccess(
+            serverId: widget.orderId,
+            orderSnapshot: recovery.orderDetail,
+            apiResponse: recovery.orderDetail,
+            offline: false,
+            reloadTabs: false,
+            backgroundSync: false,
+            paidAmount: paid,
+            changeAmount: change,
+            paymentMethod:
+                _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
+          );
+
+          if (!mounted) return;
+          await showDialog<void>(
+            context: context,
+            useRootNavigator: true,
+            builder: (dialogCtx) => AlertDialog(
+              title: const Text('Pembayaran berhasil'),
+              content: const Text(
+                'Pembayaran tersimpan di server (koneksi lambat saat konfirmasi).',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+
+          if (!mounted) return;
+          Navigator.of(context).pop(true);
+          return;
+        }
+
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                recovery.message ??
+                    'Gagal menyimpan pembayaran: $e',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
+
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
