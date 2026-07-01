@@ -881,6 +881,7 @@ class ProcessProvider extends ChangeNotifier {
           throw Exception('Local ID tidak valid');
         }
         final nextStatus = OrderStageResolver.resolveAfterFinish(order: row);
+        await _markCashDetailsServedBeforeOfflineFinish(row);
         await tabCoordinator.transitionOrderStageByClientUuid(
           clientUuid: clientUuid,
           orderStatus: nextStatus,
@@ -914,6 +915,7 @@ class ProcessProvider extends ChangeNotifier {
       }
 
       final nextStatus = OrderStageResolver.resolveAfterFinish(order: row);
+      await _markCashDetailsServedBeforeOfflineFinish(row);
       await tabCoordinator.transitionOrderStage(
         serverId: id,
         orderStatus: nextStatus,
@@ -930,6 +932,38 @@ class ProcessProvider extends ChangeNotifier {
     } finally {
       _setActionLoading(actionKey, false);
     }
+  }
+
+  Future<void> _markCashDetailsServedBeforeOfflineFinish(
+    Map<String, dynamic> row,
+  ) async {
+    if (isOpenBillOrder(row)) return;
+
+    final clientUuid =
+        (row['local_client_uuid'] ?? row['local_id'] ?? '').toString().trim();
+    final serverId = _toId(row['id'] ?? row['server_id']);
+
+    var bundle = clientUuid.isNotEmpty
+        ? await bookingOrdersDao.getBundleByClientUuid(clientUuid)
+        : null;
+    if (bundle == null && serverId > 0) {
+      final order = await bookingOrdersDao.getByServerId(serverId);
+      if (order != null) {
+        bundle = await bookingOrdersDao.getBundleByClientUuid(order.clientUuid);
+      }
+    }
+    if (bundle == null || bundle.details.isEmpty) return;
+
+    await bookingOrdersDao.markOrderDetailsServedLocally(
+      detailClientUuids:
+          bundle.details.map((detail) => detail.clientDetailUuid).toList(),
+      detailServerIds: bundle.details
+          .map((detail) => detail.serverId)
+          .whereType<int>()
+          .where((id) => id > 0)
+          .toList(),
+      cashierProcessId: auth.user?.id,
+    );
   }
 
   int _actionKey(Map<String, dynamic> row) {
