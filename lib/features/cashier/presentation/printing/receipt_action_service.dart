@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
+import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/presentation/printing/receipt_order_enricher.dart';
 import '/features/cashier/presentation/printing/receipt_totals.dart';
 import '/features/cashier/presentation/printing/receipt_pdf_builder.dart';
@@ -104,7 +105,7 @@ class ReceiptActionService {
     required FetchOrderDetail fetchOrder,
   }) async {
     final raw = await fetchOrder(row);
-    final order = enrichReceiptOrder(raw);
+    final order = enrichOfflinePrintOrder(enrichReceiptOrder(raw));
     final totals = buildReceiptTotals(order);
     return (order: order, totals: totals);
   }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'receipt_format_helpers.dart';
 
 /// Normalizes order payload for thermal/PDF receipt rendering.
@@ -28,9 +30,34 @@ Map<String, dynamic> enrichReceiptOrder(Map<String, dynamic> raw) {
     if (pass.isEmpty) {
       order['store_wifi_password'] = snap['wifi_password'];
     }
+    final address = snap['store_address']?.toString();
+    if (address != null &&
+        address.trim().isNotEmpty &&
+        (order['store_address'] ?? '').toString().trim().isEmpty) {
+      order['store_address'] = address;
+    }
   }
 
+  _decodeWifiJsonField(order);
+
   return order;
+}
+
+void _decodeWifiJsonField(Map<String, dynamic> order) {
+  if (order['wifi_snapshot'] is Map) return;
+  final raw = order['wifi_snapshot_json'] ?? order['wifiSnapshotJson'];
+  if (raw is! String || raw.trim().isEmpty) return;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map) {
+      order['wifi_snapshot'] = Map<String, dynamic>.from(decoded);
+      final snap = order['wifi_snapshot'] as Map<String, dynamic>;
+      order['store_is_wifi_shown'] ??= snap['wifi_shown'];
+      order['store_wifi_user'] ??= snap['wifi_ssid'] ?? snap['wifi_user'];
+      order['store_wifi_password'] ??= snap['wifi_password'];
+      order['store_address'] ??= snap['store_address'];
+    }
+  } catch (_) {}
 }
 
 String _partnerAddress(Map<String, dynamic> partner) {

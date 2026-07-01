@@ -15,6 +15,7 @@ import '/features/cashier/data/sync/order_detail_prefetch_policy.dart';
 import '/features/cashier/data/sync/order_detail_resolver.dart';
 import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
+import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/presentation/utils/order_tab_sort.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
@@ -376,7 +377,7 @@ class ProcessProvider extends ChangeNotifier {
         return await repo.fetchPrintDetail(serverId);
       } catch (_) {}
     }
-    return detail;
+    return enrichOfflinePrintOrder(detail);
   }
 
   Map<String, dynamic> _bundleToDetailMap(BookingOrderBundle bundle) {

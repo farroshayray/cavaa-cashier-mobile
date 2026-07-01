@@ -28,6 +28,9 @@ class OrderSyncIntentChain {
           hasDirtyServedDetails: hasDirtyServedDetails,
         );
       case 'CONFIRM_OPENBILL':
+        if (hasDirtyServedDetails) {
+          return 'SERVE_ITEMS';
+        }
         if (openbillFlag && status == 'OPENBILL_WAITING_ORDER') {
           return null;
         }

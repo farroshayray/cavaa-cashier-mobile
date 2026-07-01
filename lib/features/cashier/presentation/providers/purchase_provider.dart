@@ -341,6 +341,11 @@ class PurchaseProvider extends ChangeNotifier {
       });
     }
 
+    final pd = partnerData;
+    final wifiSnapshotJson = pd == null
+        ? null
+        : jsonEncode(pd.toWifiSnapshotMap());
+
     return bookingOrdersDao.createCheckoutOrder(
       customerName: customerName,
       tableId: table.id,
@@ -357,6 +362,7 @@ class PurchaseProvider extends ChangeNotifier {
       partnerId: partnerData?.id,
       partnerName: partnerData?.name,
       manualPaymentRawJson: manualPaymentRawJson,
+      wifiSnapshotJson: wifiSnapshotJson,
       cartItems: cartItems,
     );
   }

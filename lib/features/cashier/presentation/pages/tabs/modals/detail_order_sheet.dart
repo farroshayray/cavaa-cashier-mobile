@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/models/printer_device.dart';
+import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/presentation/printing/order_list_printer.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
@@ -82,7 +83,9 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
         throw Exception('Default printer bukan Bluetooth / address kosong');
       }
 
-      final bytes = await OrderListPrinter().buildOrderListBytes(order: order);
+      final bytes = await OrderListPrinter().buildOrderListBytes(
+        order: enrichOfflinePrintOrder(order),
+      );
 
       await pm.write(bytes);
 

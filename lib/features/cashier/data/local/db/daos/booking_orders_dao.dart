@@ -1190,13 +1190,6 @@ class BookingOrdersDao {
     final appliedIntent = applied['sync_intent']?.toString().toUpperCase() ?? '';
     final serverApplied = applied['order_status']?.toString();
 
-    if (appliedIntent == 'PROCESS' ||
-        appliedIntent == 'FINISH' ||
-        appliedIntent == 'SERVE_ITEMS' ||
-        appliedIntent == 'OFFLINE_CATCH_UP') {
-      await _clearDetailSyncDirty(clientUuid);
-    }
-
     if ((appliedIntent == 'CREATE' || appliedIntent == 'OFFLINE_CATCH_UP') &&
         applied['server_id'] != null) {
       await _linkDetailServerIdsFromApplied(
@@ -1204,6 +1197,20 @@ class BookingOrdersDao {
         applied: applied,
       );
       await reconcileDuplicateMirrors();
+    }
+
+    if (appliedIntent == 'PROCESS' ||
+        appliedIntent == 'FINISH' ||
+        appliedIntent == 'SERVE_ITEMS') {
+      await _clearDetailSyncDirty(clientUuid);
+    } else if (appliedIntent == 'OFFLINE_CATCH_UP') {
+      final servedConfirmed = await _catchUpAppliedServedDetailsConfirmed(
+        clientUuid: clientUuid,
+        appliedDetails: applied['order_details'],
+      );
+      if (servedConfirmed) {
+        await _clearDetailSyncDirty(clientUuid);
+      }
     }
 
     final stillNeedsSync = localBefore != null &&
@@ -1250,6 +1257,47 @@ class BookingOrdersDao {
         syncDirty: Value(false),
       ),
     );
+  }
+
+  Future<bool> _catchUpAppliedServedDetailsConfirmed({
+    required String clientUuid,
+    required dynamic appliedDetails,
+  }) async {
+    if (!await hasDirtyServedDetails(clientUuid)) return true;
+    if (appliedDetails is! List) return false;
+
+    final localDetails = await (db.select(db.orderDetails)
+          ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
+        .get();
+
+    final pendingServed = localDetails.where((detail) {
+      if (detail.syncDirty != true) return false;
+      final status = (detail.status ?? '').trim().toUpperCase();
+      return status.contains('SERVED');
+    }).toList();
+    if (pendingServed.isEmpty) return true;
+
+    final appliedById = <int, String>{};
+    for (final raw in appliedDetails) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      final serverId = _toIntOrNull(map['id'] ?? map['detail_id']);
+      final status = (map['status'] ?? '').toString().trim().toUpperCase();
+      if (serverId != null && status.contains('SERVED')) {
+        appliedById[serverId] = status;
+      }
+    }
+
+    for (final detail in pendingServed) {
+      final serverId = detail.serverId;
+      if (serverId == null) return false;
+      final appliedStatus = appliedById[serverId];
+      if (appliedStatus == null || !appliedStatus.contains('SERVED')) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   Future<void> _linkDetailServerIdsFromApplied({
@@ -1466,6 +1514,7 @@ class BookingOrdersDao {
     int? partnerId,
     String? partnerName,
     String? manualPaymentRawJson,
+    String? wifiSnapshotJson,
     required List<Map<String, dynamic>> cartItems,
   }) async {
     final clientUuid = _uuid.v4();
@@ -1490,6 +1539,7 @@ class BookingOrdersDao {
             partnerId: Value(partnerId),
             partnerName: Value(partnerName),
             latestPaymentJson: Value(manualPaymentRawJson),
+            wifiSnapshotJson: Value(wifiSnapshotJson),
             syncDirty: const Value(true),
             syncIntent: const Value('CREATE'),
             createdAt: Value(now),
@@ -1722,6 +1772,7 @@ class BookingOrdersDao {
       final now = DateTime.now();
       for (final line in lines) {
         final detailUuid = line['local_id']?.toString() ?? _uuid.v4();
+        final detailStatus = line['detail_status']?.toString();
         await db.into(db.orderDetails).insert(
               OrderDetailsCompanion.insert(
                 clientDetailUuid: detailUuid,
@@ -1736,7 +1787,7 @@ class BookingOrdersDao {
                 promoId: Value(_toIntOrNull(line['promo_id'])),
                 promoType: Value(line['promo_type']?.toString()),
                 promoAmount: Value(_toDouble(line['promo_amount'])),
-                status: Value(line['detail_status']?.toString()),
+                status: Value(detailStatus),
                 syncDirty: const Value(true),
                 createdAt: Value(now),
                 updatedAt: Value(now),
@@ -2027,6 +2078,9 @@ class BookingOrdersDao {
             ..where((t) => t.serverId.equals(optServerId)))
           .getSingleOrNull();
 
+      final optName = _optionNameFromServerRow(opt);
+      final parentName = _optionParentFromServerRow(opt);
+
       await db.into(db.orderDetailOptions).insertOnConflictUpdate(
             OrderDetailOptionsCompanion(
               clientOptionUuid: Value(existingOpt?.clientOptionUuid ?? _uuid.v4()),
@@ -2034,8 +2088,8 @@ class BookingOrdersDao {
               orderDetailClientUuid: Value(clientDetailUuid),
               orderDetailServerId: Value(serverId),
               optionId: Value(_toInt(opt['option_id'])),
-              parentName: Value(opt['parent_name']?.toString()),
-              partnerProductOptionName: Value(opt['partner_product_option_name']?.toString()),
+              parentName: Value(parentName),
+              partnerProductOptionName: Value(optName),
               price: Value(_toDouble(opt['price'])),
               createdAt: Value(_parseDate(opt['created_at']) ?? now),
               updatedAt: Value(_parseDate(opt['updated_at']) ?? now),
@@ -2234,5 +2288,32 @@ class BookingOrdersDao {
     if (v == null) return null;
     if (v is DateTime) return v;
     return DateTime.tryParse(v.toString());
+  }
+
+  String? _optionNameFromServerRow(Map<String, dynamic> opt) {
+    final nested = opt['option'];
+    if (nested is Map && nested['name'] != null) {
+      return nested['name'].toString();
+    }
+    final flat = opt['partner_product_option_name'] ?? opt['name'];
+    if (flat != null && flat.toString().trim().isNotEmpty) {
+      return flat.toString();
+    }
+    return null;
+  }
+
+  String? _optionParentFromServerRow(Map<String, dynamic> opt) {
+    final nested = opt['option'];
+    if (nested is Map) {
+      final parent = nested['parent'];
+      if (parent is Map && parent['name'] != null) {
+        return parent['name'].toString();
+      }
+    }
+    final flat = opt['parent_name'];
+    if (flat != null && flat.toString().trim().isNotEmpty) {
+      return flat.toString();
+    }
+    return null;
   }
 }

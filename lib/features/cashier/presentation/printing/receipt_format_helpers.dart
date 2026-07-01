@@ -80,3 +80,20 @@ String receiptOptionName(Map<String, dynamic> option) {
 
   return '-';
 }
+
+String receiptOptionParentName(Map<String, dynamic> option) {
+  final nested = option['option'];
+  if (nested is Map) {
+    final parent = nested['parent'];
+    if (parent is Map && parent['name'] != null) {
+      return parent['name'].toString();
+    }
+  }
+
+  final fallback = option['parent_name'];
+  if (fallback != null && fallback.toString().trim().isNotEmpty) {
+    return fallback.toString();
+  }
+
+  return '';
+}

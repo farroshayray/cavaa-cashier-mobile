@@ -15,6 +15,7 @@ import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 Map<String, dynamic> _normalizePaymentInstruction(Map<String, dynamic> raw) {
@@ -115,15 +116,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     cloned['booking_order_code'] ??= cloned['client_order_code'] ?? '-';
     cloned['customer_name'] ??= 'Guest';
     cloned['employee_name'] ??= '-';
-    cloned['store_name'] ??= 'CAVAA';
-    cloned['store_address'] ??= '';
-    cloned['store_is_wifi_shown'] ??= 0;
-    cloned['store_wifi_user'] ??= '';
-    cloned['store_wifi_password'] ??= '';
-
     cloned['order_details'] ??= <dynamic>[];
 
-    return cloned;
+    return enrichOfflinePrintOrder(cloned);
   }
 
   bool get _isCaseA {

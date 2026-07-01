@@ -1,4 +1,5 @@
 import '/features/cashier/data/local/db/cashier_db.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 
 /// Decides when a dirty mirror should push OFFLINE_CATCH_UP instead of step intents.
 class OfflineCatchUpPolicy {
@@ -50,5 +51,32 @@ class OfflineCatchUpPolicy {
       'PAID',
       'PROCESSED',
     }.contains(status);
+  }
+
+  /// Openbill catch-up target must reflect whether new kitchen lines are still pending.
+  static String resolveCatchUpTargetStatus({
+    required BookingOrder order,
+    BookingOrderBundle? bundle,
+  }) {
+    final status = order.orderStatus.trim().toUpperCase();
+    if (!order.openbillFlag || bundle == null) return status;
+
+    if (status != 'OPENBILL_WAITING_ORDER' && status != 'OPENBILL_CONFIRMATION') {
+      return status;
+    }
+
+    final details = bundle.details;
+    if (details.isEmpty) return status;
+
+    final hasUnserved = details.any((detail) {
+      final served = (detail.status ?? '').trim().toUpperCase();
+      return served.isEmpty || !served.contains('SERVED');
+    });
+
+    if (hasUnserved) {
+      return status;
+    }
+
+    return 'UNPAID';
   }
 }

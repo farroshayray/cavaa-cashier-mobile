@@ -149,6 +149,10 @@ class PartnerData {
   final num ppn;
   final bool isPpnActive;
   final int cashRoundingUnit;
+  final bool isWifiShown;
+  final String? wifiUser;
+  final String? wifiPassword;
+  final String? address;
 
   PartnerData({
     required this.id,
@@ -159,6 +163,10 @@ class PartnerData {
     required this.ppn,
     required this.isPpnActive,
     required this.cashRoundingUnit,
+    this.isWifiShown = false,
+    this.wifiUser,
+    this.wifiPassword,
+    this.address,
   });
 
   factory PartnerData.fromJson(Map<String, dynamic> json) {
@@ -171,7 +179,22 @@ class PartnerData {
       ppn: parseNum(json['ppn']),
       isPpnActive: parseBool(json['is_ppn_active']),
       cashRoundingUnit: parseInt(json['cash_rounding_unit']),
+      isWifiShown: parseBool(json['is_wifi_shown']),
+      wifiUser: json['user_wifi']?.toString(),
+      wifiPassword: json['pass_wifi']?.toString(),
+      address: json['address']?.toString(),
     );
+  }
+
+  Map<String, dynamic> toWifiSnapshotMap() {
+    return {
+      'wifi_shown': isWifiShown ? 1 : 0,
+      if (wifiUser != null && wifiUser!.trim().isNotEmpty) 'wifi_ssid': wifiUser,
+      if (wifiPassword != null && wifiPassword!.trim().isNotEmpty)
+        'wifi_password': wifiPassword,
+      if (address != null && address!.trim().isNotEmpty)
+        'store_address': address,
+    };
   }
 }
 

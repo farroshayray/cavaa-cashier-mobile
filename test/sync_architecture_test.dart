@@ -1,4 +1,5 @@
 import 'package:cavaa_cashier/features/cashier/data/local/db/cashier_db.dart';
+import 'package:cavaa_cashier/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/offline_catch_up_policy.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_catch_up_sync_policy.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_edit_conflict_detector.dart';
@@ -480,6 +481,19 @@ void main() {
       );
     });
 
+    test('CONFIRM_OPENBILL with dirty served details queues SERVE_ITEMS', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          storedIntent: 'CONFIRM_OPENBILL',
+          appliedIntent: 'CONFIRM_OPENBILL',
+          openbillFlag: true,
+          hasDirtyServedDetails: true,
+        ),
+        'SERVE_ITEMS',
+      );
+    });
+
     test('PAY on SERVED leads to PROCESS', () {
       expect(
         OrderSyncIntentChain.resolveNext(
@@ -653,6 +667,87 @@ void main() {
           serverId: 10,
         ),
         'OFFLINE_CATCH_UP',
+      );
+    });
+
+    test('openbill waiting with mixed served lines keeps kitchen catch-up target', () {
+      final order = _order(
+        clientUuid: 'ob-served',
+        status: 'OPENBILL_WAITING_ORDER',
+      );
+      final bundle = BookingOrderBundle(
+        order: order,
+        details: [
+          OrderDetail(
+            clientDetailUuid: 'detail-1',
+            bookingOrderClientUuid: 'ob-served',
+            partnerProductId: 1,
+            quantity: 1,
+            basePrice: 10000,
+            optionsPrice: 0,
+            syncVersion: 0,
+            status: 'SERVED BY CASHIER',
+            syncDirty: true,
+            createdAt: DateTime(2026, 6, 30, 10),
+            updatedAt: DateTime(2026, 6, 30, 10),
+          ),
+          OrderDetail(
+            clientDetailUuid: 'detail-2',
+            bookingOrderClientUuid: 'ob-served',
+            partnerProductId: 2,
+            quantity: 1,
+            basePrice: 12000,
+            optionsPrice: 0,
+            syncVersion: 0,
+            status: null,
+            syncDirty: true,
+            createdAt: DateTime(2026, 6, 30, 10),
+            updatedAt: DateTime(2026, 6, 30, 10),
+          ),
+        ],
+        optionsByDetailUuid: const {},
+      );
+
+      expect(
+        OfflineCatchUpPolicy.resolveCatchUpTargetStatus(
+          order: order,
+          bundle: bundle,
+        ),
+        'OPENBILL_WAITING_ORDER',
+      );
+    });
+
+    test('openbill waiting with all lines served targets UNPAID catch-up', () {
+      final order = _order(
+        clientUuid: 'ob-all-served',
+        status: 'OPENBILL_WAITING_ORDER',
+      );
+      final bundle = BookingOrderBundle(
+        order: order,
+        details: [
+          OrderDetail(
+            clientDetailUuid: 'detail-1',
+            bookingOrderClientUuid: 'ob-all-served',
+            partnerProductId: 1,
+            quantity: 1,
+            basePrice: 10000,
+            optionsPrice: 0,
+            syncVersion: 0,
+            status: 'SERVED BY CASHIER',
+            syncDirty: true,
+            createdAt: DateTime(2026, 6, 30, 10),
+            updatedAt: DateTime(2026, 6, 30, 10),
+          ),
+        ],
+        optionsByDetailUuid: const {},
+      );
+
+      expect(
+        OfflineCatchUpPolicy.resolveCatchUpTargetStatus(
+          order: order,
+          bundle: bundle,
+        ),
+        'UNPAID',
       );
     });
   });

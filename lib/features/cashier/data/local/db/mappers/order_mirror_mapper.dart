@@ -1,8 +1,10 @@
+import 'dart:convert';
+
 import '/features/cashier/data/local/db/cashier_db.dart';
 
 class OrderMirrorMapper {
   static Map<String, dynamic> orderToUiMap(BookingOrder row) {
-    return {
+    final map = {
       'id': row.serverId,
       'local_client_uuid': row.clientUuid,
       'local_id': row.clientUuid,
@@ -41,6 +43,18 @@ class OrderMirrorMapper {
       'updated_at': row.updatedAt?.toIso8601String(),
       'is_local_only': row.serverId == null,
     };
+
+    if (row.wifiSnapshotJson != null && row.wifiSnapshotJson!.trim().isNotEmpty) {
+      map['wifi_snapshot_json'] = row.wifiSnapshotJson;
+      try {
+        final decoded = jsonDecode(row.wifiSnapshotJson!);
+        if (decoded is Map) {
+          map['wifi_snapshot'] = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
+
+    return map;
   }
 
   static Map<String, dynamic> detailToUiMap(OrderDetail row) {

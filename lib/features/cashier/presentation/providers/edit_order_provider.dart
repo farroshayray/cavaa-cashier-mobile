@@ -12,6 +12,7 @@ import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class EditableCartItem {
   final int? detailId;
+  final String? localDetailUuid;
   final bool isLocked;
   final String? lockStatusLabel;
   final String? detailStatusSnapshot;
@@ -21,6 +22,7 @@ class EditableCartItem {
 
   EditableCartItem({
     this.detailId,
+    this.localDetailUuid,
     required this.cart,
     this.isLocked = false,
     this.lockStatusLabel,
@@ -165,6 +167,7 @@ class EditOrderProvider extends ChangeNotifier {
         items.add(
           EditableCartItem(
             detailId: detailId,
+            localDetailUuid: detail['local_detail_uuid']?.toString(),
             isLocked: locked,
             lockStatusLabel: lockLabel,
             detailStatusSnapshot: detailStatusOf(detail),
@@ -505,6 +508,8 @@ class EditOrderProvider extends ChangeNotifier {
       }
 
       return {
+        if (item.localDetailUuid != null && item.localDetailUuid!.isNotEmpty)
+          'local_id': item.localDetailUuid,
         if (item.detailId != null) 'server_order_detail_id': item.detailId,
         'product_server_id': item.product.id,
         'product_name_snapshot': item.product.name,
@@ -513,7 +518,8 @@ class EditOrderProvider extends ChangeNotifier {
         'customer_note': item.note,
         'options_price': (item.unitFinalPrice - item.product.price).toDouble(),
         'promo_id': item.product.promotion?.id,
-        if (item.detailStatusSnapshot != null)
+        if (item.detailStatusSnapshot != null &&
+            item.detailStatusSnapshot!.isNotEmpty)
           'detail_status': item.detailStatusSnapshot,
         'options': optionLines,
       };
@@ -661,6 +667,11 @@ class EditOrderProvider extends ChangeNotifier {
     String? snapshotJson,
   }) async {
     const targetStatus = 'OPENBILL_WAITING_ORDER';
+    final clientUuid = (localId ?? '').trim();
+    final syncIntent = clientUuid.isNotEmpty &&
+            await bookingOrdersDao.hasDirtyServedDetails(clientUuid)
+        ? 'OFFLINE_CATCH_UP'
+        : 'CONFIRM_OPENBILL';
 
     if (serverId != null && serverId! > 0) {
       if (isOnline) {
@@ -681,7 +692,7 @@ class EditOrderProvider extends ChangeNotifier {
       await tabCoordinator.transitionOrderStage(
         serverId: serverId!,
         orderStatus: targetStatus,
-        syncIntent: 'CONFIRM_OPENBILL',
+        syncIntent: syncIntent,
         syncDirty: true,
         orderSnapshot: currentSnapshot,
       );
@@ -697,7 +708,7 @@ class EditOrderProvider extends ChangeNotifier {
       await tabCoordinator.transitionOrderStageByClientUuid(
         clientUuid: localId!,
         orderStatus: targetStatus,
-        syncIntent: 'CONFIRM_OPENBILL',
+        syncIntent: syncIntent,
       );
 
       return {

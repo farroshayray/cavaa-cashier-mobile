@@ -249,7 +249,12 @@ class SyncEngine {
         'total_amount': subtotal,
         'total_order_value': subtotal,
         'order_status': order.orderStatus,
-        'local_target_status': order.orderStatus,
+        'local_target_status': effectiveIntent == 'OFFLINE_CATCH_UP'
+            ? OfflineCatchUpPolicy.resolveCatchUpTargetStatus(
+                order: order,
+                bundle: bundle,
+              )
+            : order.orderStatus,
         'items': items,
         if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
         if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
@@ -314,14 +319,18 @@ class SyncEngine {
   List<Map<String, dynamic>> _buildOrderDetailsCatchUpPayload(BookingOrderBundle? bundle) {
     if (bundle == null) return [];
 
-    return bundle.details
-        .map((detail) => {
-              if (detail.serverId != null) 'id': detail.serverId,
-              'client_detail_uuid': detail.clientDetailUuid,
-              'status': detail.status ?? 'SERVED BY CASHIER',
-              'quantity': detail.quantity,
-            })
-        .toList();
+    return bundle.details.map((detail) {
+      final status = (detail.status ?? '').trim();
+      final row = <String, dynamic>{
+        if (detail.serverId != null) 'id': detail.serverId,
+        'client_detail_uuid': detail.clientDetailUuid,
+        'quantity': detail.quantity,
+      };
+      if (status.isNotEmpty) {
+        row['status'] = status;
+      }
+      return row;
+    }).toList();
   }
 
   Future<List<Map<String, dynamic>>> _buildItemsPayload(BookingOrderBundle? bundle) async {
@@ -330,14 +339,19 @@ class SyncEngine {
     final items = <Map<String, dynamic>>[];
     for (final detail in bundle.details) {
       final options = bundle.optionsByDetailUuid[detail.clientDetailUuid] ?? [];
-      items.add({
+      final row = <String, dynamic>{
         if (detail.serverId != null) 'detail_id': detail.serverId,
         'product_id': detail.partnerProductId,
         'qty': detail.quantity,
         'note': detail.customerNote,
         'promo_id': detail.promoId,
         'option_ids': options.map((o) => o.optionId).toList(),
-      });
+      };
+      final status = (detail.status ?? '').trim();
+      if (status.isNotEmpty) {
+        row['status'] = status;
+      }
+      items.add(row);
     }
     return items;
   }
@@ -385,14 +399,11 @@ class SyncEngine {
       if (raw is Map) {
         final map = Map<String, dynamic>.from(raw);
         await bookingOrdersDao.applyAppliedResult(map);
-        final appliedIntent = (map['sync_intent']?.toString() ?? '').toUpperCase();
-        if (appliedIntent != 'OFFLINE_CATCH_UP') {
-          await bookingOrdersDao.queueRemainingSyncIntentIfNeeded(
-            clientUuid: map['client_uuid']?.toString() ?? '',
-            appliedIntent: map['sync_intent']?.toString() ?? '',
-            appliedServerStatus: map['order_status']?.toString(),
-          );
-        }
+        await bookingOrdersDao.queueRemainingSyncIntentIfNeeded(
+          clientUuid: map['client_uuid']?.toString() ?? '',
+          appliedIntent: map['sync_intent']?.toString() ?? '',
+          appliedServerStatus: map['order_status']?.toString(),
+        );
         ApiDebugLog.sync(
           'applied locally',
           '${map['sync_intent']} client=${map['client_uuid']} server_id=${map['server_id']}',

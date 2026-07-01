@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 
+import 'receipt_format_helpers.dart';
+
 class OrderListPrinter {
   Future<Uint8List> buildOrderListBytes({
     required Map<String, dynamic> order,
@@ -103,15 +105,8 @@ class OrderListPrinter {
         if (opts.isNotEmpty) {
           for (final o in opts) {
             final om = (o as Map).cast<String, dynamic>();
-            final optName =
-                (om['option'] is Map ? (om['option']['name'] ?? '-') : '-')
-                    .toString();
-
-            final parentName = (om['option'] is Map &&
-                    (om['option']['parent'] is Map) &&
-                    om['option']['parent']['name'] != null)
-                ? om['option']['parent']['name'].toString()
-                : '';
+            final optName = receiptOptionName(om);
+            final parentName = receiptOptionParentName(om);
 
             final line = parentName.isNotEmpty
                 ? '  - $parentName: $optName'

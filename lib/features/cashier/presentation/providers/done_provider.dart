@@ -4,6 +4,7 @@ import '../../data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
+import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/presentation/utils/order_tab_sort.dart';
 import '/core/services/connectivity_status_provider.dart';
 
@@ -142,6 +143,6 @@ class DoneProvider extends ChangeNotifier {
         return await repo.fetchPrintDetail(serverId);
       } catch (_) {}
     }
-    return detail;
+    return enrichOfflinePrintOrder(detail);
   }
 }

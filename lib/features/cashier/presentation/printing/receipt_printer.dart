@@ -126,10 +126,7 @@ class ReceiptPrinter {
       final opts = (m['order_detail_options'] as List?) ?? [];
       for (final o in opts) {
         final om = (o as Map).cast<String, dynamic>();
-        final optName = (om['option'] is Map
-                ? (om['option']['name'] ?? '-')
-                : '-')
-            .toString();
+        final optName = receiptOptionName(om);
         final optPrice = receiptNum(om['price']) * qty;
         bytes.addAll(gen.row([
           PosColumn(text: '  + $optName', width: 8),
