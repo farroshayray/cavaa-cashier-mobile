@@ -178,6 +178,22 @@ class SyncEngine {
       );
     }
 
+    final healedCash = await bookingOrdersDao.healStuckCashTerminalSyncIntents();
+    if (healedCash > 0) {
+      ApiDebugLog.sync(
+        'self-heal',
+        'queued $healedCash stuck cash terminal sync intents',
+      );
+    }
+
+    final healedSynced = await bookingOrdersDao.healMirrorsSyncedWithServer();
+    if (healedSynced > 0) {
+      ApiDebugLog.sync(
+        'self-heal',
+        'cleared $healedSynced mirrors already aligned with server',
+      );
+    }
+
     final dirtyOrders = await bookingOrdersDao.getAllDirtyBookingOrders();
     dirtyOrders.sort((a, b) {
       final aIsUpdate = (a.syncIntent ?? '').toUpperCase() == 'UPDATE' ? 0 : 1;
@@ -455,10 +471,27 @@ class SyncEngine {
       final orders = pulled['orders'];
       if (orders is Map) {
         final bookingOrders = (orders['booking_orders'] as List?) ?? [];
+        final pulledServerStatusById = <int, String>{};
         for (final raw in bookingOrders) {
           if (raw is Map) {
-            await bookingOrdersDao.upsertFromServer(Map<String, dynamic>.from(raw));
+            final map = Map<String, dynamic>.from(raw);
+            final serverId = _toInt(map['id']);
+            if (serverId != null) {
+              pulledServerStatusById[serverId] =
+                  map['order_status']?.toString() ?? '';
+            }
+            await bookingOrdersDao.upsertFromServer(map);
           }
+        }
+
+        final healedSynced = await bookingOrdersDao.healMirrorsSyncedWithServer(
+          serverStatusById: pulledServerStatusById,
+        );
+        if (healedSynced > 0) {
+          ApiDebugLog.sync(
+            'self-heal',
+            'cleared $healedSynced stale dirty mirrors after pull',
+          );
         }
 
         final standaloneDetails = (orders['order_details'] as List?) ?? [];

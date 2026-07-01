@@ -515,6 +515,11 @@ class BookingOrdersDao {
         OrderStageRank.isTerminalStatus(serverStatus);
     final preserveLocalLifecycle = existing != null &&
         (existing.syncDirty || localAhead);
+    final clearSyncFlags = existing != null &&
+        await shouldClearSyncDirtyFlag(
+          local: existing,
+          serverStatus: serverStatus,
+        );
 
     final companion = BookingOrdersCompanion(
       clientUuid: Value(clientUuid),
@@ -557,15 +562,21 @@ class BookingOrdersDao {
       latestPaymentJson:
           Value(row['latest_payment'] != null ? jsonEncode(row['latest_payment']) : null),
       syncVersion: Value(_toInt(row['sync_version'])),
-      syncDirty: preserveLocalLifecycle
-          ? Value(existing!.syncDirty)
-          : (terminalMatch ? const Value(false) : const Value(false)),
-      syncIntent: preserveLocalLifecycle
-          ? Value(existing!.syncIntent)
-          : (terminalMatch ? const Value(null) : const Value(null)),
-      syncError: preserveLocalLifecycle && existing!.syncError != null
-          ? Value(existing.syncError)
-          : const Value(null),
+      syncDirty: clearSyncFlags
+          ? const Value(false)
+          : preserveLocalLifecycle
+              ? Value(existing!.syncDirty)
+              : const Value(false),
+      syncIntent: clearSyncFlags
+          ? const Value(null)
+          : preserveLocalLifecycle
+              ? Value(existing!.syncIntent)
+              : const Value(null),
+      syncError: clearSyncFlags
+          ? const Value(null)
+          : preserveLocalLifecycle && existing!.syncError != null
+              ? Value(existing.syncError)
+              : const Value(null),
       paidAmountLocal: preserveLocalLifecycle
           ? Value(existing!.paidAmountLocal)
           : const Value.absent(),
@@ -600,7 +611,11 @@ class BookingOrdersDao {
     }
     await _deduplicateOrderDetailsByServerId(clientUuid);
 
-    if (preserveLocalLifecycle) {
+    if (clearSyncFlags && terminalMatch && existing?.openbillFlag != true) {
+      await _clearDetailSyncDirty(clientUuid);
+    }
+
+    if (preserveLocalLifecycle && !clearSyncFlags) {
       await detectEditDivergenceAfterPull(
         clientUuid: clientUuid,
         serverRow: row,
@@ -677,6 +692,51 @@ class BookingOrdersDao {
       paidAmountLocal: local.paidAmountLocal,
       syncIntent: local.syncIntent,
     );
+  }
+
+  Future<bool> shouldClearSyncDirtyFlag({
+    required BookingOrder local,
+    required String serverStatus,
+  }) async {
+    return OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+      syncDirty: local.syncDirty,
+      localStatus: local.orderStatus,
+      serverStatus: serverStatus,
+      openbillFlag: local.openbillFlag,
+      hasDirtyServedDetails: await hasDirtyServedDetails(local.clientUuid),
+      paidAmountLocal: local.paidAmountLocal,
+      syncIntent: local.syncIntent,
+    );
+  }
+
+  /// Clears header sync flags when mirror already matches server lifecycle.
+  Future<int> healMirrorsSyncedWithServer({
+    Map<int, String> serverStatusById = const {},
+  }) async {
+    var healed = 0;
+    final dirty = await getAllDirtyBookingOrders();
+
+    for (final order in dirty) {
+      final serverId = order.serverId;
+      if (serverId == null || serverId <= 0) continue;
+
+      final serverStatus = serverStatusById[serverId] ?? order.orderStatus;
+      if (!await shouldClearSyncDirtyFlag(
+        local: order,
+        serverStatus: serverStatus,
+      )) {
+        continue;
+      }
+
+      await _clearMirrorSyncState(
+        order.clientUuid,
+        clearDetails: !order.openbillFlag &&
+            OrderStageRank.isTerminalStatus(order.orderStatus),
+      );
+      healed++;
+    }
+
+    return healed;
   }
 
   /// Links offline dirty mirrors to an existing server row for the same checkout.
@@ -776,6 +836,38 @@ class BookingOrdersDao {
           syncIntent: Value(null),
           syncError: Value(null),
         ),
+      );
+      healed++;
+    }
+
+    return healed;
+  }
+
+  /// Queues PROCESS/FINISH for cash orders stuck dirty after partial server sync.
+  Future<int> healStuckCashTerminalSyncIntents() async {
+    var healed = 0;
+
+    final dirty = await getAllDirtyBookingOrders();
+
+    for (final order in dirty) {
+      if (order.openbillFlag) continue;
+      if (order.serverId == null || order.serverId! <= 0) continue;
+
+      final intent = (order.syncIntent ?? '').trim().toUpperCase();
+      if (intent.isNotEmpty) continue;
+
+      final status = order.orderStatus.trim().toUpperCase();
+      final nextIntent = switch (status) {
+        'SERVED' => 'PROCESS',
+        'PROCESSED' => 'FINISH',
+        _ => null,
+      };
+      if (nextIntent == null) continue;
+
+      await markIntent(
+        order.clientUuid,
+        nextIntent,
+        extras: {'order_status': order.orderStatus},
       );
       healed++;
     }
@@ -1204,20 +1296,44 @@ class BookingOrdersDao {
         appliedIntent == 'SERVE_ITEMS') {
       await _clearDetailSyncDirty(clientUuid);
     } else if (appliedIntent == 'OFFLINE_CATCH_UP') {
-      final servedConfirmed = await _catchUpAppliedServedDetailsConfirmed(
-        clientUuid: clientUuid,
-        appliedDetails: applied['order_details'],
-      );
-      if (servedConfirmed) {
+      final serverServed =
+          (serverApplied ?? '').trim().toUpperCase() == 'SERVED';
+      if (serverServed) {
         await _clearDetailSyncDirty(clientUuid);
+      } else {
+        final servedConfirmed = await _catchUpAppliedServedDetailsConfirmed(
+          clientUuid: clientUuid,
+          appliedDetails: applied['order_details'],
+        );
+        if (servedConfirmed) {
+          await _clearDetailSyncDirty(clientUuid);
+        }
       }
     }
 
-    final stillNeedsSync = localBefore != null &&
-        await orderNeedsCatchUpSync(
-          local: localBefore,
-          serverStatus: serverApplied,
-        );
+    var stillNeedsSync = false;
+    if (localBefore != null) {
+      stillNeedsSync = await orderNeedsCatchUpSync(
+            local: localBefore,
+            serverStatus: serverApplied,
+          ) ||
+          _cashCatchUpPartiallyApplied(
+            localBefore: localBefore,
+            appliedIntent: appliedIntent,
+            serverApplied: serverApplied,
+          );
+
+      final localStatus = localBefore.orderStatus.trim().toUpperCase();
+      final appliedStatus = (serverApplied ?? '').trim().toUpperCase();
+      if (localStatus == 'SERVED' && appliedStatus == 'SERVED') {
+        stillNeedsSync = false;
+      } else if (await shouldClearSyncDirtyFlag(
+        local: localBefore,
+        serverStatus: serverApplied ?? '',
+      )) {
+        stillNeedsSync = false;
+      }
+    }
 
     await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
           BookingOrdersCompanion(
@@ -1247,6 +1363,41 @@ class BookingOrdersDao {
             syncedAt: Value(DateTime.now()),
           ),
         );
+  }
+
+  bool _cashCatchUpPartiallyApplied({
+    required BookingOrder localBefore,
+    required String appliedIntent,
+    String? serverApplied,
+  }) {
+    if (appliedIntent != 'OFFLINE_CATCH_UP') return false;
+    if (localBefore.openbillFlag) return false;
+
+    final local = localBefore.orderStatus.trim().toUpperCase();
+    final server = (serverApplied ?? '').trim().toUpperCase();
+    if (local == 'SERVED' && (server == 'PAID' || server == 'PROCESSED')) {
+      return true;
+    }
+    if (local == 'PROCESSED' && server == 'PAID') return true;
+    return false;
+  }
+
+  Future<void> _clearMirrorSyncState(
+    String clientUuid, {
+    bool clearDetails = false,
+  }) async {
+    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
+        .write(
+      const BookingOrdersCompanion(
+        syncDirty: Value(false),
+        syncIntent: Value(null),
+        syncError: Value(null),
+      ),
+    );
+
+    if (clearDetails) {
+      await _clearDetailSyncDirty(clientUuid);
+    }
   }
 
   Future<void> _clearDetailSyncDirty(String bookingClientUuid) async {

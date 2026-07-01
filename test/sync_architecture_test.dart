@@ -349,23 +349,33 @@ void main() {
   });
 
   group('OrderSyncIntentChain — after CREATE', () {
-    test('cash PROCESSED queues PAY', () {
+    test('cash PROCESSED queues FINISH', () {
       expect(
         OrderSyncIntentChain.firstIntentAfterCreate(
           localStatus: 'PROCESSED',
           storedIntent: 'PROCESS',
         ),
-        'PAY',
+        'FINISH',
       );
     });
 
-    test('cash SERVED queues PAY', () {
+    test('cash SERVED queues PROCESS', () {
       expect(
         OrderSyncIntentChain.firstIntentAfterCreate(
           localStatus: 'SERVED',
           storedIntent: 'FINISH',
         ),
-        'PAY',
+        'PROCESS',
+      );
+    });
+
+    test('cash PAID queues PROCESS', () {
+      expect(
+        OrderSyncIntentChain.firstIntentAfterCreate(
+          localStatus: 'PAID',
+          storedIntent: 'PAY',
+        ),
+        'PROCESS',
       );
     });
 
@@ -527,6 +537,42 @@ void main() {
       );
     });
 
+    test('OFFLINE_CATCH_UP partial cash SERVED+PAID queues PROCESS', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'SERVED',
+          storedIntent: 'OFFLINE_CATCH_UP',
+          appliedIntent: 'OFFLINE_CATCH_UP',
+          serverStatusAfterApply: 'PAID',
+        ),
+        'PROCESS',
+      );
+    });
+
+    test('OFFLINE_CATCH_UP partial cash SERVED+PROCESSED queues FINISH', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'SERVED',
+          storedIntent: 'OFFLINE_CATCH_UP',
+          appliedIntent: 'OFFLINE_CATCH_UP',
+          serverStatusAfterApply: 'PROCESSED',
+        ),
+        'FINISH',
+      );
+    });
+
+    test('OFFLINE_CATCH_UP partial cash PROCESSED+PAID queues PROCESS', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'PROCESSED',
+          storedIntent: 'OFFLINE_CATCH_UP',
+          appliedIntent: 'OFFLINE_CATCH_UP',
+          serverStatusAfterApply: 'PAID',
+        ),
+        'PROCESS',
+      );
+    });
+
     test('CREATE + local UNPAID + server WAITING + dirty served queues SERVE_ITEMS', () {
       expect(
         OrderSyncIntentChain.firstIntentAfterCreate(
@@ -646,6 +692,43 @@ void main() {
           hasDirtyServedDetails: (_) async => false,
         ),
         isTrue,
+      );
+    });
+
+    test('cash SERVED with serverId uses FINISH step intent not catch-up', () async {
+      final order = _order(
+        clientUuid: 'cash-1',
+        status: 'SERVED',
+        syncIntent: 'FINISH',
+        openbillFlag: false,
+        serverId: 99,
+        paidAmountLocal: 50000,
+      );
+
+      expect(
+        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+          order: order,
+          hasDirtyServedDetails: (_) async => false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('cash PROCESSED with serverId uses PROCESS step intent not catch-up', () async {
+      final order = _order(
+        clientUuid: 'cash-2',
+        status: 'PROCESSED',
+        syncIntent: 'PROCESS',
+        openbillFlag: false,
+        serverId: 100,
+      );
+
+      expect(
+        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+          order: order,
+          hasDirtyServedDetails: (_) async => false,
+        ),
+        isFalse,
       );
     });
 
@@ -814,6 +897,60 @@ void main() {
           syncIntent: 'PAY',
         ),
         isTrue,
+      );
+    });
+
+    test('shouldClearSyncDirty when cash SERVED matches server SERVED', () {
+      expect(
+        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+          syncDirty: true,
+          localStatus: 'SERVED',
+          serverStatus: 'SERVED',
+          openbillFlag: false,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+        ),
+        isTrue,
+      );
+    });
+
+    test('shouldClearSyncDirty false when cash SERVED but server still PAID', () {
+      expect(
+        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+          syncDirty: true,
+          localStatus: 'SERVED',
+          serverStatus: 'PAID',
+          openbillFlag: false,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+        ),
+        isFalse,
+      );
+    });
+
+    test('shouldClearSyncDirty false when not dirty', () {
+      expect(
+        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+          syncDirty: false,
+          localStatus: 'SERVED',
+          serverStatus: 'SERVED',
+          openbillFlag: false,
+          hasDirtyServedDetails: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('shouldClearSyncDirty false when dirty served details remain', () {
+      expect(
+        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+          syncDirty: true,
+          localStatus: 'SERVED',
+          serverStatus: 'SERVED',
+          openbillFlag: true,
+          hasDirtyServedDetails: true,
+        ),
+        isFalse,
       );
     });
   });

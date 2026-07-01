@@ -47,4 +47,27 @@ class OrderCatchUpSyncPolicy {
       paidAmountLocal: paidAmountLocal,
     );
   }
+
+  /// True when a dirty mirror may clear `sync_dirty` after server caught up.
+  static bool shouldClearSyncDirty({
+    required bool syncDirty,
+    required String localStatus,
+    required String serverStatus,
+    required bool openbillFlag,
+    required bool hasDirtyServedDetails,
+    double? paidAmountLocal,
+    String? syncIntent,
+  }) {
+    if (!syncDirty) return false;
+    if (serverStatus.trim().isEmpty) return false;
+
+    return !needsCatchUp(
+      localStatus: localStatus,
+      serverStatus: serverStatus,
+      openbillFlag: openbillFlag,
+      hasDirtyServedDetails: hasDirtyServedDetails,
+      paidAmountLocal: paidAmountLocal,
+      syncIntent: syncIntent,
+    );
+  }
 }

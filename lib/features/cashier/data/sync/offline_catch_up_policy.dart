@@ -34,6 +34,15 @@ class OfflineCatchUpPolicy {
       }
     }
 
+    // Cash order already on server: finish lifecycle with step intents.
+    if (!order.openbillFlag && !neverSynced) {
+      if (status == 'SERVED' || status == 'PROCESSED') {
+        if (intent == 'PAY' || intent == 'PROCESS' || intent == 'FINISH') {
+          return false;
+        }
+      }
+    }
+
     if (intent == 'PAY' ||
         intent == 'SERVE_ITEMS' ||
         intent == 'FINISH' ||
@@ -42,7 +51,14 @@ class OfflineCatchUpPolicy {
       return true;
     }
 
-    if (order.paidAmountLocal != null) return true;
+    if (order.paidAmountLocal != null) {
+      if (!order.openbillFlag &&
+          !neverSynced &&
+          (status == 'SERVED' || status == 'PROCESSED')) {
+        return false;
+      }
+      return true;
+    }
     if (await hasDirtyServedDetails(order.clientUuid)) return true;
 
     return {

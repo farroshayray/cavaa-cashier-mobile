@@ -64,9 +64,33 @@ class OrderSyncIntentChain {
           return 'FINISH';
         }
         return null;
+      case 'OFFLINE_CATCH_UP':
+        if (!openbillFlag) {
+          return _cashIntentAfterPartialCatchUp(
+            localStatus: status,
+            serverStatusAfterApply: serverStatusAfterApply,
+          );
+        }
+        return null;
       default:
         return null;
     }
+  }
+
+  static String? _cashIntentAfterPartialCatchUp({
+    required String localStatus,
+    String? serverStatusAfterApply,
+  }) {
+    final server = (serverStatusAfterApply ?? '').trim().toUpperCase();
+
+    if (localStatus == 'SERVED') {
+      if (server == 'PAID') return 'PROCESS';
+      if (server == 'PROCESSED') return 'FINISH';
+    }
+    if (localStatus == 'PROCESSED' && server == 'PAID') {
+      return 'PROCESS';
+    }
+    return null;
   }
 
   static String? firstIntentAfterCreate({
@@ -119,12 +143,15 @@ class OrderSyncIntentChain {
       return null;
     }
 
-    if (localStatus == 'PAID' || (paidAmountLocal != null && !openbillFlag)) {
-      return 'PAY';
+    if (!openbillFlag) {
+      if (localStatus == 'SERVED') return 'PROCESS';
+      if (localStatus == 'PROCESSED') return 'FINISH';
+      if (localStatus == 'PAID') return 'PROCESS';
+      if (paidAmountLocal != null) return 'PAY';
+      return null;
     }
 
-    if (!openbillFlag &&
-        (localStatus == 'PROCESSED' || localStatus == 'SERVED')) {
+    if (localStatus == 'PAID') {
       return 'PAY';
     }
 
