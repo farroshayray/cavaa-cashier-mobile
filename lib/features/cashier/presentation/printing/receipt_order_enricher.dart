@@ -39,6 +39,7 @@ Map<String, dynamic> enrichReceiptOrder(Map<String, dynamic> raw) {
   }
 
   _decodeWifiJsonField(order);
+  _inferWifiShown(order);
 
   return order;
 }
@@ -58,6 +59,15 @@ void _decodeWifiJsonField(Map<String, dynamic> order) {
       order['store_address'] ??= snap['store_address'];
     }
   } catch (_) {}
+}
+
+void _inferWifiShown(Map<String, dynamic> order) {
+  if (order['store_is_wifi_shown'] != null) return;
+  final user = (order['store_wifi_user'] ?? '').toString().trim();
+  final pass = (order['store_wifi_password'] ?? '').toString().trim();
+  if (user.isNotEmpty || pass.isNotEmpty) {
+    order['store_is_wifi_shown'] = 1;
+  }
 }
 
 String _partnerAddress(Map<String, dynamic> partner) {

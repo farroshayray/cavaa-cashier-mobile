@@ -137,12 +137,13 @@ class DoneProvider extends ChangeNotifier {
     Map<String, dynamic> row,
   ) async {
     final detail = await getOrderDetailFromListItem(row);
+    final hydratedDetail = OrderMirrorMapper.hydrateReceiptPayload(detail);
     final serverId = int.tryParse('${row['id']}');
     if (serverId != null && serverId > 0 && connectivity.isOnline) {
       try {
         return await repo.fetchPrintDetail(serverId);
       } catch (_) {}
     }
-    return enrichOfflinePrintOrder(detail);
+    return enrichOfflinePrintOrder(hydratedDetail);
   }
 }

@@ -141,10 +141,7 @@ class ReceiptPdfBuilder {
       final opts = (m['order_detail_options'] as List?) ?? [];
       for (final o in opts) {
         final om = Map<String, dynamic>.from(o as Map);
-        final optName = (om['option'] is Map
-                ? (om['option']['name'] ?? '-')
-                : '-')
-            .toString();
+        final optName = receiptOptionName(om);
         final optPrice = receiptNum(om['price']) * qty;
         widgets.add(
           _amountRow('  + $optName', receiptRupiah(optPrice)),

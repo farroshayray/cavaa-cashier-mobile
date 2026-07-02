@@ -39,6 +39,19 @@ void main() {
       expect(totals.grandTotal, 10075);
       expect(totals.roundingAmount, 75);
     });
+
+    test('uses local paid/change fallback when nested payment is missing', () {
+      final totals = buildReceiptTotals({
+        'total_order_value': 10000,
+        'is_ppn_active': false,
+        'paid_amount_local': 20000,
+        'change_amount_local': 10000,
+      });
+
+      expect(totals.grandTotal, 10000);
+      expect(totals.paid, 20000);
+      expect(totals.change, 10000);
+    });
   });
 
   group('enrichReceiptOrder', () {

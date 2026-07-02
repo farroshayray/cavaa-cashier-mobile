@@ -36,6 +36,19 @@ void main() {
       expect(enriched['store_wifi_password'], 'pass');
       expect(receiptWifiShown(enriched), isTrue);
     });
+
+    test('infers wifi shown when credentials exist but wifi_shown missing', () {
+      final enriched = enrichReceiptOrder({
+        'wifi_snapshot': {
+          'wifi_ssid': 'CafeGuest',
+          'wifi_password': 'guest123',
+        },
+      });
+
+      expect(enriched['store_wifi_user'], 'CafeGuest');
+      expect(enriched['store_wifi_password'], 'guest123');
+      expect(receiptWifiShown(enriched), isTrue);
+    });
   });
 
   group('enrichOfflinePrintOrder', () {

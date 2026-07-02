@@ -602,7 +602,12 @@ class BookingOrdersDao {
       cashRoundingUnit: Value(
         await _resolveCashRoundingUnitForRow(row),
       ),
-      wifiSnapshotJson: Value(row['wifi_snapshot'] != null ? jsonEncode(row['wifi_snapshot']) : null),
+      wifiSnapshotJson: Value(
+        _resolveWifiSnapshotJsonForRow(
+          row,
+          existing: existing,
+        ),
+      ),
       paymentRequestJson:
           Value(row['payment_request'] != null ? jsonEncode(row['payment_request']) : null),
       latestPaymentJson:
@@ -2453,6 +2458,61 @@ class BookingOrdersDao {
 
     final settings = await CacheDao(db).getPartnerSettings();
     return settings?.cashRoundingUnit ?? 0;
+  }
+
+  String? _resolveWifiSnapshotJsonForRow(
+    Map<String, dynamic> row, {
+    BookingOrder? existing,
+  }) {
+    final fromRow = _toWifiSnapshotJson(row['wifi_snapshot']);
+    if (fromRow != null) return fromRow;
+
+    final fromPartnerData = _wifiSnapshotFromPartnerLikeMap(row['partner_data']);
+    if (fromPartnerData != null) return fromPartnerData;
+
+    final fromPartner = _wifiSnapshotFromPartnerLikeMap(row['partner']);
+    if (fromPartner != null) return fromPartner;
+
+    final current = existing?.wifiSnapshotJson;
+    if (current != null && current.trim().isNotEmpty) return current;
+
+    return null;
+  }
+
+  String? _toWifiSnapshotJson(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is String) {
+      final trimmed = raw.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    if (raw is Map) {
+      final map = Map<String, dynamic>.from(raw.cast<dynamic, dynamic>());
+      return map.isEmpty ? null : jsonEncode(map);
+    }
+    return null;
+  }
+
+  String? _wifiSnapshotFromPartnerLikeMap(dynamic raw) {
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(raw.cast<dynamic, dynamic>());
+    final wifiUser = (map['user_wifi'] ?? map['wifi_ssid'] ?? '').toString().trim();
+    final wifiPass =
+        (map['pass_wifi'] ?? map['wifi_password'] ?? '').toString().trim();
+    final address = (map['address'] ?? map['store_address'] ?? '').toString().trim();
+    final isShown = _toBool(map['is_wifi_shown'] ?? map['wifi_shown']);
+
+    if (!isShown && wifiUser.isEmpty && wifiPass.isEmpty && address.isEmpty) {
+      return null;
+    }
+
+    final snapshot = <String, dynamic>{
+      'wifi_shown': isShown || wifiUser.isNotEmpty || wifiPass.isNotEmpty ? 1 : 0,
+      if (wifiUser.isNotEmpty) 'wifi_ssid': wifiUser,
+      if (wifiPass.isNotEmpty) 'wifi_password': wifiPass,
+      if (address.isNotEmpty) 'store_address': address,
+    };
+
+    return jsonEncode(snapshot);
   }
 
   bool _toBool(dynamic v) {

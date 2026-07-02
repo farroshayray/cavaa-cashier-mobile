@@ -54,7 +54,91 @@ class OrderMirrorMapper {
       } catch (_) {}
     }
 
+    return hydrateReceiptPayload(
+      map,
+      latestPaymentJson: row.latestPaymentJson,
+      fallbackUpdatedAtIso: row.updatedAt?.toIso8601String(),
+    );
+  }
+
+  static Map<String, dynamic> hydrateReceiptPayload(
+    Map<String, dynamic> source, {
+    String? latestPaymentJson,
+    String? fallbackUpdatedAtIso,
+  }) {
+    final map = Map<String, dynamic>.from(source);
+    final latest = _resolveLatestPayment(
+      map,
+      latestPaymentJson: latestPaymentJson,
+    );
+
+    final paymentRaw = map['payment'];
+    final payment = paymentRaw is Map
+        ? Map<String, dynamic>.from(paymentRaw.cast<dynamic, dynamic>())
+        : <String, dynamic>{};
+    final updatedAt = payment['updated_at'] ??
+        latest?['updated_at'] ??
+        fallbackUpdatedAtIso ??
+        map['updated_at'];
+
+    payment['paid_amount'] ??=
+        map['paid_amount_local'] ?? latest?['paid_amount'] ?? map['paid_amount'];
+    payment['change_amount'] ??= map['change_amount_local'] ??
+        latest?['change_amount'] ??
+        map['change_amount'];
+    payment['rounding_amount'] ??=
+        map['cash_rounding_amount'] ?? latest?['rounding_amount'];
+    if (updatedAt != null && updatedAt.toString().trim().isNotEmpty) {
+      payment['updated_at'] ??= updatedAt;
+    }
+
+    if (_hasAny(payment, const ['paid_amount', 'change_amount', 'rounding_amount'])) {
+      map['payment'] = payment;
+    }
+
+    if ((map['employee_name'] == null || map['employee_name'].toString().trim().isEmpty) &&
+        map['order_by'] != null &&
+        map['order_by'].toString().trim().isNotEmpty) {
+      map['employee_name'] = map['order_by'];
+    }
+
     return map;
+  }
+
+  static Map<String, dynamic>? _resolveLatestPayment(
+    Map<String, dynamic> map, {
+    String? latestPaymentJson,
+  }) {
+    final latestRaw = map['latest_payment'];
+    if (latestRaw is Map) {
+      return Map<String, dynamic>.from(latestRaw.cast<dynamic, dynamic>());
+    }
+
+    final rawJson = latestPaymentJson ??
+        map['latest_payment_json']?.toString() ??
+        map['latestPaymentJson']?.toString();
+    if (rawJson == null || rawJson.trim().isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(rawJson);
+      if (decoded is Map) {
+        final latest = Map<String, dynamic>.from(decoded.cast<dynamic, dynamic>());
+        map['latest_payment'] = latest;
+        return latest;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  static bool _hasAny(Map<String, dynamic> map, List<String> keys) {
+    for (final key in keys) {
+      final value = map[key];
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static Map<String, dynamic> detailToUiMap(OrderDetail row) {

@@ -32,11 +32,13 @@ num receiptOrderGrandTotal(Map<String, dynamic> order) {
   final paid = receiptPickNum(order, ['payment', 'paid_amount']) ??
       receiptPickNum(order, ['latest_payment', 'paid_amount']) ??
       receiptPickNum(order, ['paid_amount']) ??
+      receiptPickNum(order, ['paid_amount_local']) ??
       receiptOrderGrandTotal(order);
 
   final change = receiptPickNum(order, ['payment', 'change_amount']) ??
       receiptPickNum(order, ['latest_payment', 'change_amount']) ??
       receiptPickNum(order, ['change_amount']) ??
+      receiptPickNum(order, ['change_amount_local']) ??
       0;
 
   return (paid: paid, change: change);
