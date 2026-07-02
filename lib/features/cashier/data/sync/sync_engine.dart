@@ -541,9 +541,14 @@ class SyncEngine {
 
       final master = pulled['master'];
       if (master is Map) {
-        await masterCacheService.saveAndBuildPayload(
-          Map<String, dynamic>.from(master),
-        );
+        final masterMap = Map<String, dynamic>.from(master);
+        final lastToken =
+            await bookingOrdersDao.getSyncMeta('last_sync_token') ?? '';
+        if (lastToken.isEmpty) {
+          await masterCacheService.saveAndBuildPayload(masterMap);
+        } else {
+          await masterCacheService.mergeMasterPayload(masterMap);
+        }
         await bookingOrdersDao.setSyncMeta(
           'last_master_sync',
           DateTime.now().toIso8601String(),

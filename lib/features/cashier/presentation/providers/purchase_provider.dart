@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/data/sync/purchase_stock_patcher.dart';
 import '/core/services/connectivity_status_provider.dart';
 
 class PurchaseProvider extends ChangeNotifier {
@@ -168,19 +169,73 @@ class PurchaseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Apply latest stock quantities in-memory (no network, no spinner).
+  Future<void> refreshSilently() async {
+    try {
+      await _applyPendingStockLines();
+
+      if (products.isEmpty) {
+        final cached = await repo.loadFromLocalCache();
+        if (cached != null) {
+          _applyPayload(cached);
+        }
+        notifyListeners();
+        return;
+      }
+
+      final cached = await repo.loadFromLocalCache();
+      if (cached == null) {
+        notifyListeners();
+        return;
+      }
+
+      if (cached.products.length < products.length * 0.5) {
+        notifyListeners();
+        return;
+      }
+
+      products = patchProductsStock(
+        current: products,
+        fromCache: cached.products,
+      );
+      notifyListeners();
+    } catch (e) {
+      debugPrint('PurchaseProvider.refreshSilently failed: $e');
+    }
+  }
+
+  Future<void>? _loadInFlight;
+  bool _loadInFlightSilent = true;
+
   // ===== LOAD =====
-  Future<void> load() async {
+  Future<void> load({bool silent = false}) {
+    if (_loadInFlight != null) {
+      if (!silent) _loadInFlightSilent = false;
+      return _loadInFlight!;
+    }
+
+    _loadInFlightSilent = silent;
+    _loadInFlight = _loadImpl(silent: _loadInFlightSilent).whenComplete(() {
+      _loadInFlight = null;
+      _loadInFlightSilent = true;
+    });
+    return _loadInFlight!;
+  }
+
+  Future<void> _loadImpl({bool silent = false}) async {
     final hadCatalog = products.isNotEmpty;
-    isLoading = true;
-    error = null;
-    notifyListeners();
+    if (!silent) {
+      isLoading = true;
+      error = null;
+      notifyListeners();
+    }
 
     try {
       if (!connectivity.isOnline) {
         final cached = await repo.loadFromLocalCache();
         if (cached != null) {
           _applyPayload(cached);
-        } else if (!hadCatalog) {
+        } else if (!hadCatalog && !silent) {
           error =
               'Mode offline — data menu belum tersedia. Sambungkan internet untuk memuat menu.';
         }
@@ -217,8 +272,12 @@ class PurchaseProvider extends ChangeNotifier {
         error = msg;
       }
     } finally {
-      isLoading = false;
-      notifyListeners();
+      if (!silent) {
+        isLoading = false;
+        notifyListeners();
+      } else if (products.isNotEmpty || error != null) {
+        notifyListeners();
+      }
     }
   }
 

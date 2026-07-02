@@ -62,6 +62,11 @@ class OrderStageRank {
       return false;
     }
 
+    // Cashier added items and sent order back to kitchen.
+    if (openbillFlag && local == 'UNPAID' && server == 'OPENBILL_WAITING_ORDER') {
+      return false;
+    }
+
     final localRank = rankFor(
       status: localStatus,
       openbillFlag: openbillFlag,

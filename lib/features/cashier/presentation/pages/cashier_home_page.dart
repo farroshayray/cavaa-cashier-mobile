@@ -68,6 +68,7 @@ class _CashierHomePageState extends State<CashierHomePage>
   Timer? _doneReloadDebounce;
   Timer? _allTabsReloadDebounce;
   Timer? _resumeReloadDebounce;
+  Timer? _purchaseStockRefreshDebounce;
   Future<void>? _reloadTabsInFlight;
   Future<void>? _syncAndReloadInFlight;
   bool _bootstrapSyncHandled = false;
@@ -185,6 +186,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       onSyncCompleted: (_) async {
         if (!mounted) return;
         await _reloadAllOrderTabsSequentially();
+        _debouncedRefreshPurchaseStock();
       },
       resolveCashierProcessId: () => context.read<AuthProvider>().user?.id,
     );
@@ -357,6 +359,7 @@ class _CashierHomePageState extends State<CashierHomePage>
     _doneReloadDebounce?.cancel();
     _allTabsReloadDebounce?.cancel();
     _resumeReloadDebounce?.cancel();
+    _purchaseStockRefreshDebounce?.cancel();
 
     _fcmMessageSub?.cancel();
     _fcmTapSub?.cancel();
@@ -755,6 +758,15 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     if (!mounted) return;
     await _reloadAllOrderTabsSequentially();
+    _debouncedRefreshPurchaseStock();
+  }
+
+  void _debouncedRefreshPurchaseStock() {
+    _purchaseStockRefreshDebounce?.cancel();
+    _purchaseStockRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      unawaited(context.read<PurchaseProvider>().refreshSilently());
+    });
   }
 
   Future<void> _refreshConflictCount() async {

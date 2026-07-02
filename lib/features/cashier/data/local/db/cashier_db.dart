@@ -49,6 +49,8 @@ LazyDatabase _openConnection() {
 class CashierDb extends _$CashierDb {
   CashierDb() : super(_openConnection());
 
+  CashierDb.forTesting(super.executor);
+
   @override
   int get schemaVersion => 16;
 

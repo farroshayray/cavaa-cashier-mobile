@@ -202,7 +202,10 @@ class PaymentProvider extends ChangeNotifier {
       try {
         final detail = await repo.fetchOrderDetail(serverId);
         final serverStatus = (detail['order_status'] ?? '').toString().toUpperCase();
-        if (serverStatus != 'OPENBILL_CONFIRMATION') continue;
+        if (serverStatus != 'OPENBILL_CONFIRMATION' &&
+            serverStatus != 'OPENBILL_WAITING_ORDER') {
+          continue;
+        }
 
         await bookingOrdersDao.upsertFromServer(detail);
         changed = true;

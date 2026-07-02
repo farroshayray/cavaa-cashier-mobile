@@ -329,6 +329,28 @@ void main() {
       );
     });
 
+    test('openbill server OPENBILL_WAITING_ORDER beats local payment-ready UNPAID', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'UNPAID',
+          serverStatus: 'OPENBILL_WAITING_ORDER',
+          openbillFlag: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('openbill UNPAID local equals server UNPAID is not ahead', () {
+      expect(
+        OrderStageRank.isLocalAheadOfServer(
+          localStatus: 'UNPAID',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+        ),
+        isFalse,
+      );
+    });
+
     test('isTerminalStatus recognizes served lifecycle end states', () {
       expect(OrderStageRank.isTerminalStatus('SERVED'), isTrue);
       expect(OrderStageRank.isTerminalStatus('DONE'), isTrue);

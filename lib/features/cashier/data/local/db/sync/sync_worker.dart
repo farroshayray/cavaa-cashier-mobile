@@ -32,10 +32,7 @@ class SyncWorker {
     if (_running || !connectivity.isOnline || syncService.isRunning) return;
     _running = true;
     try {
-      final pending = await syncService.hasPendingData();
-      if (pending) {
-        await syncService.syncPendingOrders();
-      }
+      await syncService.syncPendingOrders();
     } catch (_) {
     } finally {
       _running = false;
