@@ -111,4 +111,27 @@ class OrderStageResolver {
     const paymentStatuses = {'UNPAID', 'EXPIRED', 'PAYMENT REQUEST'};
     return paymentStatuses.contains(status);
   }
+
+  /// Promotes local mirror header when server lifecycle caught up on apply.
+  static String resolveStatusAfterSyncApply({
+    required String localStatus,
+    required String serverStatus,
+    required bool openbillFlag,
+  }) {
+    final server = serverStatus.trim().toUpperCase();
+    if (server.isEmpty) return localStatus;
+
+    final local = localStatus.trim().toUpperCase();
+    if (!openbillFlag) return localStatus;
+
+    if (server == 'UNPAID' &&
+        {'OPENBILL_WAITING_ORDER', 'OPENBILL_CONFIRMATION'}.contains(local)) {
+      return 'UNPAID';
+    }
+    if (server == 'SERVED' &&
+        {'UNPAID', 'OPENBILL_WAITING_ORDER', 'SERVED'}.contains(local)) {
+      return 'SERVED';
+    }
+    return localStatus;
+  }
 }

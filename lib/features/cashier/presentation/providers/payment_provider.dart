@@ -552,6 +552,27 @@ class PaymentProvider extends ChangeNotifier {
     }
 
     if (serverId != null && serverId > 0) {
+      final extras = <String, dynamic>{
+        'paid_amount': paidAmount,
+        'change_amount': changeAmount,
+        'payment_method': paymentMethod,
+      };
+
+      if (cashierProofImagePath != null && cashierProofImagePath.trim().isNotEmpty) {
+        final mirrorUuid = clientUuid.isNotEmpty
+            ? clientUuid
+            : (await bookingOrdersDao.getByServerId(serverId))?.clientUuid;
+        if (mirrorUuid != null && mirrorUuid.isNotEmpty) {
+          final persisted = await bookingOrdersDao.persistCashierProofImage(
+            clientUuid: mirrorUuid,
+            sourcePath: cashierProofImagePath,
+          );
+          if (persisted != null) {
+            extras['local_file_paths'] = {'cashier_proof': persisted};
+          }
+        }
+      }
+
       await tabCoordinator.transitionOrderStage(
         serverId: serverId,
         orderStatus: OrderStageResolver.resolveAfterPayment(
@@ -560,11 +581,7 @@ class PaymentProvider extends ChangeNotifier {
         syncIntent: 'PAY',
         syncDirty: true,
         orderSnapshot: order,
-        extras: {
-          'paid_amount': paidAmount,
-          'change_amount': changeAmount,
-          'payment_method': paymentMethod,
-        },
+        extras: extras,
       );
     }
   }

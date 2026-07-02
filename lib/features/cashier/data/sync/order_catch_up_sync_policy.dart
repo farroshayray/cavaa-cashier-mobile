@@ -19,22 +19,37 @@ class OrderCatchUpSyncPolicy {
 
     if (hasDirtyServedDetails) return true;
 
+    final intent = (syncIntent ?? '').trim().toUpperCase();
+
     if (openbillFlag && local == 'UNPAID' && server == 'OPENBILL_WAITING_ORDER') {
       return true;
     }
 
+    if (openbillFlag && local == 'OPENBILL_WAITING_ORDER' && server == 'UNPAID') {
+      return true;
+    }
+
+    if (openbillFlag && local == 'SERVED' && server == 'UNPAID') {
+      if (paidAmountLocal != null &&
+          (intent == 'PAY' || intent == 'OFFLINE_CATCH_UP')) {
+        return true;
+      }
+    }
+
     // Openbill serve synced: local + server both UNPAID, payment not queued yet.
     if (openbillFlag && local == 'UNPAID' && server == 'UNPAID') {
-      final intent = (syncIntent ?? '').trim().toUpperCase();
       if (intent == 'PAY' || intent == 'OFFLINE_CATCH_UP') return true;
       return false;
     }
 
     if (paidAmountLocal != null) {
+      if (intent == 'PAY' || intent == 'OFFLINE_CATCH_UP') {
+        if (openbillFlag && local == 'SERVED' && server != 'SERVED') return true;
+        if (!openbillFlag && local == 'PAID' && server == 'UNPAID') return true;
+      }
       if (local == 'SERVED' && server != 'SERVED') return true;
       if (local == 'UNPAID' && server == 'OPENBILL_WAITING_ORDER') return true;
       if (local == 'UNPAID' && server == 'UNPAID') {
-        final intent = (syncIntent ?? '').trim().toUpperCase();
         return intent == 'PAY' || intent == 'OFFLINE_CATCH_UP';
       }
     }

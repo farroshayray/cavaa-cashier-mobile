@@ -43,6 +43,13 @@ class OfflineCatchUpPolicy {
       }
     }
 
+    // Open bill serve-only on server-known order → native SERVE_ITEMS + detail_ids.
+    if (order.openbillFlag && !neverSynced) {
+      if (intent == 'SERVE_ITEMS' && order.paidAmountLocal == null) {
+        return false;
+      }
+    }
+
     if (intent == 'PAY' ||
         intent == 'SERVE_ITEMS' ||
         intent == 'FINISH' ||

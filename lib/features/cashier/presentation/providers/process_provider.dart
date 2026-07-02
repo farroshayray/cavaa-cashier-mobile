@@ -717,7 +717,21 @@ class ProcessProvider extends ChangeNotifier {
             (row['order_status'] ?? '').toString().startsWith('OPENBILL');
 
         if (allServed && isOpenbill) {
-          await _stageOpenbillForPaymentCache(id, row, pendingServeSync: true);
+          final fresh = await _getMirrorDetailMap(id);
+          final stagedSnapshot = fresh != null
+              ? {
+                  ...fresh,
+                  'order_status': result['order_status'] ?? 'UNPAID',
+                }
+              : {
+                  ...row,
+                  'order_status': result['order_status'] ?? 'UNPAID',
+                };
+          await _stageOpenbillForPaymentCache(
+            id,
+            stagedSnapshot,
+            pendingServeSync: true,
+          );
         } else if (allServed) {
           await _stageServedOrderForDoneCache(id, row);
         }

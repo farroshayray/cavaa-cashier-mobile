@@ -13,6 +13,7 @@ import '/features/cashier/data/local/db/local_date_utils.dart';
 import '/features/cashier/data/sync/order_catch_up_sync_policy.dart';
 import '/features/cashier/data/sync/order_edit_conflict_detector.dart';
 import '/features/cashier/data/sync/order_stage_rank.dart';
+import '/features/cashier/data/sync/order_stage_resolver.dart';
 import '/features/cashier/data/sync/order_sync_intent_chain.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
@@ -248,6 +249,23 @@ class BookingOrdersDao {
     }).toList();
   }
 
+  /// Latest PAID/PENDING payment server id for proof upload fallback.
+  Future<int?> resolveLatestPaymentServerIdForBookingOrder(
+    int bookingOrderServerId,
+  ) async {
+    if (bookingOrderServerId <= 0) return null;
+
+    final rows = await (db.select(db.orderPayments)
+          ..where((t) => t.bookingOrderServerId.equals(bookingOrderServerId))
+          ..where((t) => t.paymentStatus.isIn(['PAID', 'PENDING']))
+          ..where((t) => t.serverId.isBiggerThanValue(0))
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+        .get();
+
+    if (rows.isEmpty) return null;
+    return rows.first.serverId;
+  }
+
   int? _resolveLatestPaymentServerId(
     Map<String, dynamic> row,
     BookingOrder? existing,
@@ -381,6 +399,20 @@ class BookingOrdersDao {
     final existing = await getByServerId(serverId);
     if (existing == null) return false;
 
+    Value<String?> localFilePaths = const Value.absent();
+    if (extras?['local_file_paths'] is Map) {
+      final merged = <String, dynamic>{};
+      if (existing.localFilePathsJson != null &&
+          existing.localFilePathsJson!.trim().isNotEmpty) {
+        final decoded = jsonDecode(existing.localFilePathsJson!);
+        if (decoded is Map) {
+          merged.addAll(Map<String, dynamic>.from(decoded));
+        }
+      }
+      merged.addAll(Map<String, dynamic>.from(extras!['local_file_paths'] as Map));
+      localFilePaths = Value(jsonEncode(merged));
+    }
+
     final now = DateTime.now();
     await (db.update(db.bookingOrders)..where((t) => t.serverId.equals(serverId))).write(
           BookingOrdersCompanion(
@@ -398,6 +430,7 @@ class BookingOrdersDao {
             paymentMethod: extras?['payment_method'] != null
                 ? Value(extras!['payment_method'].toString())
                 : const Value.absent(),
+            localFilePathsJson: localFilePaths,
           ),
         );
     return true;
@@ -521,6 +554,19 @@ class BookingOrdersDao {
           serverStatus: serverStatus,
         );
 
+    final serverPaymentId = _toIntOrNull(row['payment_id']);
+    final preserveLocalPaymentIds = preserveLocalLifecycle &&
+        (serverPaymentId == null || serverPaymentId <= 0) &&
+        ((existing!.paymentId != null && existing.paymentId! > 0) ||
+            (existing.latestPaymentServerId != null &&
+                existing.latestPaymentServerId! > 0));
+    final resolvedPaymentId = preserveLocalPaymentIds
+        ? existing!.paymentId
+        : serverPaymentId;
+    final resolvedLatestPaymentServerId = preserveLocalPaymentIds
+        ? (existing!.latestPaymentServerId ?? existing.paymentId)
+        : _resolveLatestPaymentServerId(row, existing);
+
     final companion = BookingOrdersCompanion(
       clientUuid: Value(clientUuid),
       serverId: Value(serverId),
@@ -549,8 +595,8 @@ class BookingOrdersDao {
       employeeOrderNote: Value(row['employee_order_note']?.toString()),
       cashierProcessId: Value(_toIntOrNull(row['cashier_process_id'])),
       kitchenProcessId: Value(_toIntOrNull(row['kitchen_process_id'])),
-      paymentId: Value(_toIntOrNull(row['payment_id'])),
-      latestPaymentServerId: Value(_resolveLatestPaymentServerId(row, existing)),
+      paymentId: Value(resolvedPaymentId),
+      latestPaymentServerId: Value(resolvedLatestPaymentServerId),
       paymentFlag: Value(_toBool(row['payment_flag'])),
       cashRoundingAmount: Value(_toDouble(row['cash_rounding_amount'])),
       cashRoundingUnit: Value(
@@ -720,7 +766,8 @@ class BookingOrdersDao {
       final serverId = order.serverId;
       if (serverId == null || serverId <= 0) continue;
 
-      final serverStatus = serverStatusById[serverId] ?? order.orderStatus;
+      if (!serverStatusById.containsKey(serverId)) continue;
+      final serverStatus = serverStatusById[serverId]!;
       if (!await shouldClearSyncDirtyFlag(
         local: order,
         serverStatus: serverStatus,
@@ -1344,7 +1391,13 @@ class BookingOrdersDao {
                 ? Value(applied['booking_order_code'].toString())
                 : const Value.absent(),
             orderStatus: localBefore != null
-                ? Value(localBefore.orderStatus)
+                ? Value(
+                    OrderStageResolver.resolveStatusAfterSyncApply(
+                      localStatus: localBefore.orderStatus,
+                      serverStatus: serverApplied ?? '',
+                      openbillFlag: localBefore.openbillFlag,
+                    ),
+                  )
                 : applied['order_status'] != null
                     ? Value(applied['order_status'].toString())
                     : const Value.absent(),

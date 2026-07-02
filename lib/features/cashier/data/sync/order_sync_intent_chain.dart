@@ -71,7 +71,12 @@ class OrderSyncIntentChain {
             serverStatusAfterApply: serverStatusAfterApply,
           );
         }
-        return null;
+        return _openbillIntentAfterPartialCatchUp(
+          localStatus: status,
+          storedIntent: intent,
+          serverStatusAfterApply: serverStatusAfterApply,
+          paidAmountLocal: paidAmountLocal,
+        );
       default:
         return null;
     }
@@ -89,6 +94,26 @@ class OrderSyncIntentChain {
     }
     if (localStatus == 'PROCESSED' && server == 'PAID') {
       return 'PROCESS';
+    }
+    return null;
+  }
+
+  static String? _openbillIntentAfterPartialCatchUp({
+    required String localStatus,
+    required String storedIntent,
+    String? serverStatusAfterApply,
+    double? paidAmountLocal,
+  }) {
+    if (paidAmountLocal == null) return null;
+
+    final server = (serverStatusAfterApply ?? '').trim().toUpperCase();
+    if (!{'UNPAID', 'SERVED'}.contains(localStatus)) return null;
+
+    if (server == 'OPENBILL_WAITING_ORDER') {
+      return 'SERVE_ITEMS';
+    }
+    if (server == 'UNPAID' || server.isEmpty) {
+      return 'PAY';
     }
     return null;
   }

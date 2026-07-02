@@ -237,6 +237,29 @@ class SyncEngine {
         continue;
       }
 
+      final pushPaymentMethod = paymentMethodForPush(
+        openbillFlag: order.openbillFlag,
+        effectiveIntent: effectiveIntent,
+        storedPaymentMethod: order.paymentMethod,
+        paidAmountLocal: order.paidAmountLocal,
+      );
+      if (isOpenbillPayMissingPaymentMethod(
+        openbillFlag: order.openbillFlag,
+        effectiveIntent: effectiveIntent,
+        paidAmountLocal: order.paidAmountLocal,
+        pushPaymentMethod: pushPaymentMethod,
+      )) {
+        await bookingOrdersDao.markSyncErrorByClientUuid(
+          order.clientUuid,
+          'Metode pembayaran wajib dipilih untuk open bill.',
+        );
+        ApiDebugLog.syncError(
+          'push guard',
+          '${order.clientUuid}: open bill pay missing payment_method',
+        );
+        continue;
+      }
+
       if (effectiveIntent == 'DELETE' && order.serverId != null) {
         deletes.add({'table': 'booking_orders', 'server_id': order.serverId});
         continue;
@@ -258,7 +281,7 @@ class SyncEngine {
         'table_id': order.tableId,
         'customer_name': order.customerName,
         'order_name': _checkoutOrderName(order.customerName),
-        'payment_method': _checkoutPaymentMethod(order),
+        if (pushPaymentMethod != null) 'payment_method': pushPaymentMethod,
         'openbill_flag': order.openbillFlag,
         if (order.orderBy != null && order.orderBy!.trim().isNotEmpty)
           'order_by': order.orderBy,
@@ -286,6 +309,12 @@ class SyncEngine {
 
       if (effectiveIntent == 'OFFLINE_CATCH_UP') {
         row['order_details'] = _buildOrderDetailsCatchUpPayload(bundle);
+        if (order.openbillFlag && order.paidAmountLocal == null) {
+          final detailIds = _collectServedDetailIdsForPush(bundle);
+          if (detailIds.isNotEmpty) {
+            row['detail_ids'] = detailIds;
+          }
+        }
       }
 
       if (effectiveIntent == 'SERVE_ITEMS') {
@@ -411,6 +440,8 @@ class SyncEngine {
 
   Future<void> _applyResponse(Map<String, dynamic> response) async {
     final applied = (response['applied'] as List?) ?? [];
+    final appliedPaymentIds = <String, int>{};
+
     for (final raw in applied) {
       if (raw is Map) {
         final map = Map<String, dynamic>.from(raw);
@@ -420,12 +451,19 @@ class SyncEngine {
           appliedIntent: map['sync_intent']?.toString() ?? '',
           appliedServerStatus: map['order_status']?.toString(),
         );
+        final clientUuid = map['client_uuid']?.toString() ?? '';
+        final paymentId = _toInt(map['payment_id']);
+        if (clientUuid.isNotEmpty && paymentId != null && paymentId > 0) {
+          appliedPaymentIds[clientUuid] = paymentId;
+        }
         ApiDebugLog.sync(
           'applied locally',
           '${map['sync_intent']} client=${map['client_uuid']} server_id=${map['server_id']}',
         );
       }
     }
+
+    await _uploadPendingCashierProofs(appliedPaymentIds: appliedPaymentIds);
 
     final conflicts = (response['conflicts'] as List?) ?? [];
     for (final raw in conflicts) {
@@ -565,7 +603,9 @@ class SyncEngine {
     await _uploadPendingCashierProofs();
   }
 
-  Future<void> _uploadPendingCashierProofs() async {
+  Future<void> _uploadPendingCashierProofs({
+    Map<String, int> appliedPaymentIds = const {},
+  }) async {
     final api = ordersApi;
     if (api == null) return;
 
@@ -573,18 +613,29 @@ class SyncEngine {
     for (final order in pending) {
       final proofPath = bookingOrdersDao.readCashierProofPath(order);
       final serverId = order.serverId;
-      final paymentId = resolveLastPaymentIdForPush(
-        latestPaymentServerId: order.latestPaymentServerId,
-        paymentId: order.paymentId,
-      );
-      if (proofPath == null ||
-          serverId == null ||
-          serverId <= 0 ||
-          paymentId == null) {
+      if (proofPath == null || serverId == null || serverId <= 0) {
         continue;
       }
       if (!File(proofPath).existsSync()) {
         await bookingOrdersDao.clearCashierProofPath(order.clientUuid);
+        continue;
+      }
+
+      final fallbackPaymentId =
+          await bookingOrdersDao.resolveLatestPaymentServerIdForBookingOrder(
+        serverId,
+      );
+      final paymentId = resolvePaymentIdForProofUpload(
+        appliedPaymentId: appliedPaymentIds[order.clientUuid],
+        latestPaymentServerId: order.latestPaymentServerId,
+        paymentId: order.paymentId,
+        fallbackFromOrderPayments: fallbackPaymentId,
+      );
+      if (paymentId == null) {
+        ApiDebugLog.syncError(
+          'cashier proof upload skipped',
+          'client=${order.clientUuid} order=$serverId: payment_id tidak ditemukan',
+        );
         continue;
       }
 
@@ -593,7 +644,6 @@ class SyncEngine {
           id: serverId,
           paidAmount: order.paidAmountLocal ?? order.totalOrderValue,
           changeAmount: order.changeAmountLocal ?? 0,
-          paymentMethod: order.paymentMethod,
           lastPaymentId: paymentId.toString(),
           cashierProofImagePath: proofPath,
         );
@@ -646,20 +696,6 @@ class SyncEngine {
       return trimmed.substring(6).trim().isEmpty ? 'guest' : trimmed.substring(6).trim();
     }
     return trimmed.isEmpty ? 'guest' : trimmed;
-  }
-
-  String? _checkoutPaymentMethod(BookingOrder order) {
-    final method = (order.paymentMethod ?? '').trim();
-    if (order.openbillFlag) {
-      if (order.paidAmountLocal != null &&
-          method.isNotEmpty &&
-          method.toUpperCase() != 'OPENBILL') {
-        return method;
-      }
-      return 'OPENBILL';
-    }
-    if (method.isEmpty) return 'CASH';
-    return method;
   }
 
   Map<String, dynamic> _buildDetailPushPayload({

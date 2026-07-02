@@ -5,11 +5,14 @@ import 'package:cavaa_cashier/features/cashier/data/sync/order_catch_up_sync_pol
 import 'package:cavaa_cashier/features/cashier/data/sync/order_edit_conflict_detector.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_payment_helpers.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_rank.dart';
+import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_resolver.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_sync_guard.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_sync_intent_chain.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_api.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_engine.dart';
 import 'package:cavaa_cashier/features/cashier/presentation/utils/order_tab_sort.dart';
+import 'package:drift/drift.dart' hide isNotNull, isNull;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -649,6 +652,34 @@ void main() {
         'PAY',
       );
     });
+
+    test('OFFLINE_CATCH_UP openbill + server UNPAID + paid queues PAY', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'SERVED',
+          storedIntent: 'PAY',
+          appliedIntent: 'OFFLINE_CATCH_UP',
+          openbillFlag: true,
+          paidAmountLocal: 50000,
+          serverStatusAfterApply: 'UNPAID',
+        ),
+        'PAY',
+      );
+    });
+
+    test('OFFLINE_CATCH_UP openbill + server WAITING + paid queues SERVE_ITEMS', () {
+      expect(
+        OrderSyncIntentChain.resolveNext(
+          localStatus: 'UNPAID',
+          storedIntent: 'PAY',
+          appliedIntent: 'OFFLINE_CATCH_UP',
+          openbillFlag: true,
+          paidAmountLocal: 50000,
+          serverStatusAfterApply: 'OPENBILL_WAITING_ORDER',
+        ),
+        'SERVE_ITEMS',
+      );
+    });
   });
 
   group('OfflineCatchUpPolicy', () {
@@ -749,6 +780,40 @@ void main() {
         await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
           order: order,
           hasDirtyServedDetails: (_) async => false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('openbill UNPAID SERVE_ITEMS with serverId uses step intent not catch-up', () async {
+      final order = _order(
+        clientUuid: 'ob-serve',
+        status: 'UNPAID',
+        syncIntent: 'SERVE_ITEMS',
+        serverId: 55,
+      );
+
+      expect(
+        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+          order: order,
+          hasDirtyServedDetails: (_) async => true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('openbill OPENBILL_WAITING_ORDER SERVE_ITEMS with serverId uses step intent', () async {
+      final order = _order(
+        clientUuid: 'ob-serve-waiting',
+        status: 'OPENBILL_WAITING_ORDER',
+        syncIntent: 'SERVE_ITEMS',
+        serverId: 56,
+      );
+
+      expect(
+        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+          order: order,
+          hasDirtyServedDetails: (_) async => true,
         ),
         isFalse,
       );
@@ -870,6 +935,32 @@ void main() {
       );
     });
 
+    test('openbill UNPAID local ahead of server OPENBILL_WAITING_ORDER needs catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'UNPAID',
+          serverStatus: 'OPENBILL_WAITING_ORDER',
+          openbillFlag: true,
+          hasDirtyServedDetails: false,
+          syncIntent: 'SERVE_ITEMS',
+        ),
+        isTrue,
+      );
+    });
+
+    test('openbill OPENBILL_WAITING_ORDER local with server UNPAID needs catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+          hasDirtyServedDetails: false,
+          syncIntent: 'SERVE_ITEMS',
+        ),
+        isTrue,
+      );
+    });
+
     test('dirty served details still need catch-up', () {
       expect(
         OrderCatchUpSyncPolicy.needsCatchUp(
@@ -919,6 +1010,93 @@ void main() {
           syncIntent: 'PAY',
         ),
         isTrue,
+      );
+    });
+
+    test('cash PAID local ahead of server UNPAID with PAY intent needs catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'PAID',
+          serverStatus: 'UNPAID',
+          openbillFlag: false,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+          syncIntent: 'PAY',
+        ),
+        isTrue,
+      );
+    });
+
+    test('openbill SERVED with PAY intent ahead of server UNPAID needs catch-up', () {
+      expect(
+        OrderCatchUpSyncPolicy.needsCatchUp(
+          localStatus: 'SERVED',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+          syncIntent: 'PAY',
+        ),
+        isTrue,
+      );
+    });
+
+    test('shouldClearSyncDirty false when cash PAID but server still UNPAID', () {
+      expect(
+        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+          syncDirty: true,
+          localStatus: 'PAID',
+          serverStatus: 'UNPAID',
+          openbillFlag: false,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+          syncIntent: 'PAY',
+        ),
+        isFalse,
+      );
+    });
+
+    test('shouldClearSyncDirty false when openbill SERVED but server still UNPAID', () {
+      expect(
+        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+          syncDirty: true,
+          localStatus: 'SERVED',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+          syncIntent: 'PAY',
+        ),
+        isFalse,
+      );
+    });
+
+    test('pre-push heal must not treat local status as server when statuses match falsely', () {
+      // Regression: healMirrorsSyncedWithServer used to default serverStatus to
+      // order.orderStatus, making PAID vs PAID appear synced before push.
+      expect(
+        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+          syncDirty: true,
+          localStatus: 'PAID',
+          serverStatus: 'PAID',
+          openbillFlag: false,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+          syncIntent: 'PAY',
+        ),
+        isTrue,
+      );
+      expect(
+        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+          syncDirty: true,
+          localStatus: 'PAID',
+          serverStatus: 'UNPAID',
+          openbillFlag: false,
+          hasDirtyServedDetails: false,
+          paidAmountLocal: 50000,
+          syncIntent: 'PAY',
+        ),
+        isFalse,
       );
     });
 
@@ -1033,6 +1211,41 @@ void main() {
     });
   });
 
+  group('OrderStageResolver — status after sync apply', () {
+    test('promotes openbill OPENBILL_WAITING_ORDER to UNPAID when server UNPAID', () {
+      expect(
+        OrderStageResolver.resolveStatusAfterSyncApply(
+          localStatus: 'OPENBILL_WAITING_ORDER',
+          serverStatus: 'UNPAID',
+          openbillFlag: true,
+        ),
+        'UNPAID',
+      );
+    });
+
+    test('promotes openbill UNPAID to SERVED when server SERVED', () {
+      expect(
+        OrderStageResolver.resolveStatusAfterSyncApply(
+          localStatus: 'UNPAID',
+          serverStatus: 'SERVED',
+          openbillFlag: true,
+        ),
+        'SERVED',
+      );
+    });
+
+    test('keeps cash local PAID when server UNPAID', () {
+      expect(
+        OrderStageResolver.resolveStatusAfterSyncApply(
+          localStatus: 'PAID',
+          serverStatus: 'UNPAID',
+          openbillFlag: false,
+        ),
+        'PAID',
+      );
+    });
+  });
+
   group('resolveLastPaymentIdForPush', () {
     test('prefers latestPaymentServerId over paymentId', () {
       expect(
@@ -1065,6 +1278,112 @@ void main() {
     });
   });
 
+  group('paymentMethodForPush', () {
+    test('CREATE openbill sends OPENBILL even without paidAmountLocal', () {
+      expect(
+        paymentMethodForPush(
+          openbillFlag: true,
+          effectiveIntent: 'CREATE',
+          storedPaymentMethod: 'CASH',
+          paidAmountLocal: null,
+        ),
+        'OPENBILL',
+      );
+    });
+
+    test('openbill pay catch-up uses actual method not OPENBILL', () {
+      expect(
+        paymentMethodForPush(
+          openbillFlag: true,
+          effectiveIntent: 'OFFLINE_CATCH_UP',
+          storedPaymentMethod: 'manual_tf',
+          paidAmountLocal: 50000,
+        ),
+        'manual_tf',
+      );
+    });
+
+    test('openbill pay with OPENBILL stored method returns null', () {
+      expect(
+        paymentMethodForPush(
+          openbillFlag: true,
+          effectiveIntent: 'OFFLINE_CATCH_UP',
+          storedPaymentMethod: 'OPENBILL',
+          paidAmountLocal: 50000,
+        ),
+        isNull,
+      );
+    });
+
+    test('non-openbill CREATE defaults to CASH when method empty', () {
+      expect(
+        paymentMethodForPush(
+          openbillFlag: false,
+          effectiveIntent: 'CREATE',
+          storedPaymentMethod: null,
+          paidAmountLocal: null,
+        ),
+        'CASH',
+      );
+    });
+
+    test('isOpenbillPayMissingPaymentMethod only for pay not CREATE', () {
+      expect(
+        isOpenbillPayMissingPaymentMethod(
+          openbillFlag: true,
+          effectiveIntent: 'CREATE',
+          paidAmountLocal: 50000,
+          pushPaymentMethod: null,
+        ),
+        isFalse,
+      );
+      expect(
+        isOpenbillPayMissingPaymentMethod(
+          openbillFlag: true,
+          effectiveIntent: 'OFFLINE_CATCH_UP',
+          paidAmountLocal: 50000,
+          pushPaymentMethod: null,
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('resolvePaymentIdForProofUpload', () {
+    test('prefers applied payment_id over mirror ids', () {
+      expect(
+        resolvePaymentIdForProofUpload(
+          appliedPaymentId: 777,
+          latestPaymentServerId: 99,
+          paymentId: 12,
+          fallbackFromOrderPayments: 55,
+        ),
+        777,
+      );
+    });
+
+    test('falls back to mirror then order_payments table', () {
+      expect(
+        resolvePaymentIdForProofUpload(
+          appliedPaymentId: null,
+          latestPaymentServerId: null,
+          paymentId: 12,
+          fallbackFromOrderPayments: 55,
+        ),
+        12,
+      );
+      expect(
+        resolvePaymentIdForProofUpload(
+          appliedPaymentId: null,
+          latestPaymentServerId: null,
+          paymentId: null,
+          fallbackFromOrderPayments: 55,
+        ),
+        55,
+      );
+    });
+  });
+
   group('compareOrdersOldestFirst', () {
     test('sorts by created_at ASC with stable tie-breaker', () {
       final a = {
@@ -1088,6 +1407,55 @@ void main() {
 
       final items = [b, c, a]..sort(compareOrdersOldestFirst);
       expect(items.map((e) => e['client_uuid']).toList(), ['ccc', 'aaa', 'bbb']);
+    });
+  });
+
+  group('BookingOrdersDao.upsertFromServer payment id preserve', () {
+    late CashierDb db;
+    late BookingOrdersDao dao;
+
+    setUp(() {
+      db = CashierDb.forTesting(NativeDatabase.memory());
+      dao = BookingOrdersDao(db);
+    });
+
+    tearDown(() async {
+      await db.close();
+    });
+
+    test('preserves local paymentId when syncDirty and server row has no payment_id', () async {
+      const clientUuid = 'uuid-preserve-pay';
+      await db.into(db.bookingOrders).insert(
+            BookingOrdersCompanion.insert(
+              clientUuid: clientUuid,
+              customerName: 'guest',
+              orderStatus: const Value('SERVED'),
+              serverId: const Value(100),
+              paymentId: const Value(500),
+              latestPaymentServerId: const Value(500),
+              syncDirty: const Value(true),
+              syncIntent: const Value('PAY'),
+              paidAmountLocal: const Value(50000),
+              openbillFlag: const Value(true),
+              discountValue: const Value(0),
+              totalOrderValue: const Value(50000),
+              isPpnActive: const Value(false),
+              paymentFlag: const Value(false),
+              syncVersion: const Value(0),
+            ),
+          );
+
+      await dao.upsertFromServer({
+        'id': 100,
+        'order_status': 'UNPAID',
+        'customer_name': 'guest',
+        'total_order_value': 50000,
+        'sync_version': 1,
+      });
+
+      final row = await dao.getByClientUuid(clientUuid);
+      expect(row?.paymentId, 500);
+      expect(row?.latestPaymentServerId, 500);
     });
   });
 }
