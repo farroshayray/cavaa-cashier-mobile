@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '/core/services/connectivity_status_provider.dart';
@@ -495,11 +496,13 @@ class _EditableItemRow extends StatefulWidget {
 
 class _EditableItemRowState extends State<_EditableItemRow> {
   late final TextEditingController _noteC;
+  late final TextEditingController _qtyC;
 
   @override
   void initState() {
     super.initState();
     _noteC = TextEditingController(text: widget.item.note);
+    _qtyC = TextEditingController(text: widget.item.qty.toString());
   }
 
   @override
@@ -508,12 +511,29 @@ class _EditableItemRowState extends State<_EditableItemRow> {
     if (widget.item.note != _noteC.text) {
       _noteC.text = widget.item.note;
     }
+    if (widget.item.qty.toString() != _qtyC.text) {
+      _qtyC.text = widget.item.qty.toString();
+    }
   }
 
   @override
   void dispose() {
     _noteC.dispose();
+    _qtyC.dispose();
     super.dispose();
+  }
+
+  void _commitQty(EditOrderProvider editVm, int index, int maxQty) {
+    final parsed = int.tryParse(_qtyC.text) ?? 0;
+    final minQty = widget.item.minQty;
+    var next = parsed < minQty ? minQty : parsed;
+    if (maxQty > 0 && next > maxQty) next = maxQty;
+
+    editVm.setQty(index, next, maxQty: maxQty);
+    _qtyC.text = next.toString();
+    _qtyC.selection = TextSelection.fromPosition(
+      TextPosition(offset: _qtyC.text.length),
+    );
   }
 
   @override
@@ -633,17 +653,59 @@ class _EditableItemRowState extends State<_EditableItemRow> {
                   IconButton(
                     onPressed: item.qty <= item.minQty
                         ? null
-                        : () => editVm.setQty(i, item.qty - 1, maxQty: maxQty),
+                        : () {
+                            final next = item.qty - 1;
+                            editVm.setQty(i, next, maxQty: maxQty);
+                            _qtyC.text = next.toString();
+                          },
                     icon: const Icon(Icons.remove_circle_outline_rounded),
                   ),
-                  Text(
-                    '${item.qty}',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  SizedBox(
+                    width: 48,
+                    child: TextField(
+                      controller: _qtyC,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onTap: () {
+                        _qtyC.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: _qtyC.text.length,
+                        );
+                      },
+                      onChanged: (value) {
+                        final parsed = int.tryParse(value) ?? 0;
+                        if (parsed > 0) {
+                          editVm.setQty(i, parsed, maxQty: maxQty);
+                        }
+                      },
+                      onEditingComplete: () {
+                        FocusScope.of(context).unfocus();
+                        _commitQty(editVm, i, maxQty);
+                      },
+                      onTapOutside: (_) {
+                        FocusScope.of(context).unfocus();
+                        _commitQty(editVm, i, maxQty);
+                      },
+                    ),
                   ),
                   IconButton(
                     onPressed: item.qty >= maxQty
                         ? null
-                        : () => editVm.setQty(i, item.qty + 1, maxQty: maxQty),
+                        : () {
+                            final next = item.qty + 1;
+                            editVm.setQty(i, next, maxQty: maxQty);
+                            _qtyC.text = next.toString();
+                          },
                     icon: const Icon(Icons.add_circle_outline_rounded),
                   ),
                   const Spacer(),

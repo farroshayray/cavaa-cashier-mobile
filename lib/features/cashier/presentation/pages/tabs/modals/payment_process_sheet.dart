@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/core/config/env.dart';
 import '/core/utils/open_url.dart';
@@ -252,7 +253,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (!_needsPaidAmountValidation) return false;
     if (!_showCashValidation) return false;
 
-    final paid = _num(_paidCtrl.text);
+    final paid = _moneyInputNum(_paidCtrl.text);
     return paid <= 0;
   }
 
@@ -261,7 +262,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (!_showCashValidation) return false;
 
     final total = _currentBillTotal;
-    final paid = _num(_paidCtrl.text);
+    final paid = _moneyInputNum(_paidCtrl.text);
     return paid > 0 && paid < total;
   }
 
@@ -269,7 +270,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (!_needsPaidAmountValidation) return true;
 
     final total = _currentBillTotal;
-    final paid = _num(_paidCtrl.text);
+    final paid = _moneyInputNum(_paidCtrl.text);
 
     return paid > 0 && paid >= total;
   }
@@ -296,7 +297,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       return;
     }
     final total = _billTotalForPaymentType(type);
-    _paidCtrl.text = total.toStringAsFixed(0);
+    _paidCtrl.text = _formatMoneyInput(total);
     _recalcChange();
   }
 
@@ -369,7 +370,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     setState(() => _showCashValidation = true);
 
     final total = _currentBillTotal;
-    final paid = _num(_paidCtrl.text);
+    final paid = _moneyInputNum(_paidCtrl.text);
 
     if (paid <= 0) {
       ScaffoldMessenger.of(context)
@@ -547,7 +548,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   void _recalcChange() {
     final total = _currentBillTotal;
-    final paid = _num(_paidCtrl.text);
+    final paid = _moneyInputNum(_paidCtrl.text);
     final change = (paid - total);
 
     setState(() {
@@ -637,7 +638,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (!valid) return;
 
     final total = _currentBillTotal;
-    final paid = _needsPaidAmountValidation ? _num(_paidCtrl.text) : total;
+    final paid = _needsPaidAmountValidation ? _moneyInputNum(_paidCtrl.text) : total;
     final change = _needsPaidAmountValidation && (paid - total) > 0 ? (paid - total) : 0;
     final isQrisXendit = _isQrisXenditFromPicker;
 
@@ -904,7 +905,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (!ok) return;
 
     final total = _currentBillTotal;
-    final paid  = _num(_paidCtrl.text);
+    final paid  = _moneyInputNum(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
     setState(() => _printing = true);
@@ -940,7 +941,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   Future<bool> _validateBeforePrint() async {
     final total = _currentBillTotal;
-    final paid  = _num(_paidCtrl.text);
+    final paid  = _moneyInputNum(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
     // kalau metode non-cash, biasanya paidCtrl kosong, tapi kamu mungkin tetap mau allow print
@@ -2293,6 +2294,7 @@ class _PaidAmountCard extends StatelessWidget {
           TextField(
             controller: paidCtrl,
             keyboardType: TextInputType.number,
+            inputFormatters: [_MoneyThousandsInputFormatter()],
             decoration: InputDecoration(
               hintText: 'cth: ${_rupiah(total)}',
               prefixText: 'Rp ',
@@ -2493,6 +2495,7 @@ class _CashInputCard extends StatelessWidget {
           TextField(
             controller: paidCtrl,
             keyboardType: TextInputType.number,
+            inputFormatters: [_MoneyThousandsInputFormatter()],
             decoration: InputDecoration(
               hintText: 'cth: 100000',
               helperText: invalid
@@ -2899,6 +2902,38 @@ String _rupiah(num n) {
     if (idxFromEnd > 1 && idxFromEnd % 3 == 1) buf.write('.');
   }
   return buf.toString();
+}
+
+String _formatMoneyInput(num n) => _rupiah(n);
+
+num _moneyInputNum(String value) {
+  final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digitsOnly.isEmpty) return 0;
+  return num.tryParse(digitsOnly) ?? 0;
+}
+
+class _MoneyThousandsInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    final value = num.tryParse(digitsOnly);
+    if (value == null) {
+      return oldValue;
+    }
+
+    final formatted = _formatMoneyInput(value);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
 }
 
 String _formatPercent(num n) {
