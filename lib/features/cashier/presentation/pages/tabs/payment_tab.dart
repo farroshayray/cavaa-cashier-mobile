@@ -18,14 +18,8 @@ import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
 
-
-
 class PaymentTab extends StatefulWidget {
-  const PaymentTab({
-    super.key,
-    this.focusOrderId,
-    this.focusRequestKey = 0,
-  });
+  const PaymentTab({super.key, this.focusOrderId, this.focusRequestKey = 0});
 
   final int? focusOrderId;
   final int focusRequestKey;
@@ -60,10 +54,7 @@ class _PaymentTabState extends State<PaymentTab> {
 }
 
 class _PaymentView extends StatefulWidget {
-  const _PaymentView({
-    this.focusOrderId,
-    this.focusRequestKey = 0,
-  });
+  const _PaymentView({this.focusOrderId, this.focusRequestKey = 0});
 
   final int? focusOrderId;
   final int focusRequestKey;
@@ -86,7 +77,6 @@ class _PaymentViewState extends State<_PaymentView> {
   ConnectivityStatusProvider? _connectivity;
   PaymentSection? _sectionFilter;
   final Set<PaymentSection> _collapsedPaymentSections = {};
-
 
   @override
   void initState() {
@@ -111,7 +101,6 @@ class _PaymentViewState extends State<_PaymentView> {
       });
     }
   }
-
 
   @override
   void dispose() {
@@ -183,7 +172,6 @@ class _PaymentViewState extends State<_PaymentView> {
     });
   }
 
-
   Future<void> _scanAndSearch() async {
     final code = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
@@ -231,7 +219,8 @@ class _PaymentViewState extends State<_PaymentView> {
       }
     }
 
-    final needsExpand = targetSection != null &&
+    final needsExpand =
+        targetSection != null &&
         _collapsedPaymentSections.contains(targetSection);
 
     if (needsExpand) {
@@ -290,15 +279,24 @@ class _PaymentViewState extends State<_PaymentView> {
     }
   }
 
-  Widget _buildPaymentCard(BuildContext context, Map<String, dynamic> data, int i) {
+  Widget _buildPaymentCard(
+    BuildContext context,
+    Map<String, dynamic> data,
+    int i,
+  ) {
     final id = _toId(data['id']);
     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
+    final syncStatus = (data['sync_status'] ?? '').toString();
+    final canDelete =
+        canDeleteUnpaidOrder(data) &&
+        syncStatus != 'PENDING_DELETE' &&
+        !isOpenBillOrder(data);
 
     final actionKey = id > 0
         ? id
         : ((data['local_id'] ?? '').toString().isNotEmpty
-            ? data['local_id'].toString()
-            : 'idx-$i');
+              ? data['local_id'].toString()
+              : 'idx-$i');
 
     return KeyedSubtree(
       key: ValueKey('payment-$actionKey'),
@@ -314,6 +312,7 @@ class _PaymentViewState extends State<_PaymentView> {
         ),
         child: _PaymentOrderCard(
           data: data,
+          canDelete: canDelete,
           onDetail: () async {
             await _openPaymentOrderDetail(context, data, id);
           },
@@ -339,7 +338,9 @@ class _PaymentViewState extends State<_PaymentView> {
                 child: PaymentProcessSheet(
                   orderId: id,
                   forceOffline: syncStatus == 'STOCK_CONFLICT',
-                  loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
+                  loadDetail: (_) => context
+                      .read<PaymentProvider>()
+                      .getOrderDetailFromListItem(data),
                   ordersRepo: context.read<PaymentProvider>().repo,
                 ),
               ),
@@ -456,7 +457,11 @@ class _PaymentViewState extends State<_PaymentView> {
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
-                      Icon(Icons.inbox_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 56,
+                        color: Colors.black.withOpacity(0.35),
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         hasSearchQuery
@@ -475,7 +480,11 @@ class _PaymentViewState extends State<_PaymentView> {
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
-                      Icon(Icons.filter_list_off_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
+                      Icon(
+                        Icons.filter_list_off_outlined,
+                        size: 56,
+                        color: Colors.black.withOpacity(0.35),
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         'Tidak ada order di kelompok ini.',
@@ -551,7 +560,7 @@ class _SearchBar extends StatelessWidget {
             blurRadius: compact ? 10 : 16,
             offset: Offset(0, compact ? 6 : 10),
             color: Colors.black.withOpacity(0.04),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -575,7 +584,9 @@ class _SearchBar extends StatelessWidget {
           ),
           if (controller.text.isNotEmpty)
             IconButton(
-              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+              visualDensity: compact
+                  ? VisualDensity.compact
+                  : VisualDensity.standard,
               constraints: compact
                   ? const BoxConstraints(minWidth: 32, minHeight: 32)
                   : null,
@@ -584,7 +595,9 @@ class _SearchBar extends StatelessWidget {
               tooltip: 'Reset',
             ),
           IconButton(
-            visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+            visualDensity: compact
+                ? VisualDensity.compact
+                : VisualDensity.standard,
             constraints: compact
                 ? const BoxConstraints(minWidth: 32, minHeight: 32)
                 : null,
@@ -616,12 +629,14 @@ class _SearchBar extends StatelessWidget {
 class _PaymentOrderCard extends StatelessWidget {
   const _PaymentOrderCard({
     required this.data,
+    required this.canDelete,
     required this.onDetail,
     required this.onDelete,
     required this.onProcess,
   });
 
   final Map<String, dynamic> data;
+  final bool canDelete;
   final VoidCallback onDetail;
   final VoidCallback onDelete;
   final VoidCallback onProcess;
@@ -633,7 +648,9 @@ class _PaymentOrderCard extends StatelessWidget {
     final total = _calcDisplayGrandTotal(data);
     final roundingAmount = _calcCashRoundingAmount(data);
     final status = (data['order_status'] ?? '').toString();
-    final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
+    final table =
+        (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-')
+            .toString();
     final orderDateTime = _formatOrderDateTime(data);
 
     final syncMessage = localSyncStatusMessage(data);
@@ -668,7 +685,7 @@ class _PaymentOrderCard extends StatelessWidget {
                 blurRadius: 14,
                 offset: const Offset(0, 8),
                 color: Colors.black.withOpacity(0.04),
-              )
+              ),
             ],
           ),
           child: isMobileLandscape
@@ -719,7 +736,10 @@ class _PaymentOrderCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF3F4F6),
                       borderRadius: BorderRadius.circular(999),
@@ -745,7 +765,10 @@ class _PaymentOrderCard extends StatelessWidget {
                     orderDateTime != null
                         ? 'Meja: $table  |  $orderDateTime'
                         : 'Meja: $table',
-                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
                   ),
                   if (syncMessage != null) ...[
                     const SizedBox(height: 6),
@@ -778,11 +801,20 @@ class _PaymentOrderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Total', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+                  Text(
+                    'Total',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'Rp ${_rupiah(total)}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   if (roundingAmount > 0) ...[
                     const SizedBox(height: 2),
@@ -798,21 +830,31 @@ class _PaymentOrderCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline_rounded),
-              tooltip: 'Hapus',
-            ),
-            const SizedBox(width: 6),
+            if (canDelete) ...[
+              IconButton(
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded),
+                tooltip: 'Hapus',
+              ),
+              const SizedBox(width: 6),
+            ],
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
               ),
               onPressed: onProcess,
-              child: const Text('Process', style: TextStyle(fontWeight: FontWeight.w900)),
+              child: const Text(
+                'Process',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
             ),
           ],
         ),
@@ -845,7 +887,10 @@ class _PaymentOrderCard extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF3F4F6),
                             borderRadius: BorderRadius.circular(999),
@@ -877,7 +922,10 @@ class _PaymentOrderCard extends StatelessWidget {
                     orderDateTime != null
                         ? 'Meja: $table  |  $orderDateTime'
                         : 'Meja: $table',
-                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
                   ),
                   if (syncMessage != null) ...[
                     const SizedBox(height: 6),
@@ -910,12 +958,18 @@ class _PaymentOrderCard extends StatelessWidget {
                     children: [
                       Text(
                         'Total',
-                        style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Rp ${_rupiah(total)}',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                       if (roundingAmount > 0) ...[
                         const SizedBox(height: 2),
@@ -931,20 +985,30 @@ class _PaymentOrderCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(width: 8),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    tooltip: 'Hapus',
-                  ),
-                  const SizedBox(width: 4),
+                  if (canDelete) ...[
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      tooltip: 'Hapus',
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       minimumSize: const Size(0, 40),
                     ),
                     onPressed: onProcess,
@@ -962,7 +1026,12 @@ class _PaymentOrderCard extends StatelessWidget {
     );
   }
 
-  Widget _statusBadge(String orderStatus, String paymentMethod, bool isLocalOnly, String? syncStatus) {
+  Widget _statusBadge(
+    String orderStatus,
+    String paymentMethod,
+    bool isLocalOnly,
+    String? syncStatus,
+  ) {
     if (syncStatus == 'STOCK_CONFLICT') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -974,7 +1043,11 @@ class _PaymentOrderCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
+            Icon(
+              Icons.error_outline_rounded,
+              size: 14,
+              color: Color(0xFFDC2626),
+            ),
             SizedBox(width: 6),
             Text(
               'Konflik Stok',
@@ -996,7 +1069,11 @@ class _PaymentOrderCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Icon(Icons.delete_forever_rounded, size: 14, color: Color(0xFFDC2626)),
+            Icon(
+              Icons.delete_forever_rounded,
+              size: 14,
+              color: Color(0xFFDC2626),
+            ),
             SizedBox(width: 6),
             Text(
               'Pending Delete',
@@ -1070,9 +1147,16 @@ class _PaymentOrderCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 6, height: 6, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -1130,13 +1214,15 @@ num _calcDisplayGrandTotal(Map<String, dynamic> data) {
 }
 
 num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
-  final method = (_toBool(data['openbill_flag']) &&
+  final method =
+      (_toBool(data['openbill_flag']) &&
           ((data['payment_method'] ?? '').toString().trim().isEmpty))
       ? 'OPENBILL'
       : (data['payment_method'] ?? '').toString().toUpperCase();
   if (method != 'CASH') return 0;
 
-  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+  final stored =
+      _pickNum(data, ['cash_rounding_amount']) ??
       _pickNum(data, ['rounding_amount']) ??
       _pickNum(data, ['payment', 'rounding_amount']) ??
       _pickNum(data, ['latest_payment', 'rounding_amount']);
@@ -1170,11 +1256,12 @@ num? _pickNum(Map<String, dynamic> root, List<String> path) {
 }
 
 String? _formatOrderDateTime(Map<String, dynamic> data) {
-  final raw = (data['created_at'] ??
-          data['sort_time'] ??
-          data['updated_at_local'] ??
-          data['cached_at'])
-      ?.toString();
+  final raw =
+      (data['created_at'] ??
+              data['sort_time'] ??
+              data['updated_at_local'] ??
+              data['cached_at'])
+          ?.toString();
   if (raw == null || raw.trim().isEmpty) return null;
 
   final dateTime = DateTime.tryParse(raw)?.toLocal();
@@ -1182,8 +1269,7 @@ String? _formatOrderDateTime(Map<String, dynamic> data) {
 
   final date =
       '${_twoDigits(dateTime.day)}/${_twoDigits(dateTime.month)}/${dateTime.year}';
-  final time =
-      '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+  final time = '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
   return '$date $time';
 }
 
@@ -1199,6 +1285,10 @@ Future<void> _openPaymentOrderDetail(
   final editable = canEditOrder(data);
   final kitchenServed = canMarkKitchenServed(data);
   final syncStatus = (data['sync_status'] ?? '').toString();
+  final deletable =
+      canDeleteUnpaidOrder(data) &&
+      syncStatus != 'PENDING_DELETE' &&
+      !isOpenBillOrder(data);
 
   await showModalBottomSheet(
     context: context,
@@ -1212,7 +1302,7 @@ Future<void> _openPaymentOrderDetail(
         stockConflictMessage: data['last_error']?.toString(),
         loadDetail: (_) => paymentProvider.getOrderDetailFromListItem(data),
         canEdit: editable && syncStatus != 'PENDING_DELETE',
-        canDelete: canDeleteUnpaidOrder(data) && syncStatus != 'PENDING_DELETE',
+        canDelete: deletable,
         canMarkKitchenServed: kitchenServed && syncStatus != 'PENDING_DELETE',
         onMarkKitchenServed: kitchenServed && syncStatus != 'PENDING_DELETE'
             ? (detailId) async {
@@ -1222,7 +1312,9 @@ Future<void> _openPaymentOrderDetail(
                 );
                 final status = (res['status'] ?? '').toString();
                 if (status == 'warning' || status == 'error') {
-                  throw Exception((res['message'] ?? 'Gagal update status').toString());
+                  throw Exception(
+                    (res['message'] ?? 'Gagal update status').toString(),
+                  );
                 }
                 await paymentProvider.load();
                 await processProvider.load();
@@ -1231,7 +1323,9 @@ Future<void> _openPaymentOrderDetail(
         onEdit: editable && syncStatus != 'PENDING_DELETE'
             ? () async {
                 Navigator.of(sheetCtx).pop();
-                final detail = await paymentProvider.getOrderDetailFromListItem(data);
+                final detail = await paymentProvider.getOrderDetailFromListItem(
+                  data,
+                );
                 if (!context.mounted) return;
                 await showModalBottomSheet(
                   context: context,
@@ -1248,7 +1342,7 @@ Future<void> _openPaymentOrderDetail(
                 );
               }
             : null,
-        onDelete: editable && syncStatus != 'PENDING_DELETE'
+        onDelete: deletable
             ? () => confirmDeleteUnpaidOrder(context, data)
             : null,
       ),
