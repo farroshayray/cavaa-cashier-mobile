@@ -11,11 +11,7 @@ import '/features/cashier/presentation/providers/edit_order_provider.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 
 class EditOrderSheet extends StatefulWidget {
-  const EditOrderSheet({
-    super.key,
-    required this.order,
-    required this.onSaved,
-  });
+  const EditOrderSheet({super.key, required this.order, required this.onSaved});
 
   final Map<String, dynamic> order;
   final Future<void> Function() onSaved;
@@ -42,7 +38,9 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
 
   void _syncStockOverlay() {
     if (!mounted || _editVm == null) return;
-    context.read<PurchaseProvider>().setStockOverlay(_editVm!.stockOverlayLines);
+    context.read<PurchaseProvider>().setStockOverlay(
+      _editVm!.stockOverlayLines,
+    );
   }
 
   Future<void> _load() async {
@@ -68,29 +66,34 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
     final editVm = context.read<EditOrderProvider>();
     final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
 
-    final allServedFlow = editVm.allItemsServed;
+    final payNowUnpaidMenuEdit = editVm.isPayNowUnpaidMenuEdit;
+    final allServedFlow = editVm.allItemsServed && !payNowUnpaidMenuEdit;
+    final openbillKitchenOnly = editVm.isOpenbillOrder && !allServedFlow;
     bool? sendToProcess;
 
-    if (!allServedFlow) {
+    if (!allServedFlow && !payNowUnpaidMenuEdit) {
       sendToProcess = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Simpan Perubahan'),
-          content: const Text(
-            'Pilih tindakan setelah menyimpan:\n\n'
-            '• Kirim ke Proses Kitchen — order masuk tab Proses dan langsung terkonfirmasi, '
-            'sehingga kitchen dapat melihat pesanan.\n\n'
-            '• Tetap di Stage Ini — hanya memperbarui menu, status order tidak berubah.',
+          content: Text(
+            openbillKitchenOnly
+                ? 'Order open bill akan diperbarui dan dikirim ke Proses Kitchen.'
+                : 'Pilih tindakan setelah menyimpan:\n\n'
+                      '• Kirim ke Proses Kitchen — order masuk tab Proses dan langsung terkonfirmasi, '
+                      'sehingga kitchen dapat melihat pesanan.\n\n'
+                      '• Tetap di Stage Ini — hanya memperbarui menu, status order tidak berubah.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Batal'),
             ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Tetap di Stage Ini'),
-            ),
+            if (!openbillKitchenOnly)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Tetap di Stage Ini'),
+              ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Kirim ke Proses Kitchen'),
@@ -116,28 +119,32 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
           content: Text(
             allServedFlow
                 ? (editVm.isOpenbillOrder
-                    ? 'Semua item sudah served, order dipindahkan ke pembayaran'
-                    : 'Semua item sudah served, order selesai diproses')
+                      ? 'Semua item sudah served, order dipindahkan ke pembayaran'
+                      : 'Semua item sudah served, order selesai diproses')
+                : payNowUnpaidMenuEdit
+                ? (isOnline
+                      ? 'Order berhasil diperbarui'
+                      : 'Perubahan disimpan, menunggu sinkronisasi')
                 : (sendToProcess == true
-                    ? (isOnline
-                        ? 'Order diperbarui dan dikirim ke Proses Kitchen'
-                        : 'Perubahan disimpan, order akan dikirim ke kitchen saat online')
-                    : (isOnline
-                        ? 'Order berhasil diperbarui'
-                        : 'Perubahan disimpan, menunggu sinkronisasi')),
+                      ? (isOnline
+                            ? 'Order diperbarui dan dikirim ke Proses Kitchen'
+                            : 'Perubahan disimpan, order akan dikirim ke kitchen saat online')
+                      : (isOnline
+                            ? 'Order berhasil diperbarui'
+                            : 'Perubahan disimpan, menunggu sinkronisasi')),
           ),
         ),
       );
     } on StockInsufficientException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
     }
   }
 
@@ -156,7 +163,9 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
       builder: (_) => MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: purchaseVm),
-          ChangeNotifierProvider.value(value: context.read<EditOrderProvider>()),
+          ChangeNotifierProvider.value(
+            value: context.read<EditOrderProvider>(),
+          ),
         ],
         child: const EditProductPickerSheet(),
       ),
@@ -189,20 +198,21 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
           product: product,
           editingItem: item.cart,
           confirmLabel: 'Perbarui Item',
-          onConfirm: ({
-            required qty,
-            required selected,
-            required note,
-            required unitFinalPrice,
-          }) {
-            editVm.updateItemAt(
-              index,
-              qty: qty,
-              selected: selected,
-              note: note,
-              unitFinalPrice: unitFinalPrice,
-            );
-          },
+          onConfirm:
+              ({
+                required qty,
+                required selected,
+                required note,
+                required unitFinalPrice,
+              }) {
+                editVm.updateItemAt(
+                  index,
+                  qty: qty,
+                  selected: selected,
+                  note: note,
+                  unitFinalPrice: unitFinalPrice,
+                );
+              },
         ),
       ),
     );
@@ -240,7 +250,10 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
                   const Expanded(
                     child: Text(
                       'Ubah Order',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   TextButton.icon(
@@ -318,7 +331,9 @@ class _EditOrderSheetState extends State<EditOrderSheet> {
                         vertical: 14,
                       ),
                     ),
-                    onPressed: editVm.isSaving || !editVm.hasItems ? null : _save,
+                    onPressed: editVm.isSaving || !editVm.hasItems
+                        ? null
+                        : _save,
                     child: editVm.isSaving
                         ? const SizedBox(
                             width: 18,
@@ -401,7 +416,10 @@ class _LockedItemRow extends StatelessWidget {
                 ),
                 child: Text(
                   item.lockStatusLabel ?? 'Sudah diproses',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
@@ -589,7 +607,9 @@ class _EditableItemRowState extends State<_EditableItemRow> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: notice.blocking ? Colors.redAccent : Colors.orange,
+                        color: notice.blocking
+                            ? Colors.redAccent
+                            : Colors.orange,
                       ),
                     ),
                   ),

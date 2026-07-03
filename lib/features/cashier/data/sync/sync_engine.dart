@@ -19,8 +19,8 @@ class SyncEngine {
     required this.db,
     MasterCacheService? masterCacheService,
     OrdersApi? ordersApi,
-  })  : masterCacheService = masterCacheService ?? MasterCacheService(db),
-        ordersApi = ordersApi;
+  }) : masterCacheService = masterCacheService ?? MasterCacheService(db),
+       ordersApi = ordersApi;
 
   final BookingOrdersDao bookingOrdersDao;
   final SyncApi syncApi;
@@ -39,7 +39,9 @@ class SyncEngine {
     return dirty.isNotEmpty;
   }
 
-  Future<SyncResult> syncAll({List<String> pullScopes = const ['orders', 'master']}) async {
+  Future<SyncResult> syncAll({
+    List<String> pullScopes = const ['orders', 'master'],
+  }) async {
     if (_isRunning) {
       ApiDebugLog.sync('skipped — sync already running');
       return SyncResult.skipped();
@@ -67,14 +69,15 @@ class SyncEngine {
           );
         }
 
-        final lastToken = await bookingOrdersDao.getSyncMeta('last_sync_token') ?? '';
+        final lastToken =
+            await bookingOrdersDao.getSyncMeta('last_sync_token') ?? '';
         final detailPush = (push['order_details'] as List?) ?? [];
         ApiDebugLog.sync(
           'push payload pass=$pass',
           'booking_orders=${bookingPush.length} '
-          'order_details=${detailPush.length} '
-          'deletes=${(push['deletes'] as List?)?.length ?? 0} '
-          'last_sync_token=${lastToken.isEmpty ? '(empty)' : lastToken}',
+              'order_details=${detailPush.length} '
+              'deletes=${(push['deletes'] as List?)?.length ?? 0} '
+              'last_sync_token=${lastToken.isEmpty ? '(empty)' : lastToken}',
         );
 
         if (bookingPush.isNotEmpty) {
@@ -84,7 +87,8 @@ class SyncEngine {
         final idempotencyKey = _buildBatchIdempotencyKey(push);
         final response = await syncApi.sync(
           payload: {
-            'device_id': await bookingOrdersDao.getSyncMeta('device_id') ?? 'mobile',
+            'device_id':
+                await bookingOrdersDao.getSyncMeta('device_id') ?? 'mobile',
             'last_sync_token': lastToken,
             'push': push,
             'pull_scopes': pass == 0 ? pullScopes : const ['orders'],
@@ -103,7 +107,8 @@ class SyncEngine {
         }
       }
 
-      return lastResult ?? SyncResult(success: true, message: 'nothing to sync');
+      return lastResult ??
+          SyncResult(success: true, message: 'nothing to sync');
     } catch (e, st) {
       ApiDebugLog.syncError('sync failed', '$e\n$st');
       return SyncResult.failed(e.toString());
@@ -119,14 +124,15 @@ class SyncEngine {
     final pulled = response['pulled'];
     int pulledOrders = 0;
     if (pulled is Map && pulled['orders'] is Map) {
-      pulledOrders = ((pulled['orders'] as Map)['booking_orders'] as List?)?.length ?? 0;
+      pulledOrders =
+          ((pulled['orders'] as Map)['booking_orders'] as List?)?.length ?? 0;
     }
 
     ApiDebugLog.sync(
       'response summary',
       'applied=${applied.length} conflicts=${conflicts.length} '
-      'errors=${errors.length} pulled_orders=$pulledOrders '
-      'sync_token=${response['sync_token']}',
+          'errors=${errors.length} pulled_orders=$pulledOrders '
+          'sync_token=${response['sync_token']}',
     );
 
     for (final raw in errors) {
@@ -178,7 +184,8 @@ class SyncEngine {
       );
     }
 
-    final healedCash = await bookingOrdersDao.healStuckCashTerminalSyncIntents();
+    final healedCash = await bookingOrdersDao
+        .healStuckCashTerminalSyncIntents();
     if (healedCash > 0) {
       ApiDebugLog.sync(
         'self-heal',
@@ -199,8 +206,10 @@ class SyncEngine {
       final aIsUpdate = (a.syncIntent ?? '').toUpperCase() == 'UPDATE' ? 0 : 1;
       final bIsUpdate = (b.syncIntent ?? '').toUpperCase() == 'UPDATE' ? 0 : 1;
       if (aIsUpdate != bIsUpdate) return aIsUpdate.compareTo(bIsUpdate);
-      final aTime = a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bTime = b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final aTime =
+          a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime =
+          b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
       return aTime.compareTo(bTime);
     });
     final bookingOrdersPayload = <Map<String, dynamic>>[];
@@ -208,7 +217,9 @@ class SyncEngine {
     final deletes = <Map<String, dynamic>>[];
 
     for (final order in dirtyOrders) {
-      final bundle = await bookingOrdersDao.getBundleByClientUuid(order.clientUuid);
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(
+        order.clientUuid,
+      );
       final useCatchUp = await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
         order: order,
         hasDirtyServedDetails: bookingOrdersDao.hasDirtyServedDetails,
@@ -223,7 +234,8 @@ class SyncEngine {
               serverId: order.serverId,
             );
       final neverSynced = order.serverId == null || order.serverId! <= 0;
-      final offlineCatchUp = useCatchUp ||
+      final offlineCatchUp =
+          useCatchUp ||
           neverSynced ||
           storedIntent.toUpperCase() != effectiveIntent.toUpperCase();
       final guardError = OrderStageSyncGuard.validateIntent(
@@ -272,7 +284,8 @@ class SyncEngine {
         'client_uuid': order.clientUuid,
         // Use createdAt so idempotency key stays stable after failed retries bump updatedAt.
         'client_timestamp':
-            (order.createdAt ?? order.updatedAt ?? DateTime.now()).toIso8601String(),
+            (order.createdAt ?? order.updatedAt ?? DateTime.now())
+                .toIso8601String(),
         'sync_intent': effectiveIntent,
         'stored_sync_intent': storedIntent,
         'sync_version': order.syncVersion,
@@ -296,8 +309,22 @@ class SyncEngine {
             : order.orderStatus,
         'items': items,
         if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
-        if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
+        if (order.changeAmountLocal != null)
+          'change_amount': order.changeAmountLocal,
       };
+
+      if (!order.openbillFlag &&
+          effectiveIntent.toUpperCase() == 'UPDATE' &&
+          order.orderStatus.trim().toUpperCase() == 'UNPAID') {
+        row['menu_only_update'] = true;
+        row['preserve_order_status'] = true;
+        ApiDebugLog.sync('pay-now unpaid edit: push menu-only update', {
+          'client_uuid': order.clientUuid,
+          'server_id': order.serverId,
+          'sync_intent': effectiveIntent,
+          'order_status': order.orderStatus,
+        });
+      }
 
       final lastPaymentId = resolveLastPaymentIdForPush(
         latestPaymentServerId: order.latestPaymentServerId,
@@ -326,8 +353,11 @@ class SyncEngine {
 
       bookingOrdersPayload.add(row);
 
-      final dirtyDetails = await bookingOrdersDao.getDirtyDetailsForOrder(order.clientUuid);
-      final skipDetailPush = effectiveIntent == 'CREATE' ||
+      final dirtyDetails = await bookingOrdersDao.getDirtyDetailsForOrder(
+        order.clientUuid,
+      );
+      final skipDetailPush =
+          effectiveIntent == 'CREATE' ||
           effectiveIntent == 'CONFIRM_OPENBILL' ||
           effectiveIntent == 'OFFLINE_CATCH_UP' ||
           neverSynced;
@@ -361,7 +391,9 @@ class SyncEngine {
     };
   }
 
-  List<Map<String, dynamic>> _buildOrderDetailsCatchUpPayload(BookingOrderBundle? bundle) {
+  List<Map<String, dynamic>> _buildOrderDetailsCatchUpPayload(
+    BookingOrderBundle? bundle,
+  ) {
     if (bundle == null) return [];
 
     return bundle.details.map((detail) {
@@ -378,7 +410,9 @@ class SyncEngine {
     }).toList();
   }
 
-  Future<List<Map<String, dynamic>>> _buildItemsPayload(BookingOrderBundle? bundle) async {
+  Future<List<Map<String, dynamic>>> _buildItemsPayload(
+    BookingOrderBundle? bundle,
+  ) async {
     if (bundle == null) return [];
 
     final items = <Map<String, dynamic>>[];
@@ -473,7 +507,9 @@ class SyncEngine {
         if ((map['local'] == null || map['local'] is! Map) &&
             clientUuid != null &&
             clientUuid.isNotEmpty) {
-          final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+          final bundle = await bookingOrdersDao.getBundleByClientUuid(
+            clientUuid,
+          );
           if (bundle != null) {
             map['local'] = {
               'order_status': bundle.order.orderStatus,
@@ -499,6 +535,14 @@ class SyncEngine {
           clientUuid.isEmpty ||
           message == null ||
           message.isEmpty) {
+        continue;
+      }
+      if (_isServeItemsAlreadyServedError(map)) {
+        await bookingOrdersDao.clearServeItemsSyncState(clientUuid);
+        ApiDebugLog.sync(
+          'self-heal',
+          'cleared SERVE_ITEMS already-served replay for $clientUuid',
+        );
         continue;
       }
       await bookingOrdersDao.markSyncErrorByClientUuid(clientUuid, message);
@@ -547,7 +591,9 @@ class SyncEngine {
           final map = Map<String, dynamic>.from(raw);
           final serverId = _toInt(map['id']);
           if (serverId == null) continue;
-          final deletedAt = DateTime.tryParse((map['deleted_at'] ?? '').toString());
+          final deletedAt = DateTime.tryParse(
+            (map['deleted_at'] ?? '').toString(),
+          );
           await bookingOrdersDao.markDeletedByServerId(
             serverId,
             deletedAt: deletedAt,
@@ -566,14 +612,17 @@ class SyncEngine {
         ApiDebugLog.sync(
           'pull applied',
           'booking_orders=${bookingOrders.length} '
-          'standalone_details=${standaloneDetails.length} '
-          'deleted_orders=${deletedOrders.length} '
-          'order_payments=${orderPayments.length}',
+              'standalone_details=${standaloneDetails.length} '
+              'deleted_orders=${deletedOrders.length} '
+              'order_payments=${orderPayments.length}',
         );
 
         final reconciled = await bookingOrdersDao.reconcileDuplicateMirrors();
         if (reconciled > 0) {
-          ApiDebugLog.sync('self-heal', 'reconciled $reconciled duplicate mirrors after pull');
+          ApiDebugLog.sync(
+            'self-heal',
+            'reconciled $reconciled duplicate mirrors after pull',
+          );
         }
       }
 
@@ -603,6 +652,21 @@ class SyncEngine {
     await _uploadPendingCashierProofs();
   }
 
+  bool _isServeItemsAlreadyServedError(Map<String, dynamic> error) {
+    final intent = (error['sync_intent'] ?? '').toString().toUpperCase();
+    if (intent != 'SERVE_ITEMS') return false;
+
+    final code = (error['code'] ?? '').toString().toUpperCase();
+    if (code == 'DETAIL_ALREADY_SERVED') return true;
+
+    final ids = error['already_served_detail_ids'];
+    if (ids is List && ids.isNotEmpty) return true;
+
+    final message = (error['message'] ?? '').toString().toLowerCase();
+    return message.contains('sudah berstatus served') ||
+        message.contains('already served');
+  }
+
   Future<void> _uploadPendingCashierProofs({
     Map<String, int> appliedPaymentIds = const {},
   }) async {
@@ -621,10 +685,8 @@ class SyncEngine {
         continue;
       }
 
-      final fallbackPaymentId =
-          await bookingOrdersDao.resolveLatestPaymentServerIdForBookingOrder(
-        serverId,
-      );
+      final fallbackPaymentId = await bookingOrdersDao
+          .resolveLatestPaymentServerIdForBookingOrder(serverId);
       final paymentId = resolvePaymentIdForProofUpload(
         appliedPaymentId: appliedPaymentIds[order.clientUuid],
         latestPaymentServerId: order.latestPaymentServerId,
@@ -693,7 +755,9 @@ class SyncEngine {
     final trimmed = customerName.trim();
     final lower = trimmed.toLowerCase();
     if (lower.startsWith('guest-')) {
-      return trimmed.substring(6).trim().isEmpty ? 'guest' : trimmed.substring(6).trim();
+      return trimmed.substring(6).trim().isEmpty
+          ? 'guest'
+          : trimmed.substring(6).trim();
     }
     return trimmed.isEmpty ? 'guest' : trimmed;
   }
@@ -707,7 +771,8 @@ class SyncEngine {
 
     if ((cashierProcessId == null || cashierProcessId <= 0) &&
         status == 'SERVED BY CASHIER') {
-      final fallback = order.cashierProcessId ?? resolveCashierProcessId?.call();
+      final fallback =
+          order.cashierProcessId ?? resolveCashierProcessId?.call();
       if (fallback != null && fallback > 0) {
         cashierProcessId = fallback;
       }
@@ -779,7 +844,8 @@ class SyncResult {
     );
   }
 
-  factory SyncResult.skipped() => SyncResult(success: false, message: 'skipped');
+  factory SyncResult.skipped() =>
+      SyncResult(success: false, message: 'skipped');
 
   factory SyncResult.failed(String message) =>
       SyncResult(success: false, message: message);

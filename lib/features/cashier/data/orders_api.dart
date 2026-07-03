@@ -31,9 +31,7 @@ class OrdersApi {
     throw Exception('Response JSON bukan object');
   }
 
-  Future<Map<String, dynamic>> orderDetail({
-    required int id,
-  }) async {
+  Future<Map<String, dynamic>> orderDetail({required int id}) async {
     final resp = await dio.get('/api/v1/mobile/cashier/order-detail/$id');
 
     final data = resp.data;
@@ -41,14 +39,10 @@ class OrdersApi {
     throw Exception('Response JSON bukan object');
   }
 
-  Future<Map<String, dynamic>> printDetail({
-    required int id,
-  }) async {
+  Future<Map<String, dynamic>> printDetail({required int id}) async {
     final resp = await dio.get(
       '/api/v1/mobile/cashier/print-detail/$id',
-      options: Options(
-        receiveTimeout: AppConfig.printDetailTimeout,
-      ),
+      options: Options(receiveTimeout: AppConfig.printDetailTimeout),
     );
 
     final data = resp.data;
@@ -56,9 +50,7 @@ class OrdersApi {
     throw Exception('Response JSON bukan object');
   }
 
-  Future<Map<String, dynamic>> softDeleteOrder({
-    required int id,
-  }) async {
+  Future<Map<String, dynamic>> softDeleteOrder({required int id}) async {
     final resp = await dio.post('/api/v1/mobile/cashier/delete-order/$id');
 
     final data = resp.data;
@@ -71,12 +63,17 @@ class OrdersApi {
     int? orderTable,
     String? orderName,
     required List<Map<String, dynamic>> items,
+    bool preserveOrderStatus = false,
   }) async {
     final payload = <String, dynamic>{
       'items': items,
       if (orderTable != null) 'order_table': orderTable,
       if (orderName != null && orderName.trim().isNotEmpty)
         'order_name': orderName.trim(),
+      if (preserveOrderStatus) ...{
+        'menu_only_update': true,
+        'preserve_order_status': true,
+      },
     };
 
     late final Response resp;
@@ -120,8 +117,11 @@ class OrdersApi {
       if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
       if (lastPaymentId != null && lastPaymentId.trim().isNotEmpty)
         'last_payment_id': lastPaymentId.trim(),
-      if (cashierProofImagePath != null && cashierProofImagePath.trim().isNotEmpty)
-        'cashier_proof_image': await MultipartFile.fromFile(cashierProofImagePath),
+      if (cashierProofImagePath != null &&
+          cashierProofImagePath.trim().isNotEmpty)
+        'cashier_proof_image': await MultipartFile.fromFile(
+          cashierProofImagePath,
+        ),
     });
 
     final resp = await dio.post(
@@ -146,9 +146,7 @@ class OrdersApi {
   }) async {
     final resp = await dio.post(
       '/api/v1/mobile/cashier/process-order/$id',
-      data: {
-        if (sendToKitchenWaiting) 'send_to_kitchen_waiting': true,
-      },
+      data: {if (sendToKitchenWaiting) 'send_to_kitchen_waiting': true},
     );
     print('response process-order: $resp');
 
@@ -163,9 +161,7 @@ class OrdersApi {
   }) async {
     final resp = await dio.post(
       '/api/v1/mobile/cashier/process-order/$id',
-      data: {
-        'detail_ids': detailIds,
-      },
+      data: {'detail_ids': detailIds},
     );
 
     final data = resp.data;
@@ -179,9 +175,7 @@ class OrdersApi {
   }) async {
     final resp = await dio.post(
       '/api/v1/mobile/cashier/mark-served-by-kitchen/$id',
-      data: {
-        'detail_ids': detailIds,
-      },
+      data: {'detail_ids': detailIds},
     );
 
     final data = resp.data;
@@ -189,10 +183,10 @@ class OrdersApi {
     throw Exception('Response JSON bukan object');
   }
 
-  Future<Map<String, dynamic>> cancelProcessOrder({
-    required int id,
-  }) async {
-    final resp = await dio.post('/api/v1/mobile/cashier/cancel-process-order/$id');
+  Future<Map<String, dynamic>> cancelProcessOrder({required int id}) async {
+    final resp = await dio.post(
+      '/api/v1/mobile/cashier/cancel-process-order/$id',
+    );
 
     final data = resp.data;
     if (data is Map<String, dynamic>) return data;
@@ -205,9 +199,7 @@ class OrdersApi {
   }) async {
     final resp = await dio.post(
       '/api/v1/mobile/cashier/finish-order/$id',
-      data: {
-        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
-      },
+      data: {if (note != null && note.trim().isNotEmpty) 'note': note.trim()},
     );
 
     print('response finish-order: $resp');

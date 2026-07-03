@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import '/core/network/api_debug_log.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '/features/cashier/data/models/checkout_exceptions.dart';
@@ -74,6 +75,9 @@ class EditOrderProvider extends ChangeNotifier {
       openbillFlag ||
       paymentMethodEffective == 'OPENBILL' ||
       orderStatus.startsWith('OPENBILL');
+
+  bool get isPayNowUnpaidMenuEdit =>
+      !isOpenbillOrder && orderStatus.trim().toUpperCase() == 'UNPAID';
 
   bool get allItemsServed {
     if (items.isEmpty) return false;
@@ -162,7 +166,10 @@ class EditOrderProvider extends ChangeNotifier {
 
         final selected = _selectedFromDetail(product, detail);
         final unitPrice = _unitPrice(product, selected);
-        final qty = parseInt(detail['quantity'] ?? detail['qty'], defaultValue: 1);
+        final qty = parseInt(
+          detail['quantity'] ?? detail['qty'],
+          defaultValue: 1,
+        );
 
         items.add(
           EditableCartItem(
@@ -171,8 +178,9 @@ class EditOrderProvider extends ChangeNotifier {
             isLocked: locked,
             lockStatusLabel: lockLabel,
             detailStatusSnapshot: detailStatusOf(detail),
-            kitchenProcessIdSnapshot:
-                locked ? detailKitchenProcessId(detail) : null,
+            kitchenProcessIdSnapshot: locked
+                ? detailKitchenProcessId(detail)
+                : null,
             minQty: locked ? qty : 1,
             cart: CartItem(
               product: product,
@@ -288,7 +296,8 @@ class EditOrderProvider extends ChangeNotifier {
         'qty': item.qty,
         'note': item.note,
         'option_ids': optionIds,
-        if (item.product.promotion != null) 'promo_id': item.product.promotion!.id,
+        if (item.product.promotion != null)
+          'promo_id': item.product.promotion!.id,
       };
     }).toList();
   }
@@ -306,7 +315,32 @@ class EditOrderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (allItemsServed) {
+      final menuOnlyPayNowUnpaid = isPayNowUnpaidMenuEdit;
+      if (menuOnlyPayNowUnpaid && sendToProcess) {
+        ApiDebugLog.sync('pay-now unpaid edit: blocked process transition', {
+          'server_id': serverId,
+          'client_uuid': localId,
+          'status': orderStatus,
+          'openbill_flag': openbillFlag,
+          'is_online': isOnline,
+        });
+        sendToProcess = false;
+      }
+      if (!menuOnlyPayNowUnpaid &&
+          isOpenbillOrder &&
+          !allItemsServed &&
+          !sendToProcess) {
+        ApiDebugLog.sync('openbill edit: forcing kitchen process action', {
+          'server_id': serverId,
+          'client_uuid': localId,
+          'status': orderStatus,
+          'openbill_flag': openbillFlag,
+          'is_online': isOnline,
+        });
+        sendToProcess = true;
+      }
+
+      if (allItemsServed && !menuOnlyPayNowUnpaid) {
         orderStatus = isOpenbillOrder ? 'UNPAID' : 'SERVED';
       }
 
@@ -323,22 +357,37 @@ class EditOrderProvider extends ChangeNotifier {
           orderTable: tableServerId,
           orderName: guestPayloadName(guestDisplayName(customerName)),
           items: payload,
+          preserveOrderStatus: menuOnlyPayNowUnpaid,
         );
 
-        await bookingOrdersDao.upsertFromServer(updated);
+        if (menuOnlyPayNowUnpaid) {
+          ApiDebugLog.sync('pay-now unpaid edit: preserving payment stage', {
+            'server_id': serverId,
+            'client_uuid': localId,
+            'before_status': orderStatus,
+            'server_status': updated['order_status'],
+            'preserved_status': 'UNPAID',
+            'is_online': isOnline,
+          });
+          await bookingOrdersDao.upsertMenuUpdatePreservingLifecycle(
+            updated,
+            preservedStatus: 'UNPAID',
+          );
+        } else {
+          await bookingOrdersDao.upsertFromServer(updated);
+        }
 
-        if (allItemsServed) {
+        if (allItemsServed && !menuOnlyPayNowUnpaid) {
           return _transitionOrderAfterAllServed(updated, isOnline: isOnline);
         }
 
         if (sendToProcess) {
-          return _sendOrderToProcess(
-            isOnline: true,
-            currentSnapshot: updated,
-          );
+          return _sendOrderToProcess(isOnline: true, currentSnapshot: updated);
         }
 
-        return updated;
+        return menuOnlyPayNowUnpaid
+            ? {...updated, 'order_status': 'UNPAID'}
+            : updated;
       }
 
       final effectiveClientUuid = await _resolveClientUuidForOfflineSave(
@@ -355,7 +404,19 @@ class EditOrderProvider extends ChangeNotifier {
         syncIntent: serverId != null && serverId! > 0 ? 'UPDATE' : 'CREATE',
       );
 
-      if (allItemsServed) {
+      if (menuOnlyPayNowUnpaid) {
+        ApiDebugLog.sync('pay-now unpaid edit: queued menu-only update', {
+          'server_id': serverId,
+          'client_uuid': effectiveClientUuid,
+          'status': orderStatus,
+          'is_online': isOnline,
+          'sync_intent': serverId != null && serverId! > 0
+              ? 'UPDATE'
+              : 'CREATE',
+        });
+      }
+
+      if (allItemsServed && !menuOnlyPayNowUnpaid) {
         return _transitionOrderAfterAllServed(snapshot, isOnline: isOnline);
       }
 
@@ -388,11 +449,10 @@ class EditOrderProvider extends ChangeNotifier {
     if (localId != null && localId!.isNotEmpty) return localId!;
 
     final snapshotMap = jsonDecode(snapshotJson) as Map<String, dynamic>;
-    final fromSnapshot = (snapshotMap['local_id'] ??
-            snapshotMap['local_client_uuid'] ??
-            '')
-        .toString()
-        .trim();
+    final fromSnapshot =
+        (snapshotMap['local_id'] ?? snapshotMap['local_client_uuid'] ?? '')
+            .toString()
+            .trim();
     if (fromSnapshot.isNotEmpty) {
       localId = fromSnapshot;
       return fromSnapshot;
@@ -405,7 +465,8 @@ class EditOrderProvider extends ChangeNotifier {
         return existing.clientUuid;
       }
 
-      final details = (snapshotMap['order_details'] as List?)
+      final details =
+          (snapshotMap['order_details'] as List?)
               ?.whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
               .toList() ??
@@ -413,8 +474,8 @@ class EditOrderProvider extends ChangeNotifier {
 
       final uuid = await bookingOrdersDao.ensureEditMirror(
         serverId: serverId!,
-        bookingOrderCode: snapshotMap['booking_order_code']?.toString() ??
-            'ORDER-$serverId',
+        bookingOrderCode:
+            snapshotMap['booking_order_code']?.toString() ?? 'ORDER-$serverId',
         customerName: customerName,
         tableServerId: tableServerId,
         tableNoSnapshot: tableNoSnapshot,
@@ -441,7 +502,9 @@ class EditOrderProvider extends ChangeNotifier {
       final optionRows = <Map<String, dynamic>>[];
       for (final group in item.product.optionGroups) {
         final selectedIds = item.selected[group.id] ?? {};
-        for (final opt in group.items.where((o) => selectedIds.contains(o.id))) {
+        for (final opt in group.items.where(
+          (o) => selectedIds.contains(o.id),
+        )) {
           optionRows.add({
             'option_id': opt.id,
             'partner_product_option_name': opt.name,
@@ -483,10 +546,7 @@ class EditOrderProvider extends ChangeNotifier {
       'ppn': ppnPercent,
       'total_order_value': subtotal,
       'grand_total': grandTotalWithPpn,
-      'table': {
-        'id': tableServerId,
-        'table_no': tableNoSnapshot ?? '-',
-      },
+      'table': {'id': tableServerId, 'table_no': tableNoSnapshot ?? '-'},
       'order_details': orderDetails,
       'pending_update': true,
     };
@@ -497,7 +557,9 @@ class EditOrderProvider extends ChangeNotifier {
       final optionLines = <Map<String, dynamic>>[];
       for (final group in item.product.optionGroups) {
         final selectedIds = item.selected[group.id] ?? {};
-        for (final opt in group.items.where((o) => selectedIds.contains(o.id))) {
+        for (final opt in group.items.where(
+          (o) => selectedIds.contains(o.id),
+        )) {
           optionLines.add({
             'option_server_id': opt.id,
             'option_name_snapshot': opt.name,
@@ -526,7 +588,10 @@ class EditOrderProvider extends ChangeNotifier {
     }).toList();
   }
 
-  Product _productFromDetailSnapshot(Map<String, dynamic> detail, int productId) {
+  Product _productFromDetailSnapshot(
+    Map<String, dynamic> detail,
+    int productId,
+  ) {
     return Product(
       id: productId,
       categoryId: parseInt(detail['category_id']),
@@ -553,7 +618,8 @@ class EditOrderProvider extends ChangeNotifier {
       final map = Map<String, dynamic>.from(raw);
       return OptionItem(
         id: parseInt(map['option_id'] ?? map['id']),
-        name: (map['partner_product_option_name'] ?? map['name'] ?? '-').toString(),
+        name: (map['partner_product_option_name'] ?? map['name'] ?? '-')
+            .toString(),
         price: parseNum(map['price']),
         quantityAvailable: 999,
         alwaysAvailable: true,
@@ -574,7 +640,10 @@ class EditOrderProvider extends ChangeNotifier {
     ];
   }
 
-  Map<int, Set<int>> _selectedFromDetail(Product product, Map<String, dynamic> detail) {
+  Map<int, Set<int>> _selectedFromDetail(
+    Product product,
+    Map<String, dynamic> detail,
+  ) {
     final selected = <int, Set<int>>{};
     final options = (detail['order_detail_options'] as List?) ?? [];
 
@@ -629,16 +698,14 @@ class EditOrderProvider extends ChangeNotifier {
     Map<String, dynamic> order, {
     required bool isOnline,
   }) async {
-    final openbill = isOpenbillOrder ||
+    final openbill =
+        isOpenbillOrder ||
         parseBool(order['openbill_flag']) ||
         order['payment_method']?.toString() == 'OPENBILL' ||
         (order['order_status'] ?? '').toString().startsWith('OPENBILL');
     final fallbackStatus = openbill ? 'UNPAID' : 'SERVED';
     final status = (order['order_status'] ?? fallbackStatus).toString();
-    final normalized = <String, dynamic>{
-      ...order,
-      'order_status': status,
-    };
+    final normalized = <String, dynamic>{...order, 'order_status': status};
 
     orderStatus = status;
 
@@ -668,7 +735,8 @@ class EditOrderProvider extends ChangeNotifier {
   }) async {
     const targetStatus = 'OPENBILL_WAITING_ORDER';
     final clientUuid = (localId ?? '').trim();
-    final syncIntent = clientUuid.isNotEmpty &&
+    final syncIntent =
+        clientUuid.isNotEmpty &&
             await bookingOrdersDao.hasDirtyServedDetails(clientUuid)
         ? 'OFFLINE_CATCH_UP'
         : 'CONFIRM_OPENBILL';

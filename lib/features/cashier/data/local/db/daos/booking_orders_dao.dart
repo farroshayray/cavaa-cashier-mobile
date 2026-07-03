@@ -64,7 +64,9 @@ class BookingOrdersDao {
     final now = DateTime.now();
     final status = openbillFlag ? 'OPENBILL_CONFIRMATION' : 'DRAFT';
 
-    await db.into(db.bookingOrders).insert(
+    await db
+        .into(db.bookingOrders)
+        .insert(
           BookingOrdersCompanion.insert(
             clientUuid: clientUuid,
             customerName: customerName,
@@ -104,7 +106,9 @@ class BookingOrdersDao {
     final detailUuid = _uuid.v4();
     final now = DateTime.now();
 
-    await db.into(db.orderDetails).insert(
+    await db
+        .into(db.orderDetails)
+        .insert(
           OrderDetailsCompanion.insert(
             clientDetailUuid: detailUuid,
             bookingOrderClientUuid: bookingOrderClientUuid,
@@ -124,14 +128,18 @@ class BookingOrdersDao {
         );
 
     for (final opt in options) {
-      await db.into(db.orderDetailOptions).insert(
+      await db
+          .into(db.orderDetailOptions)
+          .insert(
             OrderDetailOptionsCompanion.insert(
               clientOptionUuid: _uuid.v4(),
               orderDetailClientUuid: detailUuid,
               optionId: opt['option_id'] as int,
               parentName: Value(opt['parent_name']?.toString()),
-              partnerProductOptionName:
-                  Value(opt['name']?.toString() ?? opt['partner_product_option_name']?.toString()),
+              partnerProductOptionName: Value(
+                opt['name']?.toString() ??
+                    opt['partner_product_option_name']?.toString(),
+              ),
               price: Value((opt['price'] as num?)?.toDouble() ?? 0),
               createdAt: Value(now),
               updatedAt: Value(now),
@@ -142,7 +150,11 @@ class BookingOrdersDao {
     await _markOrderDirty(bookingOrderClientUuid, 'CREATE');
   }
 
-  Future<void> markIntent(String clientUuid, String syncIntent, {Map<String, dynamic>? extras}) async {
+  Future<void> markIntent(
+    String clientUuid,
+    String syncIntent, {
+    Map<String, dynamic>? extras,
+  }) async {
     Value<String?> localFilePaths = const Value.absent();
     if (extras?['local_file_paths'] is Map) {
       final existing = await getByClientUuid(clientUuid);
@@ -154,7 +166,9 @@ class BookingOrdersDao {
           merged.addAll(Map<String, dynamic>.from(decoded));
         }
       }
-      merged.addAll(Map<String, dynamic>.from(extras!['local_file_paths'] as Map));
+      merged.addAll(
+        Map<String, dynamic>.from(extras!['local_file_paths'] as Map),
+      );
       localFilePaths = Value(jsonEncode(merged));
     }
 
@@ -177,8 +191,9 @@ class BookingOrdersDao {
       localFilePathsJson: localFilePaths,
     );
 
-    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
-        .write(companion);
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.clientUuid.equals(clientUuid))).write(companion);
   }
 
   Future<String?> persistCashierProofImage({
@@ -227,8 +242,9 @@ class BookingOrdersDao {
     }
     merged.remove('cashier_proof');
 
-    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
-        .write(
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.clientUuid.equals(clientUuid))).write(
       BookingOrdersCompanion(
         localFilePathsJson: Value(merged.isEmpty ? null : jsonEncode(merged)),
         updatedAt: Value(DateTime.now()),
@@ -237,10 +253,11 @@ class BookingOrdersDao {
   }
 
   Future<List<BookingOrder>> getOrdersWithPendingCashierProof() async {
-    final rows = await (db.select(db.bookingOrders)
-          ..where((t) => t.deletedAt.isNull())
-          ..where((t) => t.localFilePathsJson.isNotNull()))
-        .get();
+    final rows =
+        await (db.select(db.bookingOrders)
+              ..where((t) => t.deletedAt.isNull())
+              ..where((t) => t.localFilePathsJson.isNotNull()))
+            .get();
 
     return rows.where((row) {
       final path = readCashierProofPath(row);
@@ -255,12 +272,15 @@ class BookingOrdersDao {
   ) async {
     if (bookingOrderServerId <= 0) return null;
 
-    final rows = await (db.select(db.orderPayments)
-          ..where((t) => t.bookingOrderServerId.equals(bookingOrderServerId))
-          ..where((t) => t.paymentStatus.isIn(['PAID', 'PENDING']))
-          ..where((t) => t.serverId.isBiggerThanValue(0))
-          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
-        .get();
+    final rows =
+        await (db.select(db.orderPayments)
+              ..where(
+                (t) => t.bookingOrderServerId.equals(bookingOrderServerId),
+              )
+              ..where((t) => t.paymentStatus.isIn(['PAID', 'PENDING']))
+              ..where((t) => t.serverId.isBiggerThanValue(0))
+              ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+            .get();
 
     if (rows.isEmpty) return null;
     return rows.first.serverId;
@@ -299,9 +319,9 @@ class BookingOrdersDao {
       existing = await getByClientUuid(localUuid);
       if (existing != null) {
         if (existing.serverId == null) {
-          await (db.update(db.bookingOrders)
-                ..where((t) => t.clientUuid.equals(localUuid)))
-              .write(
+          await (db.update(
+            db.bookingOrders,
+          )..where((t) => t.clientUuid.equals(localUuid))).write(
             BookingOrdersCompanion(
               serverId: Value(serverId),
               updatedAt: Value(DateTime.now()),
@@ -314,19 +334,20 @@ class BookingOrdersDao {
 
     final code = order['booking_order_code']?.toString().trim();
     if (code != null && code.isNotEmpty) {
-      final byCode = await (db.select(db.bookingOrders)
-            ..where((t) => t.bookingOrderCode.equals(code))
-            ..where((t) => t.deletedAt.isNull()))
-          .get();
+      final byCode =
+          await (db.select(db.bookingOrders)
+                ..where((t) => t.bookingOrderCode.equals(code))
+                ..where((t) => t.deletedAt.isNull()))
+              .get();
       if (byCode.isNotEmpty) {
         final keeper = byCode.firstWhere(
           (row) => row.clientUuid == localUuid,
           orElse: () => byCode.first,
         );
         if (keeper.serverId == null) {
-          await (db.update(db.bookingOrders)
-                ..where((t) => t.clientUuid.equals(keeper.clientUuid)))
-              .write(
+          await (db.update(
+            db.bookingOrders,
+          )..where((t) => t.clientUuid.equals(keeper.clientUuid))).write(
             BookingOrdersCompanion(
               serverId: Value(serverId),
               updatedAt: Value(DateTime.now()),
@@ -345,9 +366,9 @@ class BookingOrdersDao {
       'created_at': order['created_at'],
     });
     if (offlineMatch != null) {
-      await (db.update(db.bookingOrders)
-            ..where((t) => t.clientUuid.equals(offlineMatch.clientUuid)))
-          .write(
+      await (db.update(
+        db.bookingOrders,
+      )..where((t) => t.clientUuid.equals(offlineMatch.clientUuid))).write(
         BookingOrdersCompanion(
           serverId: Value(serverId),
           bookingOrderCode: order['booking_order_code'] != null
@@ -365,7 +386,9 @@ class BookingOrdersDao {
         ? order['table']['table_no']?.toString()
         : order['table_no']?.toString();
 
-    await db.into(db.bookingOrders).insert(
+    await db
+        .into(db.bookingOrders)
+        .insert(
           BookingOrdersCompanion.insert(
             clientUuid: clientUuid,
             customerName: order['customer_name']?.toString() ?? 'guest',
@@ -379,8 +402,12 @@ class BookingOrdersDao {
             totalOrderValue: Value(_toDouble(order['total_order_value'])),
             ppn: Value(_toDouble(order['ppn'])),
             isPpnActive: Value(_toBool(order['is_ppn_active'])),
-            paidAmountLocal: Value(_toDouble(order['paid_amount_local'] ?? order['paid_amount'])),
-            changeAmountLocal: Value(_toDouble(order['change_amount_local'] ?? order['change_amount'])),
+            paidAmountLocal: Value(
+              _toDouble(order['paid_amount_local'] ?? order['paid_amount']),
+            ),
+            changeAmountLocal: Value(
+              _toDouble(order['change_amount_local'] ?? order['change_amount']),
+            ),
             syncDirty: const Value(false),
             createdAt: Value(_parseDate(order['created_at']) ?? now),
             updatedAt: Value(now),
@@ -409,30 +436,34 @@ class BookingOrdersDao {
           merged.addAll(Map<String, dynamic>.from(decoded));
         }
       }
-      merged.addAll(Map<String, dynamic>.from(extras!['local_file_paths'] as Map));
+      merged.addAll(
+        Map<String, dynamic>.from(extras!['local_file_paths'] as Map),
+      );
       localFilePaths = Value(jsonEncode(merged));
     }
 
     final now = DateTime.now();
-    await (db.update(db.bookingOrders)..where((t) => t.serverId.equals(serverId))).write(
-          BookingOrdersCompanion(
-            orderStatus: Value(orderStatus),
-            updatedAt: Value(now),
-            syncDirty: Value(syncDirty),
-            syncIntent: Value(syncIntent),
-            syncError: syncDirty ? const Value.absent() : const Value(null),
-            paidAmountLocal: extras?['paid_amount'] != null
-                ? Value(_toDouble(extras!['paid_amount']))
-                : const Value.absent(),
-            changeAmountLocal: extras?['change_amount'] != null
-                ? Value(_toDouble(extras!['change_amount']))
-                : const Value.absent(),
-            paymentMethod: extras?['payment_method'] != null
-                ? Value(extras!['payment_method'].toString())
-                : const Value.absent(),
-            localFilePathsJson: localFilePaths,
-          ),
-        );
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.serverId.equals(serverId))).write(
+      BookingOrdersCompanion(
+        orderStatus: Value(orderStatus),
+        updatedAt: Value(now),
+        syncDirty: Value(syncDirty),
+        syncIntent: Value(syncIntent),
+        syncError: syncDirty ? const Value.absent() : const Value(null),
+        paidAmountLocal: extras?['paid_amount'] != null
+            ? Value(_toDouble(extras!['paid_amount']))
+            : const Value.absent(),
+        changeAmountLocal: extras?['change_amount'] != null
+            ? Value(_toDouble(extras!['change_amount']))
+            : const Value.absent(),
+        paymentMethod: extras?['payment_method'] != null
+            ? Value(extras!['payment_method'].toString())
+            : const Value.absent(),
+        localFilePathsJson: localFilePaths,
+      ),
+    );
     return true;
   }
 
@@ -443,7 +474,10 @@ class BookingOrdersDao {
     );
   }
 
-  Future<List<Map<String, dynamic>>> getProcessTabOrders({String? query, int? employeeId}) {
+  Future<List<Map<String, dynamic>>> getProcessTabOrders({
+    String? query,
+    int? employeeId,
+  }) {
     return _queryTabOrders(
       statuses: const [
         'PROCESSED',
@@ -459,10 +493,11 @@ class BookingOrdersDao {
   Future<List<Map<String, dynamic>>> getDoneTabOrders({String? query}) async {
     final now = DateTime.now();
 
-    final rows = await (db.select(db.bookingOrders)
-          ..where((t) => t.orderStatus.equals('SERVED'))
-          ..where((t) => t.deletedAt.isNull()))
-        .get();
+    final rows =
+        await (db.select(db.bookingOrders)
+              ..where((t) => t.orderStatus.equals('SERVED'))
+              ..where((t) => t.deletedAt.isNull()))
+            .get();
 
     final todayRows = rows.where((row) {
       final updated = row.updatedAt;
@@ -474,13 +509,16 @@ class BookingOrdersDao {
   }
 
   Future<List<Map<String, dynamic>>> getDirtyOrders() async {
-    final rows = await (db.select(db.bookingOrders)..where((t) => t.syncDirty.equals(true)))
-        .get();
+    final rows = await (db.select(
+      db.bookingOrders,
+    )..where((t) => t.syncDirty.equals(true))).get();
     return rows.map(OrderMirrorMapper.orderToUiMap).toList();
   }
 
   Future<List<BookingOrder>> getAllDirtyBookingOrders() {
-    return (db.select(db.bookingOrders)..where((t) => t.syncDirty.equals(true))).get();
+    return (db.select(
+      db.bookingOrders,
+    )..where((t) => t.syncDirty.equals(true))).get();
   }
 
   Future<List<OrderDetail>> getDirtyDetailsForOrder(String clientUuid) {
@@ -491,30 +529,34 @@ class BookingOrdersDao {
   }
 
   Future<BookingOrder?> getByClientUuid(String clientUuid) {
-    return (db.select(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
-        .getSingleOrNull();
+    return (db.select(
+      db.bookingOrders,
+    )..where((t) => t.clientUuid.equals(clientUuid))).getSingleOrNull();
   }
 
   Future<BookingOrder?> getByServerId(int serverId) {
-    return (db.select(db.bookingOrders)..where((t) => t.serverId.equals(serverId)))
-        .getSingleOrNull();
+    return (db.select(
+      db.bookingOrders,
+    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
   }
 
   Future<BookingOrderBundle?> getBundleByClientUuid(String clientUuid) async {
     final order = await getByClientUuid(clientUuid);
     if (order == null) return null;
 
-    final details = await (db.select(db.orderDetails)
-          ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
-        .get();
+    final details = await (db.select(
+      db.orderDetails,
+    )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
 
     final dedupedDetails = _dedupeDetailRows(details);
 
     final optionsByDetailUuid = <String, List<OrderDetailOption>>{};
     for (final detail in dedupedDetails) {
-      final opts = await (db.select(db.orderDetailOptions)
-            ..where((t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid)))
-          .get();
+      final opts =
+          await (db.select(db.orderDetailOptions)..where(
+                (t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid),
+              ))
+              .get();
       optionsByDetailUuid[detail.clientDetailUuid] = opts;
     }
 
@@ -535,7 +577,8 @@ class BookingOrdersDao {
     final now = DateTime.now();
     final serverStatus = row['order_status']?.toString() ?? 'UNPAID';
 
-    final localAhead = existing != null &&
+    final localAhead =
+        existing != null &&
         OrderStageRank.isLocalAheadOfServer(
           localStatus: existing.orderStatus,
           serverStatus: serverStatus,
@@ -543,19 +586,22 @@ class BookingOrdersDao {
           syncIntent: existing.syncIntent,
           paidAmountLocal: existing.paidAmountLocal,
         );
-    final terminalMatch = existing != null &&
+    final terminalMatch =
+        existing != null &&
         existing.orderStatus.toUpperCase() == serverStatus.toUpperCase() &&
         OrderStageRank.isTerminalStatus(serverStatus);
-    final preserveLocalLifecycle = existing != null &&
-        (existing.syncDirty || localAhead);
-    final clearSyncFlags = existing != null &&
+    final preserveLocalLifecycle =
+        existing != null && (existing.syncDirty || localAhead);
+    final clearSyncFlags =
+        existing != null &&
         await shouldClearSyncDirtyFlag(
           local: existing,
           serverStatus: serverStatus,
         );
 
     final serverPaymentId = _toIntOrNull(row['payment_id']);
-    final preserveLocalPaymentIds = preserveLocalLifecycle &&
+    final preserveLocalPaymentIds =
+        preserveLocalLifecycle &&
         (serverPaymentId == null || serverPaymentId <= 0) &&
         ((existing!.paymentId != null && existing.paymentId! > 0) ||
             (existing.latestPaymentServerId != null &&
@@ -574,7 +620,9 @@ class BookingOrdersDao {
       partnerId: Value(_toIntOrNull(row['partner_id'])),
       partnerName: Value(row['partner_name']?.toString()),
       tableId: Value(_toIntOrNull(row['table_id'])),
-      tableNo: Value(row['table_no']?.toString() ?? row['table']?['table_no']?.toString()),
+      tableNo: Value(
+        row['table_no']?.toString() ?? row['table']?['table_no']?.toString(),
+      ),
       customerId: Value(_toIntOrNull(row['customer_id'])),
       employeeOrderId: Value(_toIntOrNull(row['employee_order_id'])),
       orderBy: Value(row['order_by']?.toString()),
@@ -585,7 +633,9 @@ class BookingOrdersDao {
       paymentMethod: preserveLocalLifecycle && existing!.paymentMethod != null
           ? Value(existing.paymentMethod)
           : Value(row['payment_method']?.toString()),
-      openbillFlag: Value(_toBool(row['openbill_flag']) || (existing?.openbillFlag ?? false)),
+      openbillFlag: Value(
+        _toBool(row['openbill_flag']) || (existing?.openbillFlag ?? false),
+      ),
       discountId: Value(_toIntOrNull(row['discount_id'])),
       discountValue: Value(_toDouble(row['discount_value'])),
       totalOrderValue: Value(_toDouble(row['total_order_value'])),
@@ -599,35 +649,36 @@ class BookingOrdersDao {
       latestPaymentServerId: Value(resolvedLatestPaymentServerId),
       paymentFlag: Value(_toBool(row['payment_flag'])),
       cashRoundingAmount: Value(_toDouble(row['cash_rounding_amount'])),
-      cashRoundingUnit: Value(
-        await _resolveCashRoundingUnitForRow(row),
-      ),
+      cashRoundingUnit: Value(await _resolveCashRoundingUnitForRow(row)),
       wifiSnapshotJson: Value(
-        _resolveWifiSnapshotJsonForRow(
-          row,
-          existing: existing,
-        ),
+        _resolveWifiSnapshotJsonForRow(row, existing: existing),
       ),
-      paymentRequestJson:
-          Value(row['payment_request'] != null ? jsonEncode(row['payment_request']) : null),
-      latestPaymentJson:
-          Value(row['latest_payment'] != null ? jsonEncode(row['latest_payment']) : null),
+      paymentRequestJson: Value(
+        row['payment_request'] != null
+            ? jsonEncode(row['payment_request'])
+            : null,
+      ),
+      latestPaymentJson: Value(
+        row['latest_payment'] != null
+            ? jsonEncode(row['latest_payment'])
+            : null,
+      ),
       syncVersion: Value(_toInt(row['sync_version'])),
       syncDirty: clearSyncFlags
           ? const Value(false)
           : preserveLocalLifecycle
-              ? Value(existing!.syncDirty)
-              : const Value(false),
+          ? Value(existing!.syncDirty)
+          : const Value(false),
       syncIntent: clearSyncFlags
           ? const Value(null)
           : preserveLocalLifecycle
-              ? Value(existing!.syncIntent)
-              : const Value(null),
+          ? Value(existing!.syncIntent)
+          : const Value(null),
       syncError: clearSyncFlags
           ? const Value(null)
           : preserveLocalLifecycle && existing!.syncError != null
-              ? Value(existing.syncError)
-              : const Value(null),
+          ? Value(existing.syncError)
+          : const Value(null),
       paidAmountLocal: preserveLocalLifecycle
           ? Value(existing!.paidAmountLocal)
           : const Value.absent(),
@@ -674,6 +725,16 @@ class BookingOrdersDao {
     }
   }
 
+  Future<void> upsertMenuUpdatePreservingLifecycle(
+    Map<String, dynamic> row, {
+    required String preservedStatus,
+  }) async {
+    final normalizedStatus = preservedStatus.trim().isEmpty
+        ? 'UNPAID'
+        : preservedStatus.trim().toUpperCase();
+    await upsertFromServer({...row, 'order_status': normalizedStatus});
+  }
+
   /// Upsert satu baris order_details dari pull (tanpa parent row di batch yang sama).
   Future<void> upsertDetailFromServerRow(Map<String, dynamic> row) async {
     final bookingOrderServerId = _toIntOrNull(row['booking_order_id']);
@@ -686,22 +747,31 @@ class BookingOrdersDao {
     await _deduplicateOrderDetailsByServerId(parent.clientUuid);
   }
 
-  Future<void> markSyncErrorByClientUuid(String clientUuid, String message) async {
+  Future<void> markSyncErrorByClientUuid(
+    String clientUuid,
+    String message,
+  ) async {
     if (clientUuid.isEmpty) return;
 
-    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
-          BookingOrdersCompanion(
-            syncError: Value(message),
-          ),
-        );
+    await (db.update(db.bookingOrders)
+          ..where((t) => t.clientUuid.equals(clientUuid)))
+        .write(BookingOrdersCompanion(syncError: Value(message)));
+  }
+
+  Future<void> clearServeItemsSyncState(String clientUuid) async {
+    if (clientUuid.isEmpty) return;
+
+    await _clearDetailSyncDirty(clientUuid);
+    await _clearMirrorSyncState(clientUuid, clearDetails: false);
   }
 
   /// Sets header dirty + SERVE_ITEMS when served details are still pending sync.
   Future<int> ensureHeaderDirtyForPendingDetails() async {
-    final rows = await (db.select(db.bookingOrders)
-          ..where((t) => t.deletedAt.isNull())
-          ..where((t) => t.syncDirty.equals(false)))
-        .get();
+    final rows =
+        await (db.select(db.bookingOrders)
+              ..where((t) => t.deletedAt.isNull())
+              ..where((t) => t.syncDirty.equals(false)))
+            .get();
 
     var fixed = 0;
     for (final order in rows) {
@@ -712,9 +782,12 @@ class BookingOrdersDao {
         'SERVE_ITEMS',
         extras: {
           'order_status': order.orderStatus,
-          if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
-          if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
-          if (order.paymentMethod != null) 'payment_method': order.paymentMethod,
+          if (order.paidAmountLocal != null)
+            'paid_amount': order.paidAmountLocal,
+          if (order.changeAmountLocal != null)
+            'change_amount': order.changeAmountLocal,
+          if (order.paymentMethod != null)
+            'payment_method': order.paymentMethod,
         },
       );
       fixed++;
@@ -782,7 +855,8 @@ class BookingOrdersDao {
 
       await _clearMirrorSyncState(
         order.clientUuid,
-        clearDetails: !order.openbillFlag &&
+        clearDetails:
+            !order.openbillFlag &&
             OrderStageRank.isTerminalStatus(order.orderStatus),
       );
       healed++;
@@ -799,12 +873,13 @@ class BookingOrdersDao {
     for (final order in dirty) {
       if (order.serverId != null && order.serverId! > 0) continue;
 
-      final siblings = await (db.select(db.bookingOrders)
-            ..where((t) => t.deletedAt.isNull())
-            ..where((t) => t.serverId.isNotNull())
-            ..where((t) => t.customerName.equals(order.customerName))
-            ..where((t) => t.openbillFlag.equals(order.openbillFlag)))
-          .get();
+      final siblings =
+          await (db.select(db.bookingOrders)
+                ..where((t) => t.deletedAt.isNull())
+                ..where((t) => t.serverId.isNotNull())
+                ..where((t) => t.customerName.equals(order.customerName))
+                ..where((t) => t.openbillFlag.equals(order.openbillFlag)))
+              .get();
 
       BookingOrder? keeper;
       for (final sibling in siblings) {
@@ -818,9 +893,9 @@ class BookingOrdersDao {
       }
       if (keeper == null) continue;
 
-      await (db.update(db.bookingOrders)
-            ..where((t) => t.clientUuid.equals(order.clientUuid)))
-          .write(
+      await (db.update(
+        db.bookingOrders,
+      )..where((t) => t.clientUuid.equals(order.clientUuid))).write(
         BookingOrdersCompanion(
           serverId: Value(keeper.serverId),
           bookingOrderCode: keeper.bookingOrderCode != null
@@ -843,9 +918,9 @@ class BookingOrdersDao {
 
     for (final order in dirty) {
       if (_isStuckCashierOpenbillProcessError(order)) {
-        await (db.update(db.bookingOrders)
-              ..where((t) => t.clientUuid.equals(order.clientUuid)))
-            .write(
+        await (db.update(
+          db.bookingOrders,
+        )..where((t) => t.clientUuid.equals(order.clientUuid))).write(
           const BookingOrdersCompanion(
             syncIntent: Value('CONFIRM_OPENBILL'),
             syncError: Value(null),
@@ -880,9 +955,9 @@ class BookingOrdersDao {
         continue;
       }
 
-      await (db.update(db.bookingOrders)
-            ..where((t) => t.clientUuid.equals(order.clientUuid)))
-          .write(
+      await (db.update(
+        db.bookingOrders,
+      )..where((t) => t.clientUuid.equals(order.clientUuid))).write(
         const BookingOrdersCompanion(
           syncDirty: Value(false),
           syncIntent: Value(null),
@@ -958,39 +1033,51 @@ class BookingOrdersDao {
     if (order.orderStatus.trim().toUpperCase() != 'OPENBILL_WAITING_ORDER') {
       return false;
     }
-    if ((order.syncIntent ?? '').trim().toUpperCase() != 'PROCESS') return false;
+    if ((order.syncIntent ?? '').trim().toUpperCase() != 'PROCESS')
+      return false;
     return order.serverId != null && order.serverId! > 0;
   }
 
   bool _isStuckCashierOpenbillProcessError(BookingOrder order) {
     if (!order.openbillFlag) return false;
     if ((order.orderBy ?? '').trim().toUpperCase() != 'CASHIER') return false;
-    if ((order.syncIntent ?? '').trim().toUpperCase() != 'PROCESS') return false;
+    if ((order.syncIntent ?? '').trim().toUpperCase() != 'PROCESS')
+      return false;
 
     final error = (order.syncError ?? '').toUpperCase();
     return error.contains('PROCESS') && error.contains('OPENBILL_CONFIRMATION');
   }
 
-  Future<void> markDeletedByServerId(int serverId, {DateTime? deletedAt}) async {
-    await (db.update(db.bookingOrders)..where((t) => t.serverId.equals(serverId))).write(
-          BookingOrdersCompanion(
-            deletedAt: Value(deletedAt ?? DateTime.now()),
-            syncDirty: const Value(false),
-            syncError: const Value(null),
-            syncIntent: const Value(null),
-          ),
-        );
+  Future<void> markDeletedByServerId(
+    int serverId, {
+    DateTime? deletedAt,
+  }) async {
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.serverId.equals(serverId))).write(
+      BookingOrdersCompanion(
+        deletedAt: Value(deletedAt ?? DateTime.now()),
+        syncDirty: const Value(false),
+        syncError: const Value(null),
+        syncIntent: const Value(null),
+      ),
+    );
   }
 
-  Future<void> markDeletedByClientUuid(String clientUuid, {DateTime? deletedAt}) async {
-    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
-          BookingOrdersCompanion(
-            deletedAt: Value(deletedAt ?? DateTime.now()),
-            syncDirty: const Value(false),
-            syncError: const Value(null),
-            syncIntent: const Value(null),
-          ),
-        );
+  Future<void> markDeletedByClientUuid(
+    String clientUuid, {
+    DateTime? deletedAt,
+  }) async {
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.clientUuid.equals(clientUuid))).write(
+      BookingOrdersCompanion(
+        deletedAt: Value(deletedAt ?? DateTime.now()),
+        syncDirty: const Value(false),
+        syncError: const Value(null),
+        syncIntent: const Value(null),
+      ),
+    );
   }
 
   Future<void> _mergeDetailsIntoKeeper({
@@ -999,9 +1086,9 @@ class BookingOrdersDao {
   }) async {
     if (fromClientUuid == toClientUuid) return;
 
-    await (db.update(db.orderDetails)
-          ..where((t) => t.bookingOrderClientUuid.equals(fromClientUuid)))
-        .write(
+    await (db.update(
+      db.orderDetails,
+    )..where((t) => t.bookingOrderClientUuid.equals(fromClientUuid))).write(
       OrderDetailsCompanion(
         bookingOrderClientUuid: Value(toClientUuid),
         updatedAt: Value(DateTime.now()),
@@ -1011,21 +1098,24 @@ class BookingOrdersDao {
 
   Future<void> removeOrderMirrorByClientUuid(String clientUuid) async {
     await db.transaction(() async {
-      final details = await (db.select(db.orderDetails)
-            ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
-          .get();
+      final details = await (db.select(
+        db.orderDetails,
+      )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
 
       for (final detail in details) {
-        await (db.delete(db.orderDetailOptions)
-              ..where((t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid)))
+        await (db.delete(db.orderDetailOptions)..where(
+              (t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid),
+            ))
             .go();
       }
 
-      await (db.delete(db.orderDetails)
-            ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
-          .go();
+      await (db.delete(
+        db.orderDetails,
+      )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).go();
 
-      await (db.delete(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).go();
+      await (db.delete(
+        db.bookingOrders,
+      )..where((t) => t.clientUuid.equals(clientUuid))).go();
     });
   }
 
@@ -1040,34 +1130,36 @@ class BookingOrdersDao {
     for (final uuid in detailClientUuids) {
       final trimmed = uuid.trim();
       if (trimmed.isEmpty) continue;
-      updatedCount += await (db.update(db.orderDetails)
-            ..where((t) => t.clientDetailUuid.equals(trimmed)))
-          .write(
-        OrderDetailsCompanion(
-          status: const Value('SERVED BY CASHIER'),
-          cashierProcessId: cashierProcessId != null
-              ? Value(cashierProcessId)
-              : const Value.absent(),
-          syncDirty: const Value(true),
-          updatedAt: Value(now),
-        ),
-      );
+      updatedCount +=
+          await (db.update(
+            db.orderDetails,
+          )..where((t) => t.clientDetailUuid.equals(trimmed))).write(
+            OrderDetailsCompanion(
+              status: const Value('SERVED BY CASHIER'),
+              cashierProcessId: cashierProcessId != null
+                  ? Value(cashierProcessId)
+                  : const Value.absent(),
+              syncDirty: const Value(true),
+              updatedAt: Value(now),
+            ),
+          );
     }
 
     for (final id in detailServerIds) {
       if (id <= 0) continue;
-      updatedCount += await (db.update(db.orderDetails)
-            ..where((t) => t.serverId.equals(id)))
-          .write(
-        OrderDetailsCompanion(
-          status: const Value('SERVED BY CASHIER'),
-          cashierProcessId: cashierProcessId != null
-              ? Value(cashierProcessId)
-              : const Value.absent(),
-          syncDirty: const Value(true),
-          updatedAt: Value(now),
-        ),
-      );
+      updatedCount +=
+          await (db.update(
+            db.orderDetails,
+          )..where((t) => t.serverId.equals(id))).write(
+            OrderDetailsCompanion(
+              status: const Value('SERVED BY CASHIER'),
+              cashierProcessId: cashierProcessId != null
+                  ? Value(cashierProcessId)
+                  : const Value.absent(),
+              syncDirty: const Value(true),
+              updatedAt: Value(now),
+            ),
+          );
     }
 
     return updatedCount;
@@ -1078,9 +1170,9 @@ class BookingOrdersDao {
     var removed = await _reconcileMirrorsByServerId();
     removed += await _reconcileStaleOpenbillGhostMirrors();
 
-    final rows = await (db.select(db.bookingOrders)
-          ..where((t) => t.deletedAt.isNull()))
-        .get();
+    final rows = await (db.select(
+      db.bookingOrders,
+    )..where((t) => t.deletedAt.isNull())).get();
 
     final byCode = <String, List<BookingOrder>>{};
     for (final row in rows) {
@@ -1096,10 +1188,12 @@ class BookingOrdersDao {
       var bestScore = -1;
 
       for (final row in group) {
-        final detailCount = await (db.select(db.orderDetails)
-              ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
-            .get()
-            .then((value) => value.length);
+        final detailCount =
+            await (db.select(db.orderDetails)..where(
+                  (t) => t.bookingOrderClientUuid.equals(row.clientUuid),
+                ))
+                .get()
+                .then((value) => value.length);
 
         var score = detailCount * 3;
         if (row.syncIntent == 'CREATE') score += 4;
@@ -1115,12 +1209,15 @@ class BookingOrdersDao {
       for (final row in group) {
         if (row.clientUuid == keeper.clientUuid) continue;
 
-        final detailCount = await (db.select(db.orderDetails)
-              ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
-            .get()
-            .then((value) => value.length);
+        final detailCount =
+            await (db.select(db.orderDetails)..where(
+                  (t) => t.bookingOrderClientUuid.equals(row.clientUuid),
+                ))
+                .get()
+                .then((value) => value.length);
 
-        if (detailCount == 0 || (row.serverId == null && keeper.serverId != null)) {
+        if (detailCount == 0 ||
+            (row.serverId == null && keeper.serverId != null)) {
           await removeOrderMirrorByClientUuid(row.clientUuid);
           removed++;
         }
@@ -1130,7 +1227,9 @@ class BookingOrdersDao {
     return removed;
   }
 
-  Future<BookingOrder?> _findOfflineMirrorForServerRow(Map<String, dynamic> row) async {
+  Future<BookingOrder?> _findOfflineMirrorForServerRow(
+    Map<String, dynamic> row,
+  ) async {
     final customerName = (row['customer_name'] ?? row['order_name'] ?? '')
         .toString()
         .trim()
@@ -1141,11 +1240,12 @@ class BookingOrdersDao {
     final isOpenbill = _toBool(row['openbill_flag']);
     final serverCreated = _parseDate(row['created_at']);
 
-    final candidates = await (db.select(db.bookingOrders)
-          ..where((t) => t.deletedAt.isNull())
-          ..where((t) => t.serverId.isNull())
-          ..where((t) => t.syncDirty.equals(true)))
-        .get();
+    final candidates =
+        await (db.select(db.bookingOrders)
+              ..where((t) => t.deletedAt.isNull())
+              ..where((t) => t.serverId.isNull())
+              ..where((t) => t.syncDirty.equals(true)))
+            .get();
 
     BookingOrder? best;
     var bestScore = -1;
@@ -1167,10 +1267,12 @@ class BookingOrdersDao {
       if (await hasDirtyServedDetails(candidate.clientUuid)) score += 5;
       if (candidate.paidAmountLocal != null) score += 3;
 
-      final detailCount = await (db.select(db.orderDetails)
-            ..where((t) => t.bookingOrderClientUuid.equals(candidate.clientUuid)))
-          .get()
-          .then((value) => value.length);
+      final detailCount =
+          await (db.select(db.orderDetails)..where(
+                (t) => t.bookingOrderClientUuid.equals(candidate.clientUuid),
+              ))
+              .get()
+              .then((value) => value.length);
       score += detailCount;
 
       if (serverCreated != null && candidate.createdAt != null) {
@@ -1188,10 +1290,11 @@ class BookingOrdersDao {
   }
 
   Future<int> _reconcileMirrorsByServerId() async {
-    final rows = await (db.select(db.bookingOrders)
-          ..where((t) => t.deletedAt.isNull())
-          ..where((t) => t.serverId.isNotNull()))
-        .get();
+    final rows =
+        await (db.select(db.bookingOrders)
+              ..where((t) => t.deletedAt.isNull())
+              ..where((t) => t.serverId.isNotNull()))
+            .get();
 
     final byServerId = <int, List<BookingOrder>>{};
     for (final row in rows) {
@@ -1216,9 +1319,9 @@ class BookingOrdersDao {
   }
 
   Future<int> _reconcileStaleOpenbillGhostMirrors() async {
-    final rows = await (db.select(db.bookingOrders)
-          ..where((t) => t.deletedAt.isNull()))
-        .get();
+    final rows = await (db.select(
+      db.bookingOrders,
+    )..where((t) => t.deletedAt.isNull())).get();
 
     final keepersByKey = <String, BookingOrder>{};
     for (final row in rows) {
@@ -1271,10 +1374,11 @@ class BookingOrdersDao {
     var bestScore = -1;
 
     for (final row in group) {
-      final detailCount = await (db.select(db.orderDetails)
-            ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
-          .get()
-          .then((value) => value.length);
+      final detailCount =
+          await (db.select(db.orderDetails)
+                ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
+              .get()
+              .then((value) => value.length);
 
       var score = detailCount * 3;
       if (row.syncDirty) score += 4;
@@ -1331,7 +1435,8 @@ class BookingOrdersDao {
     if (clientUuid == null || clientUuid.isEmpty) return;
 
     final localBefore = await getByClientUuid(clientUuid);
-    final appliedIntent = applied['sync_intent']?.toString().toUpperCase() ?? '';
+    final appliedIntent =
+        applied['sync_intent']?.toString().toUpperCase() ?? '';
     final serverApplied = applied['order_status']?.toString();
 
     if ((appliedIntent == 'CREATE' || appliedIntent == 'OFFLINE_CATCH_UP') &&
@@ -1365,7 +1470,8 @@ class BookingOrdersDao {
 
     var stillNeedsSync = false;
     if (localBefore != null) {
-      stillNeedsSync = await orderNeedsCatchUpSync(
+      stillNeedsSync =
+          await orderNeedsCatchUpSync(
             local: localBefore,
             serverStatus: serverApplied,
           ) ||
@@ -1387,40 +1493,42 @@ class BookingOrdersDao {
       }
     }
 
-    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
-          BookingOrdersCompanion(
-            serverId: applied['server_id'] != null
-                ? Value(_toInt(applied['server_id']))
-                : const Value.absent(),
-            bookingOrderCode: applied['booking_order_code'] != null
-                ? Value(applied['booking_order_code'].toString())
-                : const Value.absent(),
-            orderStatus: localBefore != null
-                ? Value(
-                    OrderStageResolver.resolveStatusAfterSyncApply(
-                      localStatus: localBefore.orderStatus,
-                      serverStatus: serverApplied ?? '',
-                      openbillFlag: localBefore.openbillFlag,
-                    ),
-                  )
-                : applied['order_status'] != null
-                    ? Value(applied['order_status'].toString())
-                    : const Value.absent(),
-            paymentId: applied['payment_id'] != null
-                ? Value(_toInt(applied['payment_id']))
-                : const Value.absent(),
-            latestPaymentServerId: applied['payment_id'] != null
-                ? Value(_toInt(applied['payment_id']))
-                : const Value.absent(),
-            syncVersion: applied['sync_version'] != null
-                ? Value(_toInt(applied['sync_version']))
-                : const Value.absent(),
-            syncDirty: Value(stillNeedsSync),
-            syncError: const Value(null),
-            syncIntent: const Value(null),
-            syncedAt: Value(DateTime.now()),
-          ),
-        );
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.clientUuid.equals(clientUuid))).write(
+      BookingOrdersCompanion(
+        serverId: applied['server_id'] != null
+            ? Value(_toInt(applied['server_id']))
+            : const Value.absent(),
+        bookingOrderCode: applied['booking_order_code'] != null
+            ? Value(applied['booking_order_code'].toString())
+            : const Value.absent(),
+        orderStatus: localBefore != null
+            ? Value(
+                OrderStageResolver.resolveStatusAfterSyncApply(
+                  localStatus: localBefore.orderStatus,
+                  serverStatus: serverApplied ?? '',
+                  openbillFlag: localBefore.openbillFlag,
+                ),
+              )
+            : applied['order_status'] != null
+            ? Value(applied['order_status'].toString())
+            : const Value.absent(),
+        paymentId: applied['payment_id'] != null
+            ? Value(_toInt(applied['payment_id']))
+            : const Value.absent(),
+        latestPaymentServerId: applied['payment_id'] != null
+            ? Value(_toInt(applied['payment_id']))
+            : const Value.absent(),
+        syncVersion: applied['sync_version'] != null
+            ? Value(_toInt(applied['sync_version']))
+            : const Value.absent(),
+        syncDirty: Value(stillNeedsSync),
+        syncError: const Value(null),
+        syncIntent: const Value(null),
+        syncedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   bool _cashCatchUpPartiallyApplied({
@@ -1444,8 +1552,9 @@ class BookingOrdersDao {
     String clientUuid, {
     bool clearDetails = false,
   }) async {
-    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
-        .write(
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.clientUuid.equals(clientUuid))).write(
       const BookingOrdersCompanion(
         syncDirty: Value(false),
         syncIntent: Value(null),
@@ -1461,11 +1570,7 @@ class BookingOrdersDao {
   Future<void> _clearDetailSyncDirty(String bookingClientUuid) async {
     await (db.update(db.orderDetails)
           ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid)))
-        .write(
-      const OrderDetailsCompanion(
-        syncDirty: Value(false),
-      ),
-    );
+        .write(const OrderDetailsCompanion(syncDirty: Value(false)));
   }
 
   Future<bool> _catchUpAppliedServedDetailsConfirmed({
@@ -1475,9 +1580,9 @@ class BookingOrdersDao {
     if (!await hasDirtyServedDetails(clientUuid)) return true;
     if (appliedDetails is! List) return false;
 
-    final localDetails = await (db.select(db.orderDetails)
-          ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
-        .get();
+    final localDetails = await (db.select(
+      db.orderDetails,
+    )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
 
     final pendingServed = localDetails.where((detail) {
       if (detail.syncDirty != true) return false;
@@ -1516,11 +1621,12 @@ class BookingOrdersDao {
     final details = applied['order_details'];
     if (details is! List) return;
 
-    final unlinked = await (db.select(db.orderDetails)
-          ..where((t) => t.bookingOrderClientUuid.equals(clientUuid))
-          ..where((t) => t.serverId.isNull())
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .get();
+    final unlinked =
+        await (db.select(db.orderDetails)
+              ..where((t) => t.bookingOrderClientUuid.equals(clientUuid))
+              ..where((t) => t.serverId.isNull())
+              ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+            .get();
     var unlinkedIndex = 0;
 
     for (final raw in details) {
@@ -1541,9 +1647,9 @@ class BookingOrdersDao {
       if (targetClientUuid == null || targetClientUuid.isEmpty) continue;
       final detailUuid = targetClientUuid;
 
-      await (db.update(db.orderDetails)
-            ..where((t) => t.clientDetailUuid.equals(detailUuid)))
-          .write(
+      await (db.update(
+        db.orderDetails,
+      )..where((t) => t.clientDetailUuid.equals(detailUuid))).write(
         OrderDetailsCompanion(
           serverId: Value(serverDetailId),
           bookingOrderServerId: applied['server_id'] != null
@@ -1585,14 +1691,17 @@ class BookingOrdersDao {
       extras: {
         'order_status': order.orderStatus,
         if (order.paidAmountLocal != null) 'paid_amount': order.paidAmountLocal,
-        if (order.changeAmountLocal != null) 'change_amount': order.changeAmountLocal,
+        if (order.changeAmountLocal != null)
+          'change_amount': order.changeAmountLocal,
         if (order.paymentMethod != null) 'payment_method': order.paymentMethod,
       },
     );
   }
 
   Future<void> saveConflict(Map<String, dynamic> conflict) async {
-    await db.into(db.syncConflicts).insert(
+    await db
+        .into(db.syncConflicts)
+        .insert(
           SyncConflictsCompanion.insert(
             entityTable: conflict['table']?.toString() ?? 'unknown',
             serverId: Value(_toIntOrNull(conflict['server_id'])),
@@ -1602,36 +1711,45 @@ class BookingOrdersDao {
               conflict['local'] != null ? jsonEncode(conflict['local']) : null,
             ),
             serverSnapshotJson: Value(
-              conflict['server'] != null ? jsonEncode(conflict['server']) : null,
+              conflict['server'] != null
+                  ? jsonEncode(conflict['server'])
+                  : null,
             ),
-            suggestedResolution: Value(conflict['suggested_resolution']?.toString()),
+            suggestedResolution: Value(
+              conflict['suggested_resolution']?.toString(),
+            ),
             createdAt: DateTime.now(),
           ),
         );
   }
 
   Future<int> countUnresolvedConflicts() async {
-    final rows = await (db.select(db.syncConflicts)..where((t) => t.isResolved.equals(false)))
-        .get();
+    final rows = await (db.select(
+      db.syncConflicts,
+    )..where((t) => t.isResolved.equals(false))).get();
     return rows.length;
   }
 
   Future<void> resolveConflict(int id, String choice) async {
     await (db.update(db.syncConflicts)..where((t) => t.id.equals(id))).write(
-          SyncConflictsCompanion(
-            isResolved: const Value(true),
-            resolutionChoice: Value(choice),
-          ),
-        );
+      SyncConflictsCompanion(
+        isResolved: const Value(true),
+        resolutionChoice: Value(choice),
+      ),
+    );
   }
 
   Future<String?> getSyncMeta(String key) async {
-    final row = await (db.select(db.syncMeta)..where((t) => t.key.equals(key))).getSingleOrNull();
+    final row = await (db.select(
+      db.syncMeta,
+    )..where((t) => t.key.equals(key))).getSingleOrNull();
     return row?.value;
   }
 
   Future<void> setSyncMeta(String key, String value) async {
-    await db.into(db.syncMeta).insertOnConflictUpdate(
+    await db
+        .into(db.syncMeta)
+        .insertOnConflictUpdate(
           SyncMetaCompanion(key: Value(key), value: Value(value)),
         );
   }
@@ -1664,21 +1782,24 @@ class BookingOrdersDao {
   }
 
   Future<List<SyncConflict>> getUnresolvedConflicts() {
-    return (db.select(db.syncConflicts)..where((t) => t.isResolved.equals(false)))
-        .get();
+    return (db.select(
+      db.syncConflicts,
+    )..where((t) => t.isResolved.equals(false))).get();
   }
 
   Future<void> applyConflictResolution({
     required int conflictId,
     required String choice,
   }) async {
-    final row = await (db.select(db.syncConflicts)..where((t) => t.id.equals(conflictId)))
-        .getSingleOrNull();
+    final row = await (db.select(
+      db.syncConflicts,
+    )..where((t) => t.id.equals(conflictId))).getSingleOrNull();
     if (row == null) return;
 
     if (choice == 'SERVER_WINS' && row.serverSnapshotJson != null) {
       try {
-        final server = jsonDecode(row.serverSnapshotJson!) as Map<String, dynamic>;
+        final server =
+            jsonDecode(row.serverSnapshotJson!) as Map<String, dynamic>;
         if (row.entityTable == 'booking_orders') {
           await upsertFromServer(server);
         } else if (row.entityTable == 'order_details') {
@@ -1686,8 +1807,9 @@ class BookingOrdersDao {
         }
         final clientUuid = row.clientUuid;
         if (clientUuid != null && clientUuid.isNotEmpty) {
-          await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
-              .write(
+          await (db.update(
+            db.bookingOrders,
+          )..where((t) => t.clientUuid.equals(clientUuid))).write(
             const BookingOrdersCompanion(
               syncDirty: Value(false),
               syncError: Value(null),
@@ -1730,7 +1852,9 @@ class BookingOrdersDao {
     final now = DateTime.now();
     final orderStatus = openbillFlag ? 'OPENBILL_WAITING_ORDER' : 'UNPAID';
 
-    await db.into(db.bookingOrders).insert(
+    await db
+        .into(db.bookingOrders)
+        .insert(
           BookingOrdersCompanion.insert(
             clientUuid: clientUuid,
             customerName: customerName,
@@ -1768,7 +1892,9 @@ class BookingOrdersDao {
         promoId: cartItem['promo_id'] as int?,
         promoType: cartItem['promo_type']?.toString(),
         promoAmount: (cartItem['promo_amount'] as num?)?.toDouble(),
-        options: (cartItem['options'] as List?)?.cast<Map<String, dynamic>>() ?? const [],
+        options:
+            (cartItem['options'] as List?)?.cast<Map<String, dynamic>>() ??
+            const [],
       );
     }
 
@@ -1797,7 +1923,9 @@ class BookingOrdersDao {
 
     final clientUuid = _uuid.v4();
     final now = DateTime.now();
-    await db.into(db.bookingOrders).insert(
+    await db
+        .into(db.bookingOrders)
+        .insert(
           BookingOrdersCompanion.insert(
             clientUuid: clientUuid,
             serverId: Value(serverId),
@@ -1843,7 +1971,9 @@ class BookingOrdersDao {
       final detailUuid = detail['local_detail_uuid']?.toString() ?? _uuid.v4();
       final options = (detail['order_detail_options'] as List?) ?? [];
 
-      await db.into(db.orderDetails).insert(
+      await db
+          .into(db.orderDetails)
+          .insert(
             OrderDetailsCompanion.insert(
               clientDetailUuid: detailUuid,
               bookingOrderClientUuid: clientUuid,
@@ -1855,15 +1985,21 @@ class BookingOrdersDao {
               ),
               productName: Value(detail['product_name']?.toString()),
               basePrice: Value(_toDouble(detail['base_price'])),
-              quantity: Value(_toInt(detail['quantity'] ?? detail['qty'], fallback: 1)),
+              quantity: Value(
+                _toInt(detail['quantity'] ?? detail['qty'], fallback: 1),
+              ),
               optionsPrice: Value(_toDouble(detail['options_price'])),
               customerNote: Value(detail['customer_note']?.toString()),
               promoId: Value(_toIntOrNull(detail['promo_id'])),
               promoAmount: Value(_toDouble(detail['promo_amount'])),
               promoType: Value(detail['promo_type']?.toString()),
               status: Value(detail['status']?.toString()),
-              cashierProcessId: Value(_toIntOrNull(detail['cashier_process_id'])),
-              kitchenProcessId: Value(_toIntOrNull(detail['kitchen_process_id'])),
+              cashierProcessId: Value(
+                _toIntOrNull(detail['cashier_process_id']),
+              ),
+              kitchenProcessId: Value(
+                _toIntOrNull(detail['kitchen_process_id']),
+              ),
               syncDirty: const Value(false),
               createdAt: Value(now),
               updatedAt: Value(now),
@@ -1873,13 +2009,16 @@ class BookingOrdersDao {
       for (final optRaw in options) {
         if (optRaw is! Map) continue;
         final opt = Map<String, dynamic>.from(optRaw);
-        await db.into(db.orderDetailOptions).insert(
+        await db
+            .into(db.orderDetailOptions)
+            .insert(
               OrderDetailOptionsCompanion.insert(
                 clientOptionUuid: _uuid.v4(),
                 orderDetailClientUuid: detailUuid,
                 optionId: _toInt(opt['option_id'] ?? opt['id'], fallback: 0),
-                partnerProductOptionName:
-                    Value(opt['partner_product_option_name']?.toString()),
+                partnerProductOptionName: Value(
+                  opt['partner_product_option_name']?.toString(),
+                ),
                 parentName: Value(opt['parent_name']?.toString()),
                 price: Value(_toDouble(opt['price'])),
                 createdAt: Value(now),
@@ -1946,8 +2085,9 @@ class BookingOrdersDao {
     }
     merged['force_push_update'] = true;
 
-    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
-        .write(
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.clientUuid.equals(clientUuid))).write(
       BookingOrdersCompanion(
         syncDirty: const Value(true),
         syncIntent: const Value('UPDATE'),
@@ -1966,23 +2106,26 @@ class BookingOrdersDao {
     String syncIntent = 'UPDATE',
   }) async {
     await db.transaction(() async {
-      final details = await (db.select(db.orderDetails)
-            ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
-          .get();
+      final details = await (db.select(
+        db.orderDetails,
+      )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
       for (final detail in details) {
-        await (db.delete(db.orderDetailOptions)
-              ..where((t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid)))
+        await (db.delete(db.orderDetailOptions)..where(
+              (t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid),
+            ))
             .go();
       }
-      await (db.delete(db.orderDetails)
-            ..where((t) => t.bookingOrderClientUuid.equals(clientUuid)))
-          .go();
+      await (db.delete(
+        db.orderDetails,
+      )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).go();
 
       final now = DateTime.now();
       for (final line in lines) {
         final detailUuid = line['local_id']?.toString() ?? _uuid.v4();
         final detailStatus = line['detail_status']?.toString();
-        await db.into(db.orderDetails).insert(
+        await db
+            .into(db.orderDetails)
+            .insert(
               OrderDetailsCompanion.insert(
                 clientDetailUuid: detailUuid,
                 bookingOrderClientUuid: clientUuid,
@@ -2006,13 +2149,16 @@ class BookingOrdersDao {
         final options = (line['options'] as List?) ?? [];
         for (final opt in options) {
           if (opt is! Map) continue;
-          await db.into(db.orderDetailOptions).insert(
+          await db
+              .into(db.orderDetailOptions)
+              .insert(
                 OrderDetailOptionsCompanion.insert(
                   clientOptionUuid: _uuid.v4(),
                   orderDetailClientUuid: detailUuid,
                   optionId: _toInt(opt['option_server_id']),
-                  partnerProductOptionName:
-                      Value(opt['option_name_snapshot']?.toString()),
+                  partnerProductOptionName: Value(
+                    opt['option_name_snapshot']?.toString(),
+                  ),
                   parentName: Value(opt['parent_name_snapshot']?.toString()),
                   price: Value(_toDouble(opt['price'])),
                   createdAt: Value(now),
@@ -2022,8 +2168,9 @@ class BookingOrdersDao {
         }
       }
 
-      await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid)))
-          .write(
+      await (db.update(
+        db.bookingOrders,
+      )..where((t) => t.clientUuid.equals(clientUuid))).write(
         BookingOrdersCompanion(
           totalOrderValue: Value(subtotal),
           syncDirty: const Value(true),
@@ -2036,22 +2183,26 @@ class BookingOrdersDao {
   }
 
   Future<List<MirrorPendingStockLine>> getPendingStockLines() async {
-    final dirtyOrders = await (db.select(db.bookingOrders)
-          ..where((t) => t.serverId.isNull())
-          ..where((t) => t.syncDirty.equals(true))
-          ..where((t) => t.deletedAt.isNull()))
-        .get();
+    final dirtyOrders =
+        await (db.select(db.bookingOrders)
+              ..where((t) => t.serverId.isNull())
+              ..where((t) => t.syncDirty.equals(true))
+              ..where((t) => t.deletedAt.isNull()))
+            .get();
 
     final lines = <MirrorPendingStockLine>[];
     for (final order in dirtyOrders) {
-      final details = await (db.select(db.orderDetails)
-            ..where((t) => t.bookingOrderClientUuid.equals(order.clientUuid)))
-          .get();
+      final details = await (db.select(
+        db.orderDetails,
+      )..where((t) => t.bookingOrderClientUuid.equals(order.clientUuid))).get();
 
       for (final detail in details) {
-        final opts = await (db.select(db.orderDetailOptions)
-              ..where((t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid)))
-            .get();
+        final opts =
+            await (db.select(db.orderDetailOptions)..where(
+                  (t) =>
+                      t.orderDetailClientUuid.equals(detail.clientDetailUuid),
+                ))
+                .get();
         lines.add(
           MirrorPendingStockLine(
             productId: detail.partnerProductId,
@@ -2074,13 +2225,16 @@ class BookingOrdersDao {
     final parent = await getByServerId(bookingOrderServerId);
     if (parent == null) return;
 
-    final existing = await (db.select(db.orderPayments)..where((t) => t.serverId.equals(serverId)))
-        .getSingleOrNull();
+    final existing = await (db.select(
+      db.orderPayments,
+    )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
 
     final clientPaymentUuid = existing?.clientPaymentUuid ?? _uuid.v4();
     final now = DateTime.now();
 
-    await db.into(db.orderPayments).insertOnConflictUpdate(
+    await db
+        .into(db.orderPayments)
+        .insertOnConflictUpdate(
           OrderPaymentsCompanion(
             clientPaymentUuid: Value(clientPaymentUuid),
             serverId: Value(serverId),
@@ -2097,15 +2251,23 @@ class BookingOrdersDao {
             ppn: Value(_toDouble(row['ppn'])),
             amountBeforePpn: Value(_toDouble(row['amount_before_ppn'])),
             roundingAmount: Value(_toDouble(row['rounding_amount'])),
-            ownerManualPaymentId: Value(_toIntOrNull(row['owner_manual_payment_id'])),
+            ownerManualPaymentId: Value(
+              _toIntOrNull(row['owner_manual_payment_id']),
+            ),
             manualProviderName: Value(row['manual_provider_name']?.toString()),
-            manualProviderAccountName:
-                Value(row['manual_provider_account_name']?.toString()),
-            manualProviderAccountNo: Value(row['manual_provider_account_no']?.toString()),
+            manualProviderAccountName: Value(
+              row['manual_provider_account_name']?.toString(),
+            ),
+            manualProviderAccountNo: Value(
+              row['manual_provider_account_no']?.toString(),
+            ),
             localFilePathsJson: row['manual_payment_image'] != null
-                ? Value(jsonEncode({
-                    'manual_payment_image': row['manual_payment_image'].toString(),
-                  }))
+                ? Value(
+                    jsonEncode({
+                      'manual_payment_image': row['manual_payment_image']
+                          .toString(),
+                    }),
+                  )
                 : const Value.absent(),
             syncDirty: const Value(false),
             createdAt: Value(_parseDate(row['created_at']) ?? now),
@@ -2115,12 +2277,14 @@ class BookingOrdersDao {
 
     final paymentStatus = row['payment_status']?.toString().toUpperCase() ?? '';
     if (paymentStatus == 'PENDING' || paymentStatus == 'PAID') {
-      await (db.update(db.bookingOrders)
-            ..where((t) => t.clientUuid.equals(parent.clientUuid)))
-          .write(
+      await (db.update(
+        db.bookingOrders,
+      )..where((t) => t.clientUuid.equals(parent.clientUuid))).write(
         BookingOrdersCompanion(
           latestPaymentServerId: Value(serverId),
-          paymentId: parent.paymentId == null ? Value(serverId) : const Value.absent(),
+          paymentId: parent.paymentId == null
+              ? Value(serverId)
+              : const Value.absent(),
         ),
       );
     }
@@ -2137,7 +2301,8 @@ class BookingOrdersDao {
 
     if (employeeId != null) {
       q.where(
-        (t) => t.cashierProcessId.equals(employeeId) | t.cashierProcessId.isNull(),
+        (t) =>
+            t.cashierProcessId.equals(employeeId) | t.cashierProcessId.isNull(),
       );
     }
 
@@ -2155,20 +2320,25 @@ class BookingOrdersDao {
       final map = OrderMirrorMapper.orderToUiMap(row);
 
       final details = _dedupeDetailRows(
-        await (db.select(db.orderDetails)
-              ..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid)))
-            .get(),
+        await (db.select(
+          db.orderDetails,
+        )..where((t) => t.bookingOrderClientUuid.equals(row.clientUuid))).get(),
       );
 
-      map['order_details'] = await Future.wait(details.map((d) async {
-        final detailMap = OrderMirrorMapper.detailToUiMap(d);
-        final opts = await (db.select(db.orderDetailOptions)
-              ..where((t) => t.orderDetailClientUuid.equals(d.clientDetailUuid)))
-            .get();
-        detailMap['order_detail_options'] =
-            opts.map(OrderMirrorMapper.optionToUiMap).toList();
-        return detailMap;
-      }));
+      map['order_details'] = await Future.wait(
+        details.map((d) async {
+          final detailMap = OrderMirrorMapper.detailToUiMap(d);
+          final opts =
+              await (db.select(db.orderDetailOptions)..where(
+                    (t) => t.orderDetailClientUuid.equals(d.clientDetailUuid),
+                  ))
+                  .get();
+          detailMap['order_detail_options'] = opts
+              .map(OrderMirrorMapper.optionToUiMap)
+              .toList();
+          return detailMap;
+        }),
+      );
 
       if (query != null && query.trim().isNotEmpty) {
         final q = query.trim().toLowerCase();
@@ -2207,13 +2377,15 @@ class BookingOrdersDao {
   }
 
   Future<void> _markOrderDirty(String clientUuid, String intent) async {
-    await (db.update(db.bookingOrders)..where((t) => t.clientUuid.equals(clientUuid))).write(
-          BookingOrdersCompanion(
-            syncDirty: const Value(true),
-            syncIntent: Value(intent),
-            updatedAt: Value(DateTime.now()),
-          ),
-        );
+    await (db.update(
+      db.bookingOrders,
+    )..where((t) => t.clientUuid.equals(clientUuid))).write(
+      BookingOrdersCompanion(
+        syncDirty: const Value(true),
+        syncIntent: Value(intent),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> _upsertDetailFromServer(
@@ -2224,9 +2396,16 @@ class BookingOrdersDao {
     final serverId = _detailServerIdFromRow(row);
     if (serverId == null) return;
 
-    var existing = await (db.select(db.orderDetails)
-          ..where((t) => t.serverId.equals(serverId)))
-        .getSingleOrNull();
+    final matches = await (db.select(
+      db.orderDetails,
+    )..where((t) => t.serverId.equals(serverId))).get();
+    OrderDetail? existing;
+    if (matches.isNotEmpty) {
+      existing = matches.firstWhere(
+        (detail) => detail.bookingOrderClientUuid == bookingClientUuid,
+        orElse: () => matches.first,
+      );
+    }
 
     existing ??= await _findOrphanDetailForServerRow(
       bookingClientUuid: bookingClientUuid,
@@ -2237,13 +2416,16 @@ class BookingOrdersDao {
     final now = DateTime.now();
     final incomingStatus = row['status']?.toString();
     final existingStatus = existing?.status;
-    final preserveLocalDetail = existing != null &&
+    final preserveLocalDetail =
+        existing != null &&
         (existing.syncDirty ||
             (existingStatus != null &&
                 (isDetailServedStatus(existingStatus) ||
                     isDetailProcessingStatus(existingStatus))));
 
-    await db.into(db.orderDetails).insertOnConflictUpdate(
+    await db
+        .into(db.orderDetails)
+        .insertOnConflictUpdate(
           OrderDetailsCompanion(
             clientDetailUuid: Value(clientDetailUuid),
             serverId: Value(serverId),
@@ -2283,16 +2465,20 @@ class BookingOrdersDao {
       final optServerId = _toIntOrNull(opt['id']);
       if (optServerId == null) continue;
 
-      final existingOpt = await (db.select(db.orderDetailOptions)
-            ..where((t) => t.serverId.equals(optServerId)))
-          .getSingleOrNull();
+      final existingOpt = await (db.select(
+        db.orderDetailOptions,
+      )..where((t) => t.serverId.equals(optServerId))).getSingleOrNull();
 
       final optName = _optionNameFromServerRow(opt);
       final parentName = _optionParentFromServerRow(opt);
 
-      await db.into(db.orderDetailOptions).insertOnConflictUpdate(
+      await db
+          .into(db.orderDetailOptions)
+          .insertOnConflictUpdate(
             OrderDetailOptionsCompanion(
-              clientOptionUuid: Value(existingOpt?.clientOptionUuid ?? _uuid.v4()),
+              clientOptionUuid: Value(
+                existingOpt?.clientOptionUuid ?? _uuid.v4(),
+              ),
               serverId: Value(optServerId),
               orderDetailClientUuid: Value(clientDetailUuid),
               orderDetailServerId: Value(serverId),
@@ -2317,11 +2503,12 @@ class BookingOrdersDao {
     final partnerProductId = _toIntOrNull(row['partner_product_id']);
     if (partnerProductId == null) return null;
 
-    final orphans = await (db.select(db.orderDetails)
-          ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid))
-          ..where((t) => t.serverId.isNull())
-          ..where((t) => t.partnerProductId.equals(partnerProductId)))
-        .get();
+    final orphans =
+        await (db.select(db.orderDetails)
+              ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid))
+              ..where((t) => t.serverId.isNull())
+              ..where((t) => t.partnerProductId.equals(partnerProductId)))
+            .get();
 
     if (orphans.length == 1) return orphans.first;
     return null;
@@ -2346,8 +2533,10 @@ class BookingOrdersDao {
         continue;
       }
 
-      final existingUpdated = existing.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final candidateUpdated = detail.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final existingUpdated =
+          existing.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final candidateUpdated =
+          detail.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
       if (candidateUpdated.isAfter(existingUpdated)) {
         withServerId[sid] = detail;
       }
@@ -2363,8 +2552,10 @@ class BookingOrdersDao {
         continue;
       }
 
-      final existingUpdated = existing.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final candidateUpdated = detail.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final existingUpdated =
+          existing.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final candidateUpdated =
+          detail.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
       if (candidateUpdated.isAfter(existingUpdated)) {
         dedupedOrphans[key] = detail;
       }
@@ -2386,12 +2577,12 @@ class BookingOrdersDao {
   }
 
   Future<void> _deleteDetailAndOptions(String clientDetailUuid) async {
-    await (db.delete(db.orderDetailOptions)
-          ..where((t) => t.orderDetailClientUuid.equals(clientDetailUuid)))
-        .go();
-    await (db.delete(db.orderDetails)
-          ..where((t) => t.clientDetailUuid.equals(clientDetailUuid)))
-        .go();
+    await (db.delete(
+      db.orderDetailOptions,
+    )..where((t) => t.orderDetailClientUuid.equals(clientDetailUuid))).go();
+    await (db.delete(
+      db.orderDetails,
+    )..where((t) => t.clientDetailUuid.equals(clientDetailUuid))).go();
   }
 
   Future<void> _pruneOrderDetailsAfterServerUpsert({
@@ -2399,9 +2590,9 @@ class BookingOrdersDao {
     required Set<int> keepServerIds,
   }) async {
     final parent = await getByClientUuid(bookingClientUuid);
-    final existing = await (db.select(db.orderDetails)
-          ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid)))
-        .get();
+    final existing = await (db.select(
+      db.orderDetails,
+    )..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid))).get();
 
     for (final detail in existing) {
       if (detail.syncDirty == true) continue;
@@ -2421,10 +2612,12 @@ class BookingOrdersDao {
     }
   }
 
-  Future<void> _deduplicateOrderDetailsByServerId(String bookingClientUuid) async {
-    final existing = await (db.select(db.orderDetails)
-          ..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid)))
-        .get();
+  Future<void> _deduplicateOrderDetailsByServerId(
+    String bookingClientUuid,
+  ) async {
+    final existing = await (db.select(
+      db.orderDetails,
+    )..where((t) => t.bookingOrderClientUuid.equals(bookingClientUuid))).get();
 
     final groups = <int, List<OrderDetail>>{};
     for (final detail in existing) {
@@ -2436,8 +2629,14 @@ class BookingOrdersDao {
     for (final group in groups.values) {
       if (group.length <= 1) continue;
       group.sort((a, b) {
-        final aDate = a.updatedAt ?? a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bDate = b.updatedAt ?? b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final aDate =
+            a.updatedAt ??
+            a.createdAt ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bDate =
+            b.updatedAt ??
+            b.createdAt ??
+            DateTime.fromMillisecondsSinceEpoch(0);
         return bDate.compareTo(aDate);
       });
       for (final duplicate in group.skip(1)) {
@@ -2467,7 +2666,9 @@ class BookingOrdersDao {
     final fromRow = _toWifiSnapshotJson(row['wifi_snapshot']);
     if (fromRow != null) return fromRow;
 
-    final fromPartnerData = _wifiSnapshotFromPartnerLikeMap(row['partner_data']);
+    final fromPartnerData = _wifiSnapshotFromPartnerLikeMap(
+      row['partner_data'],
+    );
     if (fromPartnerData != null) return fromPartnerData;
 
     final fromPartner = _wifiSnapshotFromPartnerLikeMap(row['partner']);
@@ -2495,10 +2696,15 @@ class BookingOrdersDao {
   String? _wifiSnapshotFromPartnerLikeMap(dynamic raw) {
     if (raw is! Map) return null;
     final map = Map<String, dynamic>.from(raw.cast<dynamic, dynamic>());
-    final wifiUser = (map['user_wifi'] ?? map['wifi_ssid'] ?? '').toString().trim();
-    final wifiPass =
-        (map['pass_wifi'] ?? map['wifi_password'] ?? '').toString().trim();
-    final address = (map['address'] ?? map['store_address'] ?? '').toString().trim();
+    final wifiUser = (map['user_wifi'] ?? map['wifi_ssid'] ?? '')
+        .toString()
+        .trim();
+    final wifiPass = (map['pass_wifi'] ?? map['wifi_password'] ?? '')
+        .toString()
+        .trim();
+    final address = (map['address'] ?? map['store_address'] ?? '')
+        .toString()
+        .trim();
     final isShown = _toBool(map['is_wifi_shown'] ?? map['wifi_shown']);
 
     if (!isShown && wifiUser.isEmpty && wifiPass.isEmpty && address.isEmpty) {
@@ -2506,7 +2712,9 @@ class BookingOrdersDao {
     }
 
     final snapshot = <String, dynamic>{
-      'wifi_shown': isShown || wifiUser.isNotEmpty || wifiPass.isNotEmpty ? 1 : 0,
+      'wifi_shown': isShown || wifiUser.isNotEmpty || wifiPass.isNotEmpty
+          ? 1
+          : 0,
       if (wifiUser.isNotEmpty) 'wifi_ssid': wifiUser,
       if (wifiPass.isNotEmpty) 'wifi_password': wifiPass,
       if (address.isNotEmpty) 'store_address': address,

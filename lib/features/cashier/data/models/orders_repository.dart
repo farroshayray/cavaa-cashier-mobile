@@ -9,10 +9,7 @@ class OrdersRepository {
     required String tab,
     String? q,
   }) async {
-    return api.getOrdersData(
-      tab: tab,
-      q: q,
-    );
+    return api.getOrdersData(tab: tab, q: q);
   }
 
   Future<Map<String, dynamic>> fetchOrderDetail(int id) async {
@@ -32,12 +29,14 @@ class OrdersRepository {
     int? orderTable,
     String? orderName,
     required List<Map<String, dynamic>> items,
+    bool preserveOrderStatus = false,
   }) async {
     return api.updateOrder(
       id: id,
       orderTable: orderTable,
       orderName: orderName,
       items: items,
+      preserveOrderStatus: preserveOrderStatus,
     );
   }
 
@@ -67,10 +66,7 @@ class OrdersRepository {
     int id, {
     bool sendToKitchenWaiting = false,
   }) async {
-    return api.processOrder(
-      id: id,
-      sendToKitchenWaiting: sendToKitchenWaiting,
-    );
+    return api.processOrder(id: id, sendToKitchenWaiting: sendToKitchenWaiting);
   }
 
   Future<Map<String, dynamic>> serveOrderItems({

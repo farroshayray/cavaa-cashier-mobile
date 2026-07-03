@@ -32,7 +32,9 @@ void main() {
 
     test('fails when errors are present', () {
       final result = SyncResult.fromJson({
-        'applied': [{'client_uuid': 'a'}],
+        'applied': [
+          {'client_uuid': 'a'},
+        ],
         'conflicts': [],
         'errors': [
           {'message': 'failed'},
@@ -45,7 +47,9 @@ void main() {
 
     test('succeeds when applied without conflicts or errors', () {
       final result = SyncResult.fromJson({
-        'applied': [{'client_uuid': 'a'}],
+        'applied': [
+          {'client_uuid': 'a'},
+        ],
         'conflicts': [],
         'errors': [],
         'sync_token': 'token-1',
@@ -267,24 +271,27 @@ void main() {
       );
     });
 
-    test('openbill OPENBILL_CONFIRMATION is ahead of server draft UNPAID rank', () {
-      expect(
-        OrderStageRank.isLocalAheadOfServer(
-          localStatus: 'OPENBILL_CONFIRMATION',
-          serverStatus: 'OPENBILL_CONFIRMATION',
-          openbillFlag: true,
-        ),
-        isFalse,
-      );
-      expect(
-        OrderStageRank.isLocalAheadOfServer(
-          localStatus: 'OPENBILL_WAITING_ORDER',
-          serverStatus: 'OPENBILL_CONFIRMATION',
-          openbillFlag: true,
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'openbill OPENBILL_CONFIRMATION is ahead of server draft UNPAID rank',
+      () {
+        expect(
+          OrderStageRank.isLocalAheadOfServer(
+            localStatus: 'OPENBILL_CONFIRMATION',
+            serverStatus: 'OPENBILL_CONFIRMATION',
+            openbillFlag: true,
+          ),
+          isFalse,
+        );
+        expect(
+          OrderStageRank.isLocalAheadOfServer(
+            localStatus: 'OPENBILL_WAITING_ORDER',
+            serverStatus: 'OPENBILL_CONFIRMATION',
+            openbillFlag: true,
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('openbill UNPAID with PAY intent is ahead of server UNPAID', () {
       expect(
@@ -308,10 +315,7 @@ void main() {
         isFalse,
       );
       expect(
-        OrderStageRank.rankFor(
-          status: 'UNPAID',
-          openbillFlag: true,
-        ),
+        OrderStageRank.rankFor(status: 'UNPAID', openbillFlag: true),
         greaterThan(
           OrderStageRank.rankFor(
             status: 'OPENBILL_WAITING_ORDER',
@@ -321,27 +325,33 @@ void main() {
       );
     });
 
-    test('openbill server OPENBILL_CONFIRMATION beats local payment-ready UNPAID', () {
-      expect(
-        OrderStageRank.isLocalAheadOfServer(
-          localStatus: 'UNPAID',
-          serverStatus: 'OPENBILL_CONFIRMATION',
-          openbillFlag: true,
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'openbill server OPENBILL_CONFIRMATION beats local payment-ready UNPAID',
+      () {
+        expect(
+          OrderStageRank.isLocalAheadOfServer(
+            localStatus: 'UNPAID',
+            serverStatus: 'OPENBILL_CONFIRMATION',
+            openbillFlag: true,
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('openbill server OPENBILL_WAITING_ORDER beats local payment-ready UNPAID', () {
-      expect(
-        OrderStageRank.isLocalAheadOfServer(
-          localStatus: 'UNPAID',
-          serverStatus: 'OPENBILL_WAITING_ORDER',
-          openbillFlag: true,
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'openbill server OPENBILL_WAITING_ORDER beats local payment-ready UNPAID',
+      () {
+        expect(
+          OrderStageRank.isLocalAheadOfServer(
+            localStatus: 'UNPAID',
+            serverStatus: 'OPENBILL_WAITING_ORDER',
+            openbillFlag: true,
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('openbill UNPAID local equals server UNPAID is not ahead', () {
       expect(
@@ -415,41 +425,47 @@ void main() {
       );
     });
 
-    test('cashier openbill WAITING_ORDER queues CONFIRM_OPENBILL when server still CONFIRMATION', () {
-      expect(
-        OrderSyncIntentChain.firstIntentAfterCreate(
-          localStatus: 'OPENBILL_WAITING_ORDER',
-          storedIntent: 'CREATE',
-          openbillFlag: true,
-          orderBy: 'CASHIER',
-          serverStatusAfterCreate: 'OPENBILL_CONFIRMATION',
-        ),
-        'CONFIRM_OPENBILL',
-      );
-      expect(
-        OrderSyncIntentChain.firstIntentAfterCreate(
-          localStatus: 'OPENBILL_WAITING_ORDER',
-          storedIntent: 'CONFIRM_OPENBILL',
-          openbillFlag: true,
-          orderBy: 'CASHIER',
-          serverStatusAfterCreate: 'OPENBILL_CONFIRMATION',
-        ),
-        isNull,
-      );
-    });
+    test(
+      'cashier openbill WAITING_ORDER queues CONFIRM_OPENBILL when server still CONFIRMATION',
+      () {
+        expect(
+          OrderSyncIntentChain.firstIntentAfterCreate(
+            localStatus: 'OPENBILL_WAITING_ORDER',
+            storedIntent: 'CREATE',
+            openbillFlag: true,
+            orderBy: 'CASHIER',
+            serverStatusAfterCreate: 'OPENBILL_CONFIRMATION',
+          ),
+          'CONFIRM_OPENBILL',
+        );
+        expect(
+          OrderSyncIntentChain.firstIntentAfterCreate(
+            localStatus: 'OPENBILL_WAITING_ORDER',
+            storedIntent: 'CONFIRM_OPENBILL',
+            openbillFlag: true,
+            orderBy: 'CASHIER',
+            serverStatusAfterCreate: 'OPENBILL_CONFIRMATION',
+          ),
+          isNull,
+        );
+      },
+    );
 
-    test('cashier openbill WAITING_ORDER needs no follow-up when server already WAITING', () {
-      expect(
-        OrderSyncIntentChain.firstIntentAfterCreate(
-          localStatus: 'OPENBILL_WAITING_ORDER',
-          storedIntent: 'CREATE',
-          openbillFlag: true,
-          orderBy: 'CASHIER',
-          serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
-        ),
-        isNull,
-      );
-    });
+    test(
+      'cashier openbill WAITING_ORDER needs no follow-up when server already WAITING',
+      () {
+        expect(
+          OrderSyncIntentChain.firstIntentAfterCreate(
+            localStatus: 'OPENBILL_WAITING_ORDER',
+            storedIntent: 'CREATE',
+            openbillFlag: true,
+            orderBy: 'CASHIER',
+            serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
+          ),
+          isNull,
+        );
+      },
+    );
 
     test('customer openbill WAITING_ORDER still queues CONFIRM_OPENBILL', () {
       expect(
@@ -504,17 +520,20 @@ void main() {
   });
 
   group('OrderSyncIntentChain — multi-pass chain', () {
-    test('CONFIRM_OPENBILL on openbill WAITING_ORDER needs no PROCESS follow-up', () {
-      expect(
-        OrderSyncIntentChain.resolveNext(
-          localStatus: 'OPENBILL_WAITING_ORDER',
-          storedIntent: 'PROCESS',
-          appliedIntent: 'CONFIRM_OPENBILL',
-          openbillFlag: true,
-        ),
-        isNull,
-      );
-    });
+    test(
+      'CONFIRM_OPENBILL on openbill WAITING_ORDER needs no PROCESS follow-up',
+      () {
+        expect(
+          OrderSyncIntentChain.resolveNext(
+            localStatus: 'OPENBILL_WAITING_ORDER',
+            storedIntent: 'PROCESS',
+            appliedIntent: 'CONFIRM_OPENBILL',
+            openbillFlag: true,
+          ),
+          isNull,
+        );
+      },
+    );
 
     test('CONFIRM_OPENBILL with dirty served details queues SERVE_ITEMS', () {
       expect(
@@ -598,46 +617,52 @@ void main() {
       );
     });
 
-    test('CREATE + local UNPAID + server WAITING + dirty served queues SERVE_ITEMS', () {
-      expect(
-        OrderSyncIntentChain.firstIntentAfterCreate(
-          localStatus: 'UNPAID',
-          storedIntent: 'CREATE',
-          openbillFlag: true,
-          orderBy: 'CASHIER',
-          serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
-          hasDirtyServedDetails: true,
-        ),
-        'SERVE_ITEMS',
-      );
-    });
+    test(
+      'CREATE + local UNPAID + server WAITING + dirty served queues SERVE_ITEMS',
+      () {
+        expect(
+          OrderSyncIntentChain.firstIntentAfterCreate(
+            localStatus: 'UNPAID',
+            storedIntent: 'CREATE',
+            openbillFlag: true,
+            orderBy: 'CASHIER',
+            serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
+            hasDirtyServedDetails: true,
+          ),
+          'SERVE_ITEMS',
+        );
+      },
+    );
 
-    test('CREATE + local SERVED + paidAmount + server WAITING queues SERVE_ITEMS not PAY', () {
-      expect(
-        OrderSyncIntentChain.firstIntentAfterCreate(
-          localStatus: 'SERVED',
-          storedIntent: 'CREATE',
-          openbillFlag: true,
-          paidAmountLocal: 50000,
-          orderBy: 'CASHIER',
-          serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
-          hasDirtyServedDetails: true,
-        ),
-        'SERVE_ITEMS',
-      );
-      expect(
-        OrderSyncIntentChain.firstIntentAfterCreate(
-          localStatus: 'SERVED',
-          storedIntent: 'CREATE',
-          openbillFlag: true,
-          paidAmountLocal: 50000,
-          orderBy: 'CASHIER',
-          serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
-          hasDirtyServedDetails: false,
-        ),
-        'SERVE_ITEMS',
-      );
-    });
+    test(
+      'CREATE + local SERVED + paidAmount + server WAITING queues SERVE_ITEMS not PAY',
+      () {
+        expect(
+          OrderSyncIntentChain.firstIntentAfterCreate(
+            localStatus: 'SERVED',
+            storedIntent: 'CREATE',
+            openbillFlag: true,
+            paidAmountLocal: 50000,
+            orderBy: 'CASHIER',
+            serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
+            hasDirtyServedDetails: true,
+          ),
+          'SERVE_ITEMS',
+        );
+        expect(
+          OrderSyncIntentChain.firstIntentAfterCreate(
+            localStatus: 'SERVED',
+            storedIntent: 'CREATE',
+            openbillFlag: true,
+            paidAmountLocal: 50000,
+            orderBy: 'CASHIER',
+            serverStatusAfterCreate: 'OPENBILL_WAITING_ORDER',
+            hasDirtyServedDetails: false,
+          ),
+          'SERVE_ITEMS',
+        );
+      },
+    );
 
     test('SERVE_ITEMS applied + paidAmount + server UNPAID queues PAY', () {
       expect(
@@ -667,19 +692,22 @@ void main() {
       );
     });
 
-    test('OFFLINE_CATCH_UP openbill + server WAITING + paid queues SERVE_ITEMS', () {
-      expect(
-        OrderSyncIntentChain.resolveNext(
-          localStatus: 'UNPAID',
-          storedIntent: 'PAY',
-          appliedIntent: 'OFFLINE_CATCH_UP',
-          openbillFlag: true,
-          paidAmountLocal: 50000,
-          serverStatusAfterApply: 'OPENBILL_WAITING_ORDER',
-        ),
-        'SERVE_ITEMS',
-      );
-    });
+    test(
+      'OFFLINE_CATCH_UP openbill + server WAITING + paid queues SERVE_ITEMS',
+      () {
+        expect(
+          OrderSyncIntentChain.resolveNext(
+            localStatus: 'UNPAID',
+            storedIntent: 'PAY',
+            appliedIntent: 'OFFLINE_CATCH_UP',
+            openbillFlag: true,
+            paidAmountLocal: 50000,
+            serverStatusAfterApply: 'OPENBILL_WAITING_ORDER',
+          ),
+          'SERVE_ITEMS',
+        );
+      },
+    );
   });
 
   group('OfflineCatchUpPolicy', () {
@@ -748,76 +776,88 @@ void main() {
       );
     });
 
-    test('cash SERVED with serverId uses FINISH step intent not catch-up', () async {
-      final order = _order(
-        clientUuid: 'cash-1',
-        status: 'SERVED',
-        syncIntent: 'FINISH',
-        openbillFlag: false,
-        serverId: 99,
-        paidAmountLocal: 50000,
-      );
+    test(
+      'cash SERVED with serverId uses FINISH step intent not catch-up',
+      () async {
+        final order = _order(
+          clientUuid: 'cash-1',
+          status: 'SERVED',
+          syncIntent: 'FINISH',
+          openbillFlag: false,
+          serverId: 99,
+          paidAmountLocal: 50000,
+        );
 
-      expect(
-        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
-          order: order,
-          hasDirtyServedDetails: (_) async => false,
-        ),
-        isFalse,
-      );
-    });
+        expect(
+          await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+            order: order,
+            hasDirtyServedDetails: (_) async => false,
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('cash PROCESSED with serverId uses PROCESS step intent not catch-up', () async {
-      final order = _order(
-        clientUuid: 'cash-2',
-        status: 'PROCESSED',
-        syncIntent: 'PROCESS',
-        openbillFlag: false,
-        serverId: 100,
-      );
+    test(
+      'cash PROCESSED with serverId uses PROCESS step intent not catch-up',
+      () async {
+        final order = _order(
+          clientUuid: 'cash-2',
+          status: 'PROCESSED',
+          syncIntent: 'PROCESS',
+          openbillFlag: false,
+          serverId: 100,
+        );
 
-      expect(
-        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
-          order: order,
-          hasDirtyServedDetails: (_) async => false,
-        ),
-        isFalse,
-      );
-    });
+        expect(
+          await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+            order: order,
+            hasDirtyServedDetails: (_) async => false,
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('openbill UNPAID SERVE_ITEMS with serverId uses step intent not catch-up', () async {
-      final order = _order(
-        clientUuid: 'ob-serve',
-        status: 'UNPAID',
-        syncIntent: 'SERVE_ITEMS',
-        serverId: 55,
-      );
+    test(
+      'openbill UNPAID SERVE_ITEMS with serverId uses step intent not catch-up',
+      () async {
+        final order = _order(
+          clientUuid: 'ob-serve',
+          status: 'UNPAID',
+          syncIntent: 'SERVE_ITEMS',
+          serverId: 55,
+        );
 
-      expect(
-        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
-          order: order,
-          hasDirtyServedDetails: (_) async => true,
-        ),
-        isFalse,
-      );
-    });
+        expect(
+          await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+            order: order,
+            hasDirtyServedDetails: (_) async => true,
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('openbill OPENBILL_WAITING_ORDER SERVE_ITEMS with serverId uses step intent', () async {
-      final order = _order(
-        clientUuid: 'ob-serve-waiting',
-        status: 'OPENBILL_WAITING_ORDER',
-        syncIntent: 'SERVE_ITEMS',
-        serverId: 56,
-      );
+    test(
+      'openbill OPENBILL_WAITING_ORDER SERVE_ITEMS with serverId uses step intent',
+      () async {
+        final order = _order(
+          clientUuid: 'ob-serve-waiting',
+          status: 'OPENBILL_WAITING_ORDER',
+          syncIntent: 'SERVE_ITEMS',
+          serverId: 56,
+        );
 
-      expect(
-        await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
-          order: order,
-          hasDirtyServedDetails: (_) async => true,
-        ),
-        isFalse,
-      );
-    });
+        expect(
+          await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+            order: order,
+            hasDirtyServedDetails: (_) async => true,
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('OFFLINE_CATCH_UP guard always allowed', () {
       expect(
@@ -840,52 +880,55 @@ void main() {
       );
     });
 
-    test('openbill waiting with mixed served lines keeps kitchen catch-up target', () {
-      final order = _order(
-        clientUuid: 'ob-served',
-        status: 'OPENBILL_WAITING_ORDER',
-      );
-      final bundle = BookingOrderBundle(
-        order: order,
-        details: [
-          OrderDetail(
-            clientDetailUuid: 'detail-1',
-            bookingOrderClientUuid: 'ob-served',
-            partnerProductId: 1,
-            quantity: 1,
-            basePrice: 10000,
-            optionsPrice: 0,
-            syncVersion: 0,
-            status: 'SERVED BY CASHIER',
-            syncDirty: true,
-            createdAt: DateTime(2026, 6, 30, 10),
-            updatedAt: DateTime(2026, 6, 30, 10),
-          ),
-          OrderDetail(
-            clientDetailUuid: 'detail-2',
-            bookingOrderClientUuid: 'ob-served',
-            partnerProductId: 2,
-            quantity: 1,
-            basePrice: 12000,
-            optionsPrice: 0,
-            syncVersion: 0,
-            status: null,
-            syncDirty: true,
-            createdAt: DateTime(2026, 6, 30, 10),
-            updatedAt: DateTime(2026, 6, 30, 10),
-          ),
-        ],
-        optionsByDetailUuid: const {},
-      );
-
-      expect(
-        OfflineCatchUpPolicy.resolveCatchUpTargetStatus(
+    test(
+      'openbill waiting with mixed served lines keeps kitchen catch-up target',
+      () {
+        final order = _order(
+          clientUuid: 'ob-served',
+          status: 'OPENBILL_WAITING_ORDER',
+        );
+        final bundle = BookingOrderBundle(
           order: order,
-          bundle: bundle,
-        ),
-        'OPENBILL_WAITING_ORDER',
-      );
-    });
+          details: [
+            OrderDetail(
+              clientDetailUuid: 'detail-1',
+              bookingOrderClientUuid: 'ob-served',
+              partnerProductId: 1,
+              quantity: 1,
+              basePrice: 10000,
+              optionsPrice: 0,
+              syncVersion: 0,
+              status: 'SERVED BY CASHIER',
+              syncDirty: true,
+              createdAt: DateTime(2026, 6, 30, 10),
+              updatedAt: DateTime(2026, 6, 30, 10),
+            ),
+            OrderDetail(
+              clientDetailUuid: 'detail-2',
+              bookingOrderClientUuid: 'ob-served',
+              partnerProductId: 2,
+              quantity: 1,
+              basePrice: 12000,
+              optionsPrice: 0,
+              syncVersion: 0,
+              status: null,
+              syncDirty: true,
+              createdAt: DateTime(2026, 6, 30, 10),
+              updatedAt: DateTime(2026, 6, 30, 10),
+            ),
+          ],
+          optionsByDetailUuid: const {},
+        );
+
+        expect(
+          OfflineCatchUpPolicy.resolveCatchUpTargetStatus(
+            order: order,
+            bundle: bundle,
+          ),
+          'OPENBILL_WAITING_ORDER',
+        );
+      },
+    );
 
     test('openbill waiting with all lines served targets UNPAID catch-up', () {
       final order = _order(
@@ -935,31 +978,37 @@ void main() {
       );
     });
 
-    test('openbill UNPAID local ahead of server OPENBILL_WAITING_ORDER needs catch-up', () {
-      expect(
-        OrderCatchUpSyncPolicy.needsCatchUp(
-          localStatus: 'UNPAID',
-          serverStatus: 'OPENBILL_WAITING_ORDER',
-          openbillFlag: true,
-          hasDirtyServedDetails: false,
-          syncIntent: 'SERVE_ITEMS',
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'openbill UNPAID local ahead of server OPENBILL_WAITING_ORDER needs catch-up',
+      () {
+        expect(
+          OrderCatchUpSyncPolicy.needsCatchUp(
+            localStatus: 'UNPAID',
+            serverStatus: 'OPENBILL_WAITING_ORDER',
+            openbillFlag: true,
+            hasDirtyServedDetails: false,
+            syncIntent: 'SERVE_ITEMS',
+          ),
+          isTrue,
+        );
+      },
+    );
 
-    test('openbill OPENBILL_WAITING_ORDER local with server UNPAID needs catch-up', () {
-      expect(
-        OrderCatchUpSyncPolicy.needsCatchUp(
-          localStatus: 'OPENBILL_WAITING_ORDER',
-          serverStatus: 'UNPAID',
-          openbillFlag: true,
-          hasDirtyServedDetails: false,
-          syncIntent: 'SERVE_ITEMS',
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'openbill OPENBILL_WAITING_ORDER local with server UNPAID needs catch-up',
+      () {
+        expect(
+          OrderCatchUpSyncPolicy.needsCatchUp(
+            localStatus: 'OPENBILL_WAITING_ORDER',
+            serverStatus: 'UNPAID',
+            openbillFlag: true,
+            hasDirtyServedDetails: false,
+            syncIntent: 'SERVE_ITEMS',
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('dirty served details still need catch-up', () {
       expect(
@@ -1013,92 +1062,107 @@ void main() {
       );
     });
 
-    test('cash PAID local ahead of server UNPAID with PAY intent needs catch-up', () {
-      expect(
-        OrderCatchUpSyncPolicy.needsCatchUp(
-          localStatus: 'PAID',
-          serverStatus: 'UNPAID',
-          openbillFlag: false,
-          hasDirtyServedDetails: false,
-          paidAmountLocal: 50000,
-          syncIntent: 'PAY',
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'cash PAID local ahead of server UNPAID with PAY intent needs catch-up',
+      () {
+        expect(
+          OrderCatchUpSyncPolicy.needsCatchUp(
+            localStatus: 'PAID',
+            serverStatus: 'UNPAID',
+            openbillFlag: false,
+            hasDirtyServedDetails: false,
+            paidAmountLocal: 50000,
+            syncIntent: 'PAY',
+          ),
+          isTrue,
+        );
+      },
+    );
 
-    test('openbill SERVED with PAY intent ahead of server UNPAID needs catch-up', () {
-      expect(
-        OrderCatchUpSyncPolicy.needsCatchUp(
-          localStatus: 'SERVED',
-          serverStatus: 'UNPAID',
-          openbillFlag: true,
-          hasDirtyServedDetails: false,
-          paidAmountLocal: 50000,
-          syncIntent: 'PAY',
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'openbill SERVED with PAY intent ahead of server UNPAID needs catch-up',
+      () {
+        expect(
+          OrderCatchUpSyncPolicy.needsCatchUp(
+            localStatus: 'SERVED',
+            serverStatus: 'UNPAID',
+            openbillFlag: true,
+            hasDirtyServedDetails: false,
+            paidAmountLocal: 50000,
+            syncIntent: 'PAY',
+          ),
+          isTrue,
+        );
+      },
+    );
 
-    test('shouldClearSyncDirty false when cash PAID but server still UNPAID', () {
-      expect(
-        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
-          syncDirty: true,
-          localStatus: 'PAID',
-          serverStatus: 'UNPAID',
-          openbillFlag: false,
-          hasDirtyServedDetails: false,
-          paidAmountLocal: 50000,
-          syncIntent: 'PAY',
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'shouldClearSyncDirty false when cash PAID but server still UNPAID',
+      () {
+        expect(
+          OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+            syncDirty: true,
+            localStatus: 'PAID',
+            serverStatus: 'UNPAID',
+            openbillFlag: false,
+            hasDirtyServedDetails: false,
+            paidAmountLocal: 50000,
+            syncIntent: 'PAY',
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('shouldClearSyncDirty false when openbill SERVED but server still UNPAID', () {
-      expect(
-        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
-          syncDirty: true,
-          localStatus: 'SERVED',
-          serverStatus: 'UNPAID',
-          openbillFlag: true,
-          hasDirtyServedDetails: false,
-          paidAmountLocal: 50000,
-          syncIntent: 'PAY',
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'shouldClearSyncDirty false when openbill SERVED but server still UNPAID',
+      () {
+        expect(
+          OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+            syncDirty: true,
+            localStatus: 'SERVED',
+            serverStatus: 'UNPAID',
+            openbillFlag: true,
+            hasDirtyServedDetails: false,
+            paidAmountLocal: 50000,
+            syncIntent: 'PAY',
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('pre-push heal must not treat local status as server when statuses match falsely', () {
-      // Regression: healMirrorsSyncedWithServer used to default serverStatus to
-      // order.orderStatus, making PAID vs PAID appear synced before push.
-      expect(
-        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
-          syncDirty: true,
-          localStatus: 'PAID',
-          serverStatus: 'PAID',
-          openbillFlag: false,
-          hasDirtyServedDetails: false,
-          paidAmountLocal: 50000,
-          syncIntent: 'PAY',
-        ),
-        isTrue,
-      );
-      expect(
-        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
-          syncDirty: true,
-          localStatus: 'PAID',
-          serverStatus: 'UNPAID',
-          openbillFlag: false,
-          hasDirtyServedDetails: false,
-          paidAmountLocal: 50000,
-          syncIntent: 'PAY',
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'pre-push heal must not treat local status as server when statuses match falsely',
+      () {
+        // Regression: healMirrorsSyncedWithServer used to default serverStatus to
+        // order.orderStatus, making PAID vs PAID appear synced before push.
+        expect(
+          OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+            syncDirty: true,
+            localStatus: 'PAID',
+            serverStatus: 'PAID',
+            openbillFlag: false,
+            hasDirtyServedDetails: false,
+            paidAmountLocal: 50000,
+            syncIntent: 'PAY',
+          ),
+          isTrue,
+        );
+        expect(
+          OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+            syncDirty: true,
+            localStatus: 'PAID',
+            serverStatus: 'UNPAID',
+            openbillFlag: false,
+            hasDirtyServedDetails: false,
+            paidAmountLocal: 50000,
+            syncIntent: 'PAY',
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('shouldClearSyncDirty when cash SERVED matches server SERVED', () {
       expect(
@@ -1114,19 +1178,22 @@ void main() {
       );
     });
 
-    test('shouldClearSyncDirty false when cash SERVED but server still PAID', () {
-      expect(
-        OrderCatchUpSyncPolicy.shouldClearSyncDirty(
-          syncDirty: true,
-          localStatus: 'SERVED',
-          serverStatus: 'PAID',
-          openbillFlag: false,
-          hasDirtyServedDetails: false,
-          paidAmountLocal: 50000,
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'shouldClearSyncDirty false when cash SERVED but server still PAID',
+      () {
+        expect(
+          OrderCatchUpSyncPolicy.shouldClearSyncDirty(
+            syncDirty: true,
+            localStatus: 'SERVED',
+            serverStatus: 'PAID',
+            openbillFlag: false,
+            hasDirtyServedDetails: false,
+            paidAmountLocal: 50000,
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('shouldClearSyncDirty false when not dirty', () {
       expect(
@@ -1156,31 +1223,34 @@ void main() {
   });
 
   group('OfflineCatchUpPolicy UPDATE exemption', () {
-    test('UPDATE intent does not use offline catch-up on UNPAID openbill', () async {
-      final order = BookingOrder(
-        clientUuid: 'uuid-1',
-        customerName: 'guest',
-        orderStatus: 'UNPAID',
-        openbillFlag: true,
-        syncDirty: true,
-        syncIntent: 'UPDATE',
-        paidAmountLocal: 50000,
-        discountValue: 0,
-        totalOrderValue: 0,
-        isPpnActive: false,
-        paymentFlag: false,
-        syncVersion: 0,
-        createdAt: DateTime(2026, 6, 30, 10),
-        updatedAt: DateTime(2026, 6, 30, 10),
-      );
+    test(
+      'UPDATE intent does not use offline catch-up on UNPAID openbill',
+      () async {
+        final order = BookingOrder(
+          clientUuid: 'uuid-1',
+          customerName: 'guest',
+          orderStatus: 'UNPAID',
+          openbillFlag: true,
+          syncDirty: true,
+          syncIntent: 'UPDATE',
+          paidAmountLocal: 50000,
+          discountValue: 0,
+          totalOrderValue: 0,
+          isPpnActive: false,
+          paymentFlag: false,
+          syncVersion: 0,
+          createdAt: DateTime(2026, 6, 30, 10),
+          updatedAt: DateTime(2026, 6, 30, 10),
+        );
 
-      final useCatchUp = await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
-        order: order,
-        hasDirtyServedDetails: (_) async => true,
-      );
+        final useCatchUp = await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+          order: order,
+          hasDirtyServedDetails: (_) async => true,
+        );
 
-      expect(useCatchUp, isFalse);
-    });
+        expect(useCatchUp, isFalse);
+      },
+    );
   });
 
   group('OrderEditConflictDetector', () {
@@ -1212,16 +1282,19 @@ void main() {
   });
 
   group('OrderStageResolver — status after sync apply', () {
-    test('promotes openbill OPENBILL_WAITING_ORDER to UNPAID when server UNPAID', () {
-      expect(
-        OrderStageResolver.resolveStatusAfterSyncApply(
-          localStatus: 'OPENBILL_WAITING_ORDER',
-          serverStatus: 'UNPAID',
-          openbillFlag: true,
-        ),
-        'UNPAID',
-      );
-    });
+    test(
+      'promotes openbill OPENBILL_WAITING_ORDER to UNPAID when server UNPAID',
+      () {
+        expect(
+          OrderStageResolver.resolveStatusAfterSyncApply(
+            localStatus: 'OPENBILL_WAITING_ORDER',
+            serverStatus: 'UNPAID',
+            openbillFlag: true,
+          ),
+          'UNPAID',
+        );
+      },
+    );
 
     test('promotes openbill UNPAID to SERVED when server SERVED', () {
       expect(
@@ -1249,20 +1322,14 @@ void main() {
   group('resolveLastPaymentIdForPush', () {
     test('prefers latestPaymentServerId over paymentId', () {
       expect(
-        resolveLastPaymentIdForPush(
-          latestPaymentServerId: 99,
-          paymentId: 12,
-        ),
+        resolveLastPaymentIdForPush(latestPaymentServerId: 99, paymentId: 12),
         99,
       );
     });
 
     test('falls back to paymentId when latest is null', () {
       expect(
-        resolveLastPaymentIdForPush(
-          latestPaymentServerId: null,
-          paymentId: 12,
-        ),
+        resolveLastPaymentIdForPush(latestPaymentServerId: null, paymentId: 12),
         12,
       );
     });
@@ -1406,7 +1473,11 @@ void main() {
       expect(compareOrdersOldestFirst(c, a), lessThan(0));
 
       final items = [b, c, a]..sort(compareOrdersOldestFirst);
-      expect(items.map((e) => e['client_uuid']).toList(), ['ccc', 'aaa', 'bbb']);
+      expect(items.map((e) => e['client_uuid']).toList(), [
+        'ccc',
+        'aaa',
+        'bbb',
+      ]);
     });
   });
 
@@ -1423,39 +1494,196 @@ void main() {
       await db.close();
     });
 
-    test('preserves local paymentId when syncDirty and server row has no payment_id', () async {
-      const clientUuid = 'uuid-preserve-pay';
-      await db.into(db.bookingOrders).insert(
+    test(
+      'preserves local paymentId when syncDirty and server row has no payment_id',
+      () async {
+        const clientUuid = 'uuid-preserve-pay';
+        await db
+            .into(db.bookingOrders)
+            .insert(
+              BookingOrdersCompanion.insert(
+                clientUuid: clientUuid,
+                customerName: 'guest',
+                orderStatus: const Value('SERVED'),
+                serverId: const Value(100),
+                paymentId: const Value(500),
+                latestPaymentServerId: const Value(500),
+                syncDirty: const Value(true),
+                syncIntent: const Value('PAY'),
+                paidAmountLocal: const Value(50000),
+                openbillFlag: const Value(true),
+                discountValue: const Value(0),
+                totalOrderValue: const Value(50000),
+                isPpnActive: const Value(false),
+                paymentFlag: const Value(false),
+                syncVersion: const Value(0),
+              ),
+            );
+
+        await dao.upsertFromServer({
+          'id': 100,
+          'order_status': 'UNPAID',
+          'customer_name': 'guest',
+          'total_order_value': 50000,
+          'sync_version': 1,
+        });
+
+        final row = await dao.getByClientUuid(clientUuid);
+        expect(row?.paymentId, 500);
+        expect(row?.latestPaymentServerId, 500);
+      },
+    );
+
+    test('preserves UNPAID status after menu-only update response', () async {
+      const clientUuid = 'uuid-preserve-unpaid';
+      await db
+          .into(db.bookingOrders)
+          .insert(
             BookingOrdersCompanion.insert(
               clientUuid: clientUuid,
               customerName: 'guest',
-              orderStatus: const Value('SERVED'),
-              serverId: const Value(100),
-              paymentId: const Value(500),
-              latestPaymentServerId: const Value(500),
-              syncDirty: const Value(true),
-              syncIntent: const Value('PAY'),
-              paidAmountLocal: const Value(50000),
-              openbillFlag: const Value(true),
+              orderStatus: const Value('UNPAID'),
+              serverId: const Value(101),
+              syncDirty: const Value(false),
+              openbillFlag: const Value(false),
               discountValue: const Value(0),
-              totalOrderValue: const Value(50000),
+              totalOrderValue: const Value(25000),
               isPpnActive: const Value(false),
               paymentFlag: const Value(false),
               syncVersion: const Value(0),
             ),
           );
 
-      await dao.upsertFromServer({
-        'id': 100,
-        'order_status': 'UNPAID',
+      await dao.upsertMenuUpdatePreservingLifecycle({
+        'id': 101,
+        'order_status': 'PAID',
         'customer_name': 'guest',
-        'total_order_value': 50000,
+        'total_order_value': 30000,
         'sync_version': 1,
-      });
+        'payment_flag': false,
+      }, preservedStatus: 'UNPAID');
 
       final row = await dao.getByClientUuid(clientUuid);
-      expect(row?.paymentId, 500);
-      expect(row?.latestPaymentServerId, 500);
+      expect(row?.orderStatus, 'UNPAID');
+      expect(row?.totalOrderValue, 30000);
+      expect(row?.syncDirty, isFalse);
+    });
+
+    test(
+      'upsertFromServer tolerates duplicate local detail server ids',
+      () async {
+        const clientUuid = 'uuid-duplicate-detail';
+        await db
+            .into(db.bookingOrders)
+            .insert(
+              BookingOrdersCompanion.insert(
+                clientUuid: clientUuid,
+                customerName: 'guest',
+                orderStatus: const Value('OPENBILL_WAITING_ORDER'),
+                serverId: const Value(102),
+                syncDirty: const Value(false),
+                openbillFlag: const Value(true),
+                discountValue: const Value(0),
+                totalOrderValue: const Value(25000),
+                isPpnActive: const Value(false),
+                paymentFlag: const Value(false),
+                syncVersion: const Value(0),
+              ),
+            );
+
+        for (final detailUuid in ['detail-a', 'detail-b']) {
+          await db
+              .into(db.orderDetails)
+              .insert(
+                OrderDetailsCompanion.insert(
+                  clientDetailUuid: detailUuid,
+                  bookingOrderClientUuid: clientUuid,
+                  serverId: const Value(9001),
+                  bookingOrderServerId: const Value(102),
+                  partnerProductId: 11,
+                  productName: const Value('Menu'),
+                  quantity: const Value(1),
+                  basePrice: const Value(25000),
+                  syncDirty: const Value(false),
+                ),
+              );
+        }
+
+        await dao.upsertFromServer({
+          'id': 102,
+          'order_status': 'UNPAID',
+          'customer_name': 'guest',
+          'openbill_flag': true,
+          'total_order_value': 25000,
+          'sync_version': 1,
+          'order_details': [
+            {
+              'id': 9001,
+              'partner_product_id': 11,
+              'product_name': 'Menu',
+              'quantity': 1,
+              'base_price': 25000,
+              'status': 'SERVED BY CASHIER',
+            },
+          ],
+        });
+
+        final details = await (db.select(
+          db.orderDetails,
+        )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
+        expect(
+          details.where((detail) => detail.serverId == 9001),
+          hasLength(1),
+        );
+        expect(details.single.status, 'SERVED BY CASHIER');
+      },
+    );
+
+    test('clearServeItemsSyncState clears pending served replay', () async {
+      const clientUuid = 'uuid-clear-serve-items';
+      await db
+          .into(db.bookingOrders)
+          .insert(
+            BookingOrdersCompanion.insert(
+              clientUuid: clientUuid,
+              customerName: 'guest',
+              orderStatus: const Value('UNPAID'),
+              serverId: const Value(103),
+              syncDirty: const Value(true),
+              syncIntent: const Value('SERVE_ITEMS'),
+              openbillFlag: const Value(true),
+              discountValue: const Value(0),
+              totalOrderValue: const Value(25000),
+              isPpnActive: const Value(false),
+              paymentFlag: const Value(false),
+              syncVersion: const Value(0),
+            ),
+          );
+      await db
+          .into(db.orderDetails)
+          .insert(
+            OrderDetailsCompanion.insert(
+              clientDetailUuid: 'detail-served',
+              bookingOrderClientUuid: clientUuid,
+              serverId: const Value(9002),
+              bookingOrderServerId: const Value(103),
+              partnerProductId: 12,
+              productName: const Value('Menu'),
+              status: const Value('SERVED BY CASHIER'),
+              syncDirty: const Value(true),
+            ),
+          );
+
+      await dao.clearServeItemsSyncState(clientUuid);
+
+      final order = await dao.getByClientUuid(clientUuid);
+      final details = await (db.select(
+        db.orderDetails,
+      )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
+      expect(order?.syncDirty, isFalse);
+      expect(order?.syncIntent, isNull);
+      expect(order?.syncError, isNull);
+      expect(details.single.syncDirty, isFalse);
     });
   });
 }
