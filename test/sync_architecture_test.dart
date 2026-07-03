@@ -1685,5 +1685,60 @@ void main() {
       expect(order?.syncError, isNull);
       expect(details.single.syncDirty, isFalse);
     });
+
+    test(
+      'clearOfflineCatchUpSyncState clears dirty replay and proof path',
+      () async {
+        const clientUuid = 'uuid-clear-catch-up';
+        await db
+            .into(db.bookingOrders)
+            .insert(
+              BookingOrdersCompanion.insert(
+                clientUuid: clientUuid,
+                customerName: 'guest',
+                orderStatus: const Value('SERVED'),
+                serverId: const Value(104),
+                syncDirty: const Value(true),
+                syncIntent: const Value('OFFLINE_CATCH_UP'),
+                syncError: const Value('Order ini tidak dapat diubah.'),
+                localFilePathsJson: const Value(
+                  '{"cashier_proof":"C:/tmp/proof.jpg"}',
+                ),
+                openbillFlag: const Value(false),
+                discountValue: const Value(0),
+                totalOrderValue: const Value(25000),
+                isPpnActive: const Value(false),
+                paymentFlag: const Value(true),
+                syncVersion: const Value(0),
+              ),
+            );
+        await db
+            .into(db.orderDetails)
+            .insert(
+              OrderDetailsCompanion.insert(
+                clientDetailUuid: 'detail-catch-up',
+                bookingOrderClientUuid: clientUuid,
+                serverId: const Value(9003),
+                bookingOrderServerId: const Value(104),
+                partnerProductId: 13,
+                productName: const Value('Menu'),
+                status: const Value('SERVED BY CASHIER'),
+                syncDirty: const Value(true),
+              ),
+            );
+
+        await dao.clearOfflineCatchUpSyncState(clientUuid, clearProof: true);
+
+        final order = await dao.getByClientUuid(clientUuid);
+        final details = await (db.select(
+          db.orderDetails,
+        )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
+        expect(order?.syncDirty, isFalse);
+        expect(order?.syncIntent, isNull);
+        expect(order?.syncError, isNull);
+        expect(order?.localFilePathsJson, isNull);
+        expect(details.single.syncDirty, isFalse);
+      },
+    );
   });
 }

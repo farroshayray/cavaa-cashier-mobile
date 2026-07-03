@@ -765,6 +765,19 @@ class BookingOrdersDao {
     await _clearMirrorSyncState(clientUuid, clearDetails: false);
   }
 
+  Future<void> clearOfflineCatchUpSyncState(
+    String clientUuid, {
+    bool clearProof = false,
+  }) async {
+    if (clientUuid.isEmpty) return;
+
+    await _clearDetailSyncDirty(clientUuid);
+    await _clearMirrorSyncState(clientUuid, clearDetails: false);
+    if (clearProof) {
+      await clearCashierProofPath(clientUuid);
+    }
+  }
+
   /// Sets header dirty + SERVE_ITEMS when served details are still pending sync.
   Future<int> ensureHeaderDirtyForPendingDetails() async {
     final rows =

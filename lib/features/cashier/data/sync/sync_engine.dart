@@ -545,6 +545,22 @@ class SyncEngine {
         );
         continue;
       }
+      if (_isOfflineCatchUpAlreadyAppliedError(map)) {
+        final clearProof = _shouldClearProofForCatchUpError(map);
+        await bookingOrdersDao.clearOfflineCatchUpSyncState(
+          clientUuid,
+          clearProof: clearProof,
+        );
+        ApiDebugLog.sync('self-heal', {
+          'client_uuid': clientUuid,
+          'reason': map['code'] ?? map['message'],
+          'server_id': map['server_id'],
+          'server_status': map['server_status'],
+          'target_status': map['target_status'],
+          'clear_proof': clearProof,
+        });
+        continue;
+      }
       await bookingOrdersDao.markSyncErrorByClientUuid(clientUuid, message);
     }
 
@@ -665,6 +681,49 @@ class SyncEngine {
     final message = (error['message'] ?? '').toString().toLowerCase();
     return message.contains('sudah berstatus served') ||
         message.contains('already served');
+  }
+
+  bool _isOfflineCatchUpAlreadyAppliedError(Map<String, dynamic> error) {
+    final intent = (error['sync_intent'] ?? '').toString().toUpperCase();
+    if (intent != 'OFFLINE_CATCH_UP') return false;
+
+    final code = (error['code'] ?? '').toString().toUpperCase();
+    const selfHealCodes = {
+      'SERVER_ALREADY_REACHED_TARGET',
+      'SERVER_AHEAD_PULL_REQUIRED',
+      'STALE_DETAIL_ALREADY_REPLACED',
+      'STALE_DETAIL_NOT_FOUND',
+      'ORDER_ALREADY_SERVED',
+    };
+    if (selfHealCodes.contains(code)) return true;
+
+    final serverStatus = (error['server_status'] ?? '')
+        .toString()
+        .toUpperCase();
+    final targetStatus = (error['target_status'] ?? '')
+        .toString()
+        .toUpperCase();
+    if (serverStatus == 'SERVED' &&
+        (targetStatus.isEmpty || targetStatus == 'SERVED')) {
+      return true;
+    }
+    if (code == 'ORDER_NOT_EDITABLE' && serverStatus == 'SERVED') {
+      return true;
+    }
+
+    final message = (error['message'] ?? '').toString().toLowerCase();
+    return message.contains('server already') ||
+        message.contains('sudah diselesaikan');
+  }
+
+  bool _shouldClearProofForCatchUpError(Map<String, dynamic> error) {
+    final serverStatus = (error['server_status'] ?? '')
+        .toString()
+        .toUpperCase();
+    final code = (error['code'] ?? '').toString().toUpperCase();
+    return serverStatus == 'SERVED' ||
+        code == 'ORDER_ALREADY_SERVED' ||
+        code == 'SERVER_ALREADY_REACHED_TARGET';
   }
 
   Future<void> _uploadPendingCashierProofs({
