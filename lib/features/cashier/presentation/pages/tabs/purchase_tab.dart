@@ -600,9 +600,6 @@ class _ProductCard extends StatelessWidget {
     final vm = context.watch<PurchaseProvider>();
     const brand = Color(0xFFAE1504);
 
-    final shortestSide = MediaQuery.of(context).size.shortestSide;
-    final isTablet = shortestSide >= 600;
-
     final qty = vm.qtyOf(product.id);
     final productRemaining = vm.availableQtyForProduct(product);
 
@@ -778,20 +775,7 @@ class _ProductCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
                     ),
-                    if (isTablet && (product.description?.trim().isNotEmpty ?? false)) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        product.description!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.black.withOpacity(0.55),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ] else
-                      const SizedBox(height: 8),
+                    const SizedBox(height: 8),
 
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
