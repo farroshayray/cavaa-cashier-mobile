@@ -51,6 +51,7 @@ class _CavaaAppState extends State<CavaaApp> {
   late final SecureStorageService storage;
   late final DioClient dioClient;
   late final AppUpdateProvider appUpdateProvider;
+  late final ConnectivityStatusProvider connectivityStatusProvider;
   late final CashierDb cashierDb;
 
   late final AuthApi authApi;
@@ -72,7 +73,12 @@ class _CavaaAppState extends State<CavaaApp> {
 
     storage = SecureStorageService();
     appUpdateProvider = AppUpdateProvider();
-    dioClient = DioClient(storage, appUpdateProvider: appUpdateProvider);
+    connectivityStatusProvider = ConnectivityStatusProvider()..init();
+    dioClient = DioClient(
+      storage,
+      appUpdateProvider: appUpdateProvider,
+      connectivity: connectivityStatusProvider,
+    );
     PushNotificationService.instance.configure(dioClient: dioClient);
     cashierDb = CashierDb();
     cachedPaymentMethodsDao = CachedPaymentMethodsDao(cashierDb);
@@ -146,6 +152,7 @@ class _CavaaAppState extends State<CavaaApp> {
   @override
   void dispose() {
     _sub?.cancel();
+    connectivityStatusProvider.dispose();
     cashierDb.close();
     super.dispose();
   }
@@ -160,8 +167,8 @@ class _CavaaAppState extends State<CavaaApp> {
         ChangeNotifierProvider<AppUpdateProvider>.value(
           value: appUpdateProvider,
         ),
-        ChangeNotifierProvider(
-          create: (_) => ConnectivityStatusProvider()..init(),
+        ChangeNotifierProvider<ConnectivityStatusProvider>.value(
+          value: connectivityStatusProvider,
         ),
 
         Provider(

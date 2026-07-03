@@ -10,6 +10,7 @@ import '../config/app_config.dart';
 import '../storage/secure_storage_service.dart';
 import '../navigation/app_navigator.dart';
 import '../services/app_update_provider.dart';
+import '../services/connectivity_status_provider.dart';
 import 'api_debug_log.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 
@@ -19,6 +20,7 @@ class DioClient {
   final Dio dio;
   final SecureStorageService storage;
   final AppUpdateProvider? appUpdateProvider;
+  final ConnectivityStatusProvider? connectivity;
 
   bool _isHandlingUnauthorized = false;
 
@@ -27,7 +29,11 @@ class DioClient {
   String? _versionName;
   bool _appInfoLoaded = false;
 
-  DioClient(this.storage, {this.appUpdateProvider})
+  DioClient(
+    this.storage, {
+    this.appUpdateProvider,
+    this.connectivity,
+  })
     : dio = Dio(
         BaseOptions(
           baseUrl: Env.baseUrl,
@@ -72,6 +78,10 @@ class DioClient {
           handler.next(options);
         },
         onResponse: (response, handler) {
+          if ((response.statusCode ?? 0) < 500) {
+            connectivity?.markServerReachable();
+          }
+
           _captureAppUpdate(response);
           ApiDebugLog.httpResponse(
             method: response.requestOptions.method,
@@ -98,6 +108,12 @@ class DioClient {
           );
 
           debugPrint('❌ DIO ERROR path=$path status=$statusCode');
+
+          if (_isServerDownError(e)) {
+            connectivity?.markServerDown(
+              reason: 'path=$path status=$statusCode type=${e.type.name}',
+            );
+          }
 
           if (isLogin || isVersionCheck) {
             return handler.next(e);
@@ -196,6 +212,22 @@ class DioClient {
   String? get platform => _platform;
   int? get versionCode => _versionCode;
   String? get versionName => _versionName;
+
+  bool _isServerDownError(DioException error) {
+    final statusCode = error.response?.statusCode;
+    if (statusCode == 500 ||
+        statusCode == 502 ||
+        statusCode == 503 ||
+        statusCode == 504) {
+      return true;
+    }
+
+    return error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.unknown;
+  }
 
   void _captureAppUpdate(Response response) {
     final provider = appUpdateProvider;
