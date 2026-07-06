@@ -83,7 +83,10 @@ class OrderTabItemMapper {
   }
 
   static Map<String, dynamic> toDoneItem(Map<String, dynamic> row) {
-    final serverId = _toInt(row['id']);
+    final serverId = _toInt(row['server_id'] ?? row['id']);
+    final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+        .toString()
+        .trim();
     final tableNo =
         row['table_no']?.toString() ??
         (row['table'] is Map ? row['table']['table_no']?.toString() : null) ??
@@ -92,6 +95,7 @@ class OrderTabItemMapper {
     return {
       ...row,
       'id': serverId,
+      'server_id': serverId,
       'booking_order_code': row['booking_order_code'] ?? '',
       'customer_name': row['customer_name'] ?? '',
       'payment_method': row['payment_method'],
@@ -100,8 +104,10 @@ class OrderTabItemMapper {
       'ppn': _toNum(row['ppn']),
       'is_ppn_active': _toBool(row['is_ppn_active']) ? 1 : 0,
       'table': {'table_no': tableNo},
+      'local_client_uuid': clientUuid.isNotEmpty ? clientUuid : null,
+      'local_id': clientUuid.isNotEmpty ? clientUuid : row['local_id'],
       'is_synced': row['sync_dirty'] != true,
-      'is_local_only': false,
+      'is_local_only': row['is_local_only'] == true || serverId == null,
       'sync_status': _mirrorSyncStatus(row),
       'last_error': row['sync_error']?.toString(),
       'sort_time':

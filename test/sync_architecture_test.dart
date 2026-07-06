@@ -10,6 +10,7 @@ import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_rank.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_resolver.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_sync_guard.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/order_sync_intent_chain.dart';
+import 'package:cavaa_cashier/features/cashier/data/sync/order_tab_item_mapper.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_api.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_engine.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_error_classifier.dart';
@@ -19,6 +20,25 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('OrderTabItemMapper done identity', () {
+    test('keeps local uuid and marks local-only done rows', () {
+      final mapped = OrderTabItemMapper.toDoneItem({
+        'id': null,
+        'local_client_uuid': 'local-done-1',
+        'booking_order_code': 'NNQK-LOCAL',
+        'customer_name': 'guest',
+        'order_status': 'SERVED',
+        'sync_dirty': true,
+      });
+
+      expect(mapped['id'], isNull);
+      expect(mapped['server_id'], isNull);
+      expect(mapped['local_client_uuid'], 'local-done-1');
+      expect(mapped['local_id'], 'local-done-1');
+      expect(mapped['is_local_only'], isTrue);
+    });
+  });
+
   group('SyncResult success criteria', () {
     test('fails when conflicts are present', () {
       final result = SyncResult.fromJson({
@@ -1727,6 +1747,95 @@ void main() {
           hasLength(1),
         );
         expect(details.single.status, 'SERVED BY CASHIER');
+      },
+    );
+
+    test(
+      'upsertFromServer links matching local option to server option',
+      () async {
+        const clientUuid = 'uuid-link-option';
+        await db
+            .into(db.bookingOrders)
+            .insert(
+              BookingOrdersCompanion.insert(
+                clientUuid: clientUuid,
+                customerName: 'guest-option',
+                orderStatus: const Value('SERVED'),
+                syncDirty: const Value(true),
+                syncIntent: const Value('CREATE'),
+                discountValue: const Value(0),
+                totalOrderValue: const Value(18000),
+                isPpnActive: const Value(false),
+                paymentFlag: const Value(true),
+                syncVersion: const Value(0),
+              ),
+            );
+
+        await db
+            .into(db.orderDetails)
+            .insert(
+              OrderDetailsCompanion.insert(
+                clientDetailUuid: 'detail-local-option',
+                bookingOrderClientUuid: clientUuid,
+                partnerProductId: 11,
+                productName: const Value('Bajigur'),
+                quantity: const Value(1),
+                basePrice: const Value(18000),
+                optionsPrice: const Value(0),
+                syncDirty: const Value(true),
+              ),
+            );
+
+        await db
+            .into(db.orderDetailOptions)
+            .insert(
+              OrderDetailOptionsCompanion.insert(
+                clientOptionUuid: 'option-local',
+                orderDetailClientUuid: 'detail-local-option',
+                optionId: 44,
+                parentName: const Value('Tingkat Dingin'),
+                partnerProductOptionName: const Value('Es'),
+                price: const Value(0),
+              ),
+            );
+
+        await dao.upsertFromServer({
+          'id': 110,
+          'order_status': 'SERVED',
+          'customer_name': 'guest-option',
+          'total_order_value': 18000,
+          'payment_flag': true,
+          'sync_version': 1,
+          'order_details': [
+            {
+              'id': 9100,
+              'partner_product_id': 11,
+              'product_name': 'Bajigur',
+              'quantity': 1,
+              'base_price': 18000,
+              'options_price': 0,
+              'status': 'SERVED BY CASHIER',
+              'order_detail_options': [
+                {
+                  'id': 8100,
+                  'option_id': 44,
+                  'parent_name': 'Tingkat Dingin',
+                  'partner_product_option_name': 'Es',
+                  'price': 0,
+                },
+              ],
+            },
+          ],
+        });
+
+        final bundle = await dao.getBundleByClientUuid(clientUuid);
+        final options = bundle!
+            .optionsByDetailUuid[bundle.details.single.clientDetailUuid]!;
+
+        expect(bundle.details.single.serverId, 9100);
+        expect(options, hasLength(1));
+        expect(options.single.clientOptionUuid, 'option-local');
+        expect(options.single.serverId, 8100);
       },
     );
 

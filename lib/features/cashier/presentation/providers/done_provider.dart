@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
+import '/features/cashier/data/sync/order_detail_resolver.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
 import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/presentation/utils/order_tab_sort.dart';
@@ -13,11 +14,7 @@ class DoneProvider extends ChangeNotifier {
   final ConnectivityStatusProvider connectivity;
   final BookingOrdersDao bookingOrdersDao;
 
-  DoneProvider(
-    this.repo,
-    this.connectivity,
-    this.bookingOrdersDao,
-  );
+  DoneProvider(this.repo, this.connectivity, this.bookingOrdersDao);
 
   bool isLoading = false;
   String? error;
@@ -59,11 +56,12 @@ class DoneProvider extends ChangeNotifier {
         items = items.where((e) {
           final code = (e['booking_order_code'] ?? '').toString().toLowerCase();
           final customer = (e['customer_name'] ?? '').toString().toLowerCase();
-          final tableNo = ((e['table'] is Map)
-                  ? (e['table']['table_no'] ?? '')
-                  : e['table_no_snapshot'] ?? '')
-              .toString()
-              .toLowerCase();
+          final tableNo =
+              ((e['table'] is Map)
+                      ? (e['table']['table_no'] ?? '')
+                      : e['table_no_snapshot'] ?? '')
+                  .toString()
+                  .toLowerCase();
 
           return code.contains(q) ||
               customer.contains(q) ||
@@ -98,27 +96,77 @@ class DoneProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> getOrderDetailFromListItem(
     Map<String, dynamic> row,
   ) async {
-    final serverId = int.tryParse('${row['id']}');
-    if (serverId == null || serverId <= 0) {
+    final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+        .toString()
+        .trim();
+    final serverId = _toId(row['server_id'] ?? row['id']);
+
+    if (serverId <= 0) {
+      if (clientUuid.isNotEmpty) {
+        final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+        if (bundle != null) return _bundleToDetailMap(bundle);
+      }
+
+      if (OrderDetailResolver.hasEmbeddedDetails(row)) {
+        return OrderDetailResolver.detailFromListRow(row);
+      }
+
       throw Exception('Order ID tidak valid');
     }
 
     if (connectivity.isOnline) {
-      final detail = await repo.fetchOrderDetail(serverId);
-      await bookingOrdersDao.upsertFromServer(detail);
-      return detail;
+      try {
+        final detail = await repo.fetchOrderDetail(serverId);
+        await bookingOrdersDao.upsertFromServer(detail);
+        return detail;
+      } catch (_) {
+        final cached = await _getMirrorDetailMap(
+          serverId: serverId,
+          clientUuid: clientUuid,
+        );
+        if (cached != null) return cached;
+        rethrow;
+      }
+    }
+
+    if (OrderDetailResolver.hasEmbeddedDetails(row)) {
+      return OrderDetailResolver.detailFromListRow(row);
+    }
+
+    final cached = await _getMirrorDetailMap(
+      serverId: serverId,
+      clientUuid: clientUuid,
+    );
+    if (cached != null) return cached;
+
+    throw Exception('Detail offline tidak tersedia');
+  }
+
+  Future<Map<String, dynamic>?> _getMirrorDetailMap({
+    required int serverId,
+    String clientUuid = '',
+  }) async {
+    if (clientUuid.isNotEmpty) {
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+      if (bundle != null) return _bundleToDetailMap(bundle);
     }
 
     final mirror = await bookingOrdersDao.getByServerId(serverId);
     if (mirror == null) {
-      throw Exception('Detail offline tidak tersedia');
+      return null;
     }
 
-    final bundle = await bookingOrdersDao.getBundleByClientUuid(mirror.clientUuid);
+    final bundle = await bookingOrdersDao.getBundleByClientUuid(
+      mirror.clientUuid,
+    );
     if (bundle == null) {
-      throw Exception('Detail offline tidak tersedia');
+      return null;
     }
 
+    return _bundleToDetailMap(bundle);
+  }
+
+  Map<String, dynamic> _bundleToDetailMap(BookingOrderBundle bundle) {
     final map = OrderTabItemMapper.toDoneItem(
       OrderMirrorMapper.orderToUiMap(bundle.order),
     );
@@ -130,7 +178,7 @@ class DoneProvider extends ChangeNotifier {
               .toList();
       return detailMap;
     }).toList();
-    return map;
+    return OrderDetailResolver.detailFromListRow(map);
   }
 
   Future<Map<String, dynamic>> getPrintDetailFromListItem(
@@ -145,5 +193,11 @@ class DoneProvider extends ChangeNotifier {
       } catch (_) {}
     }
     return enrichOfflinePrintOrder(hydratedDetail);
+  }
+
+  int _toId(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

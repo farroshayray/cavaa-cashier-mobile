@@ -557,7 +557,7 @@ class BookingOrdersDao {
                 (t) => t.orderDetailClientUuid.equals(detail.clientDetailUuid),
               ))
               .get();
-      optionsByDetailUuid[detail.clientDetailUuid] = opts;
+      optionsByDetailUuid[detail.clientDetailUuid] = _dedupeOptionRows(opts);
     }
 
     return BookingOrderBundle(
@@ -2509,9 +2509,9 @@ class BookingOrdersDao {
                     (t) => t.orderDetailClientUuid.equals(d.clientDetailUuid),
                   ))
                   .get();
-          detailMap['order_detail_options'] = opts
-              .map(OrderMirrorMapper.optionToUiMap)
-              .toList();
+          detailMap['order_detail_options'] = _dedupeOptionRows(
+            opts,
+          ).map(OrderMirrorMapper.optionToUiMap).toList();
           return detailMap;
         }),
       );
@@ -2647,13 +2647,22 @@ class BookingOrdersDao {
 
       final optName = _optionNameFromServerRow(opt);
       final parentName = _optionParentFromServerRow(opt);
+      final matchingLocalOpt =
+          existingOpt ??
+          await _findLocalOptionForServerRow(
+            detailUuid: clientDetailUuid,
+            optionId: _toInt(opt['option_id']),
+            parentName: parentName,
+            optionName: optName,
+            price: _toDouble(opt['price']),
+          );
 
       await db
           .into(db.orderDetailOptions)
           .insertOnConflictUpdate(
             OrderDetailOptionsCompanion(
               clientOptionUuid: Value(
-                existingOpt?.clientOptionUuid ?? _uuid.v4(),
+                matchingLocalOpt?.clientOptionUuid ?? _uuid.v4(),
               ),
               serverId: Value(optServerId),
               orderDetailClientUuid: Value(clientDetailUuid),
@@ -2666,6 +2675,10 @@ class BookingOrdersDao {
               updatedAt: Value(_parseDate(opt['updated_at']) ?? now),
             ),
           );
+    }
+
+    if (options.isNotEmpty) {
+      await _deduplicateOptionsForDetail(clientDetailUuid);
     }
   }
 
@@ -2728,6 +2741,131 @@ class BookingOrdersDao {
       return aDate.compareTo(bDate);
     });
     return result;
+  }
+
+  List<OrderDetailOption> _dedupeOptionRows(List<OrderDetailOption> options) {
+    if (options.length <= 1) return options;
+
+    final byKey = <String, OrderDetailOption>{};
+    for (final option in options) {
+      final key = _optionNaturalKey(
+        option.optionId,
+        option.parentName,
+        option.partnerProductOptionName,
+        option.price,
+      );
+      final existing = byKey[key];
+      if (existing == null || _preferOptionRow(option, existing)) {
+        byKey[key] = option;
+      }
+    }
+
+    final result = byKey.values.toList();
+    result.sort((a, b) {
+      final aDate = a.createdAt ?? a.updatedAt;
+      final bDate = b.createdAt ?? b.updatedAt;
+      if (aDate == null && bDate == null) return 0;
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      return aDate.compareTo(bDate);
+    });
+    return result;
+  }
+
+  Future<OrderDetailOption?> _findLocalOptionForServerRow({
+    required String detailUuid,
+    required int optionId,
+    required String? parentName,
+    required String? optionName,
+    required double price,
+  }) async {
+    final localOptions =
+        await (db.select(db.orderDetailOptions)
+              ..where((t) => t.orderDetailClientUuid.equals(detailUuid))
+              ..where((t) => t.serverId.isNull()))
+            .get();
+
+    final key = _optionNaturalKey(optionId, parentName, optionName, price);
+    for (final option in localOptions) {
+      if (_optionNaturalKey(
+            option.optionId,
+            option.parentName,
+            option.partnerProductOptionName,
+            option.price,
+          ) ==
+          key) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _deduplicateOptionsForDetail(String detailUuid) async {
+    final options = await (db.select(
+      db.orderDetailOptions,
+    )..where((t) => t.orderDetailClientUuid.equals(detailUuid))).get();
+
+    final byKey = <String, OrderDetailOption>{};
+    for (final option in options) {
+      final key = _optionNaturalKey(
+        option.optionId,
+        option.parentName,
+        option.partnerProductOptionName,
+        option.price,
+      );
+      final existing = byKey[key];
+      if (existing == null || _preferOptionRow(option, existing)) {
+        byKey[key] = option;
+      }
+    }
+
+    final keep = byKey.values.map((option) => option.clientOptionUuid).toSet();
+    for (final option in options) {
+      if (!keep.contains(option.clientOptionUuid)) {
+        await (db.delete(
+              db.orderDetailOptions,
+            )..where((t) => t.clientOptionUuid.equals(option.clientOptionUuid)))
+            .go();
+      }
+    }
+  }
+
+  bool _preferOptionRow(
+    OrderDetailOption candidate,
+    OrderDetailOption current,
+  ) {
+    final candidateServerId = candidate.serverId;
+    final currentServerId = current.serverId;
+    if (candidateServerId != null && currentServerId == null) return true;
+    if (candidateServerId == null && currentServerId != null) return false;
+
+    final candidateUpdated =
+        candidate.updatedAt ??
+        candidate.createdAt ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final currentUpdated =
+        current.updatedAt ??
+        current.createdAt ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    return candidateUpdated.isAfter(currentUpdated);
+  }
+
+  String _optionNaturalKey(
+    int optionId,
+    String? parentName,
+    String? optionName,
+    double price,
+  ) {
+    return [
+      optionId.toString(),
+      _normalizeOptionKeyPart(parentName),
+      _normalizeOptionKeyPart(optionName),
+      price.toStringAsFixed(2),
+    ].join('|');
+  }
+
+  String _normalizeOptionKeyPart(String? value) {
+    return (value ?? '').trim().toLowerCase();
   }
 
   Future<void> _deleteDetailAndOptions(String clientDetailUuid) async {
