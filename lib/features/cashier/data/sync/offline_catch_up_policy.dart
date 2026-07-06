@@ -43,9 +43,10 @@ class OfflineCatchUpPolicy {
       }
     }
 
-    // Open bill serve-only on server-known order → native SERVE_ITEMS + detail_ids.
+    // Open bill serve-only on server-known order → native step intent + detail_ids.
     if (order.openbillFlag && !neverSynced) {
-      if (intent == 'SERVE_ITEMS' && order.paidAmountLocal == null) {
+      if ((intent == 'SERVE_ITEMS' || intent == 'MARK_KITCHEN_SERVED') &&
+          order.paidAmountLocal == null) {
         return false;
       }
     }
@@ -68,12 +69,7 @@ class OfflineCatchUpPolicy {
     }
     if (await hasDirtyServedDetails(order.clientUuid)) return true;
 
-    return {
-      'UNPAID',
-      'SERVED',
-      'PAID',
-      'PROCESSED',
-    }.contains(status);
+    return {'UNPAID', 'SERVED', 'PAID', 'PROCESSED'}.contains(status);
   }
 
   /// Openbill catch-up target must reflect whether new kitchen lines are still pending.
@@ -84,7 +80,8 @@ class OfflineCatchUpPolicy {
     final status = order.orderStatus.trim().toUpperCase();
     if (!order.openbillFlag || bundle == null) return status;
 
-    if (status != 'OPENBILL_WAITING_ORDER' && status != 'OPENBILL_CONFIRMATION') {
+    if (status != 'OPENBILL_WAITING_ORDER' &&
+        status != 'OPENBILL_CONFIRMATION') {
       return status;
     }
 

@@ -20,10 +20,7 @@ import '/features/cashier/presentation/utils/order_tab_sort.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
 
 class ServeItemSelection {
-  const ServeItemSelection({
-    this.serverDetailId,
-    this.clientDetailUuid,
-  });
+  const ServeItemSelection({this.serverDetailId, this.clientDetailUuid});
 
   final int? serverDetailId;
   final String? clientDetailUuid;
@@ -129,11 +126,12 @@ class ProcessProvider extends ChangeNotifier {
         items = items.where((e) {
           final code = (e['booking_order_code'] ?? '').toString().toLowerCase();
           final customer = (e['customer_name'] ?? '').toString().toLowerCase();
-          final tableNo = ((e['table'] is Map)
-                  ? (e['table']['table_no'] ?? '')
-                  : e['table_no_snapshot'] ?? '')
-              .toString()
-              .toLowerCase();
+          final tableNo =
+              ((e['table'] is Map)
+                      ? (e['table']['table_no'] ?? '')
+                      : e['table_no_snapshot'] ?? '')
+                  .toString()
+                  .toLowerCase();
 
           return code.contains(q) ||
               customer.contains(q) ||
@@ -157,7 +155,9 @@ class ProcessProvider extends ChangeNotifier {
           e['is_synced'] == false ||
           e['is_local_only'] == true,
     );
-    if (connectivity.isOnline && dedupedMirrorRows.isNotEmpty && !hasPendingSync) {
+    if (connectivity.isOnline &&
+        dedupedMirrorRows.isNotEmpty &&
+        !hasPendingSync) {
       unawaited(_prefetchProcessDetailsInBackground(dedupedMirrorRows));
     }
   }
@@ -190,7 +190,9 @@ class ProcessProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _prefetchProcessDetails(List<Map<String, dynamic>> mirrorRows) async {
+  Future<void> _prefetchProcessDetails(
+    List<Map<String, dynamic>> mirrorRows,
+  ) async {
     for (final row in mirrorRows) {
       final serverId = _toId(row['id']);
       if (serverId <= 0) continue;
@@ -222,7 +224,9 @@ class ProcessProvider extends ChangeNotifier {
     final order = await bookingOrdersDao.getByServerId(serverId);
     if (order == null) return null;
 
-    final bundle = await bookingOrdersDao.getBundleByClientUuid(order.clientUuid);
+    final bundle = await bookingOrdersDao.getBundleByClientUuid(
+      order.clientUuid,
+    );
     if (bundle == null) return null;
 
     final map = OrderTabItemMapper.toProcessItem(
@@ -282,10 +286,9 @@ class ProcessProvider extends ChangeNotifier {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    final allServed = details.isNotEmpty &&
-        details.every(
-          (item) => isDetailServedStatus(detailStatusOf(item)),
-        );
+    final allServed =
+        details.isNotEmpty &&
+        details.every((item) => isDetailServedStatus(detailStatusOf(item)));
     final nextStatus = OrderStageResolver.resolveAfterServeItems(
       order: {...row, ...detail, 'order_details': details},
     );
@@ -326,8 +329,9 @@ class ProcessProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> getOrderDetailFromListItem(
     Map<String, dynamic> row,
   ) async {
-    final clientUuid =
-        (row['local_client_uuid'] ?? row['local_id'] ?? '').toString().trim();
+    final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+        .toString()
+        .trim();
     final serverId = _toId(row['server_id'] ?? row['id']);
 
     if (serverId <= 0) {
@@ -465,16 +469,20 @@ class ProcessProvider extends ChangeNotifier {
     if (candidateServerId > 0 && currentServerId <= 0) return true;
     if (candidateServerId <= 0 && currentServerId > 0) return false;
 
-    final candidateDirty = candidate['sync_dirty'] == true || candidate['sync_dirty'] == 1;
-    final currentDirty = current['sync_dirty'] == true || current['sync_dirty'] == 1;
+    final candidateDirty =
+        candidate['sync_dirty'] == true || candidate['sync_dirty'] == 1;
+    final currentDirty =
+        current['sync_dirty'] == true || current['sync_dirty'] == 1;
     if (!candidateDirty && currentDirty) return true;
     if (candidateDirty && !currentDirty) return false;
 
-    final candidateUpdated = DateTime.tryParse(
+    final candidateUpdated =
+        DateTime.tryParse(
           (candidate['updated_at'] ?? candidate['created_at'] ?? '').toString(),
         ) ??
         DateTime.fromMillisecondsSinceEpoch(0);
-    final currentUpdated = DateTime.tryParse(
+    final currentUpdated =
+        DateTime.tryParse(
           (current['updated_at'] ?? current['created_at'] ?? '').toString(),
         ) ??
         DateTime.fromMillisecondsSinceEpoch(0);
@@ -503,10 +511,12 @@ class ProcessProvider extends ChangeNotifier {
     try {
       final currentStatus = row['order_status']?.toString() ?? '';
       final isConfirmingOpenbill = currentStatus == 'OPENBILL_CONFIRMATION';
-      final targetStatus = isConfirmingOpenbill ? 'OPENBILL_WAITING_ORDER' : 'PROCESSED';
+      final targetStatus = isConfirmingOpenbill
+          ? 'OPENBILL_WAITING_ORDER'
+          : 'PROCESSED';
 
-      final clientUuid =
-          (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+      final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+          .toString();
       final isMirrorOnly = clientUuid.isNotEmpty && id <= 0;
 
       if (isMirrorOnly) {
@@ -565,7 +575,9 @@ class ProcessProvider extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> actionCancelProcess(Map<String, dynamic> row) async {
+  Future<Map<String, dynamic>> actionCancelProcess(
+    Map<String, dynamic> row,
+  ) async {
     final isLocalOnly = row['is_local_only'] == true;
     final isStockConflict =
         (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
@@ -574,8 +586,8 @@ class ProcessProvider extends ChangeNotifier {
 
     _setActionLoading(actionKey, true);
     try {
-      final clientUuid =
-          (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+      final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+          .toString();
       if (clientUuid.isNotEmpty && id <= 0) {
         await tabCoordinator.transitionOrderStageByClientUuid(
           clientUuid: clientUuid,
@@ -630,16 +642,17 @@ class ProcessProvider extends ChangeNotifier {
     final resolvedSelections = selections.isNotEmpty
         ? selections.where((item) => item.isValid).toList()
         : detailIds
-            .where((id) => id > 0)
-            .map((id) => ServeItemSelection(serverDetailId: id))
-            .toList();
+              .where((id) => id > 0)
+              .map((id) => ServeItemSelection(serverDetailId: id))
+              .toList();
 
     final isStockConflict =
         (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
     final id = _toId(row['id']);
     final actionKey = _actionKey(row);
-    final clientUuid =
-        (row['local_client_uuid'] ?? row['local_id'] ?? '').toString().trim();
+    final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+        .toString()
+        .trim();
     final serverDetailIds = resolvedSelections
         .map((item) => item.serverDetailId)
         .whereType<int>()
@@ -664,10 +677,11 @@ class ProcessProvider extends ChangeNotifier {
 
         final mirror = await bookingOrdersDao.getByClientUuid(clientUuid);
         if (mirror?.serverId != null && mirror!.serverId! > 0) {
-          return actionServeItems(
-            {...row, 'id': mirror.serverId, 'is_local_only': false},
-            selections: resolvedSelections,
-          );
+          return actionServeItems({
+            ...row,
+            'id': mirror.serverId,
+            'is_local_only': false,
+          }, selections: resolvedSelections);
         }
 
         final result = await _serveMirrorItemsLocally(
@@ -689,8 +703,8 @@ class ProcessProvider extends ChangeNotifier {
           'all_served': allServed,
           'message': allServed
               ? (isOpenbill
-                  ? 'Semua item served, order dipindahkan ke pembayaran'
-                  : 'Semua item served')
+                    ? 'Semua item served, order dipindahkan ke pembayaran'
+                    : 'Semua item served')
               : 'Item terpilih berhasil ditandai served',
         };
       }
@@ -719,14 +733,8 @@ class ProcessProvider extends ChangeNotifier {
         if (allServed && isOpenbill) {
           final fresh = await _getMirrorDetailMap(id);
           final stagedSnapshot = fresh != null
-              ? {
-                  ...fresh,
-                  'order_status': result['order_status'] ?? 'UNPAID',
-                }
-              : {
-                  ...row,
-                  'order_status': result['order_status'] ?? 'UNPAID',
-                };
+              ? {...fresh, 'order_status': result['order_status'] ?? 'UNPAID'}
+              : {...row, 'order_status': result['order_status'] ?? 'UNPAID'};
           await _stageOpenbillForPaymentCache(
             id,
             stagedSnapshot,
@@ -742,8 +750,8 @@ class ProcessProvider extends ChangeNotifier {
           'all_served': allServed,
           'message': allServed
               ? (isOpenbill
-                  ? 'Semua item served, order dipindahkan ke pembayaran'
-                  : 'Semua item served')
+                    ? 'Semua item served, order dipindahkan ke pembayaran'
+                    : 'Semua item served')
               : 'Item terpilih berhasil ditandai served',
         };
       }
@@ -804,16 +812,17 @@ class ProcessProvider extends ChangeNotifier {
     }
 
     if (isLocalOnly || id <= 0) {
-      final clientUuid =
-          (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+      final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+          .toString();
       final mirror = clientUuid.isNotEmpty
           ? await bookingOrdersDao.getByClientUuid(clientUuid)
           : null;
       if (mirror?.serverId != null) {
-        return actionMarkKitchenServed(
-          {...row, 'id': mirror!.serverId, 'is_local_only': false},
-          detailId: detailId,
-        );
+        return actionMarkKitchenServed({
+          ...row,
+          'id': mirror!.serverId,
+          'is_local_only': false,
+        }, detailId: detailId);
       }
       throw Exception('Sinkronkan order terlebih dahulu');
     }
@@ -837,10 +846,18 @@ class ProcessProvider extends ChangeNotifier {
           (row['order_status'] ?? '').toString().startsWith('OPENBILL');
 
       if (allServed && isOpenbill) {
-          await _stageOpenbillForPaymentCache(id, row, pendingServeSync: true);
-        } else if (allServed) {
-          await _stageServedOrderForDoneCache(id, row);
-        }
+        final fresh = await _getMirrorDetailMap(id);
+        final stagedSnapshot = fresh != null
+            ? {...fresh, 'order_status': result['order_status'] ?? 'UNPAID'}
+            : {...row, 'order_status': result['order_status'] ?? 'UNPAID'};
+        await _stageOpenbillForPaymentCache(
+          id,
+          stagedSnapshot,
+          pendingServeSync: true,
+        );
+      } else if (allServed) {
+        await _stageServedOrderForDoneCache(id, row);
+      }
 
       return {
         'status': 'offline_success',
@@ -889,8 +906,8 @@ class ProcessProvider extends ChangeNotifier {
     _setActionLoading(actionKey, true);
     try {
       if (id <= 0) {
-        final clientUuid =
-            (row['local_client_uuid'] ?? row['local_id'] ?? '').toString();
+        final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+            .toString();
         if (clientUuid.isEmpty) {
           throw Exception('Local ID tidak valid');
         }
@@ -953,8 +970,9 @@ class ProcessProvider extends ChangeNotifier {
   ) async {
     if (isOpenBillOrder(row)) return;
 
-    final clientUuid =
-        (row['local_client_uuid'] ?? row['local_id'] ?? '').toString().trim();
+    final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+        .toString()
+        .trim();
     final serverId = _toId(row['id'] ?? row['server_id']);
 
     var bundle = clientUuid.isNotEmpty
@@ -969,8 +987,9 @@ class ProcessProvider extends ChangeNotifier {
     if (bundle == null || bundle.details.isEmpty) return;
 
     await bookingOrdersDao.markOrderDetailsServedLocally(
-      detailClientUuids:
-          bundle.details.map((detail) => detail.clientDetailUuid).toList(),
+      detailClientUuids: bundle.details
+          .map((detail) => detail.clientDetailUuid)
+          .toList(),
       detailServerIds: bundle.details
           .map((detail) => detail.serverId)
           .whereType<int>()
@@ -1027,15 +1046,11 @@ class ProcessProvider extends ChangeNotifier {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    final allServed = details.isNotEmpty &&
-        details.every(
-          (item) => isDetailServedStatus(detailStatusOf(item)),
-        );
+    final allServed =
+        details.isNotEmpty &&
+        details.every((item) => isDetailServedStatus(detailStatusOf(item)));
     final nextStatus = OrderStageResolver.resolveAfterServeItems(
-      order: {
-        ...detail,
-        'order_details': details,
-      },
+      order: {...detail, 'order_details': details},
     );
 
     detail['order_details'] = details;
@@ -1083,11 +1098,17 @@ class ProcessProvider extends ChangeNotifier {
       if (isDetailServedStatus(detailStatusOf(item))) continue;
 
       final inKitchen = isDetailInKitchenProcessing(item);
-      item['status'] = inKitchen ? 'SERVED BY KITCHEN' : 'SERVED BY CASHIER';
+      final servedStatus = inKitchen
+          ? 'SERVED BY KITCHEN'
+          : 'SERVED BY CASHIER';
+      item['status'] = servedStatus;
       if (!inKitchen) {
         item['cashier_process_id'] = item['cashier_process_id'] ?? -1;
       }
-      updatedCount++;
+      updatedCount += await bookingOrdersDao.markOrderDetailsServedLocally(
+        detailServerIds: [itemId],
+        servedStatus: servedStatus,
+      );
     }
 
     if (updatedCount == 0) {
@@ -1108,7 +1129,7 @@ class ProcessProvider extends ChangeNotifier {
     await tabCoordinator.transitionOrderStage(
       serverId: serverId,
       orderStatus: nextStatus,
-      syncIntent: allServed ? 'FINISH' : 'PROCESS',
+      syncIntent: 'MARK_KITCHEN_SERVED',
       syncDirty: true,
       orderSnapshot: detail,
     );
@@ -1172,17 +1193,15 @@ class ProcessProvider extends ChangeNotifier {
     );
     final isOpenbill = isOpenBillOrder(detail);
     final openbillReadyForPayment = isOpenbill && nextStatus == 'UNPAID';
-    final allServed = OrderStageResolver.movesToDoneTab(nextStatus) ||
+    final allServed =
+        OrderStageResolver.movesToDoneTab(nextStatus) ||
         openbillReadyForPayment;
 
     if (openbillReadyForPayment) {
-      await _stageOpenbillForPaymentCache(
-        serverId,
-        {
-          ...detail,
-          'order_status': nextStatus,
-        },
-      );
+      await _stageOpenbillForPaymentCache(serverId, {
+        ...detail,
+        'order_status': nextStatus,
+      });
       return;
     }
 
@@ -1191,10 +1210,7 @@ class ProcessProvider extends ChangeNotifier {
       orderStatus: nextStatus,
       syncIntent: allServed ? 'FINISH' : 'PROCESS',
       syncDirty: false,
-      orderSnapshot: {
-        ...detail,
-        'order_status': nextStatus,
-      },
+      orderSnapshot: {...detail, 'order_status': nextStatus},
     );
   }
 }

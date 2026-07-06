@@ -881,6 +881,26 @@ void main() {
       },
     );
 
+    test(
+      'openbill MARK_KITCHEN_SERVED with serverId uses step intent',
+      () async {
+        final order = _order(
+          clientUuid: 'ob-kitchen-served',
+          status: 'UNPAID',
+          syncIntent: 'MARK_KITCHEN_SERVED',
+          serverId: 57,
+        );
+
+        expect(
+          await OfflineCatchUpPolicy.shouldUseOfflineCatchUp(
+            order: order,
+            hasDirtyServedDetails: (_) async => true,
+          ),
+          isFalse,
+        );
+      },
+    );
+
     test('OFFLINE_CATCH_UP guard always allowed', () {
       expect(
         OrderStageSyncGuard.validateIntent(
@@ -1589,6 +1609,55 @@ void main() {
       expect(row?.orderStatus, 'UNPAID');
       expect(row?.totalOrderValue, 30000);
       expect(row?.syncDirty, isFalse);
+    });
+
+    test('marks kitchen served detail dirty for offline sync', () async {
+      const clientUuid = 'uuid-kitchen-served-dirty';
+      await db
+          .into(db.bookingOrders)
+          .insert(
+            BookingOrdersCompanion.insert(
+              clientUuid: clientUuid,
+              customerName: 'guest',
+              orderStatus: const Value('OPENBILL_WAITING_ORDER'),
+              serverId: const Value(202),
+              syncDirty: const Value(false),
+              openbillFlag: const Value(true),
+              discountValue: const Value(0),
+              totalOrderValue: const Value(25000),
+              isPpnActive: const Value(false),
+              paymentFlag: const Value(false),
+              syncVersion: const Value(0),
+            ),
+          );
+      await db
+          .into(db.orderDetails)
+          .insert(
+            OrderDetailsCompanion.insert(
+              clientDetailUuid: 'detail-kitchen-served',
+              bookingOrderClientUuid: clientUuid,
+              serverId: const Value(9202),
+              bookingOrderServerId: const Value(202),
+              partnerProductId: 11,
+              productName: const Value('Menu'),
+              quantity: const Value(1),
+              basePrice: const Value(25000),
+              status: const Value('PROCESSED BY KITCHEN'),
+              syncDirty: const Value(false),
+            ),
+          );
+
+      final updated = await dao.markOrderDetailsServedLocally(
+        detailServerIds: const [9202],
+        servedStatus: 'SERVED BY KITCHEN',
+      );
+
+      final detail = await (db.select(
+        db.orderDetails,
+      )..where((t) => t.serverId.equals(9202))).getSingle();
+      expect(updated, 1);
+      expect(detail.status, 'SERVED BY KITCHEN');
+      expect(detail.syncDirty, isTrue);
     });
 
     test(

@@ -357,7 +357,8 @@ class SyncEngine {
         }
       }
 
-      if (effectiveIntent == 'SERVE_ITEMS') {
+      if (effectiveIntent == 'SERVE_ITEMS' ||
+          effectiveIntent == 'MARK_KITCHEN_SERVED') {
         final detailIds = _collectServedDetailIdsForPush(bundle);
         if (detailIds.isNotEmpty) {
           row['detail_ids'] = detailIds;
@@ -372,6 +373,7 @@ class SyncEngine {
       final skipDetailPush =
           effectiveIntent == 'CREATE' ||
           effectiveIntent == 'CONFIRM_OPENBILL' ||
+          effectiveIntent == 'MARK_KITCHEN_SERVED' ||
           effectiveIntent == 'OFFLINE_CATCH_UP' ||
           neverSynced;
       for (final detail in dirtyDetails) {
@@ -711,7 +713,9 @@ class SyncEngine {
 
   bool _isServeItemsAlreadyServedError(Map<String, dynamic> error) {
     final intent = (error['sync_intent'] ?? '').toString().toUpperCase();
-    if (intent != 'SERVE_ITEMS') return false;
+    if (intent != 'SERVE_ITEMS' && intent != 'MARK_KITCHEN_SERVED') {
+      return false;
+    }
 
     final code = (error['code'] ?? '').toString().toUpperCase();
     if (code == 'DETAIL_ALREADY_SERVED') return true;

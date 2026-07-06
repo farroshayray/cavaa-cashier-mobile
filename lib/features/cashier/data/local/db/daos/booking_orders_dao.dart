@@ -1150,9 +1150,13 @@ class BookingOrdersDao {
     List<String> detailClientUuids = const [],
     List<int> detailServerIds = const [],
     int? cashierProcessId,
+    String servedStatus = 'SERVED BY CASHIER',
   }) async {
     final now = DateTime.now();
     var updatedCount = 0;
+    final normalizedStatus = servedStatus.trim().isEmpty
+        ? 'SERVED BY CASHIER'
+        : servedStatus.trim();
 
     for (final uuid in detailClientUuids) {
       final trimmed = uuid.trim();
@@ -1162,7 +1166,7 @@ class BookingOrdersDao {
             db.orderDetails,
           )..where((t) => t.clientDetailUuid.equals(trimmed))).write(
             OrderDetailsCompanion(
-              status: const Value('SERVED BY CASHIER'),
+              status: Value(normalizedStatus),
               cashierProcessId: cashierProcessId != null
                   ? Value(cashierProcessId)
                   : const Value.absent(),
@@ -1179,7 +1183,7 @@ class BookingOrdersDao {
             db.orderDetails,
           )..where((t) => t.serverId.equals(id))).write(
             OrderDetailsCompanion(
-              status: const Value('SERVED BY CASHIER'),
+              status: Value(normalizedStatus),
               cashierProcessId: cashierProcessId != null
                   ? Value(cashierProcessId)
                   : const Value.absent(),
@@ -1477,6 +1481,7 @@ class BookingOrdersDao {
 
     if (appliedIntent == 'PROCESS' ||
         appliedIntent == 'FINISH' ||
+        appliedIntent == 'MARK_KITCHEN_SERVED' ||
         appliedIntent == 'SERVE_ITEMS') {
       await _clearDetailSyncDirty(clientUuid);
     } else if (appliedIntent == 'OFFLINE_CATCH_UP') {
