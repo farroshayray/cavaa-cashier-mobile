@@ -765,6 +765,20 @@ class BookingOrdersDao {
     await _clearMirrorSyncState(clientUuid, clearDetails: false);
   }
 
+  Future<bool> clearFinishAlreadyServedSyncState(String clientUuid) async {
+    if (clientUuid.isEmpty) return false;
+
+    final order = await getByClientUuid(clientUuid);
+    if (order == null) return false;
+
+    final status = order.orderStatus.trim().toUpperCase();
+    final intent = (order.syncIntent ?? '').trim().toUpperCase();
+    if (status != 'SERVED' || intent != 'FINISH') return false;
+
+    await _clearMirrorSyncState(clientUuid, clearDetails: !order.openbillFlag);
+    return true;
+  }
+
   Future<void> clearOfflineCatchUpSyncState(
     String clientUuid, {
     bool clearProof = false,
@@ -1712,28 +1726,151 @@ class BookingOrdersDao {
   }
 
   Future<void> saveConflict(Map<String, dynamic> conflict) async {
+    final enriched = await _enrichConflict(conflict);
     await db
         .into(db.syncConflicts)
         .insert(
           SyncConflictsCompanion.insert(
-            entityTable: conflict['table']?.toString() ?? 'unknown',
-            serverId: Value(_toIntOrNull(conflict['server_id'])),
-            clientUuid: Value(conflict['client_uuid']?.toString()),
-            reason: conflict['reason']?.toString() ?? 'UNKNOWN',
+            entityTable: enriched['table']?.toString() ?? 'unknown',
+            serverId: Value(_toIntOrNull(enriched['server_id'])),
+            clientUuid: Value(enriched['client_uuid']?.toString()),
+            reason: enriched['reason']?.toString() ?? 'UNKNOWN',
             localSnapshotJson: Value(
-              conflict['local'] != null ? jsonEncode(conflict['local']) : null,
+              enriched['local'] != null ? jsonEncode(enriched['local']) : null,
             ),
             serverSnapshotJson: Value(
-              conflict['server'] != null
-                  ? jsonEncode(conflict['server'])
+              enriched['server'] != null
+                  ? jsonEncode(enriched['server'])
                   : null,
             ),
             suggestedResolution: Value(
-              conflict['suggested_resolution']?.toString(),
+              enriched['suggested_resolution']?.toString(),
             ),
             createdAt: DateTime.now(),
           ),
         );
+  }
+
+  Future<Map<String, dynamic>> _enrichConflict(
+    Map<String, dynamic> conflict,
+  ) async {
+    final enriched = Map<String, dynamic>.from(conflict);
+    final clientUuid = enriched['client_uuid']?.toString();
+    final bundle = clientUuid == null || clientUuid.isEmpty
+        ? null
+        : await getBundleByClientUuid(clientUuid);
+
+    final local = _asStringKeyMap(enriched['local']);
+    final server = _asStringKeyMap(enriched['server']);
+
+    if (bundle != null) {
+      enriched['local'] = _enrichLocalConflictSnapshot(local, bundle);
+    } else if (local != null) {
+      enriched['local'] = local;
+    }
+
+    if (server != null) {
+      enriched['server'] = _enrichServerConflictSnapshot(server);
+    }
+
+    final localSnapshot = _asStringKeyMap(enriched['local']);
+    final serverSnapshot = _asStringKeyMap(enriched['server']);
+    final diffs = _buildConflictDiffs(localSnapshot, serverSnapshot);
+    if (diffs.isNotEmpty && localSnapshot != null) {
+      localSnapshot['diffs'] = [
+        ...((localSnapshot['diffs'] as List?) ?? const []),
+        ...diffs,
+      ];
+      enriched['local'] = localSnapshot;
+    }
+
+    return enriched;
+  }
+
+  Map<String, dynamic> _enrichLocalConflictSnapshot(
+    Map<String, dynamic>? existing,
+    BookingOrderBundle bundle,
+  ) {
+    final order = bundle.order;
+    final snapshot = <String, dynamic>{
+      if (existing != null) ...existing,
+      'booking_order_code':
+          existing?['booking_order_code'] ?? order.bookingOrderCode,
+      'order_name': existing?['order_name'] ?? order.customerName,
+      'customer_name': existing?['customer_name'] ?? order.customerName,
+      'order_status': existing?['order_status'] ?? order.orderStatus,
+      'sync_version': existing?['sync_version'] ?? order.syncVersion,
+      'sync_intent': existing?['sync_intent'] ?? order.syncIntent,
+      'server_id': existing?['server_id'] ?? order.serverId,
+    };
+
+    snapshot['order_details'] =
+        existing?['order_details'] ??
+        bundle.details
+            .map((detail) => OrderMirrorMapper.detailToUiMap(detail))
+            .toList();
+    return snapshot;
+  }
+
+  Map<String, dynamic> _enrichServerConflictSnapshot(
+    Map<String, dynamic> server,
+  ) {
+    final snapshot = Map<String, dynamic>.from(server);
+    snapshot['server_id'] ??= snapshot['id'];
+    snapshot['order_name'] ??=
+        snapshot['customer_name'] ?? snapshot['order_by'] ?? 'guest';
+    snapshot['customer_name'] ??= snapshot['order_name'];
+    snapshot['booking_order_code'] ??= snapshot['code'];
+    return snapshot;
+  }
+
+  List<String> _buildConflictDiffs(
+    Map<String, dynamic>? local,
+    Map<String, dynamic>? server,
+  ) {
+    if (local == null || server == null) return const [];
+    final diffs = <String>[];
+
+    void compareField(String key, String label) {
+      final localValue = local[key]?.toString();
+      final serverValue = server[key]?.toString();
+      if (localValue != null &&
+          serverValue != null &&
+          localValue != serverValue) {
+        diffs.add('$label lokal=$localValue server=$serverValue');
+      }
+    }
+
+    compareField('order_status', 'Status');
+    compareField('sync_version', 'Versi');
+    compareField('booking_order_code', 'Kode order');
+    compareField('customer_name', 'Nama');
+
+    final localDetails = _detailList(local['order_details']);
+    final serverDetails = _detailList(server['order_details']);
+    if (localDetails.isNotEmpty || serverDetails.isNotEmpty) {
+      final result = OrderEditConflictDetector.compare(
+        localDetails: localDetails,
+        serverDetails: serverDetails,
+      );
+      diffs.addAll(result.editableDiffs);
+      diffs.addAll(result.lockedConflicts);
+    }
+
+    return diffs;
+  }
+
+  List<Map<String, dynamic>> _detailList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  Map<String, dynamic>? _asStringKeyMap(dynamic value) {
+    if (value is! Map) return null;
+    return Map<String, dynamic>.from(value);
   }
 
   Future<int> countUnresolvedConflicts() async {

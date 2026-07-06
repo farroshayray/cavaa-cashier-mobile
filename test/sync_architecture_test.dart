@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cavaa_cashier/features/cashier/data/local/db/cashier_db.dart';
 import 'package:cavaa_cashier/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/offline_catch_up_policy.dart';
@@ -10,6 +12,7 @@ import 'package:cavaa_cashier/features/cashier/data/sync/order_stage_sync_guard.
 import 'package:cavaa_cashier/features/cashier/data/sync/order_sync_intent_chain.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_api.dart';
 import 'package:cavaa_cashier/features/cashier/data/sync/sync_engine.dart';
+import 'package:cavaa_cashier/features/cashier/data/sync/sync_error_classifier.dart';
 import 'package:cavaa_cashier/features/cashier/presentation/utils/order_tab_sort.dart';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
@@ -57,6 +60,25 @@ void main() {
 
       expect(result.success, isTrue);
       expect(result.syncToken, 'token-1');
+    });
+  });
+
+  group('SyncErrorClassifier', () {
+    test('classifies stock, lifecycle, and version conflicts', () {
+      expect(
+        SyncErrorClassifier.classify('stok tidak cukup di server').status,
+        'STOCK_CONFLICT',
+      );
+      expect(
+        SyncErrorClassifier.classify(
+          'FINISH tidak diizinkan pada status served',
+        ).status,
+        'LIFECYCLE_CONFLICT',
+      );
+      expect(
+        SyncErrorClassifier.classify('', reason: 'SYNC_VERSION_STALE').status,
+        'VERSION_CONFLICT',
+      );
     });
   });
 
@@ -1684,6 +1706,133 @@ void main() {
       expect(order?.syncIntent, isNull);
       expect(order?.syncError, isNull);
       expect(details.single.syncDirty, isFalse);
+    });
+
+    test(
+      'clearFinishAlreadyServedSyncState clears served finish replay',
+      () async {
+        const clientUuid = 'uuid-clear-finish-served';
+        await db
+            .into(db.bookingOrders)
+            .insert(
+              BookingOrdersCompanion.insert(
+                clientUuid: clientUuid,
+                bookingOrderCode: const Value('BO-001'),
+                customerName: 'Dina',
+                orderStatus: const Value('SERVED'),
+                serverId: const Value(105),
+                syncDirty: const Value(true),
+                syncIntent: const Value('FINISH'),
+                syncError: const Value(
+                  'FINISH tidak diizinkan pada status served',
+                ),
+                openbillFlag: const Value(false),
+                discountValue: const Value(0),
+                totalOrderValue: const Value(25000),
+                isPpnActive: const Value(false),
+                paymentFlag: const Value(true),
+                syncVersion: const Value(4),
+              ),
+            );
+        await db
+            .into(db.orderDetails)
+            .insert(
+              OrderDetailsCompanion.insert(
+                clientDetailUuid: 'detail-finish-served',
+                bookingOrderClientUuid: clientUuid,
+                serverId: const Value(9004),
+                bookingOrderServerId: const Value(105),
+                partnerProductId: 14,
+                productName: const Value('Menu'),
+                status: const Value('SERVED BY CASHIER'),
+                syncDirty: const Value(true),
+              ),
+            );
+
+        final healed = await dao.clearFinishAlreadyServedSyncState(clientUuid);
+
+        final order = await dao.getByClientUuid(clientUuid);
+        final details = await (db.select(
+          db.orderDetails,
+        )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
+        expect(healed, isTrue);
+        expect(order?.syncDirty, isFalse);
+        expect(order?.syncIntent, isNull);
+        expect(order?.syncError, isNull);
+        expect(details.single.syncDirty, isFalse);
+      },
+    );
+
+    test('saveConflict enriches local and server snapshots', () async {
+      const clientUuid = 'uuid-conflict-snapshot';
+      await db
+          .into(db.bookingOrders)
+          .insert(
+            BookingOrdersCompanion.insert(
+              clientUuid: clientUuid,
+              bookingOrderCode: const Value('BO-002'),
+              customerName: 'Raka',
+              orderStatus: const Value('PROCESSED'),
+              serverId: const Value(106),
+              syncDirty: const Value(true),
+              syncIntent: const Value('UPDATE'),
+              openbillFlag: const Value(false),
+              discountValue: const Value(0),
+              totalOrderValue: const Value(50000),
+              isPpnActive: const Value(false),
+              paymentFlag: const Value(true),
+              syncVersion: const Value(2),
+            ),
+          );
+      await db
+          .into(db.orderDetails)
+          .insert(
+            OrderDetailsCompanion.insert(
+              clientDetailUuid: 'detail-conflict',
+              bookingOrderClientUuid: clientUuid,
+              serverId: const Value(9005),
+              bookingOrderServerId: const Value(106),
+              partnerProductId: 15,
+              productName: const Value('Nasi'),
+              quantity: const Value(2),
+              status: const Value('PROCESSED BY CASHIER'),
+              syncDirty: const Value(true),
+            ),
+          );
+
+      await dao.saveConflict({
+        'table': 'booking_orders',
+        'server_id': 106,
+        'client_uuid': clientUuid,
+        'reason': 'SYNC_VERSION_STALE',
+        'server': {
+          'id': 106,
+          'booking_order_code': 'BO-002',
+          'customer_name': 'Raka',
+          'order_status': 'SERVED',
+          'sync_version': 3,
+          'order_details': [
+            {
+              'id': 9005,
+              'product_name': 'Nasi',
+              'quantity': 1,
+              'status': 'SERVED BY CASHIER',
+            },
+          ],
+        },
+      });
+
+      final rows = await dao.getUnresolvedConflicts();
+      final local =
+          jsonDecode(rows.single.localSnapshotJson!) as Map<String, dynamic>;
+      final server =
+          jsonDecode(rows.single.serverSnapshotJson!) as Map<String, dynamic>;
+
+      expect(local['booking_order_code'], 'BO-002');
+      expect(local['customer_name'], 'Raka');
+      expect(local['sync_version'], 2);
+      expect(server['order_status'], 'SERVED');
+      expect((local['diffs'] as List), isNotEmpty);
     });
 
     test(

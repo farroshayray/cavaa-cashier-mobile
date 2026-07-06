@@ -1,10 +1,12 @@
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
+import '/features/cashier/data/sync/sync_error_classifier.dart';
 
 /// Maps unified `booking_orders` mirror rows to tab list item shape.
 class OrderTabItemMapper {
   static Map<String, dynamic> toPaymentItem(Map<String, dynamic> row) {
     final serverId = _toInt(row['id']);
-    final tableNo = row['table_no']?.toString() ??
+    final tableNo =
+        row['table_no']?.toString() ??
         (row['table'] is Map ? row['table']['table_no']?.toString() : null) ??
         '-';
     final subtotal = _toNum(row['total_order_value']);
@@ -28,7 +30,8 @@ class OrderTabItemMapper {
       'subtotal': subtotal,
       'grand_total': grandTotal,
       'total_amount': grandTotal,
-      'openbill_flag': _toBool(row['openbill_flag']) ||
+      'openbill_flag':
+          _toBool(row['openbill_flag']) ||
           row['payment_method']?.toString() == 'OPENBILL' ||
           (row['order_status'] ?? '').toString().startsWith('OPENBILL'),
       'is_local_only': row['is_local_only'] == true || serverId == null,
@@ -36,17 +39,20 @@ class OrderTabItemMapper {
       'sync_status': _mirrorSyncStatus(row),
       'last_error': row['sync_error']?.toString(),
       'pending_action': row['sync_dirty'] == true ? row['sync_intent'] : null,
-      'sort_time': row['created_at']?.toString() ?? row['updated_at']?.toString(),
+      'sort_time':
+          row['created_at']?.toString() ?? row['updated_at']?.toString(),
     };
   }
 
   static Map<String, dynamic> toProcessItem(Map<String, dynamic> row) {
     final serverId = _toInt(row['id']);
-    final tableNo = row['table_no']?.toString() ??
+    final tableNo =
+        row['table_no']?.toString() ??
         (row['table'] is Map ? row['table']['table_no']?.toString() : null) ??
         '-';
     final details = (row['order_details'] as List?) ?? [];
-    final processedByKitchen = details.isNotEmpty &&
+    final processedByKitchen =
+        details.isNotEmpty &&
         details.every((d) {
           if (d is! Map) return false;
           final status = (d['status'] ?? '').toString().toUpperCase();
@@ -71,13 +77,15 @@ class OrderTabItemMapper {
       'last_error': row['sync_error']?.toString(),
       'pending_action': row['sync_dirty'] == true ? row['sync_intent'] : null,
       'is_local_only': row['is_local_only'] == true || serverId == null,
-      'sort_time': row['created_at']?.toString() ?? row['updated_at']?.toString(),
+      'sort_time':
+          row['created_at']?.toString() ?? row['updated_at']?.toString(),
     };
   }
 
   static Map<String, dynamic> toDoneItem(Map<String, dynamic> row) {
     final serverId = _toInt(row['id']);
-    final tableNo = row['table_no']?.toString() ??
+    final tableNo =
+        row['table_no']?.toString() ??
         (row['table'] is Map ? row['table']['table_no']?.toString() : null) ??
         '-';
 
@@ -96,7 +104,8 @@ class OrderTabItemMapper {
       'is_local_only': false,
       'sync_status': _mirrorSyncStatus(row),
       'last_error': row['sync_error']?.toString(),
-      'sort_time': row['created_at']?.toString() ?? row['updated_at']?.toString(),
+      'sort_time':
+          row['created_at']?.toString() ?? row['updated_at']?.toString(),
     };
   }
 
@@ -122,12 +131,17 @@ class OrderTabItemMapper {
 
   static String _mirrorSyncStatus(Map<String, dynamic> row) {
     final intent = (row['sync_intent'] ?? '').toString().toUpperCase();
-    if (intent == 'DELETE' && _toBool(row['sync_dirty'])) {
+    final isDirty = _toBool(row['sync_dirty']);
+    final lastError = row['sync_error']?.toString().trim() ?? '';
+    if (isDirty && lastError.isNotEmpty) {
+      return SyncErrorClassifier.classify(lastError).status;
+    }
+    if (intent == 'DELETE' && isDirty) {
       return 'PENDING_DELETE';
     }
-    if (_toBool(row['sync_dirty']) && intent == 'UPDATE') {
+    if (isDirty && intent == 'UPDATE') {
       return 'PENDING_UPDATE';
     }
-    return row['sync_dirty'] == true ? 'PENDING' : 'SYNCED';
+    return isDirty ? 'PENDING' : 'SYNCED';
   }
 }

@@ -7,6 +7,8 @@ import '/features/cashier/presentation/printing/receipt_action_service.dart';
 import '/features/cashier/presentation/widgets/receipt_action_icon_button.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/sync_error_classifier.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 import '../../providers/done_provider.dart';
 import '../../providers/payment_provider.dart';
@@ -14,11 +16,7 @@ import '../../providers/process_provider.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
 
 class DoneTab extends StatefulWidget {
-  const DoneTab({
-    super.key,
-    this.focusOrderId,
-    this.focusRequestKey = 0,
-  });
+  const DoneTab({super.key, this.focusOrderId, this.focusRequestKey = 0});
 
   final int? focusOrderId;
   final int focusRequestKey;
@@ -49,10 +47,7 @@ class _DoneTabState extends State<DoneTab> {
 }
 
 class _DoneView extends StatefulWidget {
-  const _DoneView({
-    this.focusOrderId,
-    this.focusRequestKey = 0,
-  });
+  const _DoneView({this.focusOrderId, this.focusRequestKey = 0});
 
   final int? focusOrderId;
   final int focusRequestKey;
@@ -227,7 +222,8 @@ class _DoneViewState extends State<_DoneView> {
                     children: const [
                       SizedBox(height: 200),
                       Center(child: CircularProgressIndicator()),
-                    ]);
+                    ],
+                  );
                 }
 
                 if (vm.error != null) {
@@ -251,7 +247,11 @@ class _DoneViewState extends State<_DoneView> {
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
-                      Icon(Icons.inbox_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 56,
+                        color: Colors.black.withOpacity(0.35),
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         'Belum ada order selesai.',
@@ -271,54 +271,60 @@ class _DoneViewState extends State<_DoneView> {
                   itemBuilder: (_, i) {
                     final data = vm.items[i];
                     final id = _toId(data['id']);
-                    final receiptKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
-                    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
+                    final receiptKey = id > 0
+                        ? id
+                        : (data['local_id']?.hashCode ?? id);
+                    final blinking =
+                        (_blinkOrderId != null && _blinkOrderId == id);
 
                     final actionKey = id > 0
                         ? id
                         : ((data['local_id'] ?? '').toString().isNotEmpty
-                            ? data['local_id'].toString()
-                            : 'idx-$i');
+                              ? data['local_id'].toString()
+                              : 'idx-$i');
 
                     return KeyedSubtree(
                       key: ValueKey('done-$actionKey'),
                       child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: blinking ? Colors.red : Colors.transparent,
-                          width: 2,
+                        duration: const Duration(milliseconds: 250),
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: blinking ? Colors.red : Colors.transparent,
+                            width: 2,
+                          ),
+                        ),
+                        child: _DoneOrderCard(
+                          data: data,
+                          isReceiptBusy: _receiptBusyIds.contains(receiptKey),
+                          onDetail: () async {
+                            final row = vm.items[i];
+                            final id = _toId(row['id']);
+
+                            await showModalBottomSheet(
+                              context: context,
+                              useRootNavigator: true,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.92,
+                                child: DetailOrderSheet(
+                                  orderId: id > 0 ? id : -1,
+                                  stockConflictMessage: row['last_error']
+                                      ?.toString(),
+                                  loadDetail: (_) => context
+                                      .read<DoneProvider>()
+                                      .getOrderDetailFromListItem(row),
+                                ),
+                              ),
+                            );
+                          },
+                          onReceiptPrint: () => _handleReceiptPrint(data),
+                          onReceiptShare: () => _handleReceiptShare(data),
                         ),
                       ),
-                      child: _DoneOrderCard(
-                        data: data,
-                        isReceiptBusy: _receiptBusyIds.contains(receiptKey),
-                        onDetail: () async {
-                          final row = vm.items[i];
-                          final id = _toId(row['id']);
-
-                          await showModalBottomSheet(
-                            context: context,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.92,
-                              child: DetailOrderSheet(
-                                orderId: id > 0 ? id : -1,
-                                stockConflictMessage: row['last_error']?.toString(),
-                                loadDetail: (_) =>
-                                    context.read<DoneProvider>().getOrderDetailFromListItem(row),
-                              ),
-                            ),
-                          );
-                        },
-                        onReceiptPrint: () => _handleReceiptPrint(data),
-                        onReceiptShare: () => _handleReceiptShare(data),
-                      ),
-                    ),
                     );
                   },
                 );
@@ -422,7 +428,7 @@ class _SearchBar extends StatelessWidget {
             blurRadius: compact ? 10 : 16,
             offset: Offset(0, compact ? 6 : 10),
             color: Colors.black.withOpacity(0.04),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -446,7 +452,9 @@ class _SearchBar extends StatelessWidget {
           ),
           if (controller.text.isNotEmpty)
             IconButton(
-              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+              visualDensity: compact
+                  ? VisualDensity.compact
+                  : VisualDensity.standard,
               constraints: compact
                   ? const BoxConstraints(minWidth: 32, minHeight: 32)
                   : null,
@@ -476,10 +484,7 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.text,
-    this.compact = false,
-  });
+  const _Badge({required this.text, this.compact = false});
 
   final String text;
   final bool compact;
@@ -529,7 +534,9 @@ class _DoneOrderCard extends StatelessWidget {
     final customer = (data['customer_name'] ?? '-').toString();
     final total = _calcGrandTotalFromMap(data);
     final roundingAmount = _calcCashRoundingAmount(data);
-    final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
+    final table =
+        (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-')
+            .toString();
     final orderDateTime = _formatOrderDateTime(data);
 
     final media = MediaQuery.of(context);
@@ -600,7 +607,10 @@ class _DoneOrderCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF3F4F6),
                       borderRadius: BorderRadius.circular(999),
@@ -626,17 +636,23 @@ class _DoneOrderCard extends StatelessWidget {
                     orderDateTime != null
                         ? 'Meja: $table  |  $orderDateTime'
                         : 'Meja: $table',
-                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
                   ),
-                  if (data['is_local_only'] == true || data['is_synced'] == false) ...[
+                  if (data['is_local_only'] == true ||
+                      data['is_synced'] == false) ...[
                     const SizedBox(height: 6),
                     Text(
-                      (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
-                          ? 'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}'
-                          : 'Perubahan lokal belum tersinkron',
+                      localSyncStatusMessage(data) ??
+                          'Perubahan lokal belum tersinkron',
                       style: TextStyle(
                         fontSize: 11,
-                        color: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                        color:
+                            SyncErrorClassifier.isConflictStatus(
+                              (data['sync_status'] ?? '').toString(),
+                            )
                             ? const Color(0xFFB91C1C)
                             : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
@@ -661,12 +677,18 @@ class _DoneOrderCard extends StatelessWidget {
                 children: [
                   Text(
                     'Total',
-                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     'Rp ${_rupiah(total)}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   if (roundingAmount > 0) ...[
                     const SizedBox(height: 2),
@@ -715,7 +737,10 @@ class _DoneOrderCard extends StatelessWidget {
                 children: [
                   Flexible(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(999),
@@ -747,19 +772,25 @@ class _DoneOrderCard extends StatelessWidget {
                 orderDateTime != null
                     ? 'Meja: $table  |  $orderDateTime'
                     : 'Meja: $table',
-                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
               ),
-              if (data['is_local_only'] == true || data['is_synced'] == false) ...[
+              if (data['is_local_only'] == true ||
+                  data['is_synced'] == false) ...[
                 const SizedBox(height: 6),
                 Text(
-                  (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
-                      ? 'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}'
-                      : 'Perubahan lokal belum tersinkron',
+                  localSyncStatusMessage(data) ??
+                      'Perubahan lokal belum tersinkron',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
-                    color: (data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT'
+                    color:
+                        SyncErrorClassifier.isConflictStatus(
+                          (data['sync_status'] ?? '').toString(),
+                        )
                         ? const Color(0xFFB91C1C)
                         : Colors.orange.shade800,
                     fontWeight: FontWeight.w700,
@@ -783,12 +814,18 @@ class _DoneOrderCard extends StatelessWidget {
                   children: [
                     Text(
                       'Total',
-                      style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.55),
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Rp ${_rupiah(total)}',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     if (roundingAmount > 0) ...[
                       const SizedBox(height: 2),
@@ -824,7 +861,10 @@ class _DoneOrderCard extends StatelessWidget {
     final isSynced = data['is_synced'] == true;
     final syncStatus = (data['sync_status'] ?? '').toString();
 
-    if (syncStatus == 'STOCK_CONFLICT') {
+    if (SyncErrorClassifier.isConflictStatus(syncStatus)) {
+      final issue = SyncErrorClassifier.classify(
+        data['last_error']?.toString(),
+      );
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -834,12 +874,16 @@ class _DoneOrderCard extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
-            SizedBox(width: 6),
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 14,
+              color: Color(0xFFDC2626),
+            ),
+            const SizedBox(width: 6),
             Text(
-              'Konflik Stok',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              issue.shortLabel,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
             ),
           ],
         ),
@@ -892,10 +936,7 @@ class _DoneOrderCard extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: const BoxDecoration(
-              color: dot,
-              shape: BoxShape.circle,
-            ),
+            decoration: const BoxDecoration(color: dot, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           const Text(
@@ -950,7 +991,8 @@ num _calcGrandTotalFromMap(Map<String, dynamic> data) {
 }
 
 num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
-  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+  final stored =
+      _pickNum(data, ['cash_rounding_amount']) ??
       _pickNum(data, ['rounding_amount']) ??
       _pickNum(data, ['payment', 'rounding_amount']) ??
       _pickNum(data, ['latest_payment', 'rounding_amount']);
@@ -987,11 +1029,12 @@ num? _pickNum(Map<String, dynamic> root, List<String> path) {
 }
 
 String? _formatOrderDateTime(Map<String, dynamic> data) {
-  final raw = (data['created_at'] ??
-          data['sort_time'] ??
-          data['updated_at_local'] ??
-          data['cached_at'])
-      ?.toString();
+  final raw =
+      (data['created_at'] ??
+              data['sort_time'] ??
+              data['updated_at_local'] ??
+              data['cached_at'])
+          ?.toString();
   if (raw == null || raw.trim().isEmpty) return null;
 
   final dateTime = DateTime.tryParse(raw)?.toLocal();
@@ -999,8 +1042,7 @@ String? _formatOrderDateTime(Map<String, dynamic> data) {
 
   final date =
       '${_twoDigits(dateTime.day)}/${_twoDigits(dateTime.month)}/${dateTime.year}';
-  final time =
-      '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+  final time = '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
   return '$date $time';
 }
 

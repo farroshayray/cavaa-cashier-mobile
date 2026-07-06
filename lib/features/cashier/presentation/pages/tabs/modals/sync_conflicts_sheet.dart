@@ -109,26 +109,23 @@ class _SyncConflictsSheetState extends State<SyncConflictsSheet> {
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _error != null
-                        ? Center(child: Text(_error!))
-                        : _conflicts.isEmpty
-                            ? const Center(child: Text('Tidak ada konflik aktif'))
-                            : ListView.separated(
-                                controller: scrollController,
-                                itemCount: _conflicts.length,
-                                separatorBuilder: (_, __) => const Divider(),
-                                itemBuilder: (context, index) {
-                                  final c = _conflicts[index];
-                                  return _ConflictTile(
-                                    conflict: c,
-                                    onServerWins: () =>
-                                        _resolve(c, 'SERVER_WINS'),
-                                    onLocalWins: () =>
-                                        _resolve(c, 'LOCAL_WINS'),
-                                    onPullRetry: () =>
-                                        _resolve(c, 'PULL_AND_RETRY'),
-                                  );
-                                },
-                              ),
+                    ? Center(child: Text(_error!))
+                    : _conflicts.isEmpty
+                    ? const Center(child: Text('Tidak ada konflik aktif'))
+                    : ListView.separated(
+                        controller: scrollController,
+                        itemCount: _conflicts.length,
+                        separatorBuilder: (_, __) => const Divider(),
+                        itemBuilder: (context, index) {
+                          final c = _conflicts[index];
+                          return _ConflictTile(
+                            conflict: c,
+                            onServerWins: () => _resolve(c, 'SERVER_WINS'),
+                            onLocalWins: () => _resolve(c, 'LOCAL_WINS'),
+                            onPullRetry: () => _resolve(c, 'PULL_AND_RETRY'),
+                          );
+                        },
+                      ),
               ),
             ],
           ),
@@ -153,65 +150,213 @@ class _ConflictTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final serverPreview = _preview(conflict.serverSnapshotJson);
-    final localPreview = _preview(conflict.localSnapshotJson);
+    final local = _snapshot(conflict.localSnapshotJson);
+    final server = _snapshot(conflict.serverSnapshotJson);
+    final code = _firstNonEmpty([
+      server?['booking_order_code'],
+      local?['booking_order_code'],
+      conflict.serverId,
+      conflict.clientUuid,
+      '-',
+    ]);
+    final name = _firstNonEmpty([
+      server?['order_name'],
+      server?['customer_name'],
+      local?['order_name'],
+      local?['customer_name'],
+      'guest',
+    ]);
+    final diffs = _diffs(local, server);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 12),
+      title: Text(
+        '$code - $name',
+        style: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+      subtitle: Text(
+        '${_reasonLabel(conflict.reason)} | ${conflict.entityTable}',
+      ),
       children: [
-        Text(
-          conflict.reason,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        Text('Tabel: ${conflict.entityTable}'),
-        if (conflict.clientUuid != null)
-          Text('Client: ${conflict.clientUuid}'),
-        if (conflict.suggestedResolution != null)
-          Text('Saran: ${conflict.suggestedResolution}'),
-        const SizedBox(height: 8),
-        if (localPreview != null) ...[
-          const Text('Lokal:', style: TextStyle(fontSize: 12)),
-          Text(localPreview, style: const TextStyle(fontSize: 11)),
+        _SnapshotCompare(local: local, server: server),
+        if (diffs.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Perbedaan',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(height: 6),
+          ...diffs.map(
+            (diff) => Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('- $diff', style: const TextStyle(fontSize: 12)),
+              ),
+            ),
+          ),
         ],
-        if (serverPreview != null) ...[
-          const SizedBox(height: 4),
-          const Text('Server:', style: TextStyle(fontSize: 12)),
-          Text(serverPreview, style: const TextStyle(fontSize: 11)),
+        if (conflict.suggestedResolution != null) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Saran: ${conflict.suggestedResolution}',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
         ],
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            OutlinedButton(
-              onPressed: onServerWins,
-              child: const Text('Gunakan server'),
-            ),
-            OutlinedButton(
-              onPressed: onLocalWins,
-              child: const Text('Gunakan perubahan saya'),
-            ),
-            FilledButton(
-              onPressed: onPullRetry,
-              child: const Text('Pull & coba lagi'),
-            ),
-          ],
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: onServerWins,
+                child: const Text('Gunakan server'),
+              ),
+              OutlinedButton(
+                onPressed: onLocalWins,
+                child: const Text('Gunakan perubahan saya'),
+              ),
+              FilledButton(
+                onPressed: onPullRetry,
+                child: const Text('Pull & coba lagi'),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  String? _preview(String? jsonText) {
+  Map<String, dynamic>? _snapshot(String? jsonText) {
     if (jsonText == null || jsonText.isEmpty) return null;
     try {
       final map = jsonDecode(jsonText);
       if (map is Map) {
-        final status = map['order_status'] ?? map['status'];
-        final code = map['booking_order_code'] ?? map['id'];
-        return 'status=$status code/id=$code';
+        return Map<String, dynamic>.from(map);
       }
     } catch (_) {}
-    return jsonText.length > 80 ? '${jsonText.substring(0, 80)}...' : jsonText;
+    return {'raw': jsonText};
+  }
+
+  String _firstNonEmpty(List<dynamic> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty && text != 'null') return text;
+    }
+    return '-';
+  }
+
+  String _reasonLabel(String reason) {
+    return switch (reason.toUpperCase()) {
+      'SYNC_VERSION_STALE' => 'Konflik versi',
+      'EDIT_DIVERGENCE' => 'Data berbeda',
+      'KITCHEN_CASHIER_STATUS_MISMATCH' => 'Status item berbeda',
+      _ => reason,
+    };
+  }
+
+  List<String> _diffs(
+    Map<String, dynamic>? local,
+    Map<String, dynamic>? server,
+  ) {
+    final result = <String>[];
+    final localDiffs = local?['diffs'];
+    if (localDiffs is List) {
+      result.addAll(localDiffs.map((e) => e.toString()));
+    }
+    final locked = local?['locked'];
+    if (locked is List) {
+      result.addAll(locked.map((e) => e.toString()));
+    }
+
+    void compare(String key, String label) {
+      final localValue = local?[key]?.toString();
+      final serverValue = server?[key]?.toString();
+      if (localValue != null &&
+          serverValue != null &&
+          localValue != serverValue) {
+        result.add('$label lokal=$localValue server=$serverValue');
+      }
+    }
+
+    compare('order_status', 'Status');
+    compare('sync_version', 'Versi');
+
+    return result.toSet().toList();
+  }
+}
+
+class _SnapshotCompare extends StatelessWidget {
+  const _SnapshotCompare({required this.local, required this.server});
+
+  final Map<String, dynamic>? local;
+  final Map<String, dynamic>? server;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _SnapshotCard(title: 'Lokal', snapshot: local),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _SnapshotCard(title: 'Server', snapshot: server),
+        ),
+      ],
+    );
+  }
+}
+
+class _SnapshotCard extends StatelessWidget {
+  const _SnapshotCard({required this.title, required this.snapshot});
+
+  final String title;
+  final Map<String, dynamic>? snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _value('order_status') ?? _value('status') ?? '-';
+    final version = _value('sync_version') ?? '-';
+    final code = _value('booking_order_code') ?? _value('server_id') ?? '-';
+    final details = snapshot?['order_details'];
+    final detailCount = details is List ? details.length : 0;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text('Kode: $code', style: const TextStyle(fontSize: 12)),
+          Text('Status: $status', style: const TextStyle(fontSize: 12)),
+          Text('Versi: $version', style: const TextStyle(fontSize: 12)),
+          Text('Item: $detailCount', style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  String? _value(String key) {
+    final value = snapshot?[key];
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty || text == 'null') return null;
+    return text;
   }
 }

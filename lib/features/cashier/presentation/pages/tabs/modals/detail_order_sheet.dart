@@ -5,6 +5,7 @@ import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/presentation/printing/order_list_printer.dart';
 import '/features/cashier/presentation/utils/order_edit_utils.dart';
+import '/features/cashier/data/sync/sync_error_classifier.dart';
 
 class DetailOrderSheet extends StatefulWidget {
   const DetailOrderSheet({
@@ -79,7 +80,9 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
         throw Exception('Default printer belum dipilih');
       }
 
-      if (p.type != PrinterType.bluetooth || p.address == null || p.address!.trim().isEmpty) {
+      if (p.type != PrinterType.bluetooth ||
+          p.address == null ||
+          p.address!.trim().isEmpty) {
         throw Exception('Default printer bukan Bluetooth / address kosong');
       }
 
@@ -95,9 +98,9 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal print: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal print: $e')));
     } finally {
       if (mounted) setState(() => _printing = false);
     }
@@ -116,9 +119,9 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal update status: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal update status: $e')));
     } finally {
       if (mounted) setState(() => _markingDetailId = null);
     }
@@ -141,27 +144,30 @@ class _DetailOrderSheetState extends State<DetailOrderSheet> {
                 _Header(
                   title: 'Detail Order',
                   isPrinting: _printing,
-                  onPrint: (_loading || _order == null) ? null : _printOrderList,
+                  onPrint: (_loading || _order == null)
+                      ? null
+                      : _printOrderList,
                   onClose: () => Navigator.of(context).pop(),
                 ),
                 Expanded(
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
                       : _error != null
-                          ? _ErrorView(message: _error!, onRetry: _fetch)
-                          : _Body(
-                              order: _order!,
-                              stockConflictMessage: widget.stockConflictMessage,
-                              canEdit: widget.canEdit,
-                              canDelete: widget.canDelete,
-                              canMarkKitchenServed: widget.canMarkKitchenServed,
-                              markingDetailId: _markingDetailId,
-                              onEdit: widget.onEdit,
-                              onDelete: widget.onDelete,
-                              onMarkKitchenServed: widget.onMarkKitchenServed == null
-                                  ? null
-                                  : _markKitchenServed,
-                            ),
+                      ? _ErrorView(message: _error!, onRetry: _fetch)
+                      : _Body(
+                          order: _order!,
+                          stockConflictMessage: widget.stockConflictMessage,
+                          canEdit: widget.canEdit,
+                          canDelete: widget.canDelete,
+                          canMarkKitchenServed: widget.canMarkKitchenServed,
+                          markingDetailId: _markingDetailId,
+                          onEdit: widget.onEdit,
+                          onDelete: widget.onDelete,
+                          onMarkKitchenServed:
+                              widget.onMarkKitchenServed == null
+                              ? null
+                              : _markKitchenServed,
+                        ),
                 ),
               ],
             ),
@@ -191,7 +197,9 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       decoration: BoxDecoration(
         color: const Color(0xFFF7F8FA),
-        border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.08))),
+        border: Border(
+          bottom: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
       ),
       child: Row(
         children: [
@@ -257,7 +265,9 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     final code = (order['booking_order_code'] ?? '-').toString();
     final name = (order['customer_name'] ?? '-').toString();
-    final table = (order['table'] is Map ? (order['table']['table_no'] ?? '-') : '-').toString();
+    final table =
+        (order['table'] is Map ? (order['table']['table_no'] ?? '-') : '-')
+            .toString();
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
     final total = _calcGrandTotalFromMap(order);
@@ -268,7 +278,10 @@ class _Body extends StatelessWidget {
         .trim();
 
     // mirip web: ambil payment.note (jika ada)
-    final paymentNote = ((order['payment'] is Map) ? (order['payment']['note'] ?? '') : '').toString().trim();
+    final paymentNote =
+        ((order['payment'] is Map) ? (order['payment']['note'] ?? '') : '')
+            .toString()
+            .trim();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
@@ -288,7 +301,7 @@ class _Body extends StatelessWidget {
           const SizedBox(height: 12),
 
           if (conflictMessage.isNotEmpty) ...[
-            _StockConflictCard(message: conflictMessage),
+            _SyncIssueCard(message: conflictMessage),
             const SizedBox(height: 12),
           ],
 
@@ -358,13 +371,14 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _StockConflictCard extends StatelessWidget {
-  const _StockConflictCard({required this.message});
+class _SyncIssueCard extends StatelessWidget {
+  const _SyncIssueCard({required this.message});
 
   final String message;
 
   @override
   Widget build(BuildContext context) {
+    final issue = SyncErrorClassifier.classify(message);
     final lines = message
         .split(RegExp(r'[\r\n]+'))
         .map((e) => e.trim())
@@ -381,14 +395,18 @@ class _StockConflictCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.error_outline_rounded, size: 18, color: Color(0xFFDC2626)),
-              SizedBox(width: 8),
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 18,
+                color: Color(0xFFDC2626),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Konflik Stok',
-                  style: TextStyle(
+                  issue.title,
+                  style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF991B1B),
                   ),
@@ -496,13 +514,25 @@ class _InfoCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: Text('Status', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+              Expanded(
+                child: Text(
+                  'Status',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
+                ),
+              ),
               const SizedBox(width: 12),
               Flexible(
                 child: Text(
                   status,
                   textAlign: TextAlign.right,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: statusColor),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: statusColor,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -517,12 +547,18 @@ class _InfoCard extends StatelessWidget {
               children: [
                 Text(
                   'PPN',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
                 ),
                 const Spacer(),
                 Text(
                   '${_formatPercent(ppnPercent)}%',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
@@ -534,12 +570,18 @@ class _InfoCard extends StatelessWidget {
               children: [
                 Text(
                   'Pembulatan Cash',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
                 ),
                 const Spacer(),
                 Text(
                   'Rp ${_rupiah(roundingAmount)}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
@@ -550,12 +592,18 @@ class _InfoCard extends StatelessWidget {
             children: [
               Text(
                 'Total',
-                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
               ),
               const Spacer(),
               Text(
                 'Rp ${_rupiah(total)}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ],
           ),
@@ -567,7 +615,15 @@ class _InfoCard extends StatelessWidget {
   Widget _kv(String k, String v, {bool mono = false}) {
     return Row(
       children: [
-        Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+        Expanded(
+          child: Text(
+            k,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.55),
+            ),
+          ),
+        ),
         const SizedBox(width: 12),
         Flexible(
           child: Text(
@@ -602,7 +658,10 @@ class _PaymentNoteCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Catatan Pembayaran', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Catatan Pembayaran',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 6),
           Text(note, style: TextStyle(color: Colors.black.withOpacity(0.75))),
         ],
@@ -641,16 +700,22 @@ class _ItemsCard extends StatelessWidget {
           const Text('Items', style: TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           if (details.isEmpty)
-            Text('Tidak ada item.', style: TextStyle(color: Colors.black.withOpacity(0.6)))
+            Text(
+              'Tidak ada item.',
+              style: TextStyle(color: Colors.black.withOpacity(0.6)),
+            )
           else
             ...details.map((it) {
               final m = (it as Map).cast<String, dynamic>();
               final qty = _num(m['quantity']).toInt();
               final basePrice = _num(m['base_price']);
               final promoAmount = _num(m['promo_amount']);
-              final name = (m['product_name'] ??
-                      (m['partner_product'] is Map ? (m['partner_product']['name'] ?? 'Produk') : 'Produk'))
-                  .toString();
+              final name =
+                  (m['product_name'] ??
+                          (m['partner_product'] is Map
+                              ? (m['partner_product']['name'] ?? 'Produk')
+                              : 'Produk'))
+                      .toString();
 
               final note = (m['customer_note'] ?? '').toString().trim();
               final lineTotal = (basePrice - promoAmount) * qty;
@@ -658,7 +723,8 @@ class _ItemsCard extends StatelessWidget {
               final opts = (m['order_detail_options'] as List?) ?? [];
               final itemState = _resolveKitchenItemState(m, order);
               final detailId = orderDetailId(m);
-              final canMarkThis = canMarkKitchenServed &&
+              final canMarkThis =
+                  canMarkKitchenServed &&
                   onMarkKitchenServed != null &&
                   detailId != null &&
                   isItemAwaitingServe(m);
@@ -688,19 +754,27 @@ class _ItemsCard extends StatelessWidget {
                     if (note.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text('($note)', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+                        child: Text(
+                          '($note)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black.withOpacity(0.55),
+                          ),
+                        ),
                       ),
                     if (opts.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       ...opts.map((o) {
                         final om = (o as Map).cast<String, dynamic>();
-                        final optName = (om['option'] is Map
-                                ? (om['option']['name'] ?? '-')
-                                : (om['partner_product_option_name'] ??
-                                    om['name'] ??
-                                    '-'))
-                            .toString();
-                        final parentName = (om['option'] is Map &&
+                        final optName =
+                            (om['option'] is Map
+                                    ? (om['option']['name'] ?? '-')
+                                    : (om['partner_product_option_name'] ??
+                                          om['name'] ??
+                                          '-'))
+                                .toString();
+                        final parentName =
+                            (om['option'] is Map &&
                                 (om['option']['parent'] is Map) &&
                                 om['option']['parent']['name'] != null)
                             ? om['option']['parent']['name'].toString()
@@ -711,7 +785,10 @@ class _ItemsCard extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 2),
                           child: Text(
                             '- $parentName: $optName × $qty = Rp ${_rupiah(price)}',
-                            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.65)),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black.withOpacity(0.65),
+                            ),
                           ),
                         );
                       }),
@@ -728,7 +805,9 @@ class _ItemsCard extends StatelessWidget {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.restaurant_rounded, size: 18),
                           label: Text(serveLabel),
@@ -830,11 +909,7 @@ class _KitchenStateBadge extends StatelessWidget {
 }
 
 // ===== helpers =====
-enum _KitchenItemState {
-  processing,
-  servedKitchen,
-  servedCashier,
-}
+enum _KitchenItemState { processing, servedKitchen, servedCashier }
 
 num _num(dynamic v) {
   if (v == null) return 0;
@@ -850,13 +925,15 @@ bool _toBool(dynamic v) {
 }
 
 num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
-  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+  final stored =
+      _pickNum(data, ['cash_rounding_amount']) ??
       _pickNum(data, ['rounding_amount']) ??
       _pickNum(data, ['payment', 'rounding_amount']) ??
       _pickNum(data, ['latest_payment', 'rounding_amount']);
   if (stored != null && stored > 0) return stored.ceil();
 
-  final method = (_toBool(data['openbill_flag']) &&
+  final method =
+      (_toBool(data['openbill_flag']) &&
           ((data['payment_method'] ?? '').toString().trim().isEmpty))
       ? 'OPENBILL'
       : (data['payment_method'] ?? '').toString().toUpperCase();

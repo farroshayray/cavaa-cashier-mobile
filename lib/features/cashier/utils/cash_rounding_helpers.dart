@@ -1,3 +1,5 @@
+import '/features/cashier/data/sync/sync_error_classifier.dart';
+
 /// Mirrors Laravel `App\Support\CashRounding` for offline/sync parity.
 class CashRoundingHelpers {
   static const allowedUnits = [0, 100, 500, 1000];
@@ -15,12 +17,7 @@ class CashRoundingHelpers {
     return s.ceil();
   }
 
-  static int roundedPayable(
-    num subtotal,
-    bool isPpnActive,
-    num ppn,
-    int unit,
-  ) {
+  static int roundedPayable(num subtotal, bool isPpnActive, num ppn, int unit) {
     final base = basePayable(subtotal, isPpnActive, ppn);
     final normalizedUnit = normalizeUnit(unit);
     if (normalizedUnit <= 0 || base <= 0) return base;
@@ -52,7 +49,8 @@ class CashRoundingHelpers {
     num? storedRoundingAmount,
   }) {
     final base = basePayable(subtotal, isPpnActive, ppn);
-    final rounding = storedRoundingAmount?.round() ??
+    final rounding =
+        storedRoundingAmount?.round() ??
         paymentRoundingAmount(
           paymentType,
           subtotal,
@@ -72,8 +70,9 @@ class CashRoundingHelpers {
 
     final partnerData = order['partner_data'];
     if (partnerData is Map) {
-      final fromPartnerData =
-          normalizeUnit(_num(partnerData['cash_rounding_unit']).toInt());
+      final fromPartnerData = normalizeUnit(
+        _num(partnerData['cash_rounding_unit']).toInt(),
+      );
       if (fromPartnerData > 0) return fromPartnerData;
     }
 
@@ -117,7 +116,8 @@ class CashRoundingHelpers {
     int? cashRoundingUnit,
   }) {
     final base = basePayable(subtotal, isPpnActive, ppnPercent);
-    final rounding = cashRoundingAmount ??
+    final rounding =
+        cashRoundingAmount ??
         (grandTotal > base ? grandTotal - base : 0).toDouble();
     return {
       'grand_total_local': grandTotal,
@@ -174,7 +174,9 @@ class CashRoundingHelpers {
 String? localSyncStatusMessage(Map<String, dynamic> data) {
   final syncStatus = (data['sync_status'] ?? '').toString();
   final lastError = (data['last_error'] ?? '').toString().trim();
-  final isUnsynced = data['is_synced'] == false ||
+  final errorInfo = SyncErrorClassifier.classify(lastError);
+  final isUnsynced =
+      data['is_synced'] == false ||
       data['pending_sync'] == true ||
       syncStatus == 'FAILED' ||
       syncStatus == 'PENDING' ||
@@ -182,12 +184,12 @@ String? localSyncStatusMessage(Map<String, dynamic> data) {
       syncStatus == 'PENDING_PROCESS' ||
       syncStatus == 'PENDING_FINISH' ||
       syncStatus == 'PENDING_UPDATE' ||
-      syncStatus == 'STOCK_CONFLICT';
+      SyncErrorClassifier.isConflictStatus(syncStatus);
 
   if (!isUnsynced && syncStatus != 'FAILED') return null;
 
-  if (syncStatus == 'STOCK_CONFLICT') {
-    return 'Konflik stok: ${lastError.isNotEmpty ? lastError : 'stok tidak cukup di server'}';
+  if (SyncErrorClassifier.isConflictStatus(syncStatus)) {
+    return '${errorInfo.shortLabel}: ${lastError.isNotEmpty ? lastError : errorInfo.defaultMessage}';
   }
 
   if (const {
@@ -220,5 +222,6 @@ String? localSyncStatusMessage(Map<String, dynamic> data) {
 
 bool localSyncStatusMessageIsError(String? message, Map<String, dynamic> data) {
   final syncStatus = (data['sync_status'] ?? '').toString();
-  return syncStatus == 'STOCK_CONFLICT' || syncStatus == 'FAILED';
+  return SyncErrorClassifier.isConflictStatus(syncStatus) ||
+      syncStatus == 'FAILED';
 }

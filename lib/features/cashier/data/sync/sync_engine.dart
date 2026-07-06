@@ -545,6 +545,18 @@ class SyncEngine {
         );
         continue;
       }
+      if (_isFinishAlreadyServedError(map)) {
+        final healed = await bookingOrdersDao.clearFinishAlreadyServedSyncState(
+          clientUuid,
+        );
+        if (healed) {
+          ApiDebugLog.sync(
+            'self-heal',
+            'cleared FINISH already-served replay for $clientUuid',
+          );
+          continue;
+        }
+      }
       if (_isOfflineCatchUpAlreadyAppliedError(map)) {
         final clearProof = _shouldClearProofForCatchUpError(map);
         await bookingOrdersDao.clearOfflineCatchUpSyncState(
@@ -680,6 +692,24 @@ class SyncEngine {
 
     final message = (error['message'] ?? '').toString().toLowerCase();
     return message.contains('sudah berstatus served') ||
+        message.contains('already served');
+  }
+
+  bool _isFinishAlreadyServedError(Map<String, dynamic> error) {
+    final intent = (error['sync_intent'] ?? '').toString().toUpperCase();
+    if (intent != 'FINISH') return false;
+
+    final code = (error['code'] ?? '').toString().toUpperCase();
+    if (code == 'ORDER_ALREADY_SERVED') return true;
+
+    final serverStatus = (error['server_status'] ?? '')
+        .toString()
+        .toUpperCase();
+    if (serverStatus == 'SERVED') return true;
+
+    final message = (error['message'] ?? '').toString().toLowerCase();
+    return message.contains('finish tidak diizinkan pada status served') ||
+        message.contains('finish') && message.contains('status served') ||
         message.contains('already served');
   }
 

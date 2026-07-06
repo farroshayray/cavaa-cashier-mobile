@@ -6,6 +6,7 @@ import '/features/cashier/presentation/printing/receipt_action_service.dart';
 import '/features/cashier/presentation/widgets/receipt_action_icon_button.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/sync_error_classifier.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
 
 // ✅ bikin provider khusus proses (contoh)
@@ -23,11 +24,7 @@ import '/features/scanner/pages/barcode_scanner_page.dart';
 // kalau nanti ada modal khusus proses/selesai, import juga
 
 class ProcessTab extends StatefulWidget {
-  const ProcessTab({
-    super.key,
-    this.focusOrderId,
-    this.focusRequestKey = 0,
-  });
+  const ProcessTab({super.key, this.focusOrderId, this.focusRequestKey = 0});
 
   final int? focusOrderId;
   final int focusRequestKey;
@@ -58,10 +55,7 @@ class _ProcessTabState extends State<ProcessTab> {
 }
 
 class _ProcessView extends StatefulWidget {
-  const _ProcessView({
-    this.focusOrderId,
-    this.focusRequestKey = 0,
-  });
+  const _ProcessView({this.focusOrderId, this.focusRequestKey = 0});
 
   final int? focusOrderId;
   final int focusRequestKey;
@@ -69,7 +63,6 @@ class _ProcessView extends StatefulWidget {
   @override
   State<_ProcessView> createState() => _ProcessViewState();
 }
-
 
 class _ProcessViewState extends State<_ProcessView> {
   static const Duration _searchDebounceDelay = Duration(milliseconds: 500);
@@ -143,9 +136,9 @@ class _ProcessViewState extends State<_ProcessView> {
       if (!mounted) return;
 
       final message = (res['message'] ?? 'Berhasil diproses').toString();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
 
       if ((res['status'] ?? '').toString() == 'warning') {
         await provider.load();
@@ -156,13 +149,14 @@ class _ProcessViewState extends State<_ProcessView> {
     final detail = await provider.getOrderDetailFromListItem(row);
     if (!mounted) return;
 
-    final selectedSelections = await showModalBottomSheet<List<ServeItemSelection>>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _ServeItemsSheet(order: detail),
-    );
+    final selectedSelections =
+        await showModalBottomSheet<List<ServeItemSelection>>(
+          context: context,
+          useRootNavigator: true,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => _ServeItemsSheet(order: detail),
+        );
 
     if (selectedSelections == null || selectedSelections.isEmpty) {
       return;
@@ -181,10 +175,11 @@ class _ProcessViewState extends State<_ProcessView> {
     );
 
     if (!mounted) return;
-    final message = (res['message'] ?? 'Item berhasil ditandai served').toString();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    final message = (res['message'] ?? 'Item berhasil ditandai served')
+        .toString();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _scheduleSearch() {
@@ -219,8 +214,8 @@ class _ProcessViewState extends State<_ProcessView> {
     final actionKey = id > 0
         ? id
         : ((data['local_id'] ?? '').toString().isNotEmpty
-            ? data['local_id'].toString().hashCode
-            : data.hashCode);
+              ? data['local_id'].toString().hashCode
+              : data.hashCode);
     final receiptKey = id > 0 ? id : (data['local_id']?.hashCode ?? id);
     final blinking = (_blinkOrderId != null && _blinkOrderId == id);
 
@@ -251,31 +246,36 @@ class _ProcessViewState extends State<_ProcessView> {
               await _handleProcessAction(data);
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Gagal proses: $e')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Gagal proses: $e')));
             }
           },
           onCancelProcess: () async {
             try {
-              final res = await context.read<ProcessProvider>().actionCancelProcess(data);
+              final res = await context
+                  .read<ProcessProvider>()
+                  .actionCancelProcess(data);
               if (!mounted) return;
 
-              final message = (res['message'] ?? 'Proses dibatalkan').toString();
+              final message = (res['message'] ?? 'Proses dibatalkan')
+                  .toString();
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(message)),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(message)));
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Gagal batal: $e')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Gagal batal: $e')));
             }
           },
           onFinish: () async {
             try {
-              final res = await context.read<ProcessProvider>().actionFinish(data);
+              final res = await context.read<ProcessProvider>().actionFinish(
+                data,
+              );
 
               if (!mounted) return;
 
@@ -289,14 +289,14 @@ class _ProcessViewState extends State<_ProcessView> {
 
               final message = (res['message'] ?? 'Order selesai').toString();
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(message)),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(message)));
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Gagal selesai: $e')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Gagal selesai: $e')));
             }
           },
         ),
@@ -391,7 +391,11 @@ class _ProcessViewState extends State<_ProcessView> {
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
-                      Icon(Icons.inbox_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 56,
+                        color: Colors.black.withOpacity(0.35),
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         hasSearchQuery
@@ -410,7 +414,11 @@ class _ProcessViewState extends State<_ProcessView> {
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
-                      Icon(Icons.filter_list_off_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
+                      Icon(
+                        Icons.filter_list_off_outlined,
+                        size: 56,
+                        color: Colors.black.withOpacity(0.35),
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         'Tidak ada order di kelompok ini.',
@@ -533,7 +541,8 @@ class _ProcessViewState extends State<_ProcessView> {
       }
     }
 
-    final needsExpand = targetSection != null &&
+    final needsExpand =
+        targetSection != null &&
         _collapsedProcessSections.contains(targetSection);
 
     if (needsExpand) {
@@ -592,7 +601,6 @@ class _ProcessViewState extends State<_ProcessView> {
       scrollAndBlink();
     }
   }
-
 }
 
 int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
@@ -640,7 +648,7 @@ class _SearchBar extends StatelessWidget {
             blurRadius: compact ? 10 : 16,
             offset: Offset(0, compact ? 6 : 10),
             color: Colors.black.withOpacity(0.04),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -664,7 +672,9 @@ class _SearchBar extends StatelessWidget {
           ),
           if (controller.text.isNotEmpty)
             IconButton(
-              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+              visualDensity: compact
+                  ? VisualDensity.compact
+                  : VisualDensity.standard,
               constraints: compact
                   ? const BoxConstraints(minWidth: 32, minHeight: 32)
                   : null,
@@ -673,7 +683,9 @@ class _SearchBar extends StatelessWidget {
               tooltip: 'Reset',
             ),
           IconButton(
-            visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+            visualDensity: compact
+                ? VisualDensity.compact
+                : VisualDensity.standard,
             constraints: compact
                 ? const BoxConstraints(minWidth: 32, minHeight: 32)
                 : null,
@@ -703,10 +715,7 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.text,
-    this.compact = false,
-  });
+  const _Badge({required this.text, this.compact = false});
 
   final String text;
   final bool compact;
@@ -766,11 +775,13 @@ class _ProcessOrderCard extends StatelessWidget {
     final total = _calcGrandTotalFromMap(data);
     final roundingAmount = _calcCashRoundingAmount(data);
     final orderDateTime = _formatOrderDateTime(data);
-    final table = (
-      data['table'] is Map
-          ? (data['table']['table_no'] ?? data['table_no_snapshot'] ?? '-')
-          : (data['table_no_snapshot'] ?? '-')
-    ).toString();
+    final table =
+        (data['table'] is Map
+                ? (data['table']['table_no'] ??
+                      data['table_no_snapshot'] ??
+                      '-')
+                : (data['table_no_snapshot'] ?? '-'))
+            .toString();
 
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
@@ -844,7 +855,10 @@ class _ProcessOrderCard extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF3F4F6),
                             borderRadius: BorderRadius.circular(999),
@@ -862,7 +876,9 @@ class _ProcessOrderCard extends StatelessWidget {
                       ),
                       if (_toBool(data['openbill_flag']) ||
                           data['payment_method']?.toString() == 'OPENBILL' ||
-                          (data['order_status'] ?? '').toString().startsWith('OPENBILL')) ...[
+                          (data['order_status'] ?? '').toString().startsWith(
+                            'OPENBILL',
+                          )) ...[
                         const SizedBox(width: 6),
                         const _Badge(text: 'Openbill', compact: true),
                       ],
@@ -880,7 +896,10 @@ class _ProcessOrderCard extends StatelessWidget {
                     orderDateTime != null
                         ? 'Meja: $table  |  $orderDateTime'
                         : 'Meja: $table',
-                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
                   ),
                   if (data['is_synced'] == false &&
                       localSyncStatusMessage(data) != null) ...[
@@ -891,7 +910,8 @@ class _ProcessOrderCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11,
-                        color: localSyncStatusMessageIsError(
+                        color:
+                            localSyncStatusMessageIsError(
                               localSyncStatusMessage(data),
                               data,
                             )
@@ -917,11 +937,20 @@ class _ProcessOrderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Total', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+                  Text(
+                    'Total',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'Rp ${_rupiah(total)}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   if (roundingAmount > 0) ...[
                     const SizedBox(height: 2),
@@ -982,7 +1011,10 @@ class _ProcessOrderCard extends StatelessWidget {
                 children: [
                   Flexible(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(999),
@@ -1000,7 +1032,9 @@ class _ProcessOrderCard extends StatelessWidget {
                   ),
                   if (_toBool(data['openbill_flag']) ||
                       data['payment_method']?.toString() == 'OPENBILL' ||
-                      (data['order_status'] ?? '').toString().startsWith('OPENBILL')) ...[
+                      (data['order_status'] ?? '').toString().startsWith(
+                        'OPENBILL',
+                      )) ...[
                     const SizedBox(width: 6),
                     const _Badge(text: 'Openbill', compact: true),
                   ],
@@ -1020,7 +1054,10 @@ class _ProcessOrderCard extends StatelessWidget {
                 orderDateTime != null
                     ? 'Meja: $table  |  $orderDateTime'
                     : 'Meja: $table',
-                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
               ),
               if (localSyncStatusMessage(data) != null) ...[
                 const SizedBox(height: 6),
@@ -1030,7 +1067,8 @@ class _ProcessOrderCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
-                    color: localSyncStatusMessageIsError(
+                    color:
+                        localSyncStatusMessageIsError(
                           localSyncStatusMessage(data),
                           data,
                         )
@@ -1057,12 +1095,18 @@ class _ProcessOrderCard extends StatelessWidget {
                   children: [
                     Text(
                       'Total',
-                      style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.55),
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Rp ${_rupiah(total)}',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     if (roundingAmount > 0) ...[
                       const SizedBox(height: 2),
@@ -1112,7 +1156,10 @@ class _ProcessOrderCard extends StatelessWidget {
     final pendingAction = (data['pending_action'] ?? '').toString();
     final syncStatus = (data['sync_status'] ?? '').toString();
 
-    if (syncStatus == 'STOCK_CONFLICT') {
+    if (SyncErrorClassifier.isConflictStatus(syncStatus)) {
+      final issue = SyncErrorClassifier.classify(
+        data['last_error']?.toString(),
+      );
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -1122,12 +1169,16 @@ class _ProcessOrderCard extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
-            SizedBox(width: 6),
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 14,
+              color: Color(0xFFDC2626),
+            ),
+            const SizedBox(width: 6),
             Text(
-              'Konflik Stok',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              issue.shortLabel,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
             ),
           ],
         ),
@@ -1250,10 +1301,7 @@ class _ProcessOrderCard extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: dot,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(
@@ -1268,8 +1316,13 @@ class _ProcessOrderCard extends StatelessWidget {
   Widget _buildStatusActions() {
     final st = (data['order_status'] ?? '').toString();
 
-    if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER' || st == 'PROCESSED') {
-      final buttonText = needsOpenbillConfirmation(data) ? 'Konfirmasi' : 'Pilih Served';
+    if (st == 'PAID' ||
+        st == 'OPENBILL_CONFIRMATION' ||
+        st == 'OPENBILL_WAITING_ORDER' ||
+        st == 'PROCESSED') {
+      final buttonText = needsOpenbillConfirmation(data)
+          ? 'Konfirmasi'
+          : 'Pilih Served';
       return Padding(
         padding: const EdgeInsets.only(right: 6),
         child: ElevatedButton(
@@ -1277,10 +1330,15 @@ class _ProcessOrderCard extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFEA580C),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
-          child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.w900)),
+          child: Text(
+            buttonText,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
         ),
       );
     }
@@ -1291,8 +1349,13 @@ class _ProcessOrderCard extends StatelessWidget {
   Widget _buildLandscapeStatusActions() {
     final st = (data['order_status'] ?? '').toString();
 
-    if (st == 'PAID' || st == 'OPENBILL_CONFIRMATION' || st == 'OPENBILL_WAITING_ORDER' || st == 'PROCESSED') {
-      final buttonText = needsOpenbillConfirmation(data) ? 'Konfirmasi' : 'Pilih Served';
+    if (st == 'PAID' ||
+        st == 'OPENBILL_CONFIRMATION' ||
+        st == 'OPENBILL_WAITING_ORDER' ||
+        st == 'PROCESSED') {
+      final buttonText = needsOpenbillConfirmation(data)
+          ? 'Konfirmasi'
+          : 'Pilih Served';
       return Padding(
         padding: const EdgeInsets.only(right: 4),
         child: ElevatedButton(
@@ -1300,11 +1363,16 @@ class _ProcessOrderCard extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFEA580C),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             minimumSize: const Size(0, 40),
           ),
-          child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.w900)),
+          child: Text(
+            buttonText,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
         ),
       );
     }
@@ -1334,17 +1402,20 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
   }
 
   List<ServeItemSelection> _buildSelections() {
-    return _selectedKeys.map((key) {
-      if (key.startsWith('id:')) {
-        return ServeItemSelection(
-          serverDetailId: int.tryParse(key.substring(3)),
-        );
-      }
-      if (key.startsWith('uuid:')) {
-        return ServeItemSelection(clientDetailUuid: key.substring(5));
-      }
-      return const ServeItemSelection();
-    }).where((item) => item.isValid).toList();
+    return _selectedKeys
+        .map((key) {
+          if (key.startsWith('id:')) {
+            return ServeItemSelection(
+              serverDetailId: int.tryParse(key.substring(3)),
+            );
+          }
+          if (key.startsWith('uuid:')) {
+            return ServeItemSelection(clientDetailUuid: key.substring(5));
+          }
+          return const ServeItemSelection();
+        })
+        .where((item) => item.isValid)
+        .toList();
   }
 
   @override
@@ -1355,8 +1426,7 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    final hasSelectableItems =
-        details.any(isItemAwaitingCashierServe);
+    final hasSelectableItems = details.any(isItemAwaitingCashierServe);
 
     return SafeArea(
       top: false,
@@ -1384,7 +1454,10 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                       const Expanded(
                         child: Text(
                           'Pilih Menu Served',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                       IconButton(
@@ -1401,7 +1474,9 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                           child: Text(
                             'Tidak ada menu pada order ini.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.black.withOpacity(0.65)),
+                            style: TextStyle(
+                              color: Colors.black.withOpacity(0.65),
+                            ),
                           ),
                         )
                       : ListView.separated(
@@ -1411,129 +1486,154 @@ class _ServeItemsSheetState extends State<_ServeItemsSheet> {
                             final item = details[index];
                             final selectionKey = _selectionKey(item);
                             final qty = _toNum(item['quantity']).toInt();
-                            final name = (item['product_name'] ?? 'Produk').toString();
-                            final note = (item['customer_note'] ?? '').toString().trim();
-                            final optionLines = _orderDetailOptionLines(item, qty);
+                            final name = (item['product_name'] ?? 'Produk')
+                                .toString();
+                            final note = (item['customer_note'] ?? '')
+                                .toString()
+                                .trim();
+                            final optionLines = _orderDetailOptionLines(
+                              item,
+                              qty,
+                            );
                             final state = _resolveProcessItemState(item, order);
-                            final isSelectable = isItemAwaitingCashierServe(item) &&
+                            final isSelectable =
+                                isItemAwaitingCashierServe(item) &&
                                 selectionKey.isNotEmpty;
-                            final checked = _selectedKeys.contains(selectionKey);
+                            final checked = _selectedKeys.contains(
+                              selectionKey,
+                            );
 
                             return Opacity(
                               opacity: isSelectable ? 1 : 0.55,
                               child: InkWell(
-                              borderRadius: BorderRadius.circular(14),
-                              onTap: isSelectable
-                                  ? () {
-                                setState(() {
-                                  if (checked) {
-                                    _selectedKeys.remove(selectionKey);
-                                  } else {
-                                    _selectedKeys.add(selectionKey);
-                                  }
-                                });
-                              }
-                                  : null,
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isSelectable
-                                        ? Colors.black.withOpacity(0.08)
-                                        : Colors.black.withOpacity(0.05),
-                                  ),
-                                  color: !isSelectable
-                                      ? const Color(0xFFF3F4F6)
-                                      : checked
-                                          ? const Color(0xFFFFF7ED)
-                                          : Colors.white,
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (isSelectable)
-                                      Checkbox(
-                                        value: checked,
-                                        onChanged: (_) {
-                                          setState(() {
-                                            if (checked) {
-                                              _selectedKeys.remove(selectionKey);
-                                            } else {
-                                              _selectedKeys.add(selectionKey);
-                                            }
-                                          });
-                                        },
-                                      )
-                                    else
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 4,
-                                          right: 8,
-                                          top: 2,
-                                        ),
-                                        child: Icon(
-                                          state == _ProcessItemState.served
-                                              ? Icons.check_circle_rounded
-                                              : Icons.lock_outline_rounded,
-                                          size: 22,
-                                          color: Colors.black.withOpacity(0.35),
-                                        ),
-                                      ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  '$name × $qty',
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                ),
-                                              ),
-                                              if (state != null) _ProcessItemStateBadge(state: state),
-                                            ],
-                                          ),
-                                          if (optionLines.isNotEmpty) ...[
-                                            const SizedBox(height: 6),
-                                            ...optionLines.map(
-                                              (line) => Padding(
-                                                padding: const EdgeInsets.only(bottom: 2),
-                                                child: Text(
-                                                  '- $line',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.black.withOpacity(0.65),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                          if (note.isNotEmpty) ...[
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Catatan: $note',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontStyle: FontStyle.italic,
-                                                color: Colors.black.withOpacity(0.55),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: isSelectable
+                                    ? () {
+                                        setState(() {
+                                          if (checked) {
+                                            _selectedKeys.remove(selectionKey);
+                                          } else {
+                                            _selectedKeys.add(selectionKey);
+                                          }
+                                        });
+                                      }
+                                    : null,
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isSelectable
+                                          ? Colors.black.withOpacity(0.08)
+                                          : Colors.black.withOpacity(0.05),
                                     ),
-                                  ],
+                                    color: !isSelectable
+                                        ? const Color(0xFFF3F4F6)
+                                        : checked
+                                        ? const Color(0xFFFFF7ED)
+                                        : Colors.white,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (isSelectable)
+                                        Checkbox(
+                                          value: checked,
+                                          onChanged: (_) {
+                                            setState(() {
+                                              if (checked) {
+                                                _selectedKeys.remove(
+                                                  selectionKey,
+                                                );
+                                              } else {
+                                                _selectedKeys.add(selectionKey);
+                                              }
+                                            });
+                                          },
+                                        )
+                                      else
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            left: 4,
+                                            right: 8,
+                                            top: 2,
+                                          ),
+                                          child: Icon(
+                                            state == _ProcessItemState.served
+                                                ? Icons.check_circle_rounded
+                                                : Icons.lock_outline_rounded,
+                                            size: 22,
+                                            color: Colors.black.withOpacity(
+                                              0.35,
+                                            ),
+                                          ),
+                                        ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    '$name × $qty',
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (state != null)
+                                                  _ProcessItemStateBadge(
+                                                    state: state,
+                                                  ),
+                                              ],
+                                            ),
+                                            if (optionLines.isNotEmpty) ...[
+                                              const SizedBox(height: 6),
+                                              ...optionLines.map(
+                                                (line) => Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        bottom: 2,
+                                                      ),
+                                                  child: Text(
+                                                    '- $line',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.black
+                                                          .withOpacity(0.65),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                            if (note.isNotEmpty) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Catatan: $note',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontStyle: FontStyle.italic,
+                                                  color: Colors.black
+                                                      .withOpacity(0.55),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
                             );
                           },
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
                           itemCount: details.length,
                         ),
                 ),
@@ -1635,10 +1735,7 @@ class _ProcessItemStateBadge extends StatelessWidget {
   }
 }
 
-enum _ProcessItemState {
-  processing,
-  served,
-}
+enum _ProcessItemState { processing, served }
 
 List<String> _orderDetailOptionLines(Map<String, dynamic> item, int qty) {
   final opts = (item['order_detail_options'] as List?) ?? [];
@@ -1658,14 +1755,13 @@ List<String> _orderDetailOptionLines(Map<String, dynamic> item, int qty) {
           ? (opt['parent']['name'] ?? '').toString()
           : '';
     } else {
-      optName =
-          (om['partner_product_option_name'] ?? om['name'] ?? '-').toString();
+      optName = (om['partner_product_option_name'] ?? om['name'] ?? '-')
+          .toString();
       parentName = (om['parent_name'] ?? '').toString();
     }
 
     final price = _toNum(om['price']);
-    final priceText =
-        price > 0 ? ' (+ Rp ${_rupiah(price * qty)})' : '';
+    final priceText = price > 0 ? ' (+ Rp ${_rupiah(price * qty)})' : '';
 
     if (parentName.isNotEmpty) {
       lines.add('$parentName: $optName$priceText');
@@ -1746,7 +1842,8 @@ num _calcGrandTotalFromMap(Map<String, dynamic> data) {
 }
 
 num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
-  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+  final stored =
+      _pickNum(data, ['cash_rounding_amount']) ??
       _pickNum(data, ['rounding_amount']) ??
       _pickNum(data, ['payment', 'rounding_amount']) ??
       _pickNum(data, ['latest_payment', 'rounding_amount']);
@@ -1783,11 +1880,12 @@ num? _pickNum(Map<String, dynamic> root, List<String> path) {
 }
 
 String? _formatOrderDateTime(Map<String, dynamic> data) {
-  final raw = (data['created_at'] ??
-          data['sort_time'] ??
-          data['updated_at_local'] ??
-          data['cached_at'])
-      ?.toString();
+  final raw =
+      (data['created_at'] ??
+              data['sort_time'] ??
+              data['updated_at_local'] ??
+              data['cached_at'])
+          ?.toString();
   if (raw == null || raw.trim().isEmpty) return null;
 
   final dateTime = DateTime.tryParse(raw)?.toLocal();
@@ -1795,8 +1893,7 @@ String? _formatOrderDateTime(Map<String, dynamic> data) {
 
   final date =
       '${_twoDigits(dateTime.day)}/${_twoDigits(dateTime.month)}/${dateTime.year}';
-  final time =
-      '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+  final time = '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
   return '$date $time';
 }
 
@@ -1835,7 +1932,9 @@ Future<void> _openProcessOrderDetail(
                 );
                 final status = (res['status'] ?? '').toString();
                 if (status == 'warning' || status == 'error') {
-                  throw Exception((res['message'] ?? 'Gagal update status').toString());
+                  throw Exception(
+                    (res['message'] ?? 'Gagal update status').toString(),
+                  );
                 }
                 await processProvider.load();
                 await context.read<PaymentProvider>().load();
@@ -1844,7 +1943,9 @@ Future<void> _openProcessOrderDetail(
         onEdit: editable && syncStatus != 'PENDING_DELETE'
             ? () async {
                 Navigator.of(sheetCtx).pop();
-                final detail = await processProvider.getOrderDetailFromListItem(row);
+                final detail = await processProvider.getOrderDetailFromListItem(
+                  row,
+                );
                 if (!context.mounted) return;
                 await showModalBottomSheet(
                   context: context,

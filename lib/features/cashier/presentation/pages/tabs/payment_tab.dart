@@ -16,6 +16,7 @@ import '/features/cashier/presentation/widgets/order_tab_section_widgets.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/sync_error_classifier.dart';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 class PaymentTab extends StatefulWidget {
@@ -1032,7 +1033,10 @@ class _PaymentOrderCard extends StatelessWidget {
     bool isLocalOnly,
     String? syncStatus,
   ) {
-    if (syncStatus == 'STOCK_CONFLICT') {
+    if (SyncErrorClassifier.isConflictStatus(syncStatus ?? '')) {
+      final issue = SyncErrorClassifier.classify(
+        data['last_error']?.toString(),
+      );
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -1042,16 +1046,16 @@ class _PaymentOrderCard extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(
+          children: [
+            const Icon(
               Icons.error_outline_rounded,
               size: 14,
               color: Color(0xFFDC2626),
             ),
-            SizedBox(width: 6),
+            const SizedBox(width: 6),
             Text(
-              'Konflik Stok',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              issue.shortLabel,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
             ),
           ],
         ),
