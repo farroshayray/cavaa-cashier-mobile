@@ -710,6 +710,7 @@ class _ItemsCard extends StatelessWidget {
               final qty = _num(m['quantity']).toInt();
               final basePrice = _num(m['base_price']);
               final promoAmount = _num(m['promo_amount']);
+              final promoType = (m['promo_type'] ?? '').toString().trim();
               final name =
                   (m['product_name'] ??
                           (m['partner_product'] is Map
@@ -759,6 +760,18 @@ class _ItemsCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.black.withOpacity(0.55),
+                          ),
+                        ),
+                      ),
+                    if (promoAmount > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '- Promo${promoType.isNotEmpty ? ' $promoType' : ''}: -Rp ${_rupiah(promoAmount * qty)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),

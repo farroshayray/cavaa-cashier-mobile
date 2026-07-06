@@ -326,6 +326,19 @@ class SyncEngine {
         });
       }
 
+      if (effectiveIntent.toUpperCase() == 'UPDATE' &&
+          _hasForcePushUpdate(order)) {
+        row['menu_only_update'] = true;
+        row['preserve_order_status'] = true;
+        row['force_push_update'] = true;
+        ApiDebugLog.sync('conflict resolution: force local update', {
+          'client_uuid': order.clientUuid,
+          'server_id': order.serverId,
+          'sync_intent': effectiveIntent,
+          'order_status': order.orderStatus,
+        });
+      }
+
       final lastPaymentId = resolveLastPaymentIdForPush(
         latestPaymentServerId: order.latestPaymentServerId,
         paymentId: order.paymentId,
@@ -389,6 +402,22 @@ class SyncEngine {
       'order_details': orderDetailsPayload,
       'deletes': deletes,
     };
+  }
+
+  bool _hasForcePushUpdate(BookingOrder order) {
+    final jsonText = order.localFilePathsJson;
+    if (jsonText == null || jsonText.trim().isEmpty) return false;
+    try {
+      final decoded = jsonDecode(jsonText);
+      if (decoded is! Map) return false;
+      final value = decoded['force_push_update'];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      return value?.toString().toLowerCase() == 'true' ||
+          value?.toString() == '1';
+    } catch (_) {
+      return false;
+    }
   }
 
   List<Map<String, dynamic>> _buildOrderDetailsCatchUpPayload(

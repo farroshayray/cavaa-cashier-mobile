@@ -42,6 +42,14 @@ class EditableCartItem {
   num get lineTotal => cart.lineTotal;
 }
 
+class _PromoSnapshot {
+  const _PromoSnapshot({this.id, this.type, this.amount = 0});
+
+  final int? id;
+  final String? type;
+  final double amount;
+}
+
 class EditOrderProvider extends ChangeNotifier {
   EditOrderProvider({
     required this.ordersRepo,
@@ -211,29 +219,17 @@ class EditOrderProvider extends ChangeNotifier {
       for (final entry in selected.entries) entry.key: {...entry.value},
     };
 
-    final same = items.indexWhere(
-      (item) =>
-          !item.isLocked &&
-          item.product.id == product.id &&
-          _sameSelected(item.selected, selectedCopy) &&
-          item.note == note,
-    );
-
-    if (same >= 0) {
-      items[same].qty += qty;
-    } else {
-      items.add(
-        EditableCartItem(
-          cart: CartItem(
-            product: product,
-            qty: qty,
-            selected: selectedCopy,
-            note: note,
-            unitFinalPrice: unitFinalPrice,
-          ),
+    items.add(
+      EditableCartItem(
+        cart: CartItem(
+          product: product,
+          qty: qty,
+          selected: selectedCopy,
+          note: note,
+          unitFinalPrice: unitFinalPrice,
         ),
-      );
-    }
+      ),
+    );
     notifyListeners();
   }
 
@@ -514,14 +510,22 @@ class EditOrderProvider extends ChangeNotifier {
         }
       }
 
+      final promo = _promoSnapshot(item);
+      final optionsPrice = _selectedOptionsPrice(item);
+
       return {
         if (item.detailId != null) 'id': item.detailId,
+        if (item.localDetailUuid != null && item.localDetailUuid!.isNotEmpty)
+          'local_detail_uuid': item.localDetailUuid,
         'partner_product_id': item.product.id,
         'product_name': item.product.name,
         'base_price': item.product.price,
-        'options_price': item.unitFinalPrice - item.product.price,
+        'options_price': optionsPrice,
         'quantity': item.qty,
         'customer_note': item.note,
+        'promo_id': promo.id,
+        'promo_type': promo.type,
+        'promo_amount': promo.amount,
         'order_detail_options': optionRows,
         if (item.detailStatusSnapshot != null &&
             item.detailStatusSnapshot!.isNotEmpty)
@@ -569,6 +573,9 @@ class EditOrderProvider extends ChangeNotifier {
         }
       }
 
+      final promo = _promoSnapshot(item);
+      final optionsPrice = _selectedOptionsPrice(item);
+
       return {
         if (item.localDetailUuid != null && item.localDetailUuid!.isNotEmpty)
           'local_id': item.localDetailUuid,
@@ -578,14 +585,58 @@ class EditOrderProvider extends ChangeNotifier {
         'base_price': item.product.price.toDouble(),
         'qty': item.qty,
         'customer_note': item.note,
-        'options_price': (item.unitFinalPrice - item.product.price).toDouble(),
-        'promo_id': item.product.promotion?.id,
+        'options_price': optionsPrice.toDouble(),
+        'promo_id': promo.id,
+        'promo_type': promo.type,
+        'promo_amount': promo.amount,
         if (item.detailStatusSnapshot != null &&
             item.detailStatusSnapshot!.isNotEmpty)
           'detail_status': item.detailStatusSnapshot,
         'options': optionLines,
       };
     }).toList();
+  }
+
+  _PromoSnapshot _promoSnapshot(EditableCartItem item) {
+    final promo = item.product.promotion;
+    if (promo == null) return const _PromoSnapshot();
+
+    num amount = 0;
+    final basePrice = item.product.price;
+    if (promo.type == 'percentage') {
+      amount = basePrice - _promoFinalUnitPrice(item.product);
+    } else {
+      amount = promo.value;
+    }
+
+    if (amount < 0) amount = 0;
+    return _PromoSnapshot(
+      id: promo.id,
+      type: promo.type,
+      amount: amount.toDouble(),
+    );
+  }
+
+  num _selectedOptionsPrice(EditableCartItem item) {
+    num total = 0;
+    for (final group in item.product.optionGroups) {
+      final selectedIds = item.selected[group.id] ?? {};
+      for (final opt in group.items) {
+        if (selectedIds.contains(opt.id)) {
+          total += opt.price;
+        }
+      }
+    }
+    return total;
+  }
+
+  num _promoFinalUnitPrice(Product product) {
+    final promo = product.promotion;
+    if (promo == null) return product.price;
+    if (promo.type == 'percentage') {
+      return product.price - (product.price * promo.value / 100);
+    }
+    return product.price - promo.value;
   }
 
   Product _productFromDetailSnapshot(
@@ -603,11 +654,18 @@ class EditOrderProvider extends ChangeNotifier {
       quantityAvailable: 999,
       alwaysAvailable: true,
       imagePath: null,
-      promotion: null,
+      promotion: _promotionFromDetailSnapshot(detail),
       stockType: 'direct',
       recipes: const [],
       optionGroups: _optionGroupsFromDetail(detail),
     );
+  }
+
+  Promotion? _promotionFromDetailSnapshot(Map<String, dynamic> detail) {
+    final promoId = _toInt(detail['promo_id']);
+    final promoAmount = parseNum(detail['promo_amount']);
+    if (promoId == null || promoId <= 0 || promoAmount <= 0) return null;
+    return Promotion(id: promoId, type: 'nominal', value: promoAmount);
   }
 
   List<OptionGroup> _optionGroupsFromDetail(Map<String, dynamic> detail) {
@@ -786,19 +844,6 @@ class EditOrderProvider extends ChangeNotifier {
       };
     }
     return currentSnapshot;
-  }
-
-  bool _sameSelected(Map<int, Set<int>> a, Map<int, Set<int>> b) {
-    if (a.length != b.length) return false;
-    for (final key in a.keys) {
-      final setA = a[key] ?? {};
-      final setB = b[key] ?? {};
-      if (setA.length != setB.length) return false;
-      for (final id in setA) {
-        if (!setB.contains(id)) return false;
-      }
-    }
-    return true;
   }
 
   int? _toInt(dynamic v) {

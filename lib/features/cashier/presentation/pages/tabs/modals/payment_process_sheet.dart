@@ -131,10 +131,11 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   bool get _isCaseB {
     if (_order == null) return false;
     final latestPayment = _order!['latest_payment'];
-    final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+    final cpi = latestPayment is Map
+        ? latestPayment['owner_manual_payment']
+        : null;
 
-    return (_order!['order_status'] ?? '').toString() == 'UNPAID' &&
-        cpi is Map;
+    return (_order!['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
   }
 
   bool get _isCaseC => !_isCaseA && !_isCaseB;
@@ -181,17 +182,22 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (_isCaseB) {
       final latestPayment = _order?['latest_payment'];
       if (latestPayment is Map) {
-        return (latestPayment['payment_type'] ?? _order?['payment_method'] ?? 'CASH')
+        return (latestPayment['payment_type'] ??
+                _order?['payment_method'] ??
+                'CASH')
             .toString();
       }
     }
 
     if (_canChooseFinalPaymentMethod) {
-      if (_selectedPaymentMethod == null || _selectedPaymentMethod!.trim().isEmpty) {
+      if (_selectedPaymentMethod == null ||
+          _selectedPaymentMethod!.trim().isEmpty) {
         return '';
       }
 
-      final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+      final selected = _availablePaymentMethods
+          .cast<Map<String, dynamic>?>()
+          .firstWhere(
             (item) => item?['value']?.toString() == _selectedPaymentMethod,
             orElse: () => null,
           );
@@ -216,7 +222,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (status == 'PAYMENT REQUEST' || _isCaseB) return true;
 
     if (_canChooseFinalPaymentMethod) {
-      return _selectedPaymentMethod != null && _selectedPaymentMethod!.trim().isNotEmpty;
+      return _selectedPaymentMethod != null &&
+          _selectedPaymentMethod!.trim().isNotEmpty;
     }
 
     return (_order!['payment_method'] ?? 'CASH').toString() == 'CASH';
@@ -277,7 +284,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   String? _paymentTypeForValue(String? value) {
     if (value == null || value.trim().isEmpty) return null;
-    final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+    final selected = _availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
           (item) => item?['value']?.toString() == value,
           orElse: () => null,
         );
@@ -286,7 +295,10 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   void _applyPaidAmountForMethodType(String? type) {
     if (_order == null) return;
-    if (type == 'QRIS' && _canChooseFinalPaymentMethod && !_isCaseA && !_isCaseB) {
+    if (type == 'QRIS' &&
+        _canChooseFinalPaymentMethod &&
+        !_isCaseA &&
+        !_isCaseB) {
       _paidCtrl.text = '';
       _change = 0;
       return;
@@ -307,7 +319,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       return;
     }
 
-    final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+    final selected = _availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
           (item) => item?['value']?.toString() == _selectedPaymentMethod,
           orElse: () => null,
         );
@@ -325,8 +339,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     } catch (_) {
       if (!mounted) return;
       setState(
-        () => _enrichedSelectedInstruction =
-            _normalizePaymentInstruction(Map<String, dynamic>.from(selected)),
+        () => _enrichedSelectedInstruction = _normalizePaymentInstruction(
+          Map<String, dynamic>.from(selected),
+        ),
       );
     }
   }
@@ -347,7 +362,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   bool get _canConfirm {
     if (_canChooseFinalPaymentMethod && !_isCaseA && !_isCaseB) {
-      if (_selectedPaymentMethod == null || _selectedPaymentMethod!.trim().isEmpty) {
+      if (_selectedPaymentMethod == null ||
+          _selectedPaymentMethod!.trim().isEmpty) {
         return false;
       }
     }
@@ -357,7 +373,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   String get _selectedPaymentMethodLabel {
     if (_selectedPaymentMethod == null) return '-';
-    final selected = _availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+    final selected = _availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
           (item) => item?['value']?.toString() == _selectedPaymentMethod,
           orElse: () => null,
         );
@@ -412,10 +430,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   Future<void> _pickCashierProof({required ImageSource source}) async {
     try {
-      final file = await _picker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
+      final file = await _picker.pickImage(source: source, imageQuality: 85);
 
       if (file == null) return;
 
@@ -520,7 +535,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         }
 
         if (_selectedPaymentMethod != null) {
-          _applyPaidAmountForMethodType(_paymentTypeForValue(_selectedPaymentMethod));
+          _applyPaidAmountForMethodType(
+            _paymentTypeForValue(_selectedPaymentMethod),
+          );
         }
       }
 
@@ -531,14 +548,14 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         _applyPaidAmountForMethodType(prType);
       } else if (_isCaseB) {
         _applyPaidAmountForMethodType(
-          (latestPayment is Map ? latestPayment['payment_type'] : null)?.toString(),
+          (latestPayment is Map ? latestPayment['payment_type'] : null)
+              ?.toString(),
         );
       }
 
       if (_selectedPaymentMethod != null) {
         await _syncEnrichedSelectedInstruction();
       }
-
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -558,7 +575,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboard = MediaQuery.of(context).viewInsets.bottom; // ✅ tinggi keyboard
+    final keyboard = MediaQuery.of(
+      context,
+    ).viewInsets.bottom; // ✅ tinggi keyboard
     final safe = MediaQuery.of(context).padding.bottom;
 
     return SafeArea(
@@ -580,27 +599,28 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
                       : _error != null
-                          ? _ErrorView(message: _error!, onRetry: _fetch)
-                          : _order == null
-                              ? _ErrorView(
-                                  message: 'Detail order tidak tersedia.',
-                                  onRetry: _fetch,
-                                )
-                              : _Body(
-                            order: _order!,
-                            selectedPaymentMethod: _selectedPaymentMethod,
-                            enrichedSelectedInstruction: _enrichedSelectedInstruction,
-                            availablePaymentMethods: _availablePaymentMethods,
-                            onPaymentMethodChanged: _onPaymentMethodChanged,
-                            paidCtrl: _paidCtrl,
-                            change: _change,
-                            cashierProofImage: _cashierProofImage,
-                            cashierProofError: _cashierProofError,
-                            onPickImage: _showImageSourcePicker,
-                            onRemoveImage: _removeCashierProof,
-                            paidInvalid: _paidInvalid,
-                            paidInsufficient: _paidInsufficient,
-                          ),
+                      ? _ErrorView(message: _error!, onRetry: _fetch)
+                      : _order == null
+                      ? _ErrorView(
+                          message: 'Detail order tidak tersedia.',
+                          onRetry: _fetch,
+                        )
+                      : _Body(
+                          order: _order!,
+                          selectedPaymentMethod: _selectedPaymentMethod,
+                          enrichedSelectedInstruction:
+                              _enrichedSelectedInstruction,
+                          availablePaymentMethods: _availablePaymentMethods,
+                          onPaymentMethodChanged: _onPaymentMethodChanged,
+                          paidCtrl: _paidCtrl,
+                          change: _change,
+                          cashierProofImage: _cashierProofImage,
+                          cashierProofError: _cashierProofError,
+                          onPickImage: _showImageSourcePicker,
+                          onRemoveImage: _removeCashierProof,
+                          paidInvalid: _paidInvalid,
+                          paidInsufficient: _paidInsufficient,
+                        ),
                 ),
                 _Footer2(
                   paying: _paying,
@@ -622,8 +642,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (_canChooseFinalPaymentMethod &&
         !_isCaseA &&
         !_isCaseB &&
-        (_selectedPaymentMethod == null || _selectedPaymentMethod!.trim().isEmpty)) {
-        ScaffoldMessenger.of(context)
+        (_selectedPaymentMethod == null ||
+            _selectedPaymentMethod!.trim().isEmpty)) {
+      ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           const SnackBar(
@@ -638,8 +659,12 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (!valid) return;
 
     final total = _currentBillTotal;
-    final paid = _needsPaidAmountValidation ? _moneyInputNum(_paidCtrl.text) : total;
-    final change = _needsPaidAmountValidation && (paid - total) > 0 ? (paid - total) : 0;
+    final paid = _needsPaidAmountValidation
+        ? _moneyInputNum(_paidCtrl.text)
+        : total;
+    final change = _needsPaidAmountValidation && (paid - total) > 0
+        ? (paid - total)
+        : 0;
     final isQrisXendit = _isQrisXenditFromPicker;
 
     final action = await showDialog<_PaymentCompletionAction>(
@@ -650,34 +675,28 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         content: Text(
           isQrisXendit
               ? 'Metode: QRIS (Xendit)\n'
-                'Total tagihan Rp ${_rupiah(total)}\n\n'
-                'Invoice pembayaran akan dibuka. Lanjutkan?'
+                    'Total tagihan Rp ${_rupiah(total)}\n\n'
+                    'Invoice pembayaran akan dibuka. Lanjutkan?'
               : 'Metode: ${_isCaseA || _isCaseB ? (_order?['payment_method'] ?? '-') : _selectedPaymentMethodLabel}\n'
-                'Nominal diterima Rp ${_rupiah(paid)}\n'
-                'Total tagihan Rp ${_rupiah(total)}\n'
-                'Kembalian Rp ${_rupiah(change)}\n\n'
-                'Lanjutkan proses pembayaran?',
+                    'Nominal diterima Rp ${_rupiah(paid)}\n'
+                    'Total tagihan Rp ${_rupiah(total)}\n'
+                    'Kembalian Rp ${_rupiah(change)}\n\n'
+                    'Lanjutkan proses pembayaran?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(
-              context,
-              _PaymentCompletionAction.cancel,
-            ),
+            onPressed: () =>
+                Navigator.pop(context, _PaymentCompletionAction.cancel),
             child: const Text('Batal'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(
-              context,
-              _PaymentCompletionAction.withoutPrint,
-            ),
+            onPressed: () =>
+                Navigator.pop(context, _PaymentCompletionAction.withoutPrint),
             child: const Text('Simpan'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(
-              context,
-              _PaymentCompletionAction.withPrint,
-            ),
+            onPressed: () =>
+                Navigator.pop(context, _PaymentCompletionAction.withPrint),
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -698,7 +717,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     setState(() => _paying = true);
 
     final isOnline =
-        context.read<ConnectivityStatusProvider>().isOnline && !widget.forceOffline;
+        context.read<ConnectivityStatusProvider>().isOnline &&
+        !widget.forceOffline;
 
     try {
       final repo = widget.ordersRepo;
@@ -708,7 +728,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           id: widget.orderId,
           paidAmount: paid,
           changeAmount: change,
-          paymentMethod: _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
+          paymentMethod: _canChooseFinalPaymentMethod
+              ? _selectedPaymentMethod
+              : null,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
           cashierProofImagePath: _cashierProofImage?.path,
         );
@@ -733,8 +755,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           backgroundSync: false,
           paidAmount: paid,
           changeAmount: change,
-          paymentMethod:
-              _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
+          paymentMethod: _canChooseFinalPaymentMethod
+              ? _selectedPaymentMethod
+              : null,
         );
       } else {
         final offlineOrder = Map<String, dynamic>.from(_order!);
@@ -745,7 +768,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           order: offlineOrder,
           paidAmount: paid,
           changeAmount: change,
-          selectedPaymentMethod: _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
+          selectedPaymentMethod: _canChooseFinalPaymentMethod
+              ? _selectedPaymentMethod
+              : null,
           cashierProofImagePath: _cashierProofImage?.path,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
         );
@@ -759,8 +784,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           backgroundSync: false,
           paidAmount: paid,
           changeAmount: change,
-          paymentMethod:
-              _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
+          paymentMethod: _canChooseFinalPaymentMethod
+              ? _selectedPaymentMethod
+              : null,
         );
       }
 
@@ -779,11 +805,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
             );
           }
 
-          await _printReceiptWithOrder(
-            printOrder,
-            paid: paid,
-            change: change,
-          );
+          await _printReceiptWithOrder(printOrder, paid: paid, change: change);
         } catch (e) {
           printError = e.toString();
         }
@@ -840,8 +862,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
             backgroundSync: false,
             paidAmount: paid,
             changeAmount: change,
-            paymentMethod:
-                _canChooseFinalPaymentMethod ? _selectedPaymentMethod : null,
+            paymentMethod: _canChooseFinalPaymentMethod
+                ? _selectedPaymentMethod
+                : null,
           );
 
           if (!mounted) return;
@@ -872,8 +895,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                recovery.message ??
-                    'Gagal menyimpan pembayaran: $e',
+                recovery.message ?? 'Gagal menyimpan pembayaran: $e',
               ),
               behavior: SnackBarBehavior.floating,
             ),
@@ -894,8 +916,6 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     }
   }
 
-
-
   Future<void> _printReceipt() async {
     if (_order == null) return;
     if (_printing) return;
@@ -905,7 +925,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (!ok) return;
 
     final total = _currentBillTotal;
-    final paid  = _moneyInputNum(_paidCtrl.text);
+    final paid = _moneyInputNum(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
     setState(() => _printing = true);
@@ -925,23 +945,22 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       if (!mounted) return;
       setState(() => _printed = true);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Struk berhasil diprint')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Struk berhasil diprint')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal print: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal print: $e')));
     } finally {
       if (mounted) setState(() => _printing = false);
     }
   }
 
-
   Future<bool> _validateBeforePrint() async {
     final total = _currentBillTotal;
-    final paid  = _moneyInputNum(_paidCtrl.text);
+    final paid = _moneyInputNum(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
     // kalau metode non-cash, biasanya paidCtrl kosong, tapi kamu mungkin tetap mau allow print
@@ -966,7 +985,10 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
             'Silakan periksa kembali nominal pembayaran.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
           ],
         ),
       );
@@ -986,8 +1008,14 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           'Cetak struk sekarang?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ya, print')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ya, print'),
+          ),
         ],
       ),
     );
@@ -1027,11 +1055,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 }
 
-enum _PaymentCompletionAction {
-  withPrint,
-  withoutPrint,
-  cancel,
-}
+enum _PaymentCompletionAction { withPrint, withoutPrint, cancel }
 
 class _Header extends StatelessWidget {
   const _Header({required this.title, required this.onClose});
@@ -1044,12 +1068,17 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       decoration: BoxDecoration(
         color: const Color(0xFFF7F8FA),
-        border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.08))),
+        border: Border(
+          bottom: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
           ),
           IconButton(
             onPressed: onClose,
@@ -1091,7 +1120,7 @@ class _Body extends StatelessWidget {
   final Future<void> Function() onPickImage;
   final VoidCallback onRemoveImage;
   final bool paidInvalid;
-  final bool paidInsufficient;  
+  final bool paidInsufficient;
 
   @override
   Widget build(BuildContext context) {
@@ -1113,7 +1142,9 @@ class _Body extends StatelessWidget {
         paymentRequest is Map;
 
     final latestPayment = order['latest_payment'];
-    final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+    final cpi = latestPayment is Map
+        ? latestPayment['owner_manual_payment']
+        : null;
     final canChooseFinalPaymentMethod =
         (order['order_status'] ?? '').toString() == 'UNPAID' &&
         !(latestPayment is Map && latestPayment['owner_manual_payment'] is Map);
@@ -1130,18 +1161,21 @@ class _Body extends StatelessWidget {
         ?.toString();
 
     final effectiveMethodType = hasPaymentRequest
-        ? ((paymentRequest is Map ? paymentRequest['payment_type'] : null) ?? method).toString()
+        ? ((paymentRequest is Map ? paymentRequest['payment_type'] : null) ??
+                  method)
+              .toString()
         : hasCashierPaymentInstruction
-            ? ((latestPayment is Map ? latestPayment['payment_type'] : null) ?? method).toString()
-            : (canChooseFinalPaymentMethod ? (selectedPaymentType ?? '') : method);
+        ? ((latestPayment is Map ? latestPayment['payment_type'] : null) ??
+                  method)
+              .toString()
+        : (canChooseFinalPaymentMethod ? (selectedPaymentType ?? '') : method);
 
-    final selectedPaymentInstruction = enrichedSelectedInstruction ??
-        availablePaymentMethods
-            .cast<Map<String, dynamic>?>()
-            .firstWhere(
-              (item) => item?['value']?.toString() == selectedPaymentMethod,
-              orElse: () => null,
-            );
+    final selectedPaymentInstruction =
+        enrichedSelectedInstruction ??
+        availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['value']?.toString() == selectedPaymentMethod,
+          orElse: () => null,
+        );
 
     final isCashPayment = effectiveMethodType == 'CASH';
 
@@ -1154,11 +1188,13 @@ class _Body extends StatelessWidget {
         ? basePayable + effectiveCashRounding
         : basePayable;
 
-    final isQrisXendit = effectiveMethodType == 'QRIS' &&
+    final isQrisXendit =
+        effectiveMethodType == 'QRIS' &&
         canChooseFinalPaymentMethod &&
         !hasPaymentRequest &&
         !hasCashierPaymentInstruction;
-    final showAmountInput = !isQrisXendit &&
+    final showAmountInput =
+        !isQrisXendit &&
         (hasPaymentRequest ||
             hasCashierPaymentInstruction ||
             isCashPayment ||
@@ -1175,7 +1211,8 @@ class _Body extends StatelessWidget {
             code: code,
             name: name,
             status: status,
-            method: canChooseFinalPaymentMethod &&
+            method:
+                canChooseFinalPaymentMethod &&
                     selectedPaymentType != null &&
                     selectedPaymentType.isNotEmpty
                 ? '${isOpenbill ? 'OPENBILL' : method} -> $selectedPaymentType'
@@ -1190,7 +1227,9 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          if (canChooseFinalPaymentMethod && !hasPaymentRequest && !hasCashierPaymentInstruction) ...[
+          if (canChooseFinalPaymentMethod &&
+              !hasPaymentRequest &&
+              !hasCashierPaymentInstruction) ...[
             _GroupedPaymentMethodPicker(
               items: availablePaymentMethods,
               selectedValue: selectedPaymentMethod,
@@ -1201,7 +1240,8 @@ class _Body extends StatelessWidget {
 
           if (hasPaymentRequest) ...[
             _PaymentRequestCard(
-              paymentRequest: (order['payment_request'] as Map).cast<String, dynamic>(),
+              paymentRequest: (order['payment_request'] as Map)
+                  .cast<String, dynamic>(),
             ),
             const SizedBox(height: 12),
           ] else if (hasCashierPaymentInstruction) ...[
@@ -1278,7 +1318,6 @@ class _Body extends StatelessWidget {
 
     return baseTotal;
   }
-
 }
 
 class _PaymentMethodGroupData {
@@ -1293,7 +1332,9 @@ class _PaymentMethodGroupData {
   final List<Map<String, dynamic>> items;
 }
 
-List<_PaymentMethodGroupData> _groupPaymentMethods(List<Map<String, dynamic>> items) {
+List<_PaymentMethodGroupData> _groupPaymentMethods(
+  List<Map<String, dynamic>> items,
+) {
   final cash = <Map<String, dynamic>>[];
   final qrisOnline = <Map<String, dynamic>>[];
   final transfer = <Map<String, dynamic>>[];
@@ -1407,7 +1448,11 @@ class _GroupedPaymentMethodPicker extends StatelessWidget {
                   color: brand.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.credit_card_rounded, color: brand, size: 18),
+                child: const Icon(
+                  Icons.credit_card_rounded,
+                  color: brand,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -1481,7 +1526,9 @@ class _PaymentMethodGroupSection extends StatelessWidget {
             child: _PaymentMethodOptionCard(
               brand: brand,
               title: label,
-              subtitle: subtitle != null && subtitle.isNotEmpty ? subtitle : null,
+              subtitle: subtitle != null && subtitle.isNotEmpty
+                  ? subtitle
+                  : null,
               icon: _paymentMethodIcon(type),
               active: active,
               onTap: value == null ? null : () => onChanged(value),
@@ -1532,7 +1579,9 @@ class _PaymentMethodOptionCard extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: active ? brand.withOpacity(0.12) : const Color(0xFFF3F4F6),
+                color: active
+                    ? brand.withOpacity(0.12)
+                    : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
@@ -1635,12 +1684,18 @@ class _OrderInfoCard extends StatelessWidget {
               children: [
                 Text(
                   'PPN',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
                 ),
                 const Spacer(),
                 Text(
                   '${_formatPercent(ppnPercent)}%',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
@@ -1652,12 +1707,18 @@ class _OrderInfoCard extends StatelessWidget {
               children: [
                 Text(
                   'Sebelum Pembulatan',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
                 ),
                 const Spacer(),
                 Text(
                   'Rp ${_rupiah(basePayable)}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
@@ -1666,7 +1727,10 @@ class _OrderInfoCard extends StatelessWidget {
               children: [
                 Text(
                   'Pembulatan Cash',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
                 ),
                 const Spacer(),
                 Text(
@@ -1698,15 +1762,22 @@ class _OrderInfoCard extends StatelessWidget {
             children: [
               Text(
                 'Total Tagihan',
-                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
               ),
               const Spacer(),
               Text(
                 'Rp ${_rupiah(total)}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: brand),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: brand,
+                ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -1715,7 +1786,15 @@ class _OrderInfoCard extends StatelessWidget {
   Widget _kv(String k, String v, {bool mono = false}) {
     return Row(
       children: [
-        Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+        Expanded(
+          child: Text(
+            k,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.55),
+            ),
+          ),
+        ),
         const SizedBox(width: 12),
         Flexible(
           child: Text(
@@ -1743,12 +1822,19 @@ class _PaymentRequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = (paymentRequest['payment_type_label'] ?? '-').toString();
     final provider = (paymentRequest['manual_provider_name'] ?? '-').toString();
-    final accName = (paymentRequest['manual_provider_account_name'] ?? '-').toString();
-    final accNo = (paymentRequest['manual_provider_account_no'] ?? '').toString().trim();
+    final accName = (paymentRequest['manual_provider_account_name'] ?? '-')
+        .toString();
+    final accNo = (paymentRequest['manual_provider_account_no'] ?? '')
+        .toString()
+        .trim();
 
-    final proof = (paymentRequest['manual_payment_image'] ?? '').toString().trim();
+    final proof = (paymentRequest['manual_payment_image'] ?? '')
+        .toString()
+        .trim();
     final proofLocalPath =
-        (paymentRequest['manual_payment_image_local_path'] ?? '').toString().trim();
+        (paymentRequest['manual_payment_image_local_path'] ?? '')
+            .toString()
+            .trim();
 
     final proofUrl = _normalizeProofUrl(proof);
     final localFile = proofLocalPath.isNotEmpty ? File(proofLocalPath) : null;
@@ -1767,7 +1853,10 @@ class _PaymentRequestCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Pembayaran Manual Terdeteksi', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Pembayaran Manual Terdeteksi',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 10),
           _row('Tipe', type),
           _row('Provider', provider),
@@ -1780,14 +1869,17 @@ class _PaymentRequestCard extends StatelessWidget {
             Row(
               children: [
                 const Expanded(
-                  child: Text('Bukti bayar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    'Bukti bayar',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
                 ),
                 if (proofUrl.isNotEmpty)
                   TextButton.icon(
                     onPressed: () => _openUrl(proofUrl),
                     icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     label: const Text('Lihat Bukti'),
-                  )
+                  ),
               ],
             ),
 
@@ -1797,11 +1889,11 @@ class _PaymentRequestCard extends StatelessWidget {
                 onTap: effectiveProofPath.isEmpty
                     ? null
                     : () => _showZoomableImagePreview(
-                          context,
-                          title: 'Bukti Bayar',
-                          localFile: hasLocalFile ? localFile : null,
-                          imageUrl: hasLocalFile ? null : proofUrl,
-                        ),
+                        context,
+                        title: 'Bukti Bayar',
+                        localFile: hasLocalFile ? localFile : null,
+                        imageUrl: hasLocalFile ? null : proofUrl,
+                      ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
                   child: Stack(
@@ -1814,7 +1906,10 @@ class _PaymentRequestCard extends StatelessWidget {
                         right: 10,
                         bottom: 10,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.65),
                             borderRadius: BorderRadius.circular(999),
@@ -1822,7 +1917,11 @@ class _PaymentRequestCard extends StatelessWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                              Icon(
+                                Icons.zoom_in_rounded,
+                                color: Colors.white,
+                                size: 16,
+                              ),
                               SizedBox(width: 6),
                               Text(
                                 'Perbesar',
@@ -1847,15 +1946,21 @@ class _PaymentRequestCard extends StatelessWidget {
                   hasLocalFile
                       ? 'Bukti bayar tersimpan sebagai file PDF lokal.'
                       : 'Bukti berbentuk PDF. Klik “Lihat Bukti” untuk membuka.',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.6)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.6),
+                  ),
                 ),
               ),
           ] else ...[
             Text(
               'Tidak ada bukti bayar.',
-              style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.6)),
-            )
-          ]
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.6),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1866,13 +1971,24 @@ class _PaymentRequestCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+          Expanded(
+            child: Text(
+              k,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.55),
+              ),
+            ),
+          ),
           const SizedBox(width: 12),
           Flexible(
             child: Text(
               v,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -1894,7 +2010,9 @@ class _PaymentRequestCard extends StatelessWidget {
         fit: BoxFit.contain,
         errorBuilder: (_, __, ___) => Container(
           color: Colors.white,
-          child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+          child: const Center(
+            child: Icon(Icons.broken_image_outlined, size: 34),
+          ),
         ),
       );
     }
@@ -1905,7 +2023,9 @@ class _PaymentRequestCard extends StatelessWidget {
         fit: BoxFit.contain,
         errorBuilder: (_, __, ___) => Container(
           color: Colors.white,
-          child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+          child: const Center(
+            child: Icon(Icons.broken_image_outlined, size: 34),
+          ),
         ),
       );
     }
@@ -1936,19 +2056,25 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = (paymentInstruction['payment_type'] ?? '').toString();
     final provider = (paymentInstruction['provider_name'] ?? '-').toString();
-    final accName = (paymentInstruction['provider_account_name'] ?? '-').toString();
-    final accNo = (paymentInstruction['provider_account_no'] ?? '').toString().trim();
+    final accName = (paymentInstruction['provider_account_name'] ?? '-')
+        .toString();
+    final accNo = (paymentInstruction['provider_account_no'] ?? '')
+        .toString()
+        .trim();
 
     final qris = (paymentInstruction['qris_image_url'] ?? '').toString().trim();
-    final qrisLocalPath =
-        (paymentInstruction['qris_image_local_path'] ?? '').toString().trim();
+    final qrisLocalPath = (paymentInstruction['qris_image_local_path'] ?? '')
+        .toString()
+        .trim();
 
     final qrisUrl = _normalizeProofUrl(qris);
     final showAccNo = type == 'manual_tf' || type == 'manual_ewallet';
-    final showQris = type == 'manual_qris' &&
+    final showQris =
+        type == 'manual_qris' &&
         (qrisLocalPath.isNotEmpty || qrisUrl.isNotEmpty);
-    final additionalInfo =
-        (paymentInstruction['additional_info'] ?? '').toString().trim();
+    final additionalInfo = (paymentInstruction['additional_info'] ?? '')
+        .toString()
+        .trim();
 
     final localFile = qrisLocalPath.isNotEmpty ? File(qrisLocalPath) : null;
 
@@ -1962,7 +2088,10 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Instruksi Pembayaran Manual', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Instruksi Pembayaran Manual',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 10),
           _row('Tipe', _manualTypeLabel(type)),
           _row('Provider', provider),
@@ -1975,7 +2104,10 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
             Row(
               children: [
                 const Expanded(
-                  child: Text('QRIS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    'QRIS',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: qrisUrl.isEmpty ? null : () => _openUrl(qrisUrl),
@@ -1986,13 +2118,19 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
             ),
             InkWell(
               borderRadius: BorderRadius.circular(14),
-              onTap: (localFile != null && localFile.existsSync()) || qrisUrl.isNotEmpty
+              onTap:
+                  (localFile != null && localFile.existsSync()) ||
+                      qrisUrl.isNotEmpty
                   ? () => _showZoomableImagePreview(
-                        context,
-                        title: 'QRIS',
-                        localFile: (localFile != null && localFile.existsSync()) ? localFile : null,
-                        imageUrl: (localFile != null && localFile.existsSync()) ? null : qrisUrl,
-                      )
+                      context,
+                      title: 'QRIS',
+                      localFile: (localFile != null && localFile.existsSync())
+                          ? localFile
+                          : null,
+                      imageUrl: (localFile != null && localFile.existsSync())
+                          ? null
+                          : qrisUrl,
+                    )
                   : null,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
@@ -2006,7 +2144,10 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
                       right: 10,
                       bottom: 10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.65),
                           borderRadius: BorderRadius.circular(999),
@@ -2014,7 +2155,11 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                            Icon(
+                              Icons.zoom_in_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
                             SizedBox(width: 6),
                             Text(
                               'Perbesar',
@@ -2038,11 +2183,17 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
           const Divider(),
           const SizedBox(height: 10),
 
-          const Text('Upload Bukti Bayar (Opsional)', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Upload Bukti Bayar (Opsional)',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 4),
           Text(
             'Bukti pembayaran boleh dikosongkan jika tidak diperlukan.',
-            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.55),
+            ),
           ),
           const SizedBox(height: 8),
 
@@ -2061,7 +2212,8 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
             ],
           ),
 
-          if (cashierProofError != null && cashierProofError!.trim().isNotEmpty) ...[
+          if (cashierProofError != null &&
+              cashierProofError!.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               cashierProofError!,
@@ -2118,13 +2270,24 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+          Expanded(
+            child: Text(
+              k,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.55),
+              ),
+            ),
+          ),
           const SizedBox(width: 12),
           Flexible(
             child: Text(
               v,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -2162,16 +2325,23 @@ class _ItemsCard extends StatelessWidget {
           const SizedBox(height: 10),
 
           if (details.isEmpty)
-            Text('Tidak ada item.', style: TextStyle(color: Colors.black.withOpacity(0.6)))
+            Text(
+              'Tidak ada item.',
+              style: TextStyle(color: Colors.black.withOpacity(0.6)),
+            )
           else
             ...details.map((it) {
               final m = (it as Map).cast<String, dynamic>();
               final qty = _num(m['quantity']).toInt();
               final basePrice = _num(m['base_price']);
               final promoAmount = _num(m['promo_amount']);
-              final name = (m['product_name'] ??
-                      (m['partner_product'] is Map ? (m['partner_product']['name'] ?? 'Produk') : 'Produk'))
-                  .toString();
+              final promoType = (m['promo_type'] ?? '').toString().trim();
+              final name =
+                  (m['product_name'] ??
+                          (m['partner_product'] is Map
+                              ? (m['partner_product']['name'] ?? 'Produk')
+                              : 'Produk'))
+                      .toString();
 
               final note = (m['customer_note'] ?? '').toString().trim();
               final lineTotal = (basePrice - promoAmount) * qty;
@@ -2190,15 +2360,38 @@ class _ItemsCard extends StatelessWidget {
                     if (note.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text('($note)', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+                        child: Text(
+                          '($note)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black.withOpacity(0.55),
+                          ),
+                        ),
+                      ),
+                    if (promoAmount > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '- Promo${promoType.isNotEmpty ? ' $promoType' : ''}: -Rp ${_rupiah(promoAmount * qty)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
 
                     if (opts.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       ...opts.map((o) {
                         final om = (o as Map).cast<String, dynamic>();
-                        final optName = (om['option'] is Map ? (om['option']['name'] ?? '-') : '-').toString();
-                        final parentName = (om['option'] is Map &&
+                        final optName =
+                            (om['option'] is Map
+                                    ? (om['option']['name'] ?? '-')
+                                    : '-')
+                                .toString();
+                        final parentName =
+                            (om['option'] is Map &&
                                 (om['option']['parent'] is Map) &&
                                 om['option']['parent']['name'] != null)
                             ? om['option']['parent']['name'].toString()
@@ -2209,7 +2402,10 @@ class _ItemsCard extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 2),
                           child: Text(
                             '- $parentName: $optName × $qty = Rp ${_rupiah(price)}',
-                            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.65)),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black.withOpacity(0.65),
+                            ),
                           ),
                         );
                       }),
@@ -2275,10 +2471,7 @@ class _PaidAmountCard extends StatelessWidget {
           const SizedBox(height: 12),
           const Row(
             children: [
-              Text(
-                'Nominal Diterima',
-                style: TextStyle(fontSize: 12),
-              ),
+              Text('Nominal Diterima', style: TextStyle(fontSize: 12)),
               SizedBox(width: 4),
               Text(
                 '*',
@@ -2301,8 +2494,8 @@ class _PaidAmountCard extends StatelessWidget {
               helperText: invalid
                   ? 'Nominal pembayaran wajib diisi'
                   : insufficient
-                      ? 'Nominal diterima kurang dari total tagihan'
-                      : 'Bisa disesuaikan jika customer membayar lebih',
+                  ? 'Nominal diterima kurang dari total tagihan'
+                  : 'Bisa disesuaikan jika customer membayar lebih',
               helperStyle: TextStyle(
                 color: hasError ? Colors.red : Colors.black54,
               ),
@@ -2334,7 +2527,9 @@ class _PaidAmountCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF8F6),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFAE1504).withOpacity(0.18)),
+                border: Border.all(
+                  color: const Color(0xFFAE1504).withOpacity(0.18),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2362,12 +2557,18 @@ class _PaidAmountCard extends StatelessWidget {
                     children: [
                       Text(
                         'Sebelum pembulatan',
-                        style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
                       ),
                       const Spacer(),
                       Text(
                         'Rp ${_rupiah(basePayable)}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
@@ -2376,7 +2577,10 @@ class _PaidAmountCard extends StatelessWidget {
                     children: [
                       Text(
                         'Pembulatan cash',
-                        style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
                       ),
                       const Spacer(),
                       Text(
@@ -2409,12 +2613,18 @@ class _PaidAmountCard extends StatelessWidget {
             children: [
               Text(
                 'Total Tagihan',
-                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
               ),
               const Spacer(),
               Text(
                 'Rp ${_rupiah(total)}',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ],
           ),
@@ -2423,12 +2633,18 @@ class _PaidAmountCard extends StatelessWidget {
             children: [
               Text(
                 'Kembalian',
-                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
               ),
               const Spacer(),
               Text(
                 'Rp ${_rupiah(change)}',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ],
           ),
@@ -2470,15 +2686,15 @@ class _CashInputCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Pembayaran Cash', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Pembayaran Cash',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 12),
 
           Row(
             children: const [
-              Text(
-                'Uang Diterima',
-                style: TextStyle(fontSize: 12),
-              ),
+              Text('Uang Diterima', style: TextStyle(fontSize: 12)),
               SizedBox(width: 4),
               Text(
                 '*',
@@ -2501,8 +2717,8 @@ class _CashInputCard extends StatelessWidget {
               helperText: invalid
                   ? 'Uang diterima wajib diisi'
                   : insufficient
-                      ? 'Nominal uang diterima kurang dari total tagihan'
-                      : null,
+                  ? 'Nominal uang diterima kurang dari total tagihan'
+                  : null,
               helperStyle: TextStyle(
                 color: hasError ? Colors.red : Colors.black54,
               ),
@@ -2539,7 +2755,10 @@ class _CashInputCard extends StatelessWidget {
 
           Text(
             'Kembalian',
-            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.55),
+            ),
           ),
           const SizedBox(height: 6),
           Container(
@@ -2558,7 +2777,10 @@ class _CashInputCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             'Total tagihan: Rp ${_rupiah(total)}',
-            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.60)),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.60),
+            ),
           ),
         ],
       ),
@@ -2567,7 +2789,11 @@ class _CashInputCard extends StatelessWidget {
 }
 
 class _HintCard extends StatelessWidget {
-  const _HintCard({required this.icon, required this.title, required this.message});
+  const _HintCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
   final IconData icon;
   final String title;
   final String message;
@@ -2590,9 +2816,15 @@ class _HintCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 4),
-                Text(message, style: TextStyle(color: Colors.black.withOpacity(0.65))),
+                Text(
+                  message,
+                  style: TextStyle(color: Colors.black.withOpacity(0.65)),
+                ),
               ],
             ),
           ),
@@ -2634,11 +2866,21 @@ class _Footer extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: brand, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brand,
+                foregroundColor: Colors.white,
+              ),
               onPressed: primaryBusy ? null : () async => onPrimary(),
               child: primaryBusy
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(primaryLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      primaryLabel,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
             ),
           ),
         ],
@@ -2688,8 +2930,15 @@ class _Footer2 extends StatelessWidget {
               ),
               onPressed: paying ? null : () async => onConfirm(),
               child: paying
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Konfirmasi', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text(
+                      'Konfirmasi',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
             ),
           ),
         ],
@@ -2697,8 +2946,6 @@ class _Footer2 extends StatelessWidget {
     );
   }
 }
-
-
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});
@@ -2801,10 +3048,7 @@ Future<void> _showZoomableImagePreview(
 }
 
 class _PreviewImageContent extends StatelessWidget {
-  const _PreviewImageContent({
-    this.localFile,
-    this.imageUrl,
-  });
+  const _PreviewImageContent({this.localFile, this.imageUrl});
 
   final File? localFile;
   final String? imageUrl;
@@ -2841,9 +3085,7 @@ class _PreviewImageContent extends StatelessWidget {
   Widget _previewBroken() {
     return const SizedBox(
       height: 280,
-      child: Center(
-        child: Icon(Icons.broken_image_outlined, size: 48),
-      ),
+      child: Center(child: Icon(Icons.broken_image_outlined, size: 48)),
     );
   }
 }

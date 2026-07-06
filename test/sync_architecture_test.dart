@@ -1661,6 +1661,105 @@ void main() {
       },
     );
 
+    test('getBundle keeps duplicate orphan local detail rows', () async {
+      const clientUuid = 'uuid-duplicate-orphan-detail';
+      await db
+          .into(db.bookingOrders)
+          .insert(
+            BookingOrdersCompanion.insert(
+              clientUuid: clientUuid,
+              customerName: 'guest',
+              orderStatus: const Value('UNPAID'),
+              serverId: const Value(108),
+              syncDirty: const Value(true),
+              syncIntent: const Value('UPDATE'),
+              openbillFlag: const Value(false),
+              discountValue: const Value(0),
+              totalOrderValue: const Value(50000),
+              isPpnActive: const Value(false),
+              paymentFlag: const Value(false),
+              syncVersion: const Value(0),
+            ),
+          );
+
+      for (final detailUuid in ['orphan-a', 'orphan-b']) {
+        await db
+            .into(db.orderDetails)
+            .insert(
+              OrderDetailsCompanion.insert(
+                clientDetailUuid: detailUuid,
+                bookingOrderClientUuid: clientUuid,
+                partnerProductId: 21,
+                productName: const Value('Menu Sama'),
+                quantity: const Value(1),
+                basePrice: const Value(25000),
+                optionsPrice: const Value(0),
+                syncDirty: const Value(true),
+              ),
+            );
+      }
+
+      final bundle = await dao.getBundleByClientUuid(clientUuid);
+
+      expect(bundle?.details, hasLength(2));
+      expect(bundle?.details.map((detail) => detail.clientDetailUuid).toSet(), {
+        'orphan-a',
+        'orphan-b',
+      });
+    });
+
+    test('replaceDetailsFromEdit persists promo fields per detail', () async {
+      const clientUuid = 'uuid-edit-promo';
+      await db
+          .into(db.bookingOrders)
+          .insert(
+            BookingOrdersCompanion.insert(
+              clientUuid: clientUuid,
+              customerName: 'guest',
+              orderStatus: const Value('UNPAID'),
+              serverId: const Value(109),
+              syncDirty: const Value(false),
+              openbillFlag: const Value(false),
+              discountValue: const Value(0),
+              totalOrderValue: const Value(30000),
+              isPpnActive: const Value(false),
+              paymentFlag: const Value(false),
+              syncVersion: const Value(0),
+            ),
+          );
+
+      await dao.replaceDetailsFromEdit(
+        clientUuid: clientUuid,
+        subtotal: 27000,
+        grandTotal: 27000,
+        lines: const [
+          {
+            'local_id': 'promo-detail',
+            'product_server_id': 31,
+            'product_name_snapshot': 'Promo Menu',
+            'base_price': 30000,
+            'qty': 1,
+            'options_price': 0,
+            'promo_id': 7,
+            'promo_type': 'percentage',
+            'promo_amount': 3000,
+            'options': [],
+          },
+        ],
+      );
+
+      final details = await (db.select(
+        db.orderDetails,
+      )..where((t) => t.bookingOrderClientUuid.equals(clientUuid))).get();
+      final order = await dao.getByClientUuid(clientUuid);
+
+      expect(details.single.promoId, 7);
+      expect(details.single.promoType, 'percentage');
+      expect(details.single.promoAmount, 3000);
+      expect(details.single.optionsPrice, 0);
+      expect(order?.totalOrderValue, 27000);
+    });
+
     test('clearServeItemsSyncState clears pending served replay', () async {
       const clientUuid = 'uuid-clear-serve-items';
       await db
@@ -1834,6 +1933,77 @@ void main() {
       expect(server['order_status'], 'SERVED');
       expect((local['diffs'] as List), isNotEmpty);
     });
+
+    test(
+      'LOCAL_WINS keeps conflict unresolved until local push is synced',
+      () async {
+        const clientUuid = 'uuid-local-wins';
+        await db
+            .into(db.bookingOrders)
+            .insert(
+              BookingOrdersCompanion.insert(
+                clientUuid: clientUuid,
+                bookingOrderCode: const Value('BO-LOCAL'),
+                customerName: 'Sari',
+                orderStatus: const Value('UNPAID'),
+                serverId: const Value(107),
+                syncDirty: const Value(true),
+                syncIntent: const Value('UPDATE'),
+                openbillFlag: const Value(false),
+                discountValue: const Value(0),
+                totalOrderValue: const Value(25000),
+                isPpnActive: const Value(false),
+                paymentFlag: const Value(false),
+                syncVersion: const Value(1),
+              ),
+            );
+
+        await dao.saveConflict({
+          'table': 'booking_orders',
+          'server_id': 107,
+          'client_uuid': clientUuid,
+          'reason': 'SYNC_VERSION_STALE',
+          'server': {
+            'id': 107,
+            'booking_order_code': 'BO-LOCAL',
+            'customer_name': 'Sari',
+            'order_status': 'UNPAID',
+            'sync_version': 2,
+          },
+        });
+
+        final conflict = (await dao.getUnresolvedConflicts()).single;
+        await dao.applyConflictResolution(
+          conflictId: conflict.id,
+          choice: 'LOCAL_WINS',
+        );
+
+        var unresolved = await dao.getUnresolvedConflicts();
+        var order = await dao.getByClientUuid(clientUuid);
+        expect(unresolved, hasLength(1));
+        expect(order?.syncDirty, isTrue);
+        expect(order?.syncIntent, 'UPDATE');
+        expect(order?.localFilePathsJson, contains('force_push_update'));
+
+        await dao.applyAppliedResult({
+          'client_uuid': clientUuid,
+          'server_id': 107,
+          'booking_order_code': 'BO-LOCAL',
+          'sync_intent': 'UPDATE',
+          'order_status': 'UNPAID',
+          'sync_version': 3,
+        });
+
+        final resolved = await dao.resolveLocalWinsIfSynced(conflict.id);
+        unresolved = await dao.getUnresolvedConflicts();
+        order = await dao.getByClientUuid(clientUuid);
+
+        expect(resolved, isTrue);
+        expect(unresolved, isEmpty);
+        expect(order?.syncDirty, isFalse);
+        expect(order?.syncVersion, 3);
+      },
+    );
 
     test(
       'clearOfflineCatchUpSyncState clears dirty replay and proof path',

@@ -27,6 +27,7 @@ class _SyncConflictsSheetState extends State<SyncConflictsSheet> {
   late final BookingOrdersDao _dao;
   List<SyncConflict> _conflicts = [];
   bool _loading = true;
+  int? _resolvingId;
   String? _error;
 
   @override
@@ -58,11 +59,37 @@ class _SyncConflictsSheetState extends State<SyncConflictsSheet> {
   }
 
   Future<void> _resolve(SyncConflict conflict, String choice) async {
-    await _dao.applyConflictResolution(conflictId: conflict.id, choice: choice);
-    if ((choice == 'PULL_AND_RETRY' || choice == 'LOCAL_WINS') && mounted) {
-      try {
+    setState(() {
+      _resolvingId = conflict.id;
+      _error = null;
+    });
+
+    try {
+      await _dao.applyConflictResolution(
+        conflictId: conflict.id,
+        choice: choice,
+      );
+      if (choice == 'LOCAL_WINS' && mounted) {
         await context.read<SyncService>().syncPendingOrders();
-      } catch (_) {}
+        final resolved = await _dao.resolveLocalWinsIfSynced(conflict.id);
+        if (!resolved && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Data lokal belum berhasil dikirim ke server. Konflik tetap ditampilkan.',
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _resolvingId = null);
+      }
     }
     await _load();
   }
@@ -120,9 +147,9 @@ class _SyncConflictsSheetState extends State<SyncConflictsSheet> {
                           final c = _conflicts[index];
                           return _ConflictTile(
                             conflict: c,
+                            isResolving: _resolvingId == c.id,
                             onServerWins: () => _resolve(c, 'SERVER_WINS'),
                             onLocalWins: () => _resolve(c, 'LOCAL_WINS'),
-                            onPullRetry: () => _resolve(c, 'PULL_AND_RETRY'),
                           );
                         },
                       ),
@@ -138,15 +165,15 @@ class _SyncConflictsSheetState extends State<SyncConflictsSheet> {
 class _ConflictTile extends StatelessWidget {
   const _ConflictTile({
     required this.conflict,
+    required this.isResolving,
     required this.onServerWins,
     required this.onLocalWins,
-    required this.onPullRetry,
   });
 
   final SyncConflict conflict;
+  final bool isResolving;
   final VoidCallback onServerWins;
   final VoidCallback onLocalWins;
-  final VoidCallback onPullRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -218,16 +245,14 @@ class _ConflictTile extends StatelessWidget {
             runSpacing: 8,
             children: [
               OutlinedButton(
-                onPressed: onServerWins,
-                child: const Text('Gunakan server'),
-              ),
-              OutlinedButton(
-                onPressed: onLocalWins,
-                child: const Text('Gunakan perubahan saya'),
+                onPressed: isResolving ? null : onServerWins,
+                child: const Text('Gunakan data server'),
               ),
               FilledButton(
-                onPressed: onPullRetry,
-                child: const Text('Pull & coba lagi'),
+                onPressed: isResolving ? null : onLocalWins,
+                child: Text(
+                  isResolving ? 'Menyinkronkan...' : 'Gunakan data lokal',
+                ),
               ),
             ],
           ),

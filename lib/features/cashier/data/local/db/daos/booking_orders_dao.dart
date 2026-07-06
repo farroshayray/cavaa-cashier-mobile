@@ -1973,9 +1973,30 @@ class BookingOrdersDao {
       if (clientUuid != null && clientUuid.isNotEmpty) {
         await markForcePushUpdate(clientUuid);
       }
+      return;
     }
 
     await resolveConflict(conflictId, choice);
+  }
+
+  Future<bool> resolveLocalWinsIfSynced(int conflictId) async {
+    final row = await (db.select(
+      db.syncConflicts,
+    )..where((t) => t.id.equals(conflictId))).getSingleOrNull();
+    if (row == null || row.clientUuid == null || row.clientUuid!.isEmpty) {
+      return false;
+    }
+
+    final order = await getByClientUuid(row.clientUuid!);
+    if (order == null) return false;
+
+    final synced =
+        !order.syncDirty &&
+        (order.syncError == null || order.syncError!.trim().isEmpty);
+    if (!synced) return false;
+
+    await resolveConflict(conflictId, 'LOCAL_WINS');
+    return true;
   }
 
   /// Creates a full checkout order in the mirror (single write path).
@@ -2692,29 +2713,7 @@ class BookingOrdersDao {
       }
     }
 
-    final dedupedOrphans = <String, OrderDetail>{};
-    for (final detail in withoutServerId) {
-      final key =
-          '${detail.partnerProductId}|${detail.quantity}|${detail.basePrice}|${detail.optionsPrice}';
-      final existing = dedupedOrphans[key];
-      if (existing == null) {
-        dedupedOrphans[key] = detail;
-        continue;
-      }
-
-      final existingUpdated =
-          existing.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final candidateUpdated =
-          detail.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      if (candidateUpdated.isAfter(existingUpdated)) {
-        dedupedOrphans[key] = detail;
-      }
-    }
-
-    final result = <OrderDetail>[
-      ...withServerId.values,
-      ...dedupedOrphans.values,
-    ];
+    final result = <OrderDetail>[...withServerId.values, ...withoutServerId];
     result.sort((a, b) {
       final aDate = a.createdAt ?? a.updatedAt;
       final bDate = b.createdAt ?? b.updatedAt;
