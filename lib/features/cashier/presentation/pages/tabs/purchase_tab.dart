@@ -37,7 +37,6 @@ class _PurchaseTabState extends State<PurchaseTab> {
   }
 }
 
-
 class _PurchaseView extends StatelessWidget {
   const _PurchaseView();
 
@@ -91,11 +90,13 @@ class _PurchaseView extends StatelessWidget {
                           brand: brand,
                           categories: vm.categories,
                           selectedCategoryId: vm.selectedCategoryId,
-                          onTapCategory: (id) => context.read<PurchaseProvider>().setCategory(id),
+                          onTapCategory: (id) =>
+                              context.read<PurchaseProvider>().setCategory(id),
                         ),
                         const SizedBox(height: 8),
                         _SearchBar(
-                          onChanged: (q) => context.read<PurchaseProvider>().setQuery(q),
+                          onChanged: (q) =>
+                              context.read<PurchaseProvider>().setQuery(q),
                         ),
                       ],
                     ),
@@ -107,36 +108,34 @@ class _PurchaseView extends StatelessWidget {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 110),
                 sliver: SliverList(
-                  delegate: SliverChildListDelegate(
-                    [
-                      if (vm.hotProducts.isNotEmpty) ...[
-                        _SectionTitle(
-                          title: 'Hot Products',
-                          icon: Icons.local_fire_department_rounded,
-                        ),
-                        const SizedBox(height: 10),
-                        _ProductGrid(products: vm.hotProducts),
-                        const SizedBox(height: 18),
-                      ],
-
-                      // grouped category
-                      ...vm.groupedByCategory.entries.map((entry) {
-                        final cat = vm.categoryById(entry.key);
-                        final name = cat?.name ?? 'Uncategorized';
-                        final prods = entry.value;
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _CategoryHeader(title: name, count: prods.length),
-                            const SizedBox(height: 10),
-                            _ProductGrid(products: prods),
-                            const SizedBox(height: 18),
-                          ],
-                        );
-                      }),
+                  delegate: SliverChildListDelegate([
+                    if (vm.hotProducts.isNotEmpty) ...[
+                      _SectionTitle(
+                        title: 'Hot Products',
+                        icon: Icons.local_fire_department_rounded,
+                      ),
+                      const SizedBox(height: 10),
+                      _ProductGrid(products: vm.hotProducts),
+                      const SizedBox(height: 18),
                     ],
-                  ),
+
+                    // grouped category
+                    ...vm.groupedByCategory.entries.map((entry) {
+                      final cat = vm.categoryById(entry.key);
+                      final name = cat?.name ?? 'Uncategorized';
+                      final prods = entry.value;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _CategoryHeader(title: name, count: prods.length),
+                          const SizedBox(height: 10),
+                          _ProductGrid(products: prods),
+                          const SizedBox(height: 18),
+                        ],
+                      );
+                    }),
+                  ]),
                 ),
               ),
             ],
@@ -164,7 +163,7 @@ class _MiniCartBar extends StatelessWidget {
     const brand = Color(0xFFAE1504);
 
     // TODO: sesuaikan dengan provider kamu
-    final itemCount = vm.cartItemCount;        // total qty semua item
+    final itemCount = vm.cartItemCount; // total qty semua item
     final total = vm.cartGrandTotalRounded;
     // final distinct = vm.cart.length;         // kalau kamu butuh jumlah jenis item
 
@@ -187,60 +186,65 @@ class _MiniCartBar extends StatelessWidget {
           child: Row(
             children: [
               // kiri: cart + badge jumlah item (klik -> buka cart sheet)
-            InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () {
-                final purchaseVm = context.read<PurchaseProvider>();
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () {
+                  final purchaseVm = context.read<PurchaseProvider>();
 
-                showModalBottomSheet(
-                  context: context,
-                  useRootNavigator: true,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => ChangeNotifierProvider.value(
-                    value: purchaseVm,
-                    child: SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.85,
-                      child: const CartSheet(),
-                    ),
-                  ),
-                );
-              },
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: brand.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.shopping_cart_rounded, color: brand),
-                  ),
-                  Positioned(
-                    right: -6,
-                    top: -6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: brand,
-                        borderRadius: BorderRadius.circular(999),
+                  showModalBottomSheet(
+                    context: context,
+                    useRootNavigator: true,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => ChangeNotifierProvider.value(
+                      value: purchaseVm,
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.85,
+                        child: const CartSheet(),
                       ),
-                      child: Text(
-                        '$itemCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
+                    ),
+                  );
+                },
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: brand.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.shopping_cart_rounded,
+                        color: brand,
+                      ),
+                    ),
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: brand,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$itemCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-
 
               const SizedBox(width: 12),
 
@@ -280,47 +284,63 @@ class _MiniCartBar extends StatelessWidget {
                   backgroundColor: brand,
                   foregroundColor: Colors.white,
                   shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
                 ),
                 onPressed: () async {
                   final purchaseVm = context.read<PurchaseProvider>();
-                  final rootCtx = Navigator.of(context, rootNavigator: true).context;
+                  final rootCtx = Navigator.of(
+                    context,
+                    rootNavigator: true,
+                  ).context;
 
-                  final result = await showModalBottomSheet<Map<String, dynamic>>(
-                    context: rootCtx,
-                    useRootNavigator: true,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => ChangeNotifierProvider.value(
-                      value: purchaseVm,
-                      child: SizedBox(
-                        height: MediaQuery.of(rootCtx).size.height * 0.92,
-                        child: CheckoutSheet(
-                          onSubmit: ({required customerName, required table, required payment}) async {
-                            final resp = await context.read<PurchaseProvider>().checkout(
-                              customerName: customerName,
-                              table: table,
-                              paymentMethod: payment.backendPaymentMethod,
-                              payment: payment,
-                            );
+                  final result =
+                      await showModalBottomSheet<Map<String, dynamic>>(
+                        context: rootCtx,
+                        useRootNavigator: true,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => ChangeNotifierProvider.value(
+                          value: purchaseVm,
+                          child: SizedBox(
+                            height: MediaQuery.of(rootCtx).size.height * 0.92,
+                            child: CheckoutSheet(
+                              onSubmit:
+                                  ({
+                                    required customerName,
+                                    required table,
+                                    required payment,
+                                  }) async {
+                                    final resp = await context
+                                        .read<PurchaseProvider>()
+                                        .checkout(
+                                          customerName: customerName,
+                                          table: table,
+                                          paymentMethod:
+                                              payment.backendPaymentMethod,
+                                          payment: payment,
+                                        );
 
-                            return resp;
-                          },
+                                    return resp;
+                                  },
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  );
+                      );
 
                   if (result != null && context.mounted) {
                     final purchaseVm = context.read<PurchaseProvider>();
                     purchaseVm.notifyListeners();
 
-                    final refreshTarget =
-                        (result['refresh_target'] ?? '').toString();
+                    final refreshTarget = (result['refresh_target'] ?? '')
+                        .toString();
                     final isSuccess = result['success'] == true;
                     final checkoutOffline = result['offline'] == true;
-                    final isOnline =
-                        context.read<ConnectivityStatusProvider>().isOnline;
+                    final isOnline = context
+                        .read<ConnectivityStatusProvider>()
+                        .isOnline;
 
                     if (isSuccess && refreshTarget == 'payment') {
                       await context.read<PaymentProvider>().load();
@@ -351,7 +371,6 @@ class _MiniCartBar extends StatelessWidget {
     );
   }
 }
-
 
 class _CategoryTabs extends StatelessWidget {
   const _CategoryTabs({
@@ -590,6 +609,21 @@ class _ProductGrid extends StatelessWidget {
   }
 }
 
+Future<void> _openProductOptionsSheet(BuildContext context, Product product) {
+  final purchaseVm = context.read<PurchaseProvider>();
+
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => ChangeNotifierProvider.value(
+      value: purchaseVm,
+      child: ProductOptionsSheet(product: product),
+    ),
+  );
+}
+
 class _ProductCard extends StatelessWidget {
   const _ProductCard({required this.product});
 
@@ -613,10 +647,10 @@ class _ProductCard extends StatelessWidget {
     final tracksProductStock =
         !product.alwaysAvailable || product.consumesLinkedStock;
     final productStockOut = tracksProductStock && productRemaining <= 0;
-    final isOut = !product.isActive ||
-        productStockOut ||
-        !hasRequiredOptionsAvailable;
-    final lowStock = !isOut &&
+    final isOut =
+        !product.isActive || productStockOut || !hasRequiredOptionsAvailable;
+    final lowStock =
+        !isOut &&
         tracksProductStock &&
         productRemaining > 0 &&
         productRemaining <= 3;
@@ -629,10 +663,16 @@ class _ProductCard extends StatelessWidget {
     final promo = product.promotion;
     if (promo != null) {
       if (promo.type == 'percentage') {
-        discounted = (basePrice * (1 - (promo.value.toDouble() / 100))).clamp(0, double.infinity);
+        discounted = (basePrice * (1 - (promo.value.toDouble() / 100))).clamp(
+          0,
+          double.infinity,
+        );
         promoBadge = '-${_trimPromo(promo.value)}%';
       } else {
-        discounted = (basePrice - promo.value.toDouble()).clamp(0, double.infinity);
+        discounted = (basePrice - promo.value.toDouble()).clamp(
+          0,
+          double.infinity,
+        );
         promoBadge = '-Rp ${_rupiah(promo.value)}';
       }
     }
@@ -657,25 +697,8 @@ class _ProductCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTap: isOut
-            ? null
-            : () async {
-                if (product.optionGroups.isNotEmpty) {
-                  final purchaseVm = context.read<PurchaseProvider>();
-                  await showModalBottomSheet(
-                    context: context,
-                    useRootNavigator: true,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => ChangeNotifierProvider.value(
-                      value: purchaseVm,
-                      child: ProductOptionsSheet(product: product),
-                    ),
-                  );
-
-                } else {
-                  context.read<PurchaseProvider>().add(product);
-                }
-              },
+              ? null
+              : () => _openProductOptionsSheet(context, product),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -684,22 +707,35 @@ class _ProductCard extends StatelessWidget {
                 child: Stack(
                   children: [
                     ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(18),
+                      ),
                       child: Container(
                         color: const Color(0xFFF3F4F6),
                         child: product.imagePath == null
-                            ? const Center(child: Icon(Icons.image_not_supported_outlined, size: 44))
+                            ? const Center(
+                                child: Icon(
+                                  Icons.image_not_supported_outlined,
+                                  size: 44,
+                                ),
+                              )
                             : CachedNetworkImage(
                                 imageUrl: product.imagePath!,
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
                                 placeholder: (_, __) => const Center(
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
-                                errorWidget: (_, __, ___) =>
-                                    const Center(child: Icon(Icons.broken_image_outlined, size: 44)),
-                              )
+                                errorWidget: (_, __, ___) => const Center(
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    size: 44,
+                                  ),
+                                ),
+                              ),
                       ),
                     ),
 
@@ -708,14 +744,21 @@ class _ProductCard extends StatelessWidget {
                         left: 10,
                         top: 10,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: brand,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
                             promoBadge,
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ),
@@ -726,16 +769,25 @@ class _ProductCard extends StatelessWidget {
                         right: 10,
                         bottom: 10,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.90),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.orange.withOpacity(0.30)),
+                            border: Border.all(
+                              color: Colors.orange.withOpacity(0.30),
+                            ),
                           ),
                           child: const Center(
                             child: Text(
                               'Stok Terbatas',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.orange),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
                         ),
@@ -747,12 +799,24 @@ class _ProductCard extends StatelessWidget {
                           color: Colors.white.withOpacity(0.35),
                           child: const Center(
                             child: DecoratedBox(
-                              decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.all(Radius.circular(999))),
+                              decoration: BoxDecoration(
+                                color: Colors.black87,
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(999),
+                                ),
+                              ),
                               child: Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
                                 child: Text(
                                   'Habis',
-                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                               ),
                             ),
@@ -773,7 +837,10 @@ class _ProductCard extends StatelessWidget {
                       product.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(height: 8),
 
@@ -807,7 +874,7 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
-class _ProductQtyControl extends StatefulWidget {
+class _ProductQtyControl extends StatelessWidget {
   const _ProductQtyControl({
     required this.product,
     required this.qty,
@@ -819,33 +886,7 @@ class _ProductQtyControl extends StatefulWidget {
   final bool isOut;
 
   @override
-  State<_ProductQtyControl> createState() => _ProductQtyControlState();
-}
-
-class _ProductQtyControlState extends State<_ProductQtyControl> {
-  late final TextEditingController qtyC = TextEditingController(text: widget.qty.toString());
-
-  @override
-  void didUpdateWidget(covariant _ProductQtyControl oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.qty.toString() != qtyC.text) {
-      qtyC.text = widget.qty.toString();
-    }
-  }
-
-  @override
-  void dispose() {
-    qtyC.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final product = widget.product;
-    final qty = widget.qty;
-    final isOut = widget.isOut;
-    final hasOptions = product.optionGroups.isNotEmpty;
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -857,69 +898,15 @@ class _ProductQtyControlState extends State<_ProductQtyControl> {
           ),
         if (qty > 0) ...[
           const SizedBox(width: 6),
-          if (hasOptions)
-            Text('$qty', style: const TextStyle(fontWeight: FontWeight.w900))
-          else
-            SizedBox(
-              width: 36,
-              child: TextField(
-                controller: qtyC,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onChanged: (val) {
-                  final parsed = int.tryParse(val) ?? 0;
-                  if (parsed > 0) {
-                    context.read<PurchaseProvider>().setCartQtyForProduct(product, parsed);
-                  }
-                },
-                onEditingComplete: () {
-                  FocusScope.of(context).unfocus();
-                  final parsed = int.tryParse(qtyC.text) ?? 0;
-                  if (parsed < 1) {
-                    context.read<PurchaseProvider>().setCartQtyForProduct(product, 1);
-                    qtyC.text = '1';
-                  }
-                },
-                onTapOutside: (_) {
-                  FocusScope.of(context).unfocus();
-                  final parsed = int.tryParse(qtyC.text) ?? 0;
-                  if (parsed < 1) {
-                    context.read<PurchaseProvider>().setCartQtyForProduct(product, 1);
-                    qtyC.text = '1';
-                  }
-                },
-              ),
-            ),
+          Text('$qty', style: const TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(width: 6),
         ],
         _CircleButton(
           onTap: isOut
               ? null
-              : () async {
-                  if (hasOptions) {
-                    final purchaseVm = context.read<PurchaseProvider>();
-                    await showModalBottomSheet(
-                      context: context,
-                      useRootNavigator: true,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => ChangeNotifierProvider.value(
-                        value: purchaseVm,
-                        child: ProductOptionsSheet(product: product),
-                      ),
-                    );
-                  } else {
-                    context.read<PurchaseProvider>().add(product);
-                  }
-                },
-          child: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+              : () => _openProductOptionsSheet(context, product),
           filled: true,
+          child: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
         ),
       ],
     );
@@ -961,7 +948,11 @@ class _CircleButton extends StatelessWidget {
 }
 
 class _PriceView extends StatelessWidget {
-  const _PriceView({required this.base, required this.discounted, required this.hasPromo});
+  const _PriceView({
+    required this.base,
+    required this.discounted,
+    required this.hasPromo,
+  });
 
   final double base;
   final double discounted;
@@ -1040,11 +1031,12 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => maxHeight;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Material(
-      elevation: overlapsContent ? 2 : 0,
-      child: child,
-    );
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Material(elevation: overlapsContent ? 2 : 0, child: child);
   }
 
   @override
