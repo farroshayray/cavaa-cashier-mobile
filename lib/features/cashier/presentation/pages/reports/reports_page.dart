@@ -145,7 +145,9 @@ class _ReportsPageState extends State<ReportsPage> {
 
   List<_ReportPaymentFilterOption> get _availablePaymentFilterOptions {
     final purchaseProvider = context.read<PurchaseProvider>();
-    final options = purchaseProvider.paymentOptions;
+    final options = purchaseProvider.allPaymentOptions
+        .where((option) => option.kind != PayKind.openbill)
+        .toList();
 
     if (options.isEmpty) {
       return const [

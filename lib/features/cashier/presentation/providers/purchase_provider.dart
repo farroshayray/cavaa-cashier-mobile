@@ -33,6 +33,7 @@ class PurchaseProvider extends ChangeNotifier {
   List<Category> categories = [];
   List<StoreTable> tables = [];
   List<PaymentOption> paymentOptions = [];
+  List<PaymentOption> allPaymentOptions = [];
   PartnerData? partnerData;
 
   List<MirrorPendingStockLine> _pendingStockLines = [];
@@ -159,6 +160,7 @@ class PurchaseProvider extends ChangeNotifier {
     products = payload.products;
     categories = payload.categories;
     paymentOptions = payload.paymentOptions;
+    allPaymentOptions = payload.allPaymentOptionsForCache;
     tables = payload.tables;
     partnerData = payload.partnerData;
   }
