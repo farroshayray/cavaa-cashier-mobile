@@ -233,7 +233,28 @@ class PurchaseProvider extends ChangeNotifier {
     }
 
     try {
+      // Re-probe before treating as offline — owner→cashier switch can briefly
+      // mark the server unreachable after a non-fatal request failure.
       if (!connectivity.isOnline) {
+        if (connectivity.hasNetwork) {
+          await connectivity.checkServerReachability();
+        }
+      }
+
+      if (!connectivity.isOnline) {
+        // Last resort: still try a network fetch if the device has a link.
+        if (connectivity.hasNetwork) {
+          try {
+            final payload = await repo.fetchPurchaseData();
+            connectivity.markServerReachable();
+            _applyPayload(payload);
+            await _applyPendingStockLines();
+            return;
+          } catch (_) {
+            // fall through to cache / offline message
+          }
+        }
+
         final cached = await repo.loadFromLocalCache();
         if (cached != null) {
           _applyPayload(cached);
@@ -246,6 +267,7 @@ class PurchaseProvider extends ChangeNotifier {
       }
 
       final payload = await repo.fetchPurchaseData();
+      connectivity.markServerReachable();
       _applyPayload(payload);
       await _applyPendingStockLines();
     } catch (e) {

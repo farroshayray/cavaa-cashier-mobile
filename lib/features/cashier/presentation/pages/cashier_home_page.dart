@@ -14,6 +14,7 @@ import 'tabs/modals/sync_conflicts_sheet.dart';
 import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
+import '../../../owner/presentation/pages/owner_home_page.dart';
 
 import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
@@ -223,6 +224,13 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     final conn = context.read<ConnectivityStatusProvider>();
 
+    // Owner→cashier can land here with a stale "offline" flag; re-probe first.
+    if (!conn.isOnline && conn.hasNetwork) {
+      try {
+        await conn.checkServerReachability();
+      } catch (_) {}
+    }
+
     try {
       if (conn.isOnline) {
         await _syncAndReloadAllOrderTabs();
@@ -385,6 +393,30 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false,
+    );
+  }
+
+  Future<void> _returnToOwner() async {
+    await context.read<NotificationsProvider>().clear();
+    await context.read<PaymentProvider>().clearStateAndCache();
+    await context.read<ProcessProvider>().clearStateAndCache();
+    await context.read<DoneProvider>().clearStateAndCache();
+    await context.read<SyncService>().clearCashierSessionData();
+
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.returnToOwner();
+    if (!mounted) return;
+
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? 'Gagal kembali ke owner')),
+      );
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const OwnerHomePage()),
       (_) => false,
     );
   }
@@ -1031,6 +1063,9 @@ class _CashierHomePageState extends State<CashierHomePage>
               : null,
           showUpdateBadge: hasAppUpdate,
           onLogout: _confirmLogout,
+          onReturnToOwner: context.watch<AuthProvider>().viaOwner
+              ? _returnToOwner
+              : null,
         ),
         appBar: AppBar(
           leading: Builder(
@@ -1531,6 +1566,7 @@ class _AppDrawer extends StatelessWidget {
     required this.onLogout,
     required this.showUpdateBadge,
     this.onTapUpdate,
+    this.onReturnToOwner,
   });
 
   final VoidCallback onOpenProfile;
@@ -1539,6 +1575,7 @@ class _AppDrawer extends StatelessWidget {
   final VoidCallback onLogout;
   final bool showUpdateBadge;
   final VoidCallback? onTapUpdate;
+  final VoidCallback? onReturnToOwner;
 
   String? _buildUserImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.trim().isEmpty) return null;
@@ -1624,9 +1661,11 @@ class _AppDrawer extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 7),
-                          const Text(
-                            'Cashier Account',
-                            style: TextStyle(
+                          Text(
+                            onReturnToOwner != null
+                                ? 'Cashier via Owner'
+                                : 'Cashier Account',
+                            style: const TextStyle(
                               fontSize: 13,
                               color: Colors.black54,
                             ),
@@ -1636,6 +1675,16 @@ class _AppDrawer extends StatelessWidget {
                     ),
                   ),
                   const Divider(),
+                  if (onReturnToOwner != null)
+                    ListTile(
+                      leading: const Icon(Icons.arrow_back, color: brand),
+                      title: const Text('Kembali ke Menu Owner'),
+                      subtitle: const Text('Keluar dari mode kasir'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onReturnToOwner?.call();
+                      },
+                    ),
                   ListTile(
                     leading: const Icon(Icons.edit_document, color: brand),
                     title: const Text('Laporan'),

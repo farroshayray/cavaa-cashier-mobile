@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -27,8 +29,15 @@ class _PurchaseTabState extends State<PurchaseTab> {
     if (_loaded) return;
     _loaded = true;
 
-    // ✅ pakai PurchaseProvider yang sudah ada di root (app.dart)
-    Future.microtask(() => context.read<PurchaseProvider>().load());
+    // Delay slightly so CashierHomePage bootstrap can re-probe connectivity
+    // first (important for owner→cashier). Bootstrap also calls load().
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      final vm = context.read<PurchaseProvider>();
+      if (vm.products.isEmpty && !vm.isLoading) {
+        unawaited(vm.load());
+      }
+    });
   }
 
   @override

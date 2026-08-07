@@ -7,7 +7,9 @@ import 'dart:async';
 
 import '../auth_provider.dart';
 import '../../../cashier/presentation/pages/cashier_home_page.dart';
+import '../../../owner/presentation/pages/owner_home_page.dart';
 import 'login_page.dart';
+import 'owner_set_password_page.dart';
 
 import '/core/network/version_api.dart';
 import '/core/network/dio_client.dart';
@@ -97,11 +99,19 @@ class _SplashPageState extends State<SplashPage> {
 
     if (!mounted) return;
 
+    Widget next = const LoginPage();
+    if (auth.isLoggedIn) {
+      if (auth.isOwner) {
+        next = auth.owner?.needsPassword == true
+            ? const OwnerSetPasswordPage()
+            : const OwnerHomePage();
+      } else {
+        next = const CashierHomePage();
+      }
+    }
+
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) =>
-            auth.isLoggedIn ? const CashierHomePage() : const LoginPage(),
-      ),
+      MaterialPageRoute(builder: (_) => next),
     );
   }
 
