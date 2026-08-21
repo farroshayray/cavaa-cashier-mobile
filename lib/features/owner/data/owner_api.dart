@@ -291,6 +291,68 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> listCategories({String? q}) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/categories',
+      queryParameters: {
+        if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createCategory({
+    required String name,
+    String? description,
+    String? imagePath,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/categories',
+      data: FormData.fromMap({
+        'category_name': name,
+        if (description != null) 'description': description,
+        if (imagePath != null && imagePath.isNotEmpty)
+          'image': await MultipartFile.fromFile(imagePath),
+      }),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateCategory({
+    required int id,
+    required String name,
+    String? description,
+    String? imagePath,
+    bool removeImage = false,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/categories/$id',
+      data: FormData.fromMap({
+        'category_name': name,
+        if (description != null) 'description': description,
+        'remove_image': removeImage ? 1 : 0,
+        if (imagePath != null && imagePath.isNotEmpty)
+          'image': await MultipartFile.fromFile(imagePath),
+      }),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteCategory(int id) async {
+    final res = await client.dio.delete('/api/v1/mobile/owner/categories/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> reorderCategories(
+    List<Map<String, dynamic>> orders,
+  ) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/categories/reorder',
+      data: {'orders': orders},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> listPaymentMethods() async {
     final res = await client.dio.get('/api/v1/mobile/owner/payment-methods');
     return Map<String, dynamic>.from(res.data as Map);

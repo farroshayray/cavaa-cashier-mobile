@@ -6,6 +6,7 @@ import '/features/auth/presentation/auth_provider.dart';
 import 'master_products_page.dart';
 import 'owner_home_page.dart';
 import 'product_form_shared.dart';
+import 'categories_page.dart';
 
 const _brand = productBrand;
 const _bg = Color(0xFFF6F7F9);
@@ -781,53 +782,26 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                             helperText: 'Terkunci (dari master)',
                           ),
                         )
-                      else if (_categories.isNotEmpty)
-                        DropdownButtonFormField<int>(
-                          initialValue: _categoryId != null &&
-                                  _categories.any(
+                      else
+                        CategorySelectWithManage(
+                          categories: _categories,
+                          categoryId: _categoryId,
+                          categoryNameController: _category,
+                          enabled: !_saving,
+                          onChanged: (v) => setState(() => _categoryId = v),
+                          onCategoriesUpdated: (list) {
+                            setState(() {
+                              _categories = list;
+                              if (_categoryId != null &&
+                                  !_categories.any(
                                     (c) =>
                                         int.tryParse('${c['id']}') ==
                                         _categoryId,
-                                  )
-                              ? _categoryId
-                              : null,
-                          decoration: const InputDecoration(
-                            labelText: 'Kategori',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _categories
-                              .map((c) {
-                                final id = int.tryParse('${c['id']}');
-                                if (id == null) return null;
-                                return DropdownMenuItem(
-                                  value: id,
-                                  child: Text(c['name']?.toString() ?? '-'),
-                                );
-                              })
-                              .whereType<DropdownMenuItem<int>>()
-                              .toList(),
-                          onChanged: _saving
-                              ? null
-                              : (v) {
-                                  setState(() {
-                                    _categoryId = v;
-                                    final match = _categories.firstWhere(
-                                      (c) => int.tryParse('${c['id']}') == v,
-                                      orElse: () => {},
-                                    );
-                                    _category.text =
-                                        match['name']?.toString() ?? 'Umum';
-                                  });
-                                },
-                        )
-                      else
-                        TextField(
-                          controller: _category,
-                          enabled: !_saving,
-                          decoration: const InputDecoration(
-                            labelText: 'Kategori',
-                            border: OutlineInputBorder(),
-                          ),
+                                  )) {
+                                _categoryId = null;
+                              }
+                            });
+                          },
                         ),
                       if (_identityLocked) ...[
                         const SizedBox(height: 12),
