@@ -30,6 +30,11 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> listCarousels() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/carousels');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> getStore(int storeId) async {
     final res = await client.dio.get('/api/v1/mobile/owner/stores/$storeId');
     return Map<String, dynamic>.from(res.data as Map);
@@ -59,33 +64,56 @@ class OwnerApi {
     String? gmapsUrl,
     String? instagram,
     List<int>? manualPaymentIds,
+    String? logoPath,
+    String? backgroundPath,
+    bool removeLogo = false,
+    bool removeBackground = false,
   }) async {
+    final map = <String, dynamic>{
+      'name': name,
+      'address': address,
+      if (city != null) 'city': city,
+      if (province != null) 'province': province,
+      if (district != null) 'district': district,
+      if (village != null) 'village': village,
+      'is_active': isActive ? 1 : 0,
+      'is_cashier_active': isCashierActive ? 1 : 0,
+      'is_qr_active': isQrActive ? 1 : 0,
+      'is_openbill': isOpenbill ? 1 : 0,
+      if (userWifi != null) 'user_wifi': userWifi,
+      if (passWifi != null) 'pass_wifi': passWifi,
+      'is_wifi_shown': isWifiShown ? 1 : 0,
+      'is_ppn_active': isPpnActive ? 1 : 0,
+      if (ppn != null) 'ppn': ppn,
+      'cash_rounding_unit': cashRoundingUnit,
+      if (contactPerson != null) 'contact_person': contactPerson,
+      if (contactPhone != null) 'contact_phone': contactPhone,
+      if (whatsapp != null) 'whatsapp': whatsapp,
+      if (gmapsUrl != null) 'gmaps_url': gmapsUrl,
+      if (instagram != null) 'instagram': instagram,
+      // Multipart cannot send nested lists reliably; send JSON string.
+      if (manualPaymentIds != null)
+        'manual_payment_ids': jsonEncode(manualPaymentIds),
+      if (removeLogo) 'remove_logo': 1,
+      if (removeBackground) 'remove_background_picture': 1,
+    };
+
+    if (logoPath != null && logoPath.isNotEmpty) {
+      map['logo'] = await MultipartFile.fromFile(
+        logoPath,
+        filename: 'logo.jpg',
+      );
+    }
+    if (backgroundPath != null && backgroundPath.isNotEmpty) {
+      map['image'] = await MultipartFile.fromFile(
+        backgroundPath,
+        filename: 'background.jpg',
+      );
+    }
+
     final res = await client.dio.post(
       '/api/v1/mobile/owner/stores/$storeId',
-      data: {
-        'name': name,
-        'address': address,
-        if (city != null) 'city': city,
-        if (province != null) 'province': province,
-        if (district != null) 'district': district,
-        if (village != null) 'village': village,
-        'is_active': isActive,
-        'is_cashier_active': isCashierActive,
-        'is_qr_active': isQrActive,
-        'is_openbill': isOpenbill,
-        if (userWifi != null) 'user_wifi': userWifi,
-        if (passWifi != null) 'pass_wifi': passWifi,
-        'is_wifi_shown': isWifiShown,
-        'is_ppn_active': isPpnActive,
-        if (ppn != null) 'ppn': ppn,
-        'cash_rounding_unit': cashRoundingUnit,
-        if (contactPerson != null) 'contact_person': contactPerson,
-        if (contactPhone != null) 'contact_phone': contactPhone,
-        if (whatsapp != null) 'whatsapp': whatsapp,
-        if (gmapsUrl != null) 'gmaps_url': gmapsUrl,
-        if (instagram != null) 'instagram': instagram,
-        if (manualPaymentIds != null) 'manual_payment_ids': manualPaymentIds,
-      },
+      data: FormData.fromMap(map),
     );
     return Map<String, dynamic>.from(res.data as Map);
   }

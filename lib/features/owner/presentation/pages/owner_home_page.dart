@@ -15,6 +15,7 @@ import 'employees_page.dart';
 import 'store_settings_page.dart';
 import 'tables_page.dart';
 import 'promotions_page.dart';
+import '../widgets/owner_mobile_carousel.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -29,11 +30,33 @@ class OwnerHomePage extends StatefulWidget {
 class _OwnerHomePageState extends State<OwnerHomePage> {
   bool _routingChecked = false;
   bool _selectingStore = false;
+  List<Map<String, dynamic>> _carousels = [];
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkOnboarding());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkOnboarding();
+      _loadCarousels();
+    });
+  }
+
+  Future<void> _loadCarousels() async {
+    try {
+      final data = await ownerApiOf(context).listCarousels();
+      final list = data['carousels'];
+      if (!mounted) return;
+      setState(() {
+        _carousels = list is List
+            ? list
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : [];
+      });
+    } catch (_) {
+      // Keep silent; carousel is optional enrichment.
+    }
   }
 
   Future<void> _checkOnboarding() async {
@@ -263,7 +286,10 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
       ),
       body: RefreshIndicator(
         color: _brand,
-        onRefresh: () => auth.refreshOwner(),
+        onRefresh: () async {
+          await auth.refreshOwner();
+          await _loadCarousels();
+        },
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
@@ -294,6 +320,13 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
                     label: _stepLabel(nextStep),
                     onTap: () => _openStep(nextStep),
                   ),
+                ),
+              ),
+            if (_carousels.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
+                sliver: SliverToBoxAdapter(
+                  child: OwnerMobileCarousel(items: _carousels),
                 ),
               ),
             SliverPadding(

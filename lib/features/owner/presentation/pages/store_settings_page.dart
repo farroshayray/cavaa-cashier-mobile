@@ -1,13 +1,38 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '/core/config/env.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import 'owner_home_page.dart';
 import 'payment_methods_page.dart';
+import 'store_image_crop_page.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
+
+String? resolveStoreImageUrl(String? raw) {
+  if (raw == null) return null;
+  final value = raw.trim();
+  if (value.isEmpty) return null;
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.path.contains('/storage/')) {
+      final base = Env.baseUrl.replaceAll(RegExp(r'/$'), '');
+      final q = uri.hasQuery ? '?${uri.query}' : '';
+      return '$base${uri.path}$q';
+    }
+    return value;
+  }
+  final base = Env.baseUrl.replaceAll(RegExp(r'/$'), '');
+  final clean = value.replaceFirst(RegExp(r'^/+'), '');
+  if (clean.startsWith('storage/')) return '$base/$clean';
+  return '$base/storage/$clean';
+}
 
 /// Settings for the currently selected store (like web outlet edit).
 class StoreSettingsPage extends StatefulWidget {
@@ -48,6 +73,14 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
 
   List<Map<String, dynamic>> _paymentMethods = [];
   Set<int> _selectedPaymentIds = {};
+
+  final _picker = ImagePicker();
+  String? _logoUrl;
+  String? _backgroundUrl;
+  String? _logoPath;
+  String? _backgroundPath;
+  bool _removeLogo = false;
+  bool _removeBackground = false;
 
   /// All sections start collapsed.
   final Set<String> _expandedSections = {};
@@ -129,6 +162,17 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
       _ppn.text = '${s['ppn'] ?? 0}';
       _storeSlug = s['slug']?.toString();
       _partnerCode = s['partner_code']?.toString();
+      _logoUrl = resolveStoreImageUrl(
+        s['logo_url']?.toString() ?? s['logo']?.toString(),
+      );
+      _backgroundUrl = resolveStoreImageUrl(
+        s['background_url']?.toString() ??
+            s['background_picture']?.toString(),
+      );
+      _logoPath = null;
+      _backgroundPath = null;
+      _removeLogo = false;
+      _removeBackground = false;
 
       setState(() {
         _isActive = s['is_active'] == true || s['is_active'] == 1;
@@ -203,6 +247,60 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
     await _refreshPaymentMethods();
   }
 
+  Future<String?> _pickAndCrop({
+    required String title,
+    required double aspectRatio,
+    required int maxWidth,
+    required int maxHeight,
+  }) async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 95,
+    );
+    if (picked == null || !mounted) return null;
+
+    final croppedPath = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => StoreImageCropPage(
+          sourcePath: picked.path,
+          title: title,
+          aspectRatio: aspectRatio,
+          outputWidth: maxWidth,
+          outputHeight: maxHeight,
+        ),
+      ),
+    );
+    return croppedPath;
+  }
+
+  Future<void> _pickLogo() async {
+    final path = await _pickAndCrop(
+      title: 'Crop Logo (1:1)',
+      aspectRatio: 1,
+      maxWidth: 800,
+      maxHeight: 800,
+    );
+    if (path == null || !mounted) return;
+    setState(() {
+      _logoPath = path;
+      _removeLogo = false;
+    });
+  }
+
+  Future<void> _pickBackground() async {
+    final path = await _pickAndCrop(
+      title: 'Crop Background (16:9)',
+      aspectRatio: 16 / 9,
+      maxWidth: 1920,
+      maxHeight: 1080,
+    );
+    if (path == null || !mounted) return;
+    setState(() {
+      _backgroundPath = path;
+      _removeBackground = false;
+    });
+  }
+
   Future<void> _save() async {
     if (_storeId == null) return;
     if (_name.text.trim().isEmpty || _address.text.trim().isEmpty) {
@@ -238,6 +336,10 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         gmapsUrl: _gmaps.text.trim(),
         instagram: _instagram.text.trim(),
         manualPaymentIds: _selectedPaymentIds.toList(),
+        logoPath: _logoPath,
+        backgroundPath: _backgroundPath,
+        removeLogo: _removeLogo && _logoPath == null,
+        removeBackground: _removeBackground && _backgroundPath == null,
       );
       await context.read<AuthProvider>().refreshOwner();
       if (!mounted) return;
@@ -501,6 +603,120 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                               labelText: 'Provinsi',
                               border: OutlineInputBorder(),
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _SectionCard(
+                      title: 'Logo & background',
+                      subtitle: 'Crop sama seperti web: logo 1:1 (800×800), background 16:9 (1920×1080)',
+                      expanded: _expandedSections.contains('branding'),
+                      onToggle: () => _toggleSection('branding'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'Logo toko',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Rasio 1:1 · output 800×800',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Colors.black.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Center(
+                            child: _StoreImagePreview(
+                              width: 140,
+                              height: 140,
+                              borderRadius: 70,
+                              localPath: _removeLogo ? null : _logoPath,
+                              networkUrl: _removeLogo ? null : _logoUrl,
+                              placeholderIcon: Icons.storefront_rounded,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _saving ? null : _pickLogo,
+                                  icon: const Icon(Icons.crop_rounded),
+                                  label: const Text('Pilih & crop'),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                onPressed: _saving ||
+                                        (_logoPath == null &&
+                                            (_logoUrl == null || _logoUrl!.isEmpty))
+                                    ? null
+                                    : () => setState(() {
+                                          _logoPath = null;
+                                          _removeLogo = true;
+                                        }),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Hapus'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Background',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Rasio 16:9 · output 1920×1080',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Colors.black.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _StoreImagePreview(
+                            width: double.infinity,
+                            height: 160,
+                            borderRadius: 14,
+                            localPath:
+                                _removeBackground ? null : _backgroundPath,
+                            networkUrl:
+                                _removeBackground ? null : _backgroundUrl,
+                            placeholderIcon: Icons.image_outlined,
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _saving ? null : _pickBackground,
+                                  icon: const Icon(Icons.crop_rounded),
+                                  label: const Text('Pilih & crop'),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                onPressed: _saving ||
+                                        (_backgroundPath == null &&
+                                            (_backgroundUrl == null ||
+                                                _backgroundUrl!.isEmpty))
+                                    ? null
+                                    : () => setState(() {
+                                          _backgroundPath = null;
+                                          _removeBackground = true;
+                                        }),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Hapus'),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -883,6 +1099,76 @@ class _SectionCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _StoreImagePreview extends StatelessWidget {
+  const _StoreImagePreview({
+    required this.width,
+    required this.height,
+    required this.borderRadius,
+    required this.placeholderIcon,
+    this.localPath,
+    this.networkUrl,
+  });
+
+  final double width;
+  final double height;
+  final double borderRadius;
+  final IconData placeholderIcon;
+  final String? localPath;
+  final String? networkUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child;
+    if (localPath != null && localPath!.isNotEmpty) {
+      child = Image.file(
+        File(localPath!),
+        fit: BoxFit.cover,
+        width: width == double.infinity ? null : width,
+        height: height,
+      );
+    } else if (networkUrl != null && networkUrl!.isNotEmpty) {
+      child = CachedNetworkImage(
+        imageUrl: networkUrl!,
+        fit: BoxFit.cover,
+        width: width == double.infinity ? null : width,
+        height: height,
+        placeholder: (_, __) => Container(
+          color: const Color(0xFFF1F5F9),
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2, color: _brand),
+          ),
+        ),
+        errorWidget: (_, __, ___) => _placeholder(),
+      );
+    } else {
+      child = _placeholder();
+    }
+
+    return Container(
+      width: width == double.infinity ? null : width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: _brand.withValues(alpha: 0.06),
+      alignment: Alignment.center,
+      child: Icon(placeholderIcon, color: _brand.withValues(alpha: 0.55), size: 36),
     );
   }
 }
