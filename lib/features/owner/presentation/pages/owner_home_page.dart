@@ -14,6 +14,7 @@ import 'payment_methods_page.dart';
 import 'employees_page.dart';
 import 'store_settings_page.dart';
 import 'tables_page.dart';
+import 'promotions_page.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -183,9 +184,7 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
     final iconGlyphSize = width < 600 ? 24.0 : 28.0;
     final labelSize = width < 600 ? 11.5 : 12.5;
 
-    final ownerMenus = <_MenuItemData>[];
-
-    final storeMenus = <_MenuItemData>[
+    final menus = <_MenuItemData>[
       _MenuItemData(
         icon: Icons.store_mall_directory_rounded,
         title: 'Toko',
@@ -214,6 +213,13 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
                   MaterialPageRoute(builder: (_) => const CreateProductPage()),
                 ).then((_) => auth.refreshOwner())
             : null,
+      ),
+      _MenuItemData(
+        icon: Icons.local_offer_rounded,
+        title: 'Promosi',
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PromotionsPage()),
+        ),
       ),
       _MenuItemData(
         icon: Icons.badge_rounded,
@@ -290,50 +296,8 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
                   ),
                 ),
               ),
-            if (ownerMenus.isNotEmpty) ...[
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                sliver: SliverToBoxAdapter(
-                  child: _SectionTitle(
-                    title: 'Menu Owner',
-                    subtitle: 'Katalog & pengaturan pusat',
-                  ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisSpacing: 4,
-                    crossAxisSpacing: 4,
-                    childAspectRatio: 0.82,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) => _MenuIconButton(
-                      item: ownerMenus[index],
-                      iconSize: iconSize,
-                      iconGlyphSize: iconGlyphSize,
-                      labelSize: labelSize,
-                    ),
-                    childCount: ownerMenus.length,
-                  ),
-                ),
-              ),
-            ],
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              sliver: SliverToBoxAdapter(
-                child: _SectionTitle(
-                  title: 'Menu Toko',
-                  subtitle: hasStore
-                      ? 'Operasional toko terpilih'
-                      : 'Pilih atau buat toko terlebih dahulu',
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 28),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 28),
               sliver: SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
@@ -343,12 +307,12 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) => _MenuIconButton(
-                    item: storeMenus[index],
+                    item: menus[index],
                     iconSize: iconSize,
                     iconGlyphSize: iconGlyphSize,
                     labelSize: labelSize,
                   ),
-                  childCount: storeMenus.length,
+                  childCount: menus.length,
                 ),
               ),
             ),
@@ -373,38 +337,6 @@ class _MenuItemData {
   final VoidCallback? onTap;
   final bool enabled;
   final bool highlighted;
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 15,
-            letterSpacing: 0.2,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: 12.5,
-            color: Colors.black.withValues(alpha: 0.5),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class _OwnerHeader extends StatelessWidget {
@@ -705,9 +637,10 @@ class _MenuIconButton extends StatelessWidget {
           onTap: enabled ? item.onTap : null,
           borderRadius: BorderRadius.circular(18),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+            padding: const EdgeInsets.fromLTRB(2, 6, 2, 4),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
                   width: iconSize,

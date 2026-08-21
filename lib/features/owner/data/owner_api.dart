@@ -353,6 +353,99 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> listPromotions({
+    String? q,
+    String? type,
+  }) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/promotions',
+      queryParameters: {
+        if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+        if (type != null && type.isNotEmpty) 'type': type,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> getPromotion(int id) async {
+    final res = await client.dio.get('/api/v1/mobile/owner/promotions/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createPromotion({
+    required String name,
+    required String type,
+    required num value,
+    bool usesExpiry = false,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String>? activeDays,
+    bool isActive = true,
+    String? description,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/promotions',
+      data: {
+        'promotion_name': name,
+        'promotion_type': type,
+        'promotion_value': value,
+        'uses_expiry': usesExpiry,
+        if (usesExpiry && startDate != null)
+          'start_date': _formatDateTime(startDate),
+        if (usesExpiry && endDate != null)
+          'end_date': _formatDateTime(endDate),
+        if (activeDays != null && activeDays.isNotEmpty)
+          'active_days': activeDays,
+        'is_active': isActive,
+        if (description != null) 'description': description,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updatePromotion({
+    required int id,
+    required String name,
+    required String type,
+    required num value,
+    bool usesExpiry = false,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String>? activeDays,
+    bool isActive = true,
+    String? description,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/promotions/$id',
+      data: {
+        'promotion_name': name,
+        'promotion_type': type,
+        'promotion_value': value,
+        'uses_expiry': usesExpiry,
+        if (usesExpiry && startDate != null)
+          'start_date': _formatDateTime(startDate),
+        if (usesExpiry && endDate != null)
+          'end_date': _formatDateTime(endDate),
+        'active_days': activeDays ?? <String>[],
+        'is_active': isActive,
+        if (description != null) 'description': description,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deletePromotion(int id) async {
+    final res = await client.dio.delete('/api/v1/mobile/owner/promotions/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+  }
+
   Future<Map<String, dynamic>> listPaymentMethods() async {
     final res = await client.dio.get('/api/v1/mobile/owner/payment-methods');
     return Map<String, dynamic>.from(res.data as Map);
