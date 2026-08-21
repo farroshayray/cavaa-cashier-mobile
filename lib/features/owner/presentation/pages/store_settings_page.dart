@@ -65,7 +65,6 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
 
   bool _isActive = true;
   bool _isCashierActive = true;
-  bool _isQrActive = false;
   bool _isOpenbill = false;
   bool _isWifiShown = false;
   bool _isPpnActive = false;
@@ -178,7 +177,6 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         _isActive = s['is_active'] == true || s['is_active'] == 1;
         _isCashierActive =
             s['is_cashier_active'] == true || s['is_cashier_active'] == 1;
-        _isQrActive = s['is_qr_active'] == true || s['is_qr_active'] == 1;
         _isOpenbill = s['is_openbill'] == true || s['is_openbill'] == 1;
         _isWifiShown =
             s['is_wifi_shown'] == true || s['is_wifi_shown'] == 1;
@@ -322,7 +320,6 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         province: _province.text.trim(),
         isActive: _isActive,
         isCashierActive: _isCashierActive,
-        isQrActive: _isQrActive,
         isOpenbill: _isOpenbill,
         userWifi: _wifiUser.text.trim(),
         passWifi: _wifiPass.text.trim(),
@@ -801,17 +798,6 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                             ),
                             onChanged: (v) =>
                                 setState(() => _isCashierActive = v),
-                          ),
-                          SwitchListTile.adaptive(
-                            contentPadding: EdgeInsets.zero,
-                            value: _isQrActive,
-                            activeTrackColor: _brand.withValues(alpha: 0.45),
-                            activeThumbColor: _brand,
-                            title: const Text(
-                              'QR order aktif',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            onChanged: (v) => setState(() => _isQrActive = v),
                           ),
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,

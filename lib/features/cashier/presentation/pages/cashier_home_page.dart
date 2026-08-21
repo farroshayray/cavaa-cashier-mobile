@@ -76,6 +76,13 @@ class _CashierHomePageState extends State<CashierHomePage>
   int _conflictCount = 0;
   SyncWorker? _syncWorker;
 
+  /// Full-screen gate until first sync/cache load finishes.
+  bool _isBootstrapping = true;
+  String _bootstrapPhase = 'Menyiapkan kasir…';
+  String? _bootstrapError;
+  bool _usedCacheFallback = false;
+  Map<String, dynamic>? _queuedFcmTap;
+
   bool? _lastOnlineState;
 
   StreamSubscription<Map<String, dynamic>>? _fcmMessageSub;
@@ -98,7 +105,11 @@ class _CashierHomePageState extends State<CashierHomePage>
 
       if (pendingTap != null && mounted) {
         await context.read<NotificationsProvider>().pushFromFcm(pendingTap);
-        await _handleFcmTap(pendingTap);
+        if (_isBootstrapping) {
+          _queuedFcmTap = pendingTap;
+        } else {
+          await _handleFcmTap(pendingTap);
+        }
       }
     });
 
@@ -106,12 +117,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (!mounted) return;
       _setupConnectivitySyncHook();
       _setupSyncCallbacks();
-      _bootstrapAfterLogin();
-      _syncWorker = SyncWorker(
-        syncService: context.read<SyncService>(),
-        connectivity: context.read<ConnectivityStatusProvider>(),
-      )..start();
-      _refreshConflictCount();
+      unawaited(_bootstrapAfterLogin());
     });
 
     Future.microtask(() async {
@@ -126,6 +132,8 @@ class _CashierHomePageState extends State<CashierHomePage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (_isBootstrapping) return;
+
       Future.microtask(_reloadNotificationsFromStorage);
       context.read<PrinterManager>().connectDefault(silent: true);
       _refreshAfterResume();
@@ -133,13 +141,14 @@ class _CashierHomePageState extends State<CashierHomePage>
       Future.microtask(() async {
         final stale = await PushNotificationService.instance
             .consumeOrdersStaleFlag();
-        if (stale && mounted) {
+        if (stale && mounted && !_isBootstrapping) {
           _debouncedSyncAndReloadAllOrderTabs();
         }
       });
 
       Future.microtask(() async {
         try {
+          if (_isBootstrapping) return;
           final conn = context.read<ConnectivityStatusProvider>();
           if (conn.isOnline && !conn.isChecking) {
             await _syncAndReloadAllOrderTabs();
@@ -175,9 +184,12 @@ class _CashierHomePageState extends State<CashierHomePage>
   void _setupConnectivitySyncHook() {
     final connectivityProvider = context.read<ConnectivityStatusProvider>();
 
-    connectivityProvider.onBackOnline = _syncAndReloadAllOrderTabs;
+    connectivityProvider.onBackOnline = () async {
+      if (_isBootstrapping) return;
+      await _syncAndReloadAllOrderTabs();
+    };
     connectivityProvider.onInitialOnline = () async {
-      if (_bootstrapSyncHandled) return;
+      if (_isBootstrapping || _bootstrapSyncHandled) return;
       await _syncAndReloadAllOrderTabs();
     };
   }
@@ -185,7 +197,7 @@ class _CashierHomePageState extends State<CashierHomePage>
   void _setupSyncCallbacks() {
     context.read<SyncService>().configureSyncCallbacks(
       onSyncCompleted: (_) async {
-        if (!mounted) return;
+        if (!mounted || _isBootstrapping) return;
         await _reloadAllOrderTabsSequentially();
         _debouncedRefreshPurchaseStock();
       },
@@ -215,38 +227,136 @@ class _CashierHomePageState extends State<CashierHomePage>
     }
   }
 
+  void _setBootstrapPhase(String phase) {
+    if (!mounted) return;
+    setState(() {
+      _bootstrapPhase = phase;
+      _bootstrapError = null;
+    });
+  }
+
   Future<void> _bootstrapAfterLogin() async {
     if (!mounted) return;
 
-    _bootstrapSyncHandled = true;
-    await _waitForConnectivityReady();
-    if (!mounted) return;
-
-    final conn = context.read<ConnectivityStatusProvider>();
-
-    // Owner→cashier can land here with a stale "offline" flag; re-probe first.
-    if (!conn.isOnline && conn.hasNetwork) {
-      try {
-        await conn.checkServerReachability();
-      } catch (_) {}
-    }
+    setState(() {
+      _isBootstrapping = true;
+      _bootstrapError = null;
+      _usedCacheFallback = false;
+      _bootstrapPhase = 'Cek koneksi…';
+    });
 
     try {
-      if (conn.isOnline) {
-        await _syncAndReloadAllOrderTabs();
+      await _waitForConnectivityReady();
+      if (!mounted) return;
+
+      final conn = context.read<ConnectivityStatusProvider>();
+
+      // Owner→cashier can land here with a stale "offline" flag; re-probe first.
+      if (!conn.isOnline && conn.hasNetwork) {
+        try {
+          await conn.checkServerReachability();
+        } catch (_) {}
       }
-    } catch (e) {
-      debugPrint('bootstrap sync failed: $e');
-    }
+      if (!mounted) return;
 
-    if (!mounted) return;
+      var syncOk = false;
+      if (conn.isOnline) {
+        _setBootstrapPhase('Sinkron data…');
+        try {
+          await context.read<SyncService>().syncPendingOrders();
+          syncOk = true;
+        } catch (e) {
+          debugPrint('bootstrap sync failed: $e');
+          syncOk = false;
+        }
+        await _refreshConflictCount();
+      } else {
+        _setBootstrapPhase('Mode offline — memuat cache…');
+      }
 
-    try {
-      await context.read<PurchaseProvider>().load();
-      await _reloadAllOrderTabsSequentially();
-    } catch (e) {
-      debugPrint('bootstrap load tabs failed: $e');
+      if (!mounted) return;
+      _setBootstrapPhase('Muat menu…');
+      final purchase = context.read<PurchaseProvider>();
+      try {
+        await purchase.load();
+      } catch (e) {
+        debugPrint('bootstrap purchase load failed: $e');
+      }
+
+      if (!mounted) return;
+
+      final hasMenu = purchase.products.isNotEmpty;
+      if (!hasMenu) {
+        final offline = !context.read<ConnectivityStatusProvider>().isOnline;
+        setState(() {
+          _isBootstrapping = true;
+          _bootstrapError = offline
+              ? 'Mode offline — data menu belum tersedia. Sambungkan internet lalu coba lagi.'
+              : (purchase.error ??
+                  'Data menu gagal dimuat. Periksa koneksi lalu coba lagi.');
+        });
+        return;
+      }
+
+      if (!syncOk &&
+          context.read<ConnectivityStatusProvider>().isOnline) {
+        _usedCacheFallback = true;
+      }
+
+      _setBootstrapPhase('Muat pesanan…');
+      try {
+        await _reloadAllOrderTabsSequentially();
+      } catch (e) {
+        debugPrint('bootstrap order tabs failed: $e');
+      }
+
+      if (!mounted) return;
+
+      _startSyncWorker();
+      _bootstrapSyncHandled = true;
+
+      setState(() {
+        _isBootstrapping = false;
+        _bootstrapError = null;
+        _bootstrapPhase = 'Siap';
+      });
+
+      if (_usedCacheFallback && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sinkronisasi tidak lengkap — menampilkan data yang tersedia',
+            ),
+          ),
+        );
+      }
+
+      final queued = _queuedFcmTap;
+      _queuedFcmTap = null;
+      if (queued != null && mounted) {
+        await _handleFcmTap(queued);
+      }
+    } catch (e, st) {
+      debugPrint('bootstrap fatal: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _isBootstrapping = true;
+        _bootstrapError =
+            'Gagal menyiapkan kasir. Periksa koneksi lalu coba lagi.';
+      });
     }
+  }
+
+  void _startSyncWorker() {
+    _syncWorker?.dispose();
+    _syncWorker = SyncWorker(
+      syncService: context.read<SyncService>(),
+      connectivity: context.read<ConnectivityStatusProvider>(),
+    )..start();
+  }
+
+  Future<void> _retryBootstrap() async {
+    await _bootstrapAfterLogin();
   }
 
   @override
@@ -256,6 +366,8 @@ class _CashierHomePageState extends State<CashierHomePage>
   }
 
   void _handleConnectivitySync() {
+    if (_isBootstrapping) return;
+
     final conn = context.read<ConnectivityStatusProvider>();
 
     if (conn.isChecking) return;
@@ -647,6 +759,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       data,
     ) async {
       if (!mounted) return;
+      if (_isBootstrapping) return;
 
       final type = (data['type'] ?? '').toString();
 
@@ -687,6 +800,11 @@ class _CashierHomePageState extends State<CashierHomePage>
 
       if (type == 'force_logout') {
         await _handleForceLogout(data);
+        return;
+      }
+
+      if (_isBootstrapping) {
+        _queuedFcmTap = data;
         return;
       }
 
@@ -998,6 +1116,12 @@ class _CashierHomePageState extends State<CashierHomePage>
     final appUpdateData = liveAppUpdate ?? auth.appUpdate;
     final hasAppUpdate = appUpdateData?['update_available'] == true;
 
+    if (_isBootstrapping) {
+      return _buildBootstrapScaffold(
+        viaOwner: auth.viaOwner,
+      );
+    }
+
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
     final shortestSide = media.size.shortestSide;
@@ -1181,6 +1305,126 @@ class _CashierHomePageState extends State<CashierHomePage>
                   ),
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildBootstrapScaffold({required bool viaOwner}) {
+    const brand = Color(0xFFAE1504);
+    final hasError = (_bootstrapError ?? '').isNotEmpty;
+
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        if (viaOwner) {
+          await _returnToOwner();
+        } else {
+          await _handleBack();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: brand,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/cavaa_logo.png',
+                    height: 48,
+                    errorBuilder: (_, __, ___) => const Text(
+                      'Cavaa',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 28,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  if (!hasError) ...[
+                    const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      _bootstrapPhase,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Mohon tunggu, menyiapkan data kasir…',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ] else ...[
+                    const Icon(
+                      Icons.cloud_off_rounded,
+                      color: Colors.white,
+                      size: 42,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      _bootstrapError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _retryBootstrap,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: brand,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Coba lagi',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                    if (viaOwner) ...[
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: _returnToOwner,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Kembali ke Owner'),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
