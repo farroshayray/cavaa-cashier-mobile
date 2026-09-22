@@ -1,6 +1,9 @@
 // lib/features/cashier/presentation/printing/receipt_printer.dart
 import 'dart:typed_data';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
+import '/core/config/env.dart';
 import 'receipt_format_helpers.dart';
 import 'receipt_order_enricher.dart';
 import 'receipt_totals.dart';
@@ -70,6 +73,23 @@ class ReceiptPrinter {
     }
 
     bytes.addAll(gen.reset());
+
+    final printLogo = order['print_receipt_logo'] == true ||
+        order['print_receipt_logo'] == 1 ||
+        order['print_receipt_logo'] == '1';
+    if (printLogo) {
+      final logoBytes = await _loadStoreLogoBytes(order);
+      if (logoBytes != null) {
+        try {
+          final decoded = img.decodeImage(logoBytes);
+          if (decoded != null) {
+            final resized = img.copyResize(decoded, width: 200);
+            bytes.addAll(gen.image(resized));
+            bytes.addAll(gen.feed(1));
+          }
+        } catch (_) {}
+      }
+    }
 
     bytes.addAll(gen.text(
       storeName,
@@ -221,5 +241,22 @@ class ReceiptPrinter {
     bytes.addAll(gen.feed(3));
 
     return bytes;
+  }
+
+  Future<Uint8List?> _loadStoreLogoBytes(Map<String, dynamic> order) async {
+    final raw = (order['store_logo'] ?? order['logo'] ?? '').toString().trim();
+    if (raw.isEmpty) return null;
+    try {
+      final uri = raw.startsWith('http')
+          ? Uri.parse(raw)
+          : Uri.parse(
+              '${Env.baseUrl.replaceAll(RegExp(r'/+$'), '')}/storage/${raw.replaceFirst(RegExp(r'^/+'), '')}',
+            );
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        return res.bodyBytes;
+      }
+    } catch (_) {}
+    return null;
   }
 }

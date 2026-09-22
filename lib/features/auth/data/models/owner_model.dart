@@ -180,6 +180,7 @@ class OwnerModel {
   final bool canCreateStore;
   final bool forceOnboarding;
   final OwnerPlanInfo? plan;
+  final Map<String, bool> features;
   final OwnerOnboarding? onboarding;
 
   const OwnerModel({
@@ -197,15 +198,26 @@ class OwnerModel {
     this.canCreateStore = true,
     this.forceOnboarding = false,
     this.plan,
+    this.features = const {},
     this.onboarding,
   });
+
+  bool hasFeature(String key) => features[key] == true;
 
   factory OwnerModel.fromJson(Map<String, dynamic> json) {
     final onboardingRaw = json['onboarding'];
     final planRaw = json['plan'];
+    final featuresRaw = json['features'];
     final onboarding = onboardingRaw is Map
         ? OwnerOnboarding.fromJson(Map<String, dynamic>.from(onboardingRaw))
         : null;
+
+    final features = <String, bool>{};
+    if (featuresRaw is Map) {
+      featuresRaw.forEach((key, value) {
+        features['$key'] = value == true || value == 1;
+      });
+    }
 
     return OwnerModel(
       id: json['id'] is int
@@ -231,6 +243,7 @@ class OwnerModel {
       plan: planRaw is Map
           ? OwnerPlanInfo.fromJson(Map<String, dynamic>.from(planRaw))
           : null,
+      features: features,
       onboarding: onboarding,
     );
   }
@@ -251,6 +264,7 @@ class OwnerModel {
       'can_create_store': canCreateStore,
       'force_onboarding': forceOnboarding,
       'plan': plan?.toJson(),
+      'features': features,
       'onboarding': onboarding?.toJson(),
     };
   }
@@ -262,6 +276,7 @@ class OwnerModel {
     int? selectedPartnerId,
     bool? canCreateStore,
     bool? forceOnboarding,
+    Map<String, bool>? features,
   }) {
     return OwnerModel(
       id: id,
@@ -278,6 +293,7 @@ class OwnerModel {
       canCreateStore: canCreateStore ?? this.canCreateStore,
       forceOnboarding: forceOnboarding ?? this.forceOnboarding,
       plan: plan,
+      features: features ?? this.features,
       onboarding: onboarding ?? this.onboarding,
     );
   }

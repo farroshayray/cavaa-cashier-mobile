@@ -7,6 +7,7 @@ import 'master_products_page.dart';
 import 'owner_home_page.dart';
 import 'product_form_shared.dart';
 import 'categories_page.dart';
+import 'promotions_page.dart';
 
 const _brand = productBrand;
 const _bg = Color(0xFFF6F7F9);
@@ -826,28 +827,24 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<int?>(
-                        initialValue: _promotionId,
-                        decoration: const InputDecoration(
-                          labelText: 'Promo (opsional)',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('Tanpa promo'),
-                          ),
-                          ..._promotions.map((p) {
-                            final id = int.tryParse('${p['id']}');
-                            return DropdownMenuItem<int?>(
-                              value: id,
-                              child: Text(p['name']?.toString() ?? '-'),
-                            );
-                          }),
-                        ],
-                        onChanged: _saving
-                            ? null
-                            : (v) => setState(() => _promotionId = v),
+                      PromotionSelectWithManage(
+                        promotions: _promotions,
+                        promotionId: _promotionId,
+                        enabled: !_saving,
+                        onChanged: (v) => setState(() => _promotionId = v),
+                        onPromotionsUpdated: (list) {
+                          setState(() {
+                            _promotions = list;
+                            if (_promotionId != null &&
+                                !_promotions.any(
+                                  (p) =>
+                                      int.tryParse('${p['id']}') ==
+                                      _promotionId,
+                                )) {
+                              _promotionId = null;
+                            }
+                          });
+                        },
                       ),
                       const SizedBox(height: 12),
                       TextField(

@@ -794,6 +794,38 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> listAddons() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/addons');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> confirmAddonPurchase({
+    required String productId,
+    required String purchaseToken,
+    String? packageName,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/addons/confirm',
+      data: {
+        'product_id': productId,
+        'purchase_token': purchaseToken,
+        if (packageName != null && packageName.isNotEmpty)
+          'package_name': packageName,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> restoreAddonPurchases(
+    List<Map<String, String>> purchases,
+  ) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/addons/restore',
+      data: {'purchases': purchases},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   OwnerModel? parseUser(Map<String, dynamic> data) {
     final user = data['user'];
     if (user is Map) {

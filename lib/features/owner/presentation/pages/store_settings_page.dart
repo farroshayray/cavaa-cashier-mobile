@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '/core/config/env.dart';
 import '/features/auth/presentation/auth_provider.dart';
+import 'owner_addons_page.dart';
 import 'owner_home_page.dart';
 import 'payment_methods_page.dart';
 import 'store_image_crop_page.dart';
@@ -272,6 +273,42 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
   }
 
   Future<void> _pickLogo() async {
+    final owner = context.read<AuthProvider>().owner;
+    if (owner != null && !owner.hasFeature('feature_receipt_logo')) {
+      if (!mounted) return;
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Fitur berbayar'),
+          content: const Text(
+            'Logo di struk memerlukan add-on atau paket yang mendukung.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Nanti'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: _brand),
+              child: const Text('Lihat Add-on'),
+            ),
+          ],
+        ),
+      );
+      if (go == true && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const OwnerAddonsPage(
+              highlightFeatureKey: 'feature_receipt_logo',
+              highlightAddonCode: 'receipt_logo',
+            ),
+          ),
+        );
+        if (mounted) await context.read<AuthProvider>().refreshOwner();
+      }
+      return;
+    }
     final path = await _pickAndCrop(
       title: 'Crop Logo (1:1)',
       aspectRatio: 1,

@@ -14,6 +14,8 @@ Map<String, dynamic> enrichReceiptOrder(Map<String, dynamic> raw) {
     order['store_is_wifi_shown'] ??= p['is_wifi_shown'];
     order['store_wifi_user'] ??= p['user_wifi'];
     order['store_wifi_password'] ??= p['pass_wifi'];
+    order['store_logo'] ??= p['logo'];
+    order['print_receipt_logo'] ??= p['print_receipt_logo'];
   }
 
   final wifiSnapshot = order['wifi_snapshot'];

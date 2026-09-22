@@ -5,8 +5,11 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '/features/auth/presentation/auth_provider.dart';
+import 'owner_addons_page.dart';
 import 'owner_home_page.dart';
 
 const _brand = Color(0xFFAE1504);
@@ -147,6 +150,43 @@ class _TablesPageState extends State<TablesPage> {
   }
 
   Future<void> _showBarcode(Map<String, dynamic> table) async {
+    final owner = context.read<AuthProvider>().owner;
+    final canScan = owner?.hasFeature('feature_scan_table') ?? false;
+    if (!canScan) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Fitur berbayar'),
+          content: const Text(
+            'QR barcode meja memerlukan add-on Scan barcode table atau paket yang mendukung.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Nanti'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: _brand),
+              child: const Text('Lihat Add-on'),
+            ),
+          ],
+        ),
+      );
+      if (go == true && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const OwnerAddonsPage(
+              highlightFeatureKey: 'feature_scan_table',
+              highlightAddonCode: 'scan_table',
+            ),
+          ),
+        );
+        if (mounted) await context.read<AuthProvider>().refreshOwner();
+      }
+      return;
+    }
+
     final id = int.tryParse('${table['id']}') ?? 0;
     if (id <= 0) return;
 
@@ -194,13 +234,16 @@ class _TablesPageState extends State<TablesPage> {
   @override
   Widget build(BuildContext context) {
     final storeLabel = _storeName ?? 'Toko terpilih';
+    final canScan =
+        context.watch<AuthProvider>().owner?.hasFeature('feature_scan_table') ??
+            false;
 
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
-        title: const Text(
-          'QR Meja',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          canScan ? 'QR Meja' : 'Meja',
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         backgroundColor: _brand,
         foregroundColor: Colors.white,

@@ -15,6 +15,7 @@ import 'employees_page.dart';
 import 'store_settings_page.dart';
 import 'tables_page.dart';
 import 'promotions_page.dart';
+import 'owner_addons_page.dart';
 import '../widgets/owner_mobile_carousel.dart';
 
 const _brand = Color(0xFFAE1504);
@@ -185,6 +186,42 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
     }
   }
 
+  Future<void> _openAddonsPaywall(
+    String message, {
+    String? highlightFeatureKey,
+    String? highlightAddonCode,
+  }) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fitur berbayar'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: _brand),
+            child: const Text('Lihat Add-on'),
+          ),
+        ],
+      ),
+    );
+    if (go == true && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => OwnerAddonsPage(
+            highlightFeatureKey: highlightFeatureKey,
+            highlightAddonCode: highlightAddonCode,
+          ),
+        ),
+      );
+      if (mounted) await context.read<AuthProvider>().refreshOwner();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -206,6 +243,9 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
     final iconSize = width < 600 ? 54.0 : 62.0;
     final iconGlyphSize = width < 600 ? 24.0 : 28.0;
     final labelSize = width < 600 ? 11.5 : 12.5;
+
+    final canPromo = owner?.hasFeature('products_promotions') ?? false;
+    final canScanTable = owner?.hasFeature('feature_scan_table') ?? false;
 
     final menus = <_MenuItemData>[
       _MenuItemData(
@@ -240,9 +280,19 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
       _MenuItemData(
         icon: Icons.local_offer_rounded,
         title: 'Promosi',
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const PromotionsPage()),
-        ),
+        onTap: () {
+          if (!canPromo) {
+            _openAddonsPaywall(
+              'Promosi menu memerlukan add-on atau paket yang mendukung.',
+              highlightFeatureKey: 'products_promotions',
+              highlightAddonCode: 'promotions',
+            );
+            return;
+          }
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PromotionsPage()),
+          );
+        },
       ),
       _MenuItemData(
         icon: Icons.badge_rounded,
@@ -256,13 +306,20 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
       ),
       _MenuItemData(
         icon: Icons.qr_code_2_rounded,
-        title: 'QR\nMeja',
+        title: canScanTable ? 'QR\nMeja' : 'Meja',
         enabled: hasStore,
         onTap: hasStore
             ? () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const TablesPage()),
                 )
             : null,
+      ),
+      _MenuItemData(
+        icon: Icons.extension_rounded,
+        title: 'Add-on',
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const OwnerAddonsPage()),
+        ).then((_) => auth.refreshOwner()),
       ),
     ];
 

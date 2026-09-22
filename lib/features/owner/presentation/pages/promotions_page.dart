@@ -1,6 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '/features/auth/presentation/auth_provider.dart';
+import 'owner_addons_page.dart';
 import 'owner_home_page.dart';
 
 const _brand = Color(0xFFAE1504);
@@ -31,6 +34,15 @@ String _formatDateTime(DateTime? dt) {
   final local = dt.toLocal();
   return '${_pad2(local.day)}/${_pad2(local.month)}/${local.year}, '
       '${_pad2(local.hour)}:${_pad2(local.minute)}';
+}
+
+/// Opens promotions manager and returns refreshed list when closed.
+Future<List<Map<String, dynamic>>?> openPromotionManager(
+  BuildContext context,
+) async {
+  return Navigator.of(context).push<List<Map<String, dynamic>>>(
+    MaterialPageRoute(builder: (_) => const PromotionsPage()),
+  );
 }
 
 class _DateTimeField extends StatelessWidget {
@@ -265,9 +277,33 @@ class _PromotionsPageState extends State<PromotionsPage> {
     return keys.map((k) => _dayLabels[k] ?? k).join(', ');
   }
 
+  Future<void> _popWithResult() async {
+    List<Map<String, dynamic>> result = _promotions;
+    try {
+      final data = await ownerApiOf(context).listPromotions();
+      final list = data['promotions'];
+      if (list is List) {
+        result = list
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {
+      // Fall back to in-memory list (may be filtered).
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _popWithResult();
+      },
+      child: Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
         title: const Text(
@@ -276,6 +312,10 @@ class _PromotionsPageState extends State<PromotionsPage> {
         ),
         backgroundColor: _brand,
         foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _popWithResult,
+        ),
         actions: [
           if (_refreshing)
             const Padding(
@@ -627,6 +667,175 @@ class _PromotionsPageState extends State<PromotionsPage> {
                 ],
               ),
             ),
+      ),
+    );
+  }
+}
+
+/// Promo dropdown + "Kelola promo" action for product forms.
+class PromotionSelectWithManage extends StatelessWidget {
+  const PromotionSelectWithManage({
+    super.key,
+    required this.promotions,
+    required this.promotionId,
+    required this.onChanged,
+    required this.onPromotionsUpdated,
+    this.enabled = true,
+  });
+
+  final List<Map<String, dynamic>> promotions;
+  final int? promotionId;
+  final ValueChanged<int?> onChanged;
+  final ValueChanged<List<Map<String, dynamic>>> onPromotionsUpdated;
+  final bool enabled;
+
+  Future<void> _openPaywall(BuildContext context) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fitur berbayar'),
+        content: const Text(
+          'Kelola promo memerlukan add-on Promosi menu atau paket yang mendukung.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: _brand),
+            child: const Text('Lihat Add-on'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const OwnerAddonsPage(
+          highlightFeatureKey: 'products_promotions',
+          highlightAddonCode: 'promotions',
+        ),
+      ),
+    );
+    if (context.mounted) {
+      await context.read<AuthProvider>().refreshOwner();
+    }
+  }
+
+  Future<void> _manage(BuildContext context) async {
+    final canPromo =
+        context.read<AuthProvider>().owner?.hasFeature('products_promotions') ??
+            false;
+    if (!canPromo) {
+      await _openPaywall(context);
+      return;
+    }
+    final result = await openPromotionManager(context);
+    if (result == null) return;
+    onPromotionsUpdated(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canPromo =
+        context.watch<AuthProvider>().owner?.hasFeature('products_promotions') ??
+            false;
+    final validId = promotionId != null &&
+            promotions.any((p) => int.tryParse('${p['id']}') == promotionId)
+        ? promotionId
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Promo',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: enabled ? () => _manage(context) : null,
+              style: TextButton.styleFrom(
+                foregroundColor: _brand,
+                visualDensity: VisualDensity.compact,
+              ),
+              icon: Icon(
+                canPromo ? Icons.tune_rounded : Icons.lock_outline_rounded,
+                size: 18,
+              ),
+              label: const Text(
+                'Kelola promo',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<int?>(
+          key: ValueKey(
+            'promo-dd-${promotions.map((p) => p['id']).join('-')}-$validId',
+          ),
+          initialValue: validId,
+          decoration: const InputDecoration(
+            hintText: 'Pilih promo (opsional)',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem<int?>(
+              value: null,
+              child: Text('Tanpa promo'),
+            ),
+            ...promotions.map((p) {
+              final id = int.tryParse('${p['id']}');
+              if (id == null) return null;
+              final name =
+                  p['name']?.toString() ?? p['promotion_name']?.toString();
+              return DropdownMenuItem<int?>(
+                value: id,
+                child: Text(name ?? '-'),
+              );
+            }).whereType<DropdownMenuItem<int?>>(),
+          ],
+          onChanged: enabled ? onChanged : null,
+        ),
+        if (!canPromo) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFFDBA74)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: Color(0xFFC2410C),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Membuat & mengelola promo memerlukan add-on. Ketuk “Kelola promo” untuk melihatnya.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: Colors.brown.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
