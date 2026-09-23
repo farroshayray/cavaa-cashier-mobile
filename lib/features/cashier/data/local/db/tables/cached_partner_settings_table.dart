@@ -9,6 +9,9 @@ class CachedPartnerSettings extends Table {
   RealColumn get ppn => real().withDefault(const Constant(0))();
   BoolColumn get isPpnActive => boolean().withDefault(const Constant(false))();
   IntColumn get cashRoundingUnit => integer().withDefault(const Constant(0))();
+  TextColumn get logo => text().nullable()();
+  BoolColumn get printReceiptLogo =>
+      boolean().withDefault(const Constant(false))();
   DateTimeColumn get cachedAt => dateTime()();
 
   @override

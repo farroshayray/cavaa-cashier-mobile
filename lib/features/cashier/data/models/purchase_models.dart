@@ -153,6 +153,8 @@ class PartnerData {
   final String? wifiUser;
   final String? wifiPassword;
   final String? address;
+  final String? logo;
+  final bool printReceiptLogo;
 
   PartnerData({
     required this.id,
@@ -167,6 +169,8 @@ class PartnerData {
     this.wifiUser,
     this.wifiPassword,
     this.address,
+    this.logo,
+    this.printReceiptLogo = false,
   });
 
   factory PartnerData.fromJson(Map<String, dynamic> json) {
@@ -183,7 +187,18 @@ class PartnerData {
       wifiUser: json['user_wifi']?.toString(),
       wifiPassword: json['pass_wifi']?.toString(),
       address: json['address']?.toString(),
+      logo: json['logo']?.toString(),
+      printReceiptLogo: parseBool(json['print_receipt_logo']),
     );
+  }
+
+  void applyReceiptLogo(Map<String, dynamic> order) {
+    if (order['print_receipt_logo'] != null) return;
+    order['print_receipt_logo'] = printReceiptLogo;
+    final path = (logo ?? '').trim();
+    if (printReceiptLogo && path.isNotEmpty) {
+      order['store_logo'] ??= path;
+    }
   }
 
   Map<String, dynamic> toWifiSnapshotMap() {

@@ -16,6 +16,7 @@ import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
 
@@ -119,7 +120,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     cloned['employee_name'] ??= '-';
     cloned['order_details'] ??= <dynamic>[];
 
-    return enrichOfflinePrintOrder(cloned);
+    final printable = enrichOfflinePrintOrder(cloned);
+    context.read<PurchaseProvider>().partnerData?.applyReceiptLogo(printable);
+    return printable;
   }
 
   bool get _isCaseA {

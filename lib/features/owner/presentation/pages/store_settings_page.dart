@@ -68,6 +68,7 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
   bool _isCashierActive = true;
   bool _isOpenbill = false;
   bool _isWifiShown = false;
+  bool _showReceiptLogo = false;
   bool _isPpnActive = false;
   int _cashRoundingUnit = 0;
 
@@ -181,6 +182,8 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         _isOpenbill = s['is_openbill'] == true || s['is_openbill'] == 1;
         _isWifiShown =
             s['is_wifi_shown'] == true || s['is_wifi_shown'] == 1;
+        _showReceiptLogo =
+            s['show_receipt_logo'] == true || s['show_receipt_logo'] == 1;
         _isPpnActive =
             s['is_ppn_active'] == true || s['is_ppn_active'] == 1;
         _cashRoundingUnit =
@@ -404,6 +407,7 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         userWifi: _wifiUser.text.trim(),
         passWifi: _wifiPass.text.trim(),
         isWifiShown: _isWifiShown,
+        showReceiptLogo: _showReceiptLogo,
         isPpnActive: _isPpnActive,
         ppn: num.tryParse(_ppn.text.trim()) ?? 0,
         cashRoundingUnit: _cashRoundingUnit,
@@ -964,11 +968,42 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                     ),
                     const SizedBox(height: 12),
                     _SectionCard(
-                      title: 'WiFi toko',
+                      title: 'Struk',
                       expanded: _expandedSections.contains('wifi'),
                       onToggle: () => _toggleSection('wifi'),
                       child: Column(
                         children: [
+                          SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            value: _showReceiptLogo &&
+                                (context.read<AuthProvider>().owner?.hasFeature(
+                                      'feature_receipt_logo',
+                                    ) ??
+                                    false),
+                            activeTrackColor: _brand.withValues(alpha: 0.45),
+                            activeThumbColor: _brand,
+                            title: const Text(
+                              'Tampilkan logo di struk',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: Text(
+                              (context.read<AuthProvider>().owner?.hasFeature(
+                                        'feature_receipt_logo',
+                                      ) ??
+                                      false)
+                                  ? 'Logo toko dicetak bila file logo sudah diunggah.'
+                                  : 'Aktifkan add-on atau paket yang mencakup logo di struk.',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: Colors.black.withValues(alpha: 0.55),
+                              ),
+                            ),
+                            onChanged: (context.read<AuthProvider>().owner
+                                        ?.hasFeature('feature_receipt_logo') ??
+                                    false)
+                                ? (v) => setState(() => _showReceiptLogo = v)
+                                : null,
+                          ),
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
                             value: _isWifiShown,

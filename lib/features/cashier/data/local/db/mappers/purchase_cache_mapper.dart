@@ -264,6 +264,8 @@ class PurchaseCacheMapper {
       ppn: Value(p.ppn.toDouble()),
       isPpnActive: Value(p.isPpnActive),
       cashRoundingUnit: Value(p.cashRoundingUnit),
+      logo: Value(p.logo),
+      printReceiptLogo: Value(p.printReceiptLogo),
       cachedAt: DateTime.now(),
     );
   }
@@ -278,6 +280,8 @@ class PurchaseCacheMapper {
       ppn: row.ppn,
       isPpnActive: row.isPpnActive,
       cashRoundingUnit: row.cashRoundingUnit,
+      logo: row.logo,
+      printReceiptLogo: row.printReceiptLogo,
     );
   }
 

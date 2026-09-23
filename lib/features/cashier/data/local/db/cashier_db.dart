@@ -52,7 +52,7 @@ class CashierDb extends _$CashierDb {
   CashierDb.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -88,6 +88,14 @@ class CashierDb extends _$CashierDb {
             // (payment sync used to bump updated_at to now() locally).
             await m.database.customStatement(
               "DELETE FROM sync_meta WHERE key = 'last_sync_token'",
+            );
+          }
+          if (from < 17) {
+            await m.database.customStatement(
+              'ALTER TABLE cached_partner_settings ADD COLUMN logo TEXT',
+            );
+            await m.database.customStatement(
+              'ALTER TABLE cached_partner_settings ADD COLUMN print_receipt_logo INTEGER NOT NULL DEFAULT 0',
             );
           }
         },

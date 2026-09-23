@@ -78,7 +78,7 @@ class ReceiptPrinter {
         order['print_receipt_logo'] == 1 ||
         order['print_receipt_logo'] == '1';
     if (printLogo) {
-      final logoBytes = await _loadStoreLogoBytes(order);
+      final logoBytes = await loadStoreLogoBytes(order);
       if (logoBytes != null) {
         try {
           final decoded = img.decodeImage(logoBytes);
@@ -243,7 +243,7 @@ class ReceiptPrinter {
     return bytes;
   }
 
-  Future<Uint8List?> _loadStoreLogoBytes(Map<String, dynamic> order) async {
+  Future<Uint8List?> loadStoreLogoBytes(Map<String, dynamic> order) async {
     final raw = (order['store_logo'] ?? order['logo'] ?? '').toString().trim();
     if (raw.isEmpty) return null;
     try {

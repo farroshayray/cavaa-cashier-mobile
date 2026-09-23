@@ -4086,6 +4086,30 @@ class $CachedPartnerSettingsTable extends CachedPartnerSettings
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _logoMeta = const VerificationMeta('logo');
+  @override
+  late final GeneratedColumn<String> logo = GeneratedColumn<String>(
+    'logo',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _printReceiptLogoMeta = const VerificationMeta(
+    'printReceiptLogo',
+  );
+  @override
+  late final GeneratedColumn<bool> printReceiptLogo = GeneratedColumn<bool>(
+    'print_receipt_logo',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("print_receipt_logo" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _cachedAtMeta = const VerificationMeta(
     'cachedAt',
   );
@@ -4107,6 +4131,8 @@ class $CachedPartnerSettingsTable extends CachedPartnerSettings
     ppn,
     isPpnActive,
     cashRoundingUnit,
+    logo,
+    printReceiptLogo,
     cachedAt,
   ];
   @override
@@ -4183,6 +4209,21 @@ class $CachedPartnerSettingsTable extends CachedPartnerSettings
         ),
       );
     }
+    if (data.containsKey('logo')) {
+      context.handle(
+        _logoMeta,
+        logo.isAcceptableOrUnknown(data['logo']!, _logoMeta),
+      );
+    }
+    if (data.containsKey('print_receipt_logo')) {
+      context.handle(
+        _printReceiptLogoMeta,
+        printReceiptLogo.isAcceptableOrUnknown(
+          data['print_receipt_logo']!,
+          _printReceiptLogoMeta,
+        ),
+      );
+    }
     if (data.containsKey('cached_at')) {
       context.handle(
         _cachedAtMeta,
@@ -4232,6 +4273,14 @@ class $CachedPartnerSettingsTable extends CachedPartnerSettings
         DriftSqlType.int,
         data['${effectivePrefix}cash_rounding_unit'],
       )!,
+      logo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}logo'],
+      ),
+      printReceiptLogo: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}print_receipt_logo'],
+      )!,
       cachedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}cached_at'],
@@ -4255,6 +4304,8 @@ class CachedPartnerSetting extends DataClass
   final double ppn;
   final bool isPpnActive;
   final int cashRoundingUnit;
+  final String? logo;
+  final bool printReceiptLogo;
   final DateTime cachedAt;
   const CachedPartnerSetting({
     required this.partnerId,
@@ -4265,6 +4316,8 @@ class CachedPartnerSetting extends DataClass
     required this.ppn,
     required this.isPpnActive,
     required this.cashRoundingUnit,
+    this.logo,
+    required this.printReceiptLogo,
     required this.cachedAt,
   });
   @override
@@ -4278,6 +4331,10 @@ class CachedPartnerSetting extends DataClass
     map['ppn'] = Variable<double>(ppn);
     map['is_ppn_active'] = Variable<bool>(isPpnActive);
     map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit);
+    if (!nullToAbsent || logo != null) {
+      map['logo'] = Variable<String>(logo);
+    }
+    map['print_receipt_logo'] = Variable<bool>(printReceiptLogo);
     map['cached_at'] = Variable<DateTime>(cachedAt);
     return map;
   }
@@ -4292,6 +4349,8 @@ class CachedPartnerSetting extends DataClass
       ppn: Value(ppn),
       isPpnActive: Value(isPpnActive),
       cashRoundingUnit: Value(cashRoundingUnit),
+      logo: logo == null && nullToAbsent ? const Value.absent() : Value(logo),
+      printReceiptLogo: Value(printReceiptLogo),
       cachedAt: Value(cachedAt),
     );
   }
@@ -4310,6 +4369,8 @@ class CachedPartnerSetting extends DataClass
       ppn: serializer.fromJson<double>(json['ppn']),
       isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
       cashRoundingUnit: serializer.fromJson<int>(json['cashRoundingUnit']),
+      logo: serializer.fromJson<String?>(json['logo']),
+      printReceiptLogo: serializer.fromJson<bool>(json['printReceiptLogo']),
       cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
     );
   }
@@ -4325,6 +4386,8 @@ class CachedPartnerSetting extends DataClass
       'ppn': serializer.toJson<double>(ppn),
       'isPpnActive': serializer.toJson<bool>(isPpnActive),
       'cashRoundingUnit': serializer.toJson<int>(cashRoundingUnit),
+      'logo': serializer.toJson<String?>(logo),
+      'printReceiptLogo': serializer.toJson<bool>(printReceiptLogo),
       'cachedAt': serializer.toJson<DateTime>(cachedAt),
     };
   }
@@ -4338,6 +4401,8 @@ class CachedPartnerSetting extends DataClass
     double? ppn,
     bool? isPpnActive,
     int? cashRoundingUnit,
+    Value<String?> logo = const Value.absent(),
+    bool? printReceiptLogo,
     DateTime? cachedAt,
   }) => CachedPartnerSetting(
     partnerId: partnerId ?? this.partnerId,
@@ -4348,6 +4413,8 @@ class CachedPartnerSetting extends DataClass
     ppn: ppn ?? this.ppn,
     isPpnActive: isPpnActive ?? this.isPpnActive,
     cashRoundingUnit: cashRoundingUnit ?? this.cashRoundingUnit,
+    logo: logo.present ? logo.value : this.logo,
+    printReceiptLogo: printReceiptLogo ?? this.printReceiptLogo,
     cachedAt: cachedAt ?? this.cachedAt,
   );
   CachedPartnerSetting copyWithCompanion(CachedPartnerSettingsCompanion data) {
@@ -4370,6 +4437,10 @@ class CachedPartnerSetting extends DataClass
       cashRoundingUnit: data.cashRoundingUnit.present
           ? data.cashRoundingUnit.value
           : this.cashRoundingUnit,
+      logo: data.logo.present ? data.logo.value : this.logo,
+      printReceiptLogo: data.printReceiptLogo.present
+          ? data.printReceiptLogo.value
+          : this.printReceiptLogo,
       cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
     );
   }
@@ -4385,6 +4456,8 @@ class CachedPartnerSetting extends DataClass
           ..write('ppn: $ppn, ')
           ..write('isPpnActive: $isPpnActive, ')
           ..write('cashRoundingUnit: $cashRoundingUnit, ')
+          ..write('logo: $logo, ')
+          ..write('printReceiptLogo: $printReceiptLogo, ')
           ..write('cachedAt: $cachedAt')
           ..write(')'))
         .toString();
@@ -4400,6 +4473,8 @@ class CachedPartnerSetting extends DataClass
     ppn,
     isPpnActive,
     cashRoundingUnit,
+    logo,
+    printReceiptLogo,
     cachedAt,
   );
   @override
@@ -4414,6 +4489,8 @@ class CachedPartnerSetting extends DataClass
           other.ppn == this.ppn &&
           other.isPpnActive == this.isPpnActive &&
           other.cashRoundingUnit == this.cashRoundingUnit &&
+          other.logo == this.logo &&
+          other.printReceiptLogo == this.printReceiptLogo &&
           other.cachedAt == this.cachedAt);
 }
 
@@ -4427,6 +4504,8 @@ class CachedPartnerSettingsCompanion
   final Value<double> ppn;
   final Value<bool> isPpnActive;
   final Value<int> cashRoundingUnit;
+  final Value<String?> logo;
+  final Value<bool> printReceiptLogo;
   final Value<DateTime> cachedAt;
   const CachedPartnerSettingsCompanion({
     this.partnerId = const Value.absent(),
@@ -4437,6 +4516,8 @@ class CachedPartnerSettingsCompanion
     this.ppn = const Value.absent(),
     this.isPpnActive = const Value.absent(),
     this.cashRoundingUnit = const Value.absent(),
+    this.logo = const Value.absent(),
+    this.printReceiptLogo = const Value.absent(),
     this.cachedAt = const Value.absent(),
   });
   CachedPartnerSettingsCompanion.insert({
@@ -4448,6 +4529,8 @@ class CachedPartnerSettingsCompanion
     this.ppn = const Value.absent(),
     this.isPpnActive = const Value.absent(),
     this.cashRoundingUnit = const Value.absent(),
+    this.logo = const Value.absent(),
+    this.printReceiptLogo = const Value.absent(),
     required DateTime cachedAt,
   }) : name = Value(name),
        cachedAt = Value(cachedAt);
@@ -4460,6 +4543,8 @@ class CachedPartnerSettingsCompanion
     Expression<double>? ppn,
     Expression<bool>? isPpnActive,
     Expression<int>? cashRoundingUnit,
+    Expression<String>? logo,
+    Expression<bool>? printReceiptLogo,
     Expression<DateTime>? cachedAt,
   }) {
     return RawValuesInsertable({
@@ -4471,6 +4556,8 @@ class CachedPartnerSettingsCompanion
       if (ppn != null) 'ppn': ppn,
       if (isPpnActive != null) 'is_ppn_active': isPpnActive,
       if (cashRoundingUnit != null) 'cash_rounding_unit': cashRoundingUnit,
+      if (logo != null) 'logo': logo,
+      if (printReceiptLogo != null) 'print_receipt_logo': printReceiptLogo,
       if (cachedAt != null) 'cached_at': cachedAt,
     });
   }
@@ -4484,6 +4571,8 @@ class CachedPartnerSettingsCompanion
     Value<double>? ppn,
     Value<bool>? isPpnActive,
     Value<int>? cashRoundingUnit,
+    Value<String?>? logo,
+    Value<bool>? printReceiptLogo,
     Value<DateTime>? cachedAt,
   }) {
     return CachedPartnerSettingsCompanion(
@@ -4495,6 +4584,8 @@ class CachedPartnerSettingsCompanion
       ppn: ppn ?? this.ppn,
       isPpnActive: isPpnActive ?? this.isPpnActive,
       cashRoundingUnit: cashRoundingUnit ?? this.cashRoundingUnit,
+      logo: logo ?? this.logo,
+      printReceiptLogo: printReceiptLogo ?? this.printReceiptLogo,
       cachedAt: cachedAt ?? this.cachedAt,
     );
   }
@@ -4526,6 +4617,12 @@ class CachedPartnerSettingsCompanion
     if (cashRoundingUnit.present) {
       map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit.value);
     }
+    if (logo.present) {
+      map['logo'] = Variable<String>(logo.value);
+    }
+    if (printReceiptLogo.present) {
+      map['print_receipt_logo'] = Variable<bool>(printReceiptLogo.value);
+    }
     if (cachedAt.present) {
       map['cached_at'] = Variable<DateTime>(cachedAt.value);
     }
@@ -4543,6 +4640,8 @@ class CachedPartnerSettingsCompanion
           ..write('ppn: $ppn, ')
           ..write('isPpnActive: $isPpnActive, ')
           ..write('cashRoundingUnit: $cashRoundingUnit, ')
+          ..write('logo: $logo, ')
+          ..write('printReceiptLogo: $printReceiptLogo, ')
           ..write('cachedAt: $cachedAt')
           ..write(')'))
         .toString();
@@ -13104,6 +13203,8 @@ typedef $$CachedPartnerSettingsTableCreateCompanionBuilder =
       Value<double> ppn,
       Value<bool> isPpnActive,
       Value<int> cashRoundingUnit,
+      Value<String?> logo,
+      Value<bool> printReceiptLogo,
       required DateTime cachedAt,
     });
 typedef $$CachedPartnerSettingsTableUpdateCompanionBuilder =
@@ -13116,6 +13217,8 @@ typedef $$CachedPartnerSettingsTableUpdateCompanionBuilder =
       Value<double> ppn,
       Value<bool> isPpnActive,
       Value<int> cashRoundingUnit,
+      Value<String?> logo,
+      Value<bool> printReceiptLogo,
       Value<DateTime> cachedAt,
     });
 
@@ -13165,6 +13268,16 @@ class $$CachedPartnerSettingsTableFilterComposer
 
   ColumnFilters<int> get cashRoundingUnit => $composableBuilder(
     column: $table.cashRoundingUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get logo => $composableBuilder(
+    column: $table.logo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get printReceiptLogo => $composableBuilder(
+    column: $table.printReceiptLogo,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13223,6 +13336,16 @@ class $$CachedPartnerSettingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get logo => $composableBuilder(
+    column: $table.logo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get printReceiptLogo => $composableBuilder(
+    column: $table.printReceiptLogo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
     column: $table.cachedAt,
     builder: (column) => ColumnOrderings(column),
@@ -13269,6 +13392,14 @@ class $$CachedPartnerSettingsTableAnnotationComposer
 
   GeneratedColumn<int> get cashRoundingUnit => $composableBuilder(
     column: $table.cashRoundingUnit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get logo =>
+      $composableBuilder(column: $table.logo, builder: (column) => column);
+
+  GeneratedColumn<bool> get printReceiptLogo => $composableBuilder(
+    column: $table.printReceiptLogo,
     builder: (column) => column,
   );
 
@@ -13330,6 +13461,8 @@ class $$CachedPartnerSettingsTableTableManager
                 Value<double> ppn = const Value.absent(),
                 Value<bool> isPpnActive = const Value.absent(),
                 Value<int> cashRoundingUnit = const Value.absent(),
+                Value<String?> logo = const Value.absent(),
+                Value<bool> printReceiptLogo = const Value.absent(),
                 Value<DateTime> cachedAt = const Value.absent(),
               }) => CachedPartnerSettingsCompanion(
                 partnerId: partnerId,
@@ -13340,6 +13473,8 @@ class $$CachedPartnerSettingsTableTableManager
                 ppn: ppn,
                 isPpnActive: isPpnActive,
                 cashRoundingUnit: cashRoundingUnit,
+                logo: logo,
+                printReceiptLogo: printReceiptLogo,
                 cachedAt: cachedAt,
               ),
           createCompanionCallback:
@@ -13352,6 +13487,8 @@ class $$CachedPartnerSettingsTableTableManager
                 Value<double> ppn = const Value.absent(),
                 Value<bool> isPpnActive = const Value.absent(),
                 Value<int> cashRoundingUnit = const Value.absent(),
+                Value<String?> logo = const Value.absent(),
+                Value<bool> printReceiptLogo = const Value.absent(),
                 required DateTime cachedAt,
               }) => CachedPartnerSettingsCompanion.insert(
                 partnerId: partnerId,
@@ -13362,6 +13499,8 @@ class $$CachedPartnerSettingsTableTableManager
                 ppn: ppn,
                 isPpnActive: isPpnActive,
                 cashRoundingUnit: cashRoundingUnit,
+                logo: logo,
+                printReceiptLogo: printReceiptLogo,
                 cachedAt: cachedAt,
               ),
           withReferenceMapper: (p0) => p0

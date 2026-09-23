@@ -5,6 +5,8 @@ import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
 import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
 import '/features/cashier/data/sync/order_detail_resolver.dart';
 import '/features/cashier/data/sync/order_tab_item_mapper.dart';
+import '/features/cashier/data/local/db/daos/cache_dao.dart';
+import '/features/cashier/data/local/db/mappers/purchase_cache_mapper.dart';
 import '/features/cashier/presentation/printing/offline_print_enricher.dart';
 import '/features/cashier/presentation/utils/order_tab_sort.dart';
 import '/core/services/connectivity_status_provider.dart';
@@ -192,7 +194,18 @@ class DoneProvider extends ChangeNotifier {
         return await repo.fetchPrintDetail(serverId);
       } catch (_) {}
     }
-    return enrichOfflinePrintOrder(hydratedDetail);
+    return _withCachedReceiptLogo(enrichOfflinePrintOrder(hydratedDetail));
+  }
+
+  Future<Map<String, dynamic>> _withCachedReceiptLogo(
+    Map<String, dynamic> order,
+  ) async {
+    if (order['print_receipt_logo'] != null) return order;
+    final settings = await CacheDao(bookingOrdersDao.db).getPartnerSettings();
+    if (settings == null) return order;
+    PurchaseCacheMapper.fromCachedPartnerSettings(settings)
+        .applyReceiptLogo(order);
+    return order;
   }
 
   int _toId(dynamic value) {

@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import 'receipt_format_helpers.dart';
 import 'receipt_order_enricher.dart';
+import 'receipt_printer.dart';
 import 'receipt_totals.dart';
 
 /// PDF receipt aligned with thermal output in [ReceiptPrinter].
@@ -23,11 +24,17 @@ class ReceiptPdfBuilder {
     ReceiptTotals? totals,
   }) async {
     final resolvedTotals = totals ?? buildReceiptTotals(order);
-    final widgets = _buildContent(order: order, totals: resolvedTotals);
+    final logo = await _logoBytes(order);
+    final widgets = _buildContent(
+      order: order,
+      totals: resolvedTotals,
+      logo: logo,
+    );
     final pageHeight = _estimatePageHeight(
       order: order,
       totals: resolvedTotals,
       widgetCount: widgets.length,
+      hasLogo: logo != null,
     );
 
     final doc = pw.Document();
@@ -51,9 +58,18 @@ class ReceiptPdfBuilder {
     return doc.save();
   }
 
+  Future<Uint8List?> _logoBytes(Map<String, dynamic> order) async {
+    final printLogo = order['print_receipt_logo'] == true ||
+        order['print_receipt_logo'] == 1 ||
+        order['print_receipt_logo'] == '1';
+    if (!printLogo) return null;
+    return ReceiptPrinter().loadStoreLogoBytes(order);
+  }
+
   List<pw.Widget> _buildContent({
     required Map<String, dynamic> order,
     required ReceiptTotals totals,
+    Uint8List? logo,
   }) {
     final code = (order['booking_order_code'] ?? '-').toString();
     final customer = (order['customer_name'] ?? '-').toString();
@@ -67,6 +83,16 @@ class ReceiptPdfBuilder {
     final wifiPass = (order['store_wifi_password'] ?? '').toString().trim();
 
     return [
+      if (logo != null) ...[
+        pw.Center(
+          child: pw.Image(
+            pw.MemoryImage(logo),
+            height: 56,
+            fit: pw.BoxFit.contain,
+          ),
+        ),
+        pw.SizedBox(height: 6),
+      ],
       pw.Center(
         child: pw.Text(storeName, style: _monoBold, textAlign: pw.TextAlign.center),
       ),
@@ -183,8 +209,9 @@ class ReceiptPdfBuilder {
     required Map<String, dynamic> order,
     required ReceiptTotals totals,
     required int widgetCount,
+    bool hasLogo = false,
   }) {
-    var lines = 16.0;
+    var lines = hasLogo ? 21.0 : 16.0;
     if ((order['store_address'] ?? '').toString().trim().isNotEmpty) lines += 1;
     if (receiptFormatTime(receiptPaidAtRaw(order)).isNotEmpty) lines += 1;
     if (totals.isPpnActive) lines += 1;
