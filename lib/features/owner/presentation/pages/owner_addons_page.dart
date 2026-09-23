@@ -10,6 +10,56 @@ import '/core/utils/open_url.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
 
+const _monthShort = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'Mei',
+  'Jun',
+  'Jul',
+  'Agu',
+  'Sep',
+  'Okt',
+  'Nov',
+  'Des',
+];
+
+class _ExpiryLine {
+  const _ExpiryLine(this.text, {this.warning = false});
+
+  final String text;
+  final bool warning;
+}
+
+DateTime? _parseExpiry(Object? raw) {
+  final text = (raw ?? '').toString();
+  if (text.isEmpty) return null;
+  return DateTime.tryParse(text)?.toLocal();
+}
+
+String _formatIdDate(DateTime date) {
+  return '${date.day} ${_monthShort[date.month - 1]} ${date.year}';
+}
+
+_ExpiryLine _expiryLine(DateTime date, {required String untilPrefix}) {
+  final day = DateTime(date.year, date.month, date.day);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final days = day.difference(today).inDays;
+  if (days <= 0) {
+    return const _ExpiryLine('Berakhir hari ini', warning: true);
+  }
+  final formatted = _formatIdDate(date);
+  if (days <= 7) {
+    return _ExpiryLine(
+      'Berakhir $formatted · $days hari lagi',
+      warning: true,
+    );
+  }
+  return _ExpiryLine('$untilPrefix $formatted');
+}
+
 class OwnerAddonsPage extends StatefulWidget {
   const OwnerAddonsPage({
     super.key,
@@ -193,6 +243,45 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       _allowPlay = billing['play'] == true;
       _allowManual = billing['manual'] == true;
     }
+  }
+
+  _ExpiryLine _currentPlanLine() {
+    final current = _currentPlan;
+    if (current == null) {
+      return const _ExpiryLine('Paket sedang aktif.');
+    }
+    if (current['is_mobile_free'] == true) {
+      return const _ExpiryLine('Tanpa batas waktu');
+    }
+    final parsed = _parseExpiry(current['expires_at']);
+    if (parsed == null) {
+      return const _ExpiryLine('Paket berbayar sedang aktif.');
+    }
+    return _expiryLine(parsed, untilPrefix: 'Aktif sampai');
+  }
+
+  _ExpiryLine? _addonExpiryLine(Map<String, dynamic> addon, {required bool isSub}) {
+    final entitlement = addon['entitlement_active'] == true;
+    final covered = addon['covered_by_plan'] == true;
+    if (entitlement && isSub) {
+      final parsed = _parseExpiry(addon['expires_at']);
+      if (parsed != null) {
+        return _expiryLine(parsed, untilPrefix: 'Aktif sampai');
+      }
+    }
+    if (entitlement && !isSub) {
+      return const _ExpiryLine('Berlaku selamanya');
+    }
+    if (covered) {
+      final current = _currentPlan;
+      final planFree = current?['is_mobile_free'] == true;
+      final planExpiry = _parseExpiry(current?['expires_at']);
+      if (!planFree && planExpiry != null) {
+        return _expiryLine(planExpiry, untilPrefix: 'Termasuk paket sampai');
+      }
+      return const _ExpiryLine('Termasuk paket');
+    }
+    return null;
   }
 
   bool _canPayPlan(Map<String, dynamic> plan, bool hasSku) {
@@ -529,6 +618,10 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                   ),
                 ),
               ],
+              if (isCurrent) ...[
+                const SizedBox(height: 8),
+                _ExpiryText(line: _currentPlanLine()),
+              ],
               const SizedBox(height: 10),
               Text.rich(
                 TextSpan(
@@ -777,6 +870,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                             (addon['status_label'] ?? '').toString();
                         final overlap =
                             addon['overlapping_subscription'] == true;
+                        final expiry = _addonExpiryLine(addon, isSub: isSub);
 
                         final card = Padding(
                           padding: const EdgeInsets.only(bottom: 14),
@@ -791,7 +885,8 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                             highlighted: highlighted,
                             covered: covered,
                             owned: owned,
-                            statusLabel: status,
+                            statusLabel: expiry == null ? status : '',
+                            expiry: expiry,
                             overlapping: overlap,
                             ctaLabel: _ctaLabel(
                               covered: covered,
@@ -996,16 +1091,15 @@ class _CurrentPlanBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = (plan['name'] ?? 'Paket').toString();
     final isFree = plan['is_mobile_free'] == true;
-    final expires = (plan['expires_at'] ?? '').toString();
-    final parsed = DateTime.tryParse(expires);
-    final expiryLabel = parsed == null
-        ? expires
-        : '${parsed.toLocal().day}/${parsed.toLocal().month}/${parsed.toLocal().year}';
-    final subtitle = isFree
-        ? 'Paket gratis aplikasi kasir. Upgrade kapan saja.'
-        : expires.isEmpty
-            ? 'Paket berbayar sedang aktif.'
-            : 'Berlaku sampai $expiryLabel';
+    final parsed = _parseExpiry(plan['expires_at']);
+    final _ExpiryLine line;
+    if (isFree) {
+      line = const _ExpiryLine('Tanpa batas waktu');
+    } else if (parsed == null) {
+      line = const _ExpiryLine('Paket berbayar sedang aktif.');
+    } else {
+      line = _expiryLine(parsed, untilPrefix: 'Aktif sampai');
+    }
 
     return Container(
       width: double.infinity,
@@ -1031,18 +1125,30 @@ class _CurrentPlanBanner extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: Colors.grey.shade700,
-                    height: 1.3,
-                  ),
-                ),
+                _ExpiryText(line: line),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ExpiryText extends StatelessWidget {
+  const _ExpiryText({required this.line});
+
+  final _ExpiryLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      line.text,
+      style: TextStyle(
+        fontSize: 12.5,
+        fontWeight: line.warning ? FontWeight.w800 : FontWeight.w600,
+        color: line.warning ? const Color(0xFFC2410C) : Colors.grey.shade700,
+        height: 1.3,
       ),
     );
   }
@@ -1154,6 +1260,7 @@ class _AddonCard extends StatelessWidget {
     required this.covered,
     required this.owned,
     required this.statusLabel,
+    this.expiry,
     required this.overlapping,
     required this.ctaLabel,
     required this.canBuy,
@@ -1170,6 +1277,7 @@ class _AddonCard extends StatelessWidget {
   final bool covered;
   final bool owned;
   final String statusLabel;
+  final _ExpiryLine? expiry;
   final bool overlapping;
   final String ctaLabel;
   final bool canBuy;
@@ -1356,7 +1464,7 @@ class _AddonCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (statusLabel.isNotEmpty)
+                      if (statusLabel.isNotEmpty && expiry == null)
                         Flexible(
                           child: Text(
                             statusLabel,
@@ -1373,6 +1481,10 @@ class _AddonCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (expiry != null) ...[
+                  const SizedBox(height: 8),
+                  _ExpiryText(line: expiry!),
+                ],
                 if (overlapping) ...[
                   const SizedBox(height: 10),
                   const Text(
