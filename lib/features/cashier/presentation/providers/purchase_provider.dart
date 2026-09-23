@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../../data/models/checkout_exceptions.dart';
 import '../../data/models/purchase_models.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
 import '/features/cashier/data/models/purchase_repository.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import 'dart:convert';
@@ -311,6 +312,11 @@ class PurchaseProvider extends ChangeNotifier {
     required String paymentMethod,
     required PaymentOption payment,
   }) async {
+    if (paymentMethod != 'CASH' &&
+        paymentMethod != 'OPENBILL' &&
+        !CashierShiftGate.canTakePayment) {
+      throw Exception(CashierShiftGate.blockedMessage);
+    }
     final normalizedCustomerName = customerName;
 
     final localOrderId = await _saveOrderToMirror(

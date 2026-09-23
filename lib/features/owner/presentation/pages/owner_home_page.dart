@@ -8,6 +8,7 @@ import '/features/auth/data/models/owner_model.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/auth/presentation/pages/login_page.dart';
 import '/features/cashier/presentation/pages/cashier_home_page.dart';
+import '/features/cashier/presentation/providers/notifications_provider.dart';
 import '/core/network/dio_client.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '../../data/owner_api.dart';
@@ -17,6 +18,7 @@ import 'payment_methods_page.dart';
 import 'employees_page.dart';
 import 'store_settings_page.dart';
 import 'tables_page.dart';
+import 'owner_cash_book_page.dart';
 import 'promotions_page.dart';
 import 'owner_addons_page.dart';
 import '../widgets/owner_mobile_carousel.dart';
@@ -31,31 +33,76 @@ class OwnerHomePage extends StatefulWidget {
   State<OwnerHomePage> createState() => _OwnerHomePageState();
 }
 
-class _OwnerHomePageState extends State<OwnerHomePage> {
+class _OwnerHomePageState extends State<OwnerHomePage>
+    with WidgetsBindingObserver {
   bool _routingChecked = false;
   bool _selectingStore = false;
   List<Map<String, dynamic>> _carousels = [];
   StreamSubscription<Map<String, dynamic>>? _billingNotifSub;
+  int _pendingCashBooks = 0;
+  String _cashBookStoreName = '';
+  List<Map<String, dynamic>> _otherCashBookStores = [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _billingNotifSub = PushNotificationService.instance.onMessageReceived.listen(
       (data) {
         final type = (data['type'] ?? '').toString();
-        if (type != 'billing_approved' && type != 'billing_rejected') return;
+        if (type == 'billing_approved' || type == 'billing_rejected') {
+          if (!mounted) return;
+          context.read<AuthProvider>().refreshOwner();
+          return;
+        }
+        if (type != 'new_order') return;
+        if ((data['order_by'] ?? '').toString().toUpperCase() == 'CASHIER') {
+          return;
+        }
         if (!mounted) return;
-        context.read<AuthProvider>().refreshOwner();
+        context.read<NotificationsProvider>().pushFromFcm(data);
       },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<NotificationsProvider>().loadFromStorage();
+      }
       _checkOnboarding();
       _loadCarousels();
+      _loadPendingCashBooks();
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<NotificationsProvider>().loadFromStorage();
+      _loadPendingCashBooks();
+    }
+  }
+
+  Future<void> _loadPendingCashBooks() async {
+    try {
+      final summary = await ownerApiOf(context).cashierShiftSummary();
+      final pending = summary['pending'];
+      final others = summary['other_stores'];
+      if (!mounted) return;
+      setState(() {
+        _pendingCashBooks = pending is List ? pending.length : 0;
+        _cashBookStoreName = summary['store_name']?.toString() ?? '';
+        _otherCashBookStores = others is List
+            ? others
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : [];
+      });
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _billingNotifSub?.cancel();
     super.dispose();
   }
@@ -110,6 +157,9 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
         break;
       case 'create_payment_method':
         page = const PaymentMethodsPage();
+        break;
+      case 'create_table':
+        page = const TablesPage();
         break;
       case 'create_employee':
         page = const EmployeesPage();
@@ -184,7 +234,9 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(auth.errorMessage ?? 'Gagal memilih toko')),
       );
+      return;
     }
+    await _loadPendingCashBooks();
   }
 
   String _stepLabel(String step) {
@@ -197,6 +249,8 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
         return 'Tambahkan produk toko';
       case 'create_payment_method':
         return 'Buat metode pembayaran';
+      case 'create_table':
+        return 'Buat meja';
       case 'create_employee':
         return 'Buat pegawai kasir';
       default:
@@ -261,6 +315,7 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
     final iconSize = width < 600 ? 54.0 : 62.0;
     final iconGlyphSize = width < 600 ? 24.0 : 28.0;
     final labelSize = width < 600 ? 11.5 : 12.5;
+    final unreadOrders = context.watch<NotificationsProvider>().unread;
 
     final canPromo = owner?.hasFeature('products_promotions') ?? false;
     final canScanTable = owner?.hasFeature('feature_scan_table') ?? false;
@@ -283,6 +338,7 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
         title: 'Kasir',
         highlighted: true,
         enabled: hasStore,
+        badgeCount: unreadOrders,
         onTap: hasStore ? _enterCashier : null,
       ),
       _MenuItemData(
@@ -335,6 +391,22 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
             : null,
       ),
       _MenuItemData(
+        icon: Icons.account_balance_wallet_rounded,
+        title: 'Buku\nkasir',
+        enabled: hasStore,
+        badgeCount: _pendingCashBooks,
+        onTap: hasStore
+            ? () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const OwnerCashBookPage(),
+                  ),
+                );
+                if (mounted) _loadPendingCashBooks();
+              }
+            : null,
+      ),
+      _MenuItemData(
         icon: Icons.card_membership_rounded,
         title: 'Paket',
         onTap: () => Navigator.of(context).push(
@@ -366,6 +438,7 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
         onRefresh: () async {
           await auth.refreshOwner();
           await _loadCarousels();
+          await _loadPendingCashBooks();
         },
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(
@@ -389,6 +462,25 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
                 ),
               ),
             ),
+            if (_pendingCashBooks > 0 || _otherCashBookStores.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                sliver: SliverToBoxAdapter(
+                  child: _CashBookNotice(
+                    activeCount: _pendingCashBooks,
+                    storeName: _cashBookStoreName,
+                    otherStores: _otherCashBookStores,
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const OwnerCashBookPage(),
+                        ),
+                      );
+                      if (mounted) _loadPendingCashBooks();
+                    },
+                  ),
+                ),
+              ),
             if (!forceOnboarding && nextStep != 'ready')
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -440,6 +532,7 @@ class _MenuItemData {
     this.onTap,
     this.enabled = true,
     this.highlighted = false,
+    this.badgeCount = 0,
   });
 
   final IconData icon;
@@ -447,6 +540,7 @@ class _MenuItemData {
   final VoidCallback? onTap;
   final bool enabled;
   final bool highlighted;
+  final int badgeCount;
 }
 
 class _OwnerHeader extends StatelessWidget {
@@ -648,6 +742,81 @@ class _OwnerHeader extends StatelessWidget {
   }
 }
 
+class _CashBookNotice extends StatelessWidget {
+  const _CashBookNotice({
+    required this.activeCount,
+    required this.storeName,
+    required this.otherStores,
+    required this.onTap,
+  });
+
+  final int activeCount;
+  final String storeName;
+  final List<Map<String, dynamic>> otherStores;
+  final VoidCallback onTap;
+
+  String get _othersLine {
+    final parts = otherStores.map((store) {
+      final name = store['name']?.toString() ?? 'Toko';
+      final count = int.tryParse('${store['pending_count']}') ?? 0;
+      return '$name ($count)';
+    }).join(', ');
+    if (activeCount > 0) return 'Juga menunggu di: $parts';
+    return 'Buku kasir menunggu di: $parts';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = storeName.trim().isEmpty ? 'toko ini' : storeName.trim();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF4E5),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFF0D7B0)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.account_balance_wallet_outlined, color: _brand),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (activeCount > 0)
+                        Text(
+                          '$activeCount buku kasir $store menunggu persetujuan',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      if (otherStores.isNotEmpty) ...[
+                        if (activeCount > 0) const SizedBox(height: 4),
+                        Text(
+                          _othersLine,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Colors.black.withValues(alpha: 0.62),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: _brand.withValues(alpha: 0.8)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SetupBanner extends StatelessWidget {
   const _SetupBanner({required this.label, required this.onTap});
 
@@ -752,28 +921,66 @@ class _MenuIconButton extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
+                SizedBox(
                   width: iconSize,
                   height: iconSize,
-                  decoration: BoxDecoration(
-                    color: item.highlighted
-                        ? _brand
-                        : _brand.withValues(alpha: 0.10),
-                    shape: BoxShape.circle,
-                    boxShadow: item.highlighted
-                        ? [
-                            BoxShadow(
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                              color: _brand.withValues(alpha: 0.28),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: iconSize,
+                        height: iconSize,
+                        decoration: BoxDecoration(
+                          color: item.highlighted
+                              ? _brand
+                              : _brand.withValues(alpha: 0.10),
+                          shape: BoxShape.circle,
+                          boxShadow: item.highlighted
+                              ? [
+                                  BoxShadow(
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                    color: _brand.withValues(alpha: 0.28),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Icon(
+                          item.icon,
+                          size: iconGlyphSize,
+                          color: item.highlighted ? Colors.white : _brand,
+                        ),
+                      ),
+                      if (item.badgeCount > 0)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 2,
                             ),
-                          ]
-                        : null,
-                  ),
-                  child: Icon(
-                    item.icon,
-                    size: iconGlyphSize,
-                    color: item.highlighted ? Colors.white : _brand,
+                            constraints: const BoxConstraints(minWidth: 18),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: _brand, width: 1.5),
+                            ),
+                            child: Text(
+                              item.badgeCount > 99
+                                  ? '99+'
+                                  : '${item.badgeCount}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: _brand,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                height: 1.1,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 6),

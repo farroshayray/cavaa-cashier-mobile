@@ -16,6 +16,9 @@ import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 import '../../../owner/presentation/pages/owner_home_page.dart';
 
+import '/features/cashier/data/cashier_shift_api.dart';
+import '/features/cashier/presentation/pages/opening_cash_dialog.dart';
+import '/features/cashier/presentation/pages/cash_book_page.dart';
 import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
@@ -186,6 +189,7 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     connectivityProvider.onBackOnline = () async {
       if (_isBootstrapping) return;
+      await _ensureCashBook();
       await _syncAndReloadAllOrderTabs();
     };
     connectivityProvider.onInitialOnline = () async {
@@ -336,6 +340,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (queued != null && mounted) {
         await _handleFcmTap(queued);
       }
+      await _ensureCashBook();
     } catch (e, st) {
       debugPrint('bootstrap fatal: $e\n$st');
       if (!mounted) return;
@@ -344,6 +349,128 @@ class _CashierHomePageState extends State<CashierHomePage>
         _bootstrapError =
             'Gagal menyiapkan kasir. Periksa koneksi lalu coba lagi.';
       });
+    }
+  }
+
+  Widget _withShiftBanner(Widget child) {
+    final status = CashierShiftGate.shift?['status']?.toString();
+    if (status == null || status == 'open' || status == 'closed') return child;
+    final text = status == 'pending_approval'
+        ? 'Buku kasir menunggu persetujuan. Pembayaran dikunci.'
+        : status == 'counted_offline'
+            ? 'Hitungan tersimpan. Akan dikirim saat tersambung. Pembayaran dikunci.'
+            : 'Hitung ulang uang di laci. Pembayaran dikunci.';
+    return Column(
+      children: [
+        Material(
+          color: const Color(0xFFFFF4E5),
+          child: ListTile(
+            dense: true,
+            title: Text(text),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CashBookPage()),
+              );
+              if (mounted) await _ensureCashBook();
+            },
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  Future<void> _ensureCashBook() async {
+    if (!mounted) return;
+    await CashierShiftGate.restore();
+    final online = context.read<ConnectivityStatusProvider>().isOnline;
+    if (!online) {
+      if (CashierShiftGate.shift == null && mounted) {
+        await _promptOpeningCash(localOnly: true);
+      }
+      if (mounted) setState(() {});
+      return;
+    }
+
+    try {
+      final api = CashierShiftApi(context.read<DioClient>().dio);
+      var shift = await api.current();
+      final local = CashierShiftGate.shift;
+      if (shift == null &&
+          local != null &&
+          local['local_only'] == true &&
+          local['client_uuid'] != null) {
+        shift = await api.open(
+          openingCash: num.tryParse('${local['opening_cash']}') ?? 0,
+          clientUuid: local['client_uuid'].toString(),
+        );
+        final movements = local['movements'];
+        if (movements is List) {
+          for (final movement in movements) {
+            if (movement is! Map) continue;
+            await api.movement(
+              direction: movement['direction'].toString(),
+              amount: num.tryParse('${movement['amount']}') ?? 0,
+              note: movement['note']?.toString(),
+            );
+          }
+          shift = await api.current();
+        }
+        if (local['counted_cash'] != null && shift != null) {
+          shift = await api.close(
+            countedCash: num.tryParse('${local['counted_cash']}') ?? 0,
+          );
+        }
+      }
+      await CashierShiftGate.remember(
+        shift != null && shift['status'] == 'closed' ? null : shift,
+      );
+      if (!mounted) return;
+      setState(() {});
+      if (CashierShiftGate.shift == null) {
+        await _promptOpeningCash();
+      }
+    } catch (_) {
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _promptOpeningCash({bool localOnly = false}) async {
+    final viaOwner = context.read<AuthProvider>().viaOwner;
+    final amount = await showDialog<num>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OpeningCashDialog(
+        leaveLabel: viaOwner ? 'Kembali ke menu owner' : 'Keluar',
+      ),
+    );
+    if (!mounted) return;
+    if (amount == null) {
+      if (viaOwner) {
+        await _returnToOwner();
+      } else {
+        await _logout();
+      }
+      return;
+    }
+    try {
+      if (localOnly) {
+        await CashierShiftGate.remember(
+          CashierShiftGate.localOpen(amount < 0 ? 0 : amount),
+        );
+      } else {
+        final shift = await CashierShiftApi(context.read<DioClient>().dio).open(
+          openingCash: amount < 0 ? 0 : amount,
+        );
+        await CashierShiftGate.remember(shift);
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Buku kasir gagal dibuka.')),
+      );
     }
   }
 
@@ -1177,6 +1304,12 @@ class _CashierHomePageState extends State<CashierHomePage>
               context,
             ).push(MaterialPageRoute(builder: (_) => const ReportsPage()));
           },
+          onOpenCashBook: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CashBookPage()),
+            );
+            if (mounted) await _ensureCashBook();
+          },
           onOpenPrinterSettings: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
@@ -1258,10 +1391,10 @@ class _CashierHomePageState extends State<CashierHomePage>
                     processCount: processCount,
                     doneCount: doneCount,
                   ),
-                  Expanded(child: content),
+                  Expanded(child: _withShiftBanner(content)),
                 ],
               )
-            : content,
+            : _withShiftBanner(content),
         bottomNavigationBar: useSideNav
             ? null
             : BottomAppBar(
@@ -1806,6 +1939,7 @@ class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
     required this.onOpenProfile,
     required this.onOpenReports,
+    required this.onOpenCashBook,
     required this.onOpenPrinterSettings,
     required this.onLogout,
     required this.showUpdateBadge,
@@ -1815,6 +1949,7 @@ class _AppDrawer extends StatelessWidget {
 
   final VoidCallback onOpenProfile;
   final VoidCallback onOpenReports;
+  final VoidCallback onOpenCashBook;
   final VoidCallback onOpenPrinterSettings;
   final VoidCallback onLogout;
   final bool showUpdateBadge;
@@ -1929,6 +2064,15 @@ class _AppDrawer extends StatelessWidget {
                         onReturnToOwner?.call();
                       },
                     ),
+                  ListTile(
+                    leading: const Icon(Icons.point_of_sale, color: brand),
+                    title: const Text('Buku kasir'),
+                    subtitle: const Text('Kas masuk, kas keluar, tutup buku'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onOpenCashBook();
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.edit_document, color: brand),
                     title: const Text('Laporan'),

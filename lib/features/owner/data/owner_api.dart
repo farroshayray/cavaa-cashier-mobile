@@ -58,6 +58,7 @@ class OwnerApi {
     bool isPpnActive = false,
     num? ppn,
     int cashRoundingUnit = 0,
+    int cashVarianceTolerance = 0,
     String? contactPerson,
     String? contactPhone,
     String? whatsapp,
@@ -86,6 +87,7 @@ class OwnerApi {
       'is_ppn_active': isPpnActive ? 1 : 0,
       if (ppn != null) 'ppn': ppn,
       'cash_rounding_unit': cashRoundingUnit,
+      'cash_variance_tolerance': cashVarianceTolerance,
       if (contactPerson != null) 'contact_person': contactPerson,
       if (contactPhone != null) 'contact_phone': contactPhone,
       if (whatsapp != null) 'whatsapp': whatsapp,
@@ -873,6 +875,30 @@ class OwnerApi {
       data: {'purchases': purchases},
     );
     return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> cashierShiftSummary({String? date}) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/cashier-shifts',
+      queryParameters: {
+        if (date != null && date.isNotEmpty) 'date': date,
+      },
+    );
+    final data = res.data;
+    if (data is Map && data['summary'] is Map) {
+      return Map<String, dynamic>.from(data['summary'] as Map);
+    }
+    return {};
+  }
+
+  Future<void> approveCashierShift(int id, {String? note}) async {
+    await client.dio.post('/api/v1/mobile/owner/cashier-shifts/$id/approve', data: {
+      if (note != null) 'note': note,
+    });
+  }
+
+  Future<void> rejectCashierShift(int id) async {
+    await client.dio.post('/api/v1/mobile/owner/cashier-shifts/$id/reject');
   }
 
   OwnerModel? parseUser(Map<String, dynamic> data) {

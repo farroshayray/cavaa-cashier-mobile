@@ -56,6 +56,7 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
   final _wifiUser = TextEditingController();
   final _wifiPass = TextEditingController();
   final _ppn = TextEditingController(text: '0');
+  final _cashVarianceTolerance = TextEditingController(text: '0');
 
   bool _loading = true;
   bool _saving = false;
@@ -116,6 +117,7 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
     _wifiUser.dispose();
     _wifiPass.dispose();
     _ppn.dispose();
+    _cashVarianceTolerance.dispose();
     super.dispose();
   }
 
@@ -188,6 +190,8 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
             s['is_ppn_active'] == true || s['is_ppn_active'] == 1;
         _cashRoundingUnit =
             int.tryParse('${s['cash_rounding_unit'] ?? 0}') ?? 0;
+        _cashVarianceTolerance.text =
+            '${int.tryParse('${s['cash_variance_tolerance'] ?? 0}') ?? 0}';
         _paymentMethods = methods is List
             ? methods
                 .whereType<Map>()
@@ -421,6 +425,8 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         isPpnActive: _isPpnActive,
         ppn: num.tryParse(_ppn.text.trim()) ?? 0,
         cashRoundingUnit: _cashRoundingUnit,
+        cashVarianceTolerance:
+            int.tryParse(_cashVarianceTolerance.text.trim()) ?? 0,
         contactPerson: _contactPerson.text.trim(),
         contactPhone: _contactPhone.text.trim(),
         whatsapp: _whatsapp.text.trim(),
@@ -971,6 +977,16 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                             ],
                             onChanged: (v) => setState(
                               () => _cashRoundingUnit = v ?? 0,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _cashVarianceTolerance,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Batas toleransi selisih kas (Rp)',
+                              helperText:
+                                  '0 berarti selisih berapa pun, selain pas, perlu persetujuan.',
                             ),
                           ),
                         ],

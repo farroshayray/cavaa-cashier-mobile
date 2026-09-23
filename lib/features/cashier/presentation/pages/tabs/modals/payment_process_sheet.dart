@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/core/config/env.dart';
 import '/core/utils/open_url.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
 import '/features/cashier/data/orders_api.dart';
 import '/features/cashier/data/sync/payment_submit_recovery.dart';
 import '/core/storage/secure_storage_service.dart';
@@ -716,6 +717,12 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     );
 
     if (action == null || action == _PaymentCompletionAction.cancel) return;
+    if (!CashierShiftGate.canTakePayment) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(CashierShiftGate.blockedMessage)),
+      );
+      return;
+    }
 
     final shouldPrint = action == _PaymentCompletionAction.withPrint;
 

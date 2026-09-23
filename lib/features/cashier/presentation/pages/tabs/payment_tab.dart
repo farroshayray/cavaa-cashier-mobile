@@ -6,6 +6,7 @@ import '../../providers/payment_provider.dart';
 import '../../providers/process_provider.dart';
 import '../../providers/done_provider.dart';
 import '../../../../scanner/pages/barcode_scanner_page.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
 import '/features/cashier/presentation/pages/tabs/modals/payment_process_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/edit_order_sheet.dart';
@@ -319,6 +320,12 @@ class _PaymentViewState extends State<_PaymentView> {
           },
           onDelete: () => confirmDeleteUnpaidOrder(context, data),
           onProcess: () async {
+            if (!CashierShiftGate.canTakePayment) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(CashierShiftGate.blockedMessage)),
+              );
+              return;
+            }
             final syncStatus = (data['sync_status'] ?? '').toString();
             if (syncStatus == 'PENDING_DELETE') {
               ScaffoldMessenger.of(context).showSnackBar(

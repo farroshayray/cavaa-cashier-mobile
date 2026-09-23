@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:drift/drift.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
 import '../../data/models/orders_repository.dart';
 import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
 import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
@@ -452,6 +453,9 @@ class PaymentProvider extends ChangeNotifier {
     String? cashierProofImagePath,
     String? lastPaymentId,
   }) async {
+    if (!CashierShiftGate.canTakePayment) {
+      throw Exception(CashierShiftGate.blockedMessage);
+    }
     final isStockConflict =
         (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
     final isOnline = connectivity.isOnline && !isStockConflict;
