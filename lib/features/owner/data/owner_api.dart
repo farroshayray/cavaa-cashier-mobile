@@ -827,6 +827,20 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> startPlanTrial(int planId) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/plans/$planId/trial',
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> startAddonTrial(int addonId) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/addons/$addonId/trial',
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> listAddons() async {
     final res = await client.dio.get('/api/v1/mobile/owner/addons');
     return Map<String, dynamic>.from(res.data as Map);

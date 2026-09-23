@@ -263,14 +263,14 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   _ExpiryLine? _addonExpiryLine(Map<String, dynamic> addon, {required bool isSub}) {
     final entitlement = addon['entitlement_active'] == true;
     final covered = addon['covered_by_plan'] == true;
-    if (entitlement && isSub) {
+    if (entitlement) {
       final parsed = _parseExpiry(addon['expires_at']);
       if (parsed != null) {
         return _expiryLine(parsed, untilPrefix: 'Aktif sampai');
       }
-    }
-    if (entitlement && !isSub) {
-      return const _ExpiryLine('Berlaku selamanya');
+      if (!isSub) {
+        return const _ExpiryLine('Berlaku selamanya');
+      }
     }
     if (covered) {
       final current = _currentPlan;
@@ -294,6 +294,45 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     if (isCurrent) return 'Sedang dipakai';
     if (!_allowManual && _allowPlay && !hasSku) return 'Belum tersedia di Play';
     return 'Langganan sekarang';
+  }
+
+  String? _trialLabel(Map<String, dynamic> item) {
+    if (item['can_trial'] != true) return null;
+    final days = int.tryParse('${item['trial_days']}') ?? 0;
+    if (days < 1) return null;
+    return 'Coba $days hari';
+  }
+
+  Future<void> _startTrial({
+    required String kind,
+    required Map<String, dynamic> item,
+  }) async {
+    final id = int.tryParse('${item['id']}');
+    if (id == null) return;
+    setState(() => _busy = true);
+    try {
+      final api = ownerApiOf(context);
+      final res = kind == 'plan'
+          ? await api.startPlanTrial(id)
+          : await api.startAddonTrial(id);
+      final user = api.parseUser(res);
+      if (user != null && mounted) {
+        await context.read<AuthProvider>().refreshOwner();
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['message']?.toString() ?? 'Uji coba aktif')),
+      );
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Uji coba gagal: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _startPurchase({
@@ -647,6 +686,29 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                 ),
               ),
               const SizedBox(height: 12),
+              if (_trialLabel(plan) != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _startTrial(kind: 'plan', item: plan),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _brand,
+                      side: const BorderSide(color: _brand),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      _trialLabel(plan)!,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               SizedBox(
                 width: double.infinity,
                 height: 44,
@@ -904,6 +966,10 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                                       .toString()
                                       .isNotEmpty,
                             ),
+                            trialLabel: _trialLabel(addon),
+                            onTrial: _busy
+                                ? null
+                                : () => _startTrial(kind: 'addon', item: addon),
                           ),
                         );
 
@@ -1265,6 +1331,8 @@ class _AddonCard extends StatelessWidget {
     required this.ctaLabel,
     required this.canBuy,
     required this.onBuy,
+    this.trialLabel,
+    this.onTrial,
   });
 
   final String name;
@@ -1282,6 +1350,8 @@ class _AddonCard extends StatelessWidget {
   final String ctaLabel;
   final bool canBuy;
   final VoidCallback onBuy;
+  final String? trialLabel;
+  final VoidCallback? onTrial;
 
   static const _brand = Color(0xFFAE1504);
   static const _ink = Color(0xFF1C1C1E);
@@ -1497,6 +1567,28 @@ class _AddonCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 14),
+                if (trialLabel != null) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: OutlinedButton(
+                      onPressed: onTrial,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _brand,
+                        side: const BorderSide(color: _brand),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      child: Text(trialLabel!),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 SizedBox(
                   width: double.infinity,
                   height: 46,
