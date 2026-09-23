@@ -361,7 +361,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
                                 textInputAction: TextInputAction.search,
                                 onSubmitted: (_) => _load(silent: true),
                                 decoration: InputDecoration(
-                                  hintText: 'Cari nama, username, emailâ€¦',
+                                  hintText: 'Cari nama, username, email...',
                                   prefixIcon: const Icon(Icons.search_rounded),
                                   suffixIcon: IconButton(
                                     onPressed: () => _load(silent: true),
@@ -618,7 +618,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
                                               const SizedBox(height: 2),
                                               Text(
                                                 '@${e['user_name'] ?? '-'}'
-                                                '${e['email'] != null ? ' Â· ${e['email']}' : ''}',
+                                                '${e['email'] != null ? ' \u00B7 ${e['email']}' : ''}',
                                                 style: TextStyle(
                                                   fontSize: 12.5,
                                                   color: Colors.black.withValues(

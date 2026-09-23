@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '/core/config/env.dart';
+import '/core/network/dio_client.dart';
 import '../auth_provider.dart';
 import '../../../owner/presentation/pages/owner_home_page.dart';
 import 'cashier_login_page.dart';
@@ -22,11 +23,24 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   String? _localError;
   bool _googleLoading = false;
+  bool _cashierOnly = false;
 
   @override
   void initState() {
     super.initState();
     _localError = widget.initialErrorMessage;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadLoginOptions());
+  }
+
+  Future<void> _loadLoginOptions() async {
+    try {
+      final res = await context.read<DioClient>().dio.get(
+        '/api/v1/mobile/login-options',
+      );
+      final mode = res.data is Map ? res.data['mode']?.toString() : null;
+      if (!mounted) return;
+      setState(() => _cashierOnly = mode == 'cashier');
+    } catch (_) {}
   }
 
   Future<void> _googleSignup() async {
@@ -165,7 +179,9 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 6),
                       Center(
                         child: Text(
-                          'Pilih cara masuk ke aplikasi',
+                          _cashierOnly
+                              ? 'Masuk sebagai kasir'
+                              : 'Pilih cara masuk ke aplikasi',
                           style: TextStyle(
                             fontSize: 13.5,
                             color: Colors.black.withValues(alpha: 0.62),
@@ -190,33 +206,34 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 14),
                       ],
-                      SizedBox(
-                        height: 48,
-                        child: ElevatedButton(
-                          onPressed: busy
-                              ? null
-                              : () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const OwnerLoginPage(),
-                                    ),
-                                  );
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: brand,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                      if (!_cashierOnly)
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: busy
+                                ? null
+                                : () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const OwnerLoginPage(),
+                                      ),
+                                    );
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: brand,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
                             ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            'Login Owner',
-                            style: TextStyle(fontWeight: FontWeight.w800),
+                            child: const Text(
+                              'Login Owner',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                      if (!_cashierOnly) const SizedBox(height: 12),
                       SizedBox(
                         height: 48,
                         child: OutlinedButton(
@@ -230,8 +247,13 @@ class _LoginPageState extends State<LoginPage> {
                                   );
                                 },
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: brand,
-                            side: BorderSide(color: brand.withValues(alpha: 0.5)),
+                            foregroundColor: _cashierOnly ? Colors.white : brand,
+                            backgroundColor: _cashierOnly ? brand : null,
+                            side: BorderSide(
+                              color: _cashierOnly
+                                  ? brand
+                                  : brand.withValues(alpha: 0.5),
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -242,66 +264,68 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 22),
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.black12)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Text(
-                              'atau',
-                              style: TextStyle(
-                                color: Colors.black.withValues(alpha: 0.45),
+                      if (!_cashierOnly) ...[
+                        const SizedBox(height: 22),
+                        Row(
+                          children: [
+                            Expanded(child: Divider(color: Colors.black12)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                'atau',
+                                style: TextStyle(
+                                  color: Colors.black.withValues(alpha: 0.45),
+                                ),
+                              ),
+                            ),
+                            Expanded(child: Divider(color: Colors.black12)),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Belum punya akun owner? Daftar gratis',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black.withValues(alpha: 0.75),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            onPressed: busy ? null : _googleSignup,
+                            icon: busy
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Image.network(
+                                    'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                                    width: 20,
+                                    height: 20,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Icon(Icons.g_mobiledata, size: 24),
+                                  ),
+                            label: const Text(
+                              'Daftar dengan Google',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.black87,
+                              side: BorderSide(
+                                color: Colors.black.withValues(alpha: 0.15),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                           ),
-                          Expanded(child: Divider(color: Colors.black12)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Belum punya akun owner? Daftar gratis',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black.withValues(alpha: 0.75),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 48,
-                        child: OutlinedButton.icon(
-                          onPressed: busy ? null : _googleSignup,
-                          icon: busy
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Image.network(
-                                  'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                                  width: 20,
-                                  height: 20,
-                                  errorBuilder: (_, __, ___) =>
-                                      const Icon(Icons.g_mobiledata, size: 24),
-                                ),
-                          label: const Text(
-                            'Daftar dengan Google',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.black87,
-                            side: BorderSide(
-                              color: Colors.black.withValues(alpha: 0.15),
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
+                      ],
                       const SizedBox(height: 18),
                       Center(
                         child: Text(

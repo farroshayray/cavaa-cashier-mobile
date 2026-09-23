@@ -127,6 +127,8 @@ class DioClient {
           final errorCode = data is Map ? data['code']?.toString() : null;
           final isInactiveAccount =
               statusCode == 403 && errorCode == 'account_inactive';
+          final isOwnerLoginDisabled =
+              statusCode == 403 && errorCode == 'owner_login_disabled';
           // Only force-logout on true account suspension — not work-schedule / validation 403s.
           final forcedLogoutMessage =
               isInactiveAccount && data is Map ? _buildForcedLogoutMessage(data) : null;
@@ -134,7 +136,9 @@ class DioClient {
               isInactiveAccount &&
               (forcedLogoutMessage?.isNotEmpty ?? false);
 
-          if ((statusCode == 401 || shouldShowForcedLogoutMessage) &&
+          if ((statusCode == 401 ||
+                  shouldShowForcedLogoutMessage ||
+                  isOwnerLoginDisabled) &&
               !_isHandlingUnauthorized) {
             _isHandlingUnauthorized = true;
 
@@ -144,6 +148,11 @@ class DioClient {
               if (shouldShowForcedLogoutMessage &&
                   forcedLogoutMessage != null) {
                 await _saveForcedLogoutMessage(forcedLogoutMessage);
+              } else if (isOwnerLoginDisabled && data is Map) {
+                final message = data['message']?.toString();
+                if (message != null && message.isNotEmpty) {
+                  await _saveForcedLogoutMessage(message);
+                }
               }
 
               await storage.clearAllAuth();
@@ -157,7 +166,9 @@ class DioClient {
                       builder: (_) => LoginPage(
                         initialErrorMessage: shouldShowForcedLogoutMessage
                             ? forcedLogoutMessage
-                            : null,
+                            : isOwnerLoginDisabled && data is Map
+                                ? data['message']?.toString()
+                                : null,
                       ),
                     ),
                     (_) => false,
