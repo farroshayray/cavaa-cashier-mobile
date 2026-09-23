@@ -81,6 +81,10 @@ class AuthRepository {
     await storage.deleteCachedUser();
     await storage.saveCachedOwner(owner);
 
+    try {
+      await PushNotificationService.instance.syncCurrentTokenToBackend();
+    } catch (_) {}
+
     return owner;
   }
 
@@ -141,6 +145,9 @@ class AuthRepository {
 
     final owner = await api.ownerMe();
     await storage.saveCachedOwner(owner);
+    try {
+      await PushNotificationService.instance.syncCurrentTokenToBackend();
+    } catch (_) {}
     return owner;
   }
 

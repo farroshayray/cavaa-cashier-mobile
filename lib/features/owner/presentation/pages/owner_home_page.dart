@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '/core/services/push_notification_service.dart';
 import '/features/auth/data/models/owner_model.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/auth/presentation/pages/login_page.dart';
@@ -32,14 +35,29 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
   bool _routingChecked = false;
   bool _selectingStore = false;
   List<Map<String, dynamic>> _carousels = [];
+  StreamSubscription<Map<String, dynamic>>? _billingNotifSub;
 
   @override
   void initState() {
     super.initState();
+    _billingNotifSub = PushNotificationService.instance.onMessageReceived.listen(
+      (data) {
+        final type = (data['type'] ?? '').toString();
+        if (type != 'billing_approved' && type != 'billing_rejected') return;
+        if (!mounted) return;
+        context.read<AuthProvider>().refreshOwner();
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkOnboarding();
       _loadCarousels();
     });
+  }
+
+  @override
+  void dispose() {
+    _billingNotifSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadCarousels() async {

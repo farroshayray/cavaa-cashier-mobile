@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '/core/network/dio_client.dart';
+import '/core/storage/secure_storage_service.dart';
 import '/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
@@ -41,6 +42,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       (data['order_by'] ?? '').toString().toUpperCase() == 'CASHIER') {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('orders_stale', true);
+    return;
+  }
+
+  if (type == 'billing_approved' || type == 'billing_rejected') {
     return;
   }
 
@@ -428,9 +433,13 @@ class PushNotificationService {
       }
 
       final deviceName = await getDeviceName();
+      final role = await SecureStorageService().getAuthRole();
+      final path = role == 'owner'
+          ? '/api/v1/mobile/owner/device-token'
+          : '/api/v1/mobile/cashier/device-token';
 
       final response = await dioClient.dio.post(
-        '/api/v1/mobile/cashier/device-token',
+        path,
         data: {
           'token': token,
           'platform': 'Android',

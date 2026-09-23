@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:provider/provider.dart';
 
+import '/core/services/push_notification_service.dart';
 import '/core/utils/open_url.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
@@ -44,6 +45,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
 
   final InAppPurchase _iap = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _purchaseSub;
+  StreamSubscription<Map<String, dynamic>>? _billingNotifSub;
   final Map<String, ProductDetails> _products = {};
 
   bool _isHighlighted(Map<String, dynamic> addon) {
@@ -81,12 +83,20 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       _onPurchaseUpdated,
       onError: (e) => debugPrint('IAP stream error: $e'),
     );
+    _billingNotifSub = PushNotificationService.instance.onMessageReceived.listen(
+      (data) {
+        final type = (data['type'] ?? '').toString();
+        if (type != 'billing_approved' && type != 'billing_rejected') return;
+        if (mounted) _load();
+      },
+    );
     _load();
   }
 
   @override
   void dispose() {
     _purchaseSub?.cancel();
+    _billingNotifSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -183,6 +193,74 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       _allowPlay = billing['play'] == true;
       _allowManual = billing['manual'] == true;
     }
+  }
+
+  bool _canPayPlan(Map<String, dynamic> plan, bool hasSku) {
+    if (plan['is_current'] == true) return false;
+    if (_allowManual) return true;
+    return _allowPlay && hasSku && plan['can_purchase'] == true;
+  }
+
+  String _planCta({required bool isCurrent, required bool hasSku}) {
+    if (isCurrent) return 'Sedang dipakai';
+    if (!_allowManual && _allowPlay && !hasSku) return 'Belum tersedia di Play';
+    return 'Langganan sekarang';
+  }
+
+  Future<void> _startPurchase({
+    required String kind,
+    required Map<String, dynamic> item,
+    required bool hasPlaySku,
+  }) async {
+    final play = _allowPlay && hasPlaySku;
+    final manual = _allowManual;
+    if (!play && !manual) return;
+
+    var usePlay = play;
+    if (play && manual) {
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(
+                title: Text(
+                  'Pilih cara pembayaran',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.shop_rounded),
+                title: const Text('Google Play'),
+                onTap: () => Navigator.pop(ctx, 'play'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_rounded),
+                title: const Text('Transfer bank'),
+                subtitle: const Text('Dilanjutkan di browser'),
+                onTap: () => Navigator.pop(ctx, 'manual'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || choice == null) return;
+      usePlay = choice == 'play';
+    }
+
+    if (usePlay) {
+      if (kind == 'plan') {
+        await _buyPlan(item);
+      } else {
+        await _buy(item);
+      }
+      return;
+    }
+
+    await _openManualCheckout(kind, item['id']);
   }
 
   Future<void> _openManualCheckout(String type, Object? id) async {
@@ -398,7 +476,6 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
 
   Widget _planCard(Map<String, dynamic> plan) {
     final isCurrent = plan['is_current'] == true;
-    final canBuy = plan['can_purchase'] == true;
     final hasSku = ((plan['play_product_id'] ?? '').toString()).isNotEmpty;
     final parts = _planPrice(plan);
     final name = (plan['name'] ?? '').toString();
@@ -477,62 +554,32 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              if (_allowPlay && !isCurrent)
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: FilledButton(
-                    onPressed: canBuy && !_busy ? () => _buyPlan(plan) : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _brand,
-                      disabledBackgroundColor: const Color(0xFFE5E7EB),
-                      disabledForegroundColor: const Color(0xFF6B7280),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      hasSku ? 'Beli paket' : 'Belum tersedia di Play',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ),
-              if (isCurrent)
-                const SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: FilledButton(
-                    onPressed: null,
-                    child: Text(
-                      'Sedang dipakai',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: FilledButton(
+                  onPressed: !isCurrent && _canPayPlan(plan, hasSku) && !_busy
+                      ? () => _startPurchase(
+                            kind: 'plan',
+                            item: plan,
+                            hasPlaySku: hasSku,
+                          )
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _brand,
+                    disabledBackgroundColor: const Color(0xFFE5E7EB),
+                    disabledForegroundColor: const Color(0xFF6B7280),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                ),
-              if (_allowManual && !isCurrent) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _openManualCheckout('plan', plan['id']),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _brand,
-                      side: const BorderSide(color: _brand),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Transfer bank',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
+                  child: Text(
+                    _planCta(isCurrent: isCurrent, hasSku: hasSku),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -751,12 +798,17 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                               owned: owned,
                               isSub: isSub,
                             ),
-                            canBuy: canBuy && !_busy && _allowPlay,
-                            onBuy: () => _buy(addon),
-                            showManual: _allowManual && canBuy,
-                            showPlay: _allowPlay,
-                            onTransfer: () =>
-                                _openManualCheckout('addon', addon['id']),
+                            canBuy: canBuy &&
+                                !_busy &&
+                                (_allowManual || _allowPlay),
+                            onBuy: () => _startPurchase(
+                              kind: 'addon',
+                              item: addon,
+                              hasPlaySku:
+                                  (addon['play_product_id'] ?? '')
+                                      .toString()
+                                      .isNotEmpty,
+                            ),
                           ),
                         );
 
@@ -1106,9 +1158,6 @@ class _AddonCard extends StatelessWidget {
     required this.ctaLabel,
     required this.canBuy,
     required this.onBuy,
-    this.showManual = false,
-    this.showPlay = true,
-    this.onTransfer,
   });
 
   final String name;
@@ -1125,9 +1174,6 @@ class _AddonCard extends StatelessWidget {
   final String ctaLabel;
   final bool canBuy;
   final VoidCallback onBuy;
-  final bool showManual;
-  final bool showPlay;
-  final VoidCallback? onTransfer;
 
   static const _brand = Color(0xFFAE1504);
   static const _ink = Color(0xFF1C1C1E);
@@ -1339,49 +1385,27 @@ class _AddonCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 14),
-                if (showPlay || !showManual)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: FilledButton(
-                      onPressed: canBuy ? onBuy : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _brand,
-                        disabledBackgroundColor: const Color(0xFFE5E7EB),
-                        disabledForegroundColor: const Color(0xFF6B7280),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        textStyle: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14.5,
-                        ),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: FilledButton(
+                    onPressed: canBuy ? onBuy : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _brand,
+                      disabledBackgroundColor: const Color(0xFFE5E7EB),
+                      disabledForegroundColor: const Color(0xFF6B7280),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(ctaLabel),
-                    ),
-                  ),
-                if (showManual) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: OutlinedButton(
-                      onPressed: onTransfer,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _brand,
-                        side: const BorderSide(color: _brand),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Transfer bank',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
                       ),
                     ),
+                    child: Text(ctaLabel),
                   ),
-                ],
+                ),
               ],
             ),
           ),
