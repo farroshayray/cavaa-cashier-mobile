@@ -201,6 +201,13 @@ class PartnerData {
     }
   }
 
+  void applyReceiptWifi(Map<String, dynamic> order) {
+    if (isWifiShown) return;
+    order['store_is_wifi_shown'] = 0;
+    order['store_wifi_user'] = '';
+    order['store_wifi_password'] = '';
+  }
+
   Map<String, dynamic> toWifiSnapshotMap() {
     return {
       'wifi_shown': isWifiShown ? 1 : 0,

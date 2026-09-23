@@ -275,41 +275,51 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
     return croppedPath;
   }
 
+  Future<void> _openReceiptPaywall({
+    required String message,
+    required String featureKey,
+    required String addonCode,
+  }) async {
+    if (!mounted) return;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fitur berbayar'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: _brand),
+            child: const Text('Lihat Add-on'),
+          ),
+        ],
+      ),
+    );
+    if (go == true && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => OwnerAddonsPage(
+            highlightFeatureKey: featureKey,
+            highlightAddonCode: addonCode,
+          ),
+        ),
+      );
+      if (mounted) await context.read<AuthProvider>().refreshOwner();
+    }
+  }
+
   Future<void> _pickLogo() async {
     final owner = context.read<AuthProvider>().owner;
     if (owner != null && !owner.hasFeature('feature_receipt_logo')) {
-      if (!mounted) return;
-      final go = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Fitur berbayar'),
-          content: const Text(
-            'Logo di struk memerlukan add-on atau paket yang mendukung.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Nanti'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(backgroundColor: _brand),
-              child: const Text('Lihat Add-on'),
-            ),
-          ],
-        ),
+      await _openReceiptPaywall(
+        message: 'Logo di struk memerlukan add-on atau paket yang mendukung.',
+        featureKey: 'feature_receipt_logo',
+        addonCode: 'receipt_logo',
       );
-      if (go == true && mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const OwnerAddonsPage(
-              highlightFeatureKey: 'feature_receipt_logo',
-              highlightAddonCode: 'receipt_logo',
-            ),
-          ),
-        );
-        if (mounted) await context.read<AuthProvider>().refreshOwner();
-      }
       return;
     }
     final path = await _pickAndCrop(
@@ -976,7 +986,7 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
                             value: _showReceiptLogo &&
-                                (context.read<AuthProvider>().owner?.hasFeature(
+                                (context.watch<AuthProvider>().owner?.hasFeature(
                                       'feature_receipt_logo',
                                     ) ??
                                     false),
@@ -987,7 +997,7 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
                             subtitle: Text(
-                              (context.read<AuthProvider>().owner?.hasFeature(
+                              (context.watch<AuthProvider>().owner?.hasFeature(
                                         'feature_receipt_logo',
                                       ) ??
                                       false)
@@ -998,23 +1008,66 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                                 color: Colors.black.withValues(alpha: 0.55),
                               ),
                             ),
-                            onChanged: (context.read<AuthProvider>().owner
-                                        ?.hasFeature('feature_receipt_logo') ??
-                                    false)
-                                ? (v) => setState(() => _showReceiptLogo = v)
-                                : null,
+                            onChanged: (v) async {
+                              final allowed = context
+                                      .read<AuthProvider>()
+                                      .owner
+                                      ?.hasFeature('feature_receipt_logo') ??
+                                  false;
+                              if (!allowed) {
+                                await _openReceiptPaywall(
+                                  message:
+                                      'Logo di struk memerlukan add-on atau paket yang mendukung.',
+                                  featureKey: 'feature_receipt_logo',
+                                  addonCode: 'receipt_logo',
+                                );
+                                return;
+                              }
+                              setState(() => _showReceiptLogo = v);
+                            },
                           ),
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
-                            value: _isWifiShown,
+                            value: _isWifiShown &&
+                                (context.watch<AuthProvider>().owner?.hasFeature(
+                                      'feature_receipt_wifi',
+                                    ) ??
+                                    false),
                             activeTrackColor: _brand.withValues(alpha: 0.45),
                             activeThumbColor: _brand,
                             title: const Text(
                               'Tampilkan WiFi di struk/QR',
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
-                            onChanged: (v) =>
-                                setState(() => _isWifiShown = v),
+                            subtitle: Text(
+                              (context.watch<AuthProvider>().owner?.hasFeature(
+                                        'feature_receipt_wifi',
+                                      ) ??
+                                      false)
+                                  ? 'Nama dan kata sandi WiFi dicetak di struk serta QR pelanggan.'
+                                  : 'Aktifkan add-on atau paket yang mencakup WiFi di struk.',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: Colors.black.withValues(alpha: 0.55),
+                              ),
+                            ),
+                            onChanged: (v) async {
+                              final allowed = context
+                                      .read<AuthProvider>()
+                                      .owner
+                                      ?.hasFeature('feature_receipt_wifi') ??
+                                  false;
+                              if (!allowed) {
+                                await _openReceiptPaywall(
+                                  message:
+                                      'WiFi di struk memerlukan add-on atau paket yang mendukung.',
+                                  featureKey: 'feature_receipt_wifi',
+                                  addonCode: 'receipt_wifi',
+                                );
+                                return;
+                              }
+                              setState(() => _isWifiShown = v);
+                            },
                           ),
                           const SizedBox(height: 8),
                           TextField(

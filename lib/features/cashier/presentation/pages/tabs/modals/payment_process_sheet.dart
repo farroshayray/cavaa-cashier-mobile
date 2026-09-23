@@ -121,7 +121,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     cloned['order_details'] ??= <dynamic>[];
 
     final printable = enrichOfflinePrintOrder(cloned);
-    context.read<PurchaseProvider>().partnerData?.applyReceiptLogo(printable);
+    final partner = context.read<PurchaseProvider>().partnerData;
+    partner?.applyReceiptLogo(printable);
+    partner?.applyReceiptWifi(printable);
     return printable;
   }
 

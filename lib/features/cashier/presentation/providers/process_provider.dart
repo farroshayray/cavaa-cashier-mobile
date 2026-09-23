@@ -389,11 +389,13 @@ class ProcessProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> _withCachedReceiptLogo(
     Map<String, dynamic> order,
   ) async {
-    if (order['print_receipt_logo'] != null) return order;
     final settings = await CacheDao(bookingOrdersDao.db).getPartnerSettings();
     if (settings == null) return order;
-    PurchaseCacheMapper.fromCachedPartnerSettings(settings)
-        .applyReceiptLogo(order);
+    final partner = PurchaseCacheMapper.fromCachedPartnerSettings(settings);
+    if (order['print_receipt_logo'] == null) {
+      partner.applyReceiptLogo(order);
+    }
+    partner.applyReceiptWifi(order);
     return order;
   }
 
