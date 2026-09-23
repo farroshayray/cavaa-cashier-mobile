@@ -317,8 +317,8 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
             : null,
       ),
       _MenuItemData(
-        icon: Icons.extension_rounded,
-        title: 'Add-on',
+        icon: Icons.card_membership_rounded,
+        title: 'Paket',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const OwnerAddonsPage()),
         ).then((_) => auth.refreshOwner()),

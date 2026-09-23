@@ -33,6 +33,8 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   bool _busy = false;
   String? _error;
   List<Map<String, dynamic>> _addons = [];
+  List<Map<String, dynamic>> _plans = [];
+  Map<String, dynamic>? _currentPlan;
   List<Map<String, dynamic>> _overlapping = [];
   bool _playConfigured = false;
   final ScrollController _scrollController = ScrollController();
@@ -91,8 +93,9 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       _loading = true;
       _error = null;
     });
+    final api = ownerApiOf(context);
     try {
-      final res = await ownerApiOf(context).listAddons();
+      final res = await api.listAddons();
       final raw = res['addons'];
       _addons = raw is List
           ? raw
@@ -107,12 +110,25 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList()
           : [];
-      _playConfigured = res['play_configured'] == true;
+      final plansRes = await api.listPlans();
+      final rawPlans = plansRes['plans'];
+      _plans = rawPlans is List
+          ? rawPlans
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+          : [];
+      final current = plansRes['current_plan'];
+      _currentPlan = current is Map
+          ? Map<String, dynamic>.from(current)
+          : null;
+      _playConfigured = res['play_configured'] == true ||
+          plansRes['play_configured'] == true;
 
-      final ids = _addons
-          .map((a) => (a['play_product_id'] ?? '').toString())
-          .where((id) => id.isNotEmpty)
-          .toSet();
+      final ids = {
+        ..._addons.map((a) => (a['play_product_id'] ?? '').toString()),
+        ..._plans.map((p) => (p['play_product_id'] ?? '').toString()),
+      }.where((id) => id.isNotEmpty).toSet();
       if (ids.isNotEmpty) {
         final available = await _iap.isAvailable();
         if (available) {
@@ -121,11 +137,6 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
             _products[p.id] = p;
           }
         }
-      }
-
-      final user = ownerApiOf(context).parseUser(res);
-      if (user != null && mounted) {
-        // Refresh via /me is better; features already in confirm responses.
       }
     } catch (e) {
       _error = e.toString();
@@ -161,14 +172,27 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     }
   }
 
+  bool _isPlanProduct(String productId) {
+    return _plans.any(
+      (plan) => (plan['play_product_id'] ?? '').toString() == productId,
+    );
+  }
+
   Future<void> _confirmWithBackend(PurchaseDetails purchase) async {
+    final api = ownerApiOf(context);
     setState(() => _busy = true);
     try {
-      final res = await ownerApiOf(context).confirmAddonPurchase(
-        productId: purchase.productID,
-        purchaseToken: purchase.verificationData.serverVerificationData,
-      );
-      final user = ownerApiOf(context).parseUser(res);
+      final token = purchase.verificationData.serverVerificationData;
+      final res = _isPlanProduct(purchase.productID)
+          ? await api.confirmPlanPurchase(
+              productId: purchase.productID,
+              purchaseToken: token,
+            )
+          : await api.confirmAddonPurchase(
+              productId: purchase.productID,
+              purchaseToken: token,
+            );
+      final user = api.parseUser(res);
       if (user != null && mounted) {
         await context.read<AuthProvider>().refreshOwner();
       }
@@ -218,9 +242,10 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
         ),
       );
       if (ok != true || !mounted) return;
+      final api = ownerApiOf(context);
       setState(() => _busy = true);
       try {
-        final res = await ownerApiOf(context).confirmAddonPurchase(
+        final res = await api.confirmAddonPurchase(
           productId: productId,
           purchaseToken: 'DEV-STUB-${DateTime.now().millisecondsSinceEpoch}',
         );
@@ -252,6 +277,190 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     } else {
       await _iap.buyNonConsumable(purchaseParam: param);
     }
+  }
+
+  Future<void> _buyPlan(Map<String, dynamic> plan) async {
+    if (plan['can_purchase'] != true) return;
+    final productId = (plan['play_product_id'] ?? '').toString();
+    if (productId.isEmpty) return;
+
+    final details = _products[productId];
+    if (details == null) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Produk Play belum tersedia'),
+          content: Text(
+            _playConfigured
+                ? 'SKU "$productId" belum muncul dari Google Play. Pastikan internal testing + license tester.\n\nLanjut dengan stub token (hanya jika server GOOGLE_PLAY_DEV_STUB=true)?'
+                : 'Google Play Billing belum dikonfigurasi di server. Lanjut stub token untuk uji lokal?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Stub confirm'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      final api = ownerApiOf(context);
+      setState(() => _busy = true);
+      try {
+        final res = await api.confirmPlanPurchase(
+          productId: productId,
+          purchaseToken: 'DEV-STUB-${DateTime.now().millisecondsSinceEpoch}',
+        );
+        await context.read<AuthProvider>().refreshOwner();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(res['message']?.toString() ?? 'Paket aktif')),
+          );
+          await _load();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
+
+    await _iap.buyNonConsumable(
+      purchaseParam: PurchaseParam(productDetails: details),
+    );
+  }
+
+  (String amount, String suffix) _planPrice(Map<String, dynamic> plan) {
+    final productId = (plan['play_product_id'] ?? '').toString();
+    final play = _products[productId];
+    if (play != null) {
+      return (play.price, '');
+    }
+    final raw = plan['price'];
+    final n = raw is num ? raw : num.tryParse('$raw') ?? 0;
+    final cycle = (plan['billing_cycle'] ?? '').toString().trim();
+    return ('Rp ${_formatIdr(n)}', cycle.isEmpty ? '' : cycle);
+  }
+
+  Widget _planCard(Map<String, dynamic> plan) {
+    final isCurrent = plan['is_current'] == true;
+    final canBuy = plan['can_purchase'] == true;
+    final hasSku = ((plan['play_product_id'] ?? '').toString()).isNotEmpty;
+    final parts = _planPrice(plan);
+    final name = (plan['name'] ?? '').toString();
+    final description = (plan['description'] ?? '').toString();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.white,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isCurrent ? _brand : const Color(0xFFE5E7EB),
+              width: isCurrent ? 1.6 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  if (isCurrent)
+                    const _Chip(
+                      label: 'Paket aktif',
+                      fg: _brand,
+                      bg: Color(0xFFFFF1EE),
+                    ),
+                ],
+              ),
+              if (description.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: parts.$1,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: _brand,
+                      ),
+                    ),
+                    if (parts.$2.isNotEmpty)
+                      TextSpan(
+                        text: ' ${parts.$2}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: FilledButton(
+                  onPressed: canBuy && !_busy ? () => _buyPlan(plan) : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _brand,
+                    disabledBackgroundColor: const Color(0xFFE5E7EB),
+                    disabledForegroundColor: const Color(0xFF6B7280),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    isCurrent
+                        ? 'Sedang dipakai'
+                        : hasSku
+                            ? 'Beli paket'
+                            : 'Belum tersedia di Play',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _restore() async {
@@ -355,7 +564,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       backgroundColor: _bg,
       appBar: AppBar(
         title: const Text(
-          'Add-on fitur',
+          'Paket',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         backgroundColor: _brand,
@@ -386,13 +595,42 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
                     children: [
                       const _HeroBanner(),
+                      if (_currentPlan != null) ...[
+                        const SizedBox(height: 12),
+                        _CurrentPlanBanner(plan: _currentPlan!),
+                      ],
                       if (_overlapping.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         _OverlapBanner(messages: _overlapping),
                       ],
                       const SizedBox(height: 18),
                       Text(
-                        'Pilih add-on',
+                        'Paket penuh',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Mengganti seluruh akses paket. Add-on yang sudah dibeli tetap ada.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.grey.shade600,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (_plans.isEmpty)
+                        const _EmptyNote(
+                          text: 'Belum ada paket yang ditawarkan di aplikasi.',
+                        )
+                      else
+                        ..._plans.map(_planCard),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Add-on fitur',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
@@ -611,6 +849,84 @@ class _HeroBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CurrentPlanBanner extends StatelessWidget {
+  const _CurrentPlanBanner({required this.plan});
+
+  final Map<String, dynamic> plan;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (plan['name'] ?? 'Paket').toString();
+    final isFree = plan['is_mobile_free'] == true;
+    final expires = (plan['expires_at'] ?? '').toString();
+    final parsed = DateTime.tryParse(expires);
+    final expiryLabel = parsed == null
+        ? expires
+        : '${parsed.toLocal().day}/${parsed.toLocal().month}/${parsed.toLocal().year}';
+    final subtitle = isFree
+        ? 'Paket gratis aplikasi kasir. Upgrade kapan saja.'
+        : expires.isEmpty
+            ? 'Paket berbayar sedang aktif.'
+            : 'Berlaku sampai $expiryLabel';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.workspace_premium_rounded, color: Color(0xFFAE1504)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Paket aktif: $name',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.grey.shade700,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyNote extends StatelessWidget {
+  const _EmptyNote({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
       ),
     );
   }

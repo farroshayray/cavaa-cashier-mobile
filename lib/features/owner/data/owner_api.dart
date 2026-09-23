@@ -794,6 +794,25 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> listPlans() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/plans');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> confirmPlanPurchase({
+    required String productId,
+    required String purchaseToken,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/plans/confirm',
+      data: {
+        'product_id': productId,
+        'purchase_token': purchaseToken,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> listAddons() async {
     final res = await client.dio.get('/api/v1/mobile/owner/addons');
     return Map<String, dynamic>.from(res.data as Map);
