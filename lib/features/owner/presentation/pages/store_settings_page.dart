@@ -322,6 +322,49 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
     });
   }
 
+  Future<void> _onOpenBillChanged(bool value) async {
+    if (!value) {
+      setState(() => _isOpenbill = false);
+      return;
+    }
+    final owner = context.read<AuthProvider>().owner;
+    if (owner == null || owner.hasFeature('feature_open_bill')) {
+      setState(() => _isOpenbill = true);
+      return;
+    }
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fitur berbayar'),
+        content: const Text(
+          'Open bill memerlukan add-on atau paket yang mendukung.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: _brand),
+            child: const Text('Lihat Add-on'),
+          ),
+        ],
+      ),
+    );
+    if (go == true && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const OwnerAddonsPage(
+            highlightFeatureKey: 'feature_open_bill',
+            highlightAddonCode: 'open_bill',
+          ),
+        ),
+      );
+      if (mounted) await context.read<AuthProvider>().refreshOwner();
+    }
+  }
+
   Future<void> _pickBackground() async {
     final path = await _pickAndCrop(
       title: 'Crop Background (16:9)',
@@ -845,7 +888,14 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                               'Open bill',
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
-                            onChanged: (v) => setState(() => _isOpenbill = v),
+                            subtitle: (context.watch<AuthProvider>().owner
+                                        ?.hasFeature('feature_open_bill') ??
+                                    true)
+                                ? null
+                                : const Text(
+                                    'Menyalakan fitur ini memerlukan add-on.',
+                                  ),
+                            onChanged: _onOpenBillChanged,
                           ),
                         ],
                       ),

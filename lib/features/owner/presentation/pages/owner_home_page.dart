@@ -305,7 +305,9 @@ class _OwnerHomePageState extends State<OwnerHomePage> {
             : null,
       ),
       _MenuItemData(
-        icon: Icons.qr_code_2_rounded,
+        icon: canScanTable
+            ? Icons.qr_code_2_rounded
+            : Icons.table_restaurant_rounded,
         title: canScanTable ? 'QR\nMeja' : 'Meja',
         enabled: hasStore,
         onTap: hasStore

@@ -604,6 +604,72 @@ class _BarcodeDialog extends StatelessWidget {
   final String? qrUrl;
 
   Future<void> _share(BuildContext context) async {
+    final hasLink = (qrUrl ?? '').trim().isNotEmpty;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      useRootNavigator: false,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  'Bagikan QR Meja',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.image_rounded, color: _brand),
+                title: const Text(
+                  'Bagikan gambar',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text('Kirim file gambar barcode'),
+                onTap: () => Navigator.pop(ctx, 'image'),
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.link_rounded,
+                  color: hasLink ? _brand : Colors.grey,
+                ),
+                title: const Text(
+                  'Bagikan link',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  hasLink ? 'Kirim tautan tanpa gambar' : 'Link belum tersedia',
+                ),
+                enabled: hasLink,
+                onTap: hasLink ? () => Navigator.pop(ctx, 'link') : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+
+    if (choice == 'link') {
+      final link = qrUrl!.trim();
+      await Share.share(
+        'QR Meja $tableNo · $storeName\n$link',
+        subject: 'QR Meja $tableNo',
+      );
+      return;
+    }
+
     final dir = await getTemporaryDirectory();
     final file = File(
       '${dir.path}/qr-meja-${tableNo.replaceAll(RegExp(r"[^a-zA-Z0-9_-]"), "_")}.png',

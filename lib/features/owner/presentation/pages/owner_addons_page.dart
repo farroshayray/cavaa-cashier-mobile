@@ -322,6 +322,12 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
           accent: _brand,
           soft: Color(0xFFFFF1EE),
         );
+      case 'open_bill':
+        return const _AddonVisual(
+          icon: Icons.payments_rounded,
+          accent: Color(0xFF0369A1),
+          soft: Color(0xFFF0F9FF),
+        );
       default:
         return const _AddonVisual(
           icon: Icons.extension_rounded,
