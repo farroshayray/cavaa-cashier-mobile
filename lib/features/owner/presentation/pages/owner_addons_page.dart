@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:provider/provider.dart';
 
+import '/core/utils/open_url.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
 
@@ -37,6 +38,8 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   Map<String, dynamic>? _currentPlan;
   List<Map<String, dynamic>> _overlapping = [];
   bool _playConfigured = false;
+  bool _allowPlay = true;
+  bool _allowManual = false;
   final ScrollController _scrollController = ScrollController();
 
   final InAppPurchase _iap = InAppPurchase.instance;
@@ -124,6 +127,8 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
           : null;
       _playConfigured = res['play_configured'] == true ||
           plansRes['play_configured'] == true;
+      _readBilling(res);
+      _readBilling(plansRes);
 
       final ids = {
         ..._addons.map((a) => (a['play_product_id'] ?? '').toString()),
@@ -169,6 +174,46 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
           await _iap.completePurchase(purchase);
         }
       }
+    }
+  }
+
+  void _readBilling(Map<String, dynamic> res) {
+    final billing = res['billing'];
+    if (billing is Map) {
+      _allowPlay = billing['play'] == true;
+      _allowManual = billing['manual'] == true;
+    }
+  }
+
+  Future<void> _openManualCheckout(String type, Object? id) async {
+    final itemId = id is int ? id : int.tryParse('$id');
+    if (itemId == null || itemId <= 0) return;
+    final api = ownerApiOf(context);
+    setState(() => _busy = true);
+    try {
+      final res = await api.createCheckoutLink(type: type, itemId: itemId);
+      final url = (res['url'] ?? '').toString();
+      if (url.isEmpty) {
+        throw Exception('Tautan pembayaran kosong');
+      }
+      await openExternalUrl(url);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Lanjutkan transfer di browser. Setelah disetujui, tarik halaman ini untuk memperbarui akses.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -432,30 +477,62 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: FilledButton(
-                  onPressed: canBuy && !_busy ? () => _buyPlan(plan) : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _brand,
-                    disabledBackgroundColor: const Color(0xFFE5E7EB),
-                    disabledForegroundColor: const Color(0xFF6B7280),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              if (_allowPlay && !isCurrent)
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: FilledButton(
+                    onPressed: canBuy && !_busy ? () => _buyPlan(plan) : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _brand,
+                      disabledBackgroundColor: const Color(0xFFE5E7EB),
+                      disabledForegroundColor: const Color(0xFF6B7280),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      hasSku ? 'Beli paket' : 'Belum tersedia di Play',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
-                  child: Text(
-                    isCurrent
-                        ? 'Sedang dipakai'
-                        : hasSku
-                            ? 'Beli paket'
-                            : 'Belum tersedia di Play',
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              if (isCurrent)
+                const SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: FilledButton(
+                    onPressed: null,
+                    child: Text(
+                      'Sedang dipakai',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
                   ),
                 ),
-              ),
+              if (_allowManual && !isCurrent) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _openManualCheckout('plan', plan['id']),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _brand,
+                      side: const BorderSide(color: _brand),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Transfer bank',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -674,8 +751,12 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                               owned: owned,
                               isSub: isSub,
                             ),
-                            canBuy: canBuy && !_busy,
+                            canBuy: canBuy && !_busy && _allowPlay,
                             onBuy: () => _buy(addon),
+                            showManual: _allowManual && canBuy,
+                            showPlay: _allowPlay,
+                            onTransfer: () =>
+                                _openManualCheckout('addon', addon['id']),
                           ),
                         );
 
@@ -1025,6 +1106,9 @@ class _AddonCard extends StatelessWidget {
     required this.ctaLabel,
     required this.canBuy,
     required this.onBuy,
+    this.showManual = false,
+    this.showPlay = true,
+    this.onTransfer,
   });
 
   final String name;
@@ -1041,6 +1125,9 @@ class _AddonCard extends StatelessWidget {
   final String ctaLabel;
   final bool canBuy;
   final VoidCallback onBuy;
+  final bool showManual;
+  final bool showPlay;
+  final VoidCallback? onTransfer;
 
   static const _brand = Color(0xFFAE1504);
   static const _ink = Color(0xFF1C1C1E);
@@ -1252,27 +1339,49 @@ class _AddonCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: FilledButton(
-                    onPressed: canBuy ? onBuy : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _brand,
-                      disabledBackgroundColor: const Color(0xFFE5E7EB),
-                      disabledForegroundColor: const Color(0xFF6B7280),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                if (showPlay || !showManual)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: FilledButton(
+                      onPressed: canBuy ? onBuy : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _brand,
+                        disabledBackgroundColor: const Color(0xFFE5E7EB),
+                        disabledForegroundColor: const Color(0xFF6B7280),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                        ),
                       ),
-                      textStyle: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14.5,
+                      child: Text(ctaLabel),
+                    ),
+                  ),
+                if (showManual) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: OutlinedButton(
+                      onPressed: onTransfer,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _brand,
+                        side: const BorderSide(color: _brand),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Transfer bank',
+                        style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
-                    child: Text(ctaLabel),
                   ),
-                ),
+                ],
               ],
             ),
           ),

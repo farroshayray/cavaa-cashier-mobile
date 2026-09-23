@@ -794,6 +794,20 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> createCheckoutLink({
+    required String type,
+    required int itemId,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/checkout-links',
+      data: {
+        'type': type,
+        'item_id': itemId,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> listPlans() async {
     final res = await client.dio.get('/api/v1/mobile/owner/plans');
     return Map<String, dynamic>.from(res.data as Map);
