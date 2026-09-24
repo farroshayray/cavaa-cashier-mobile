@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
@@ -36,6 +37,17 @@ DateTime? _parseExpiry(Object? raw) {
   final text = (raw ?? '').toString();
   if (text.isEmpty) return null;
   return DateTime.tryParse(text)?.toLocal();
+}
+
+String _confirmErrorMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map && data['message'] != null) {
+      final message = data['message'].toString().trim();
+      if (message.isNotEmpty) return message;
+    }
+  }
+  return 'Gagal konfirmasi pembelian.';
 }
 
 String _formatIdDate(DateTime date) {
@@ -211,6 +223,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   }
 
   Future<void> _onPurchaseUpdated(List<PurchaseDetails> purchases) async {
+    final restored = <PurchaseDetails>[];
     for (final purchase in purchases) {
       if (purchase.status == PurchaseStatus.pending) continue;
       if (purchase.status == PurchaseStatus.error) {
@@ -227,13 +240,21 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
         continue;
       }
 
-      if (purchase.status == PurchaseStatus.purchased ||
-          purchase.status == PurchaseStatus.restored) {
+      if (purchase.status == PurchaseStatus.restored) {
+        restored.add(purchase);
+        continue;
+      }
+
+      if (purchase.status == PurchaseStatus.purchased) {
         await _confirmWithBackend(purchase);
         if (purchase.pendingCompletePurchase) {
           await _iap.completePurchase(purchase);
         }
       }
+    }
+
+    if (restored.isNotEmpty) {
+      await _confirmRestored(restored);
     }
   }
 
@@ -429,20 +450,26 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     );
   }
 
+  Future<Map<String, dynamic>> _postConfirm(PurchaseDetails purchase) {
+    final api = ownerApiOf(context);
+    final token = purchase.verificationData.serverVerificationData;
+    if (_isPlanProduct(purchase.productID)) {
+      return api.confirmPlanPurchase(
+        productId: purchase.productID,
+        purchaseToken: token,
+      );
+    }
+    return api.confirmAddonPurchase(
+      productId: purchase.productID,
+      purchaseToken: token,
+    );
+  }
+
   Future<void> _confirmWithBackend(PurchaseDetails purchase) async {
     final api = ownerApiOf(context);
     setState(() => _busy = true);
     try {
-      final token = purchase.verificationData.serverVerificationData;
-      final res = _isPlanProduct(purchase.productID)
-          ? await api.confirmPlanPurchase(
-              productId: purchase.productID,
-              purchaseToken: token,
-            )
-          : await api.confirmAddonPurchase(
-              productId: purchase.productID,
-              purchaseToken: token,
-            );
+      final res = await _postConfirm(purchase);
       final user = api.parseUser(res);
       if (user != null && mounted) {
         await context.read<AuthProvider>().refreshOwner();
@@ -456,9 +483,48 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal konfirmasi: $e')),
+          SnackBar(content: Text(_confirmErrorMessage(e))),
         );
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirmRestored(List<PurchaseDetails> purchases) async {
+    final api = ownerApiOf(context);
+    setState(() => _busy = true);
+    final successes = <String>[];
+    final failures = <String>[];
+    try {
+      for (final purchase in purchases) {
+        try {
+          final res = await _postConfirm(purchase);
+          final message = res['message']?.toString().trim() ?? '';
+          successes.add(message.isEmpty ? 'Pembelian dipulihkan.' : message);
+          final user = api.parseUser(res);
+          if (user != null && mounted) {
+            await context.read<AuthProvider>().refreshOwner();
+          }
+        } catch (e) {
+          failures.add(_confirmErrorMessage(e));
+        }
+        if (purchase.pendingCompletePurchase) {
+          await _iap.completePurchase(purchase);
+        }
+      }
+      if (successes.isNotEmpty && mounted) {
+        await _load();
+      }
+      if (!mounted) return;
+      final text = successes.isEmpty
+          ? failures.first
+          : failures.isEmpty
+              ? successes.first
+              : '${successes.first} ${failures.first}';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(text)),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -512,7 +578,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$e')),
+            SnackBar(content: Text(_confirmErrorMessage(e))),
           );
         }
       } finally {
@@ -576,7 +642,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$e')),
+            SnackBar(content: Text(_confirmErrorMessage(e))),
           );
         }
       } finally {
@@ -746,11 +812,6 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     setState(() => _busy = true);
     try {
       await _iap.restorePurchases();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Restore dikirim ke Google Play')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
