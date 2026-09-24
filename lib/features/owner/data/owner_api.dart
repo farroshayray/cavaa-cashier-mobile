@@ -151,6 +151,7 @@ class OwnerApi {
     int? categoryId,
     int? promotionId,
     bool alwaysAvailable = true,
+    int? stockQuantity,
     bool isActive = true,
     bool isHotProduct = false,
     List<Map<String, dynamic>>? menuOptions,
@@ -164,6 +165,8 @@ class OwnerApi {
       if (categoryId == null) 'category_name': categoryName ?? 'Umum',
       if (promotionId != null) 'promotion_id': promotionId,
       'always_available': alwaysAvailable ? 1 : 0,
+      if (!alwaysAvailable && stockQuantity != null)
+        'stock_quantity': stockQuantity,
       'is_active': isActive ? 1 : 0,
       'is_hot_product': isHotProduct ? 1 : 0,
       if (menuOptions != null) 'menu_options': jsonEncode(menuOptions),
@@ -184,6 +187,7 @@ class OwnerApi {
     required int id,
     required num price,
     bool? alwaysAvailable,
+    int? stockQuantity,
     bool? isActive,
     bool? isHotProduct,
     int? promotionId,
@@ -196,6 +200,8 @@ class OwnerApi {
         'price': price,
         if (alwaysAvailable != null)
           'always_available': alwaysAvailable ? 1 : 0,
+        if (alwaysAvailable == false && stockQuantity != null)
+          'stock_quantity': stockQuantity,
         if (isActive != null) 'is_active': isActive ? 1 : 0,
         if (isHotProduct != null) 'is_hot_product': isHotProduct ? 1 : 0,
         if (clearPromotion)
@@ -213,6 +219,7 @@ class OwnerApi {
     List<int> masterProductIds, {
     num? price,
     bool? alwaysAvailable,
+    int? stockQuantity,
     bool? isActive,
     bool? isHotProduct,
     int? promotionId,
@@ -223,6 +230,8 @@ class OwnerApi {
         'master_product_ids': masterProductIds,
         if (price != null) 'price': price,
         if (alwaysAvailable != null) 'always_available': alwaysAvailable,
+        if (alwaysAvailable == false && stockQuantity != null)
+          'stock_quantity': stockQuantity,
         if (isActive != null) 'is_active': isActive,
         if (isHotProduct != null) 'is_hot_product': isHotProduct,
         if (promotionId != null) 'promotion_id': promotionId,

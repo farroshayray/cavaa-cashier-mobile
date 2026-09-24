@@ -23,6 +23,9 @@ class MenuOptionItem {
     this.price = '0',
     this.description = '',
     this.alwaysAvailable = false,
+    this.stockType = 'direct',
+    this.stockQuantity = '',
+    this.stockEditable = true,
   });
 
   int? optionId;
@@ -30,6 +33,9 @@ class MenuOptionItem {
   String price;
   String description;
   bool alwaysAvailable;
+  String stockType;
+  String stockQuantity;
+  bool stockEditable;
 
   factory MenuOptionItem.fromJson(Map<String, dynamic> json) {
     return MenuOptionItem(
@@ -45,6 +51,15 @@ class MenuOptionItem {
       description: json['description']?.toString() ?? '',
       alwaysAvailable:
           json['always_available'] == true || json['always_available'] == 1,
+      stockType: json['stock_type']?.toString() ?? 'direct',
+      stockQuantity: () {
+        final q = json['stock_quantity'];
+        if (q is num) return q.toStringAsFixed(0);
+        final text = q?.toString() ?? '';
+        return text.isEmpty ? '' : text;
+      }(),
+      stockEditable: json['stock_editable'] != false &&
+          (json['stock_type']?.toString() ?? 'direct') != 'linked',
     );
   }
 
@@ -341,6 +356,35 @@ class ProductMenuOptionsEditor extends StatelessWidget {
                               opt.alwaysAvailable = v;
                               _emit();
                             },
+                          ),
+                        if (showOptionStock && !opt.alwaysAvailable)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: opt.stockEditable
+                                ? TextField(
+                                    controller: TextEditingController(
+                                      text: opt.stockQuantity,
+                                    )..selection = TextSelection.collapsed(
+                                        offset: opt.stockQuantity.length,
+                                      ),
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Stok (pcs)',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (v) => opt.stockQuantity = v,
+                                  )
+                                : InputDecorator(
+                                    decoration: const InputDecoration(
+                                      labelText: 'Stok dari resep (pcs)',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    child: Text(
+                                      opt.stockQuantity.isEmpty
+                                          ? '0'
+                                          : opt.stockQuantity,
+                                    ),
+                                  ),
                           ),
                       ],
                     ),

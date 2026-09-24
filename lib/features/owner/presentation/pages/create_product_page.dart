@@ -12,6 +12,32 @@ import 'promotions_page.dart';
 const _brand = productBrand;
 const _bg = Color(0xFFF6F7F9);
 
+class _StoreStockChip extends StatelessWidget {
+  const _StoreStockChip({required this.label, this.filled = false});
+
+  final String label;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: filled ? _brand.withValues(alpha: 0.1) : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: filled ? _brand : Colors.black87,
+        ),
+      ),
+    );
+  }
+}
+
 class CreateProductPage extends StatefulWidget {
   const CreateProductPage({super.key});
 
@@ -252,6 +278,13 @@ class _CreateProductPageState extends State<CreateProductPage> {
                       final catName =
                           cat is Map ? cat['name']?.toString() : null;
                       final thumb = resolveProductImageUrl(p['pictures']);
+                      final always = p['always_available'] == true ||
+                          p['always_available'] == 1;
+                      final rawQty = p['stock_quantity'];
+                      final qty = rawQty is num
+                          ? rawQty.toInt()
+                          : int.tryParse('${rawQty ?? ''}');
+                      final showQty = qty != null && (!always || qty > 0);
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         decoration: BoxDecoration(
@@ -286,15 +319,39 @@ class _CreateProductPageState extends State<CreateProductPage> {
                             p['name']?.toString() ?? '-',
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
-                          subtitle: Text(
-                            [
-                              'Rp ${formatProductPrice(p['price'])}',
-                              if (catName != null) catName,
-                              if ((p['product_code']?.toString() ?? '')
-                                  .isNotEmpty)
-                                p['product_code'].toString(),
-                            ].join(' · '),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                [
+                                  'Rp ${formatProductPrice(p['price'])}',
+                                  if (catName != null) catName,
+                                  if ((p['product_code']?.toString() ?? '')
+                                      .isNotEmpty)
+                                    p['product_code'].toString(),
+                                ].join(' · '),
+                              ),
+                              if (always || showQty) ...[
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (showQty)
+                                      _StoreStockChip(
+                                        label: 'Stok $qty pcs',
+                                      ),
+                                    if (always)
+                                      const _StoreStockChip(
+                                        label: 'Selalu tersedia',
+                                        filled: true,
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ],
                           ),
+                          isThreeLine: always || showQty,
                           trailing: Icon(
                             (p['is_active'] == true || p['is_active'] == 1)
                                 ? Icons.check_circle_rounded
@@ -339,6 +396,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
   final _category = TextEditingController(text: 'Umum');
   final _desc = TextEditingController();
   final _code = TextEditingController();
+  final _stock = TextEditingController();
 
   Map<String, dynamic>? _selectedMaster;
   List<MenuOptionGroup> _groups = [];
@@ -350,6 +408,8 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
   int? _categoryId;
   int? _promotionId;
   bool _alwaysAvailable = true;
+  String _stockType = 'direct';
+  bool _stockEditable = true;
   bool _isActive = true;
   bool _isHot = false;
   bool _loading = false;
@@ -379,6 +439,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
     _category.dispose();
     _desc.dispose();
     _code.dispose();
+    _stock.dispose();
     super.dispose();
   }
 
@@ -435,6 +496,12 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
         : int.tryParse('${product['promo_id'] ?? ''}');
     _alwaysAvailable =
         product['always_available'] == true || product['always_available'] == 1;
+    _stockType = product['stock_type']?.toString() ?? 'direct';
+    _stockEditable = product['stock_editable'] != false && _stockType != 'linked';
+    final stockQty = product['stock_quantity'];
+    _stock.text = stockQty is num
+        ? stockQty.toStringAsFixed(0)
+        : (stockQty?.toString() ?? '');
     _isActive = product['is_active'] == true || product['is_active'] == 1;
     _isHot =
         product['is_hot_product'] == true || product['is_hot_product'] == 1;
@@ -585,6 +652,22 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       setState(() => _error = 'Harga wajib diisi');
       return;
     }
+    final stockQty = int.tryParse(_stock.text.trim());
+    if (!_alwaysAvailable && _stockEditable && stockQty == null) {
+      setState(() => _error = 'Stok (pcs) wajib diisi');
+      return;
+    }
+    if (_isEdit && !_alwaysAvailable) {
+      for (final g in _groups) {
+        for (final o in g.options) {
+          if (o.alwaysAvailable || !o.stockEditable) continue;
+          if (int.tryParse(o.stockQuantity.trim()) == null) {
+            setState(() => _error = 'Stok opsi wajib diisi');
+            return;
+          }
+        }
+      }
+    }
     if (!_identityLocked) {
       for (final g in _groups) {
         if (g.name.trim().isEmpty) {
@@ -609,6 +692,8 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
             optionSettings.add({
               'option_id': o.optionId,
               'always_available': o.alwaysAvailable,
+              if (!o.alwaysAvailable && o.stockEditable)
+                'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
             });
           }
         }
@@ -616,6 +701,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           id: _productId!,
           price: price,
           alwaysAvailable: _alwaysAvailable,
+          stockQuantity: (!_alwaysAvailable && _stockEditable) ? stockQty : null,
           isActive: _isActive,
           isHotProduct: _isHot,
           promotionId: _promotionId,
@@ -635,6 +721,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           [masterId],
           price: price,
           alwaysAvailable: _alwaysAvailable,
+          stockQuantity: (!_alwaysAvailable && _stockEditable) ? stockQty : null,
           isActive: _isActive,
           isHotProduct: _isHot,
           promotionId: _promotionId,
@@ -651,6 +738,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
               : _category.text.trim(),
           promotionId: _promotionId,
           alwaysAvailable: _alwaysAvailable,
+          stockQuantity: (!_alwaysAvailable && _stockEditable) ? stockQty : null,
           isActive: _isActive,
           isHotProduct: _isHot,
           menuOptions: _groups.map((e) => e.toJson()).toList(),
@@ -909,6 +997,29 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                             ? null
                             : (v) => setState(() => _alwaysAvailable = v),
                       ),
+                      if (!_alwaysAvailable)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _stockEditable
+                              ? TextField(
+                                  controller: _stock,
+                                  enabled: !_saving,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Stok (pcs)',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                )
+                              : InputDecorator(
+                                  decoration: const InputDecoration(
+                                    labelText: 'Stok dari resep (pcs)',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  child: Text(
+                                    _stock.text.isEmpty ? '0' : _stock.text,
+                                  ),
+                                ),
+                        ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         activeThumbColor: _brand,
