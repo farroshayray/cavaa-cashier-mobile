@@ -228,10 +228,13 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     for (final purchase in purchases) {
       if (purchase.status == PurchaseStatus.pending) continue;
       if (purchase.status == PurchaseStatus.error) {
-        if (mounted) {
+        final message = purchase.error?.message ?? '';
+        if (_isAlreadyOwned(message)) {
+          await _recoverAlreadyOwned();
+        } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(purchase.error?.message ?? 'Pembelian gagal'),
+              content: Text(message.isEmpty ? 'Pembelian gagal' : message),
             ),
           );
         }
@@ -589,10 +592,48 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     }
 
     final billingType = (addon['billing_type'] ?? '').toString();
-    await _iap.buyNonConsumable(
+    final started = await _iap.buyNonConsumable(
       purchaseParam: _purchaseParam(
         details,
         subscription: billingType == 'subscription',
+      ),
+    );
+    if (!started && billingType != 'subscription') {
+      await _recoverAlreadyOwned();
+    }
+  }
+
+  bool _isAlreadyOwned(String message) {
+    final text = message.toLowerCase();
+    return text.contains('already own') || text.contains('itemalreadyowned');
+  }
+
+  Future<void> _recoverAlreadyOwned() async {
+    final oneTimeIds = _addons
+        .where((addon) => (addon['billing_type'] ?? '').toString() != 'subscription')
+        .map((addon) => (addon['play_product_id'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    try {
+      final addition = _iap
+          .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+      final response = await addition.queryPastPurchases();
+      final owned = response.pastPurchases
+          .where((purchase) => oneTimeIds.contains(purchase.productID))
+          .toList();
+      if (owned.isNotEmpty) {
+        await _confirmRestored(owned);
+        return;
+      }
+    } catch (e) {
+      debugPrint('queryPastPurchases gagal: $e');
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Akun Google Play masih memegang item ini setelah refund. Pembelian baru bisa dilakukan setelah consume dari refund selesai.',
+        ),
       ),
     );
   }
