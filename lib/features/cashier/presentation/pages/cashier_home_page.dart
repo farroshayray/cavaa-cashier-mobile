@@ -15,6 +15,11 @@ import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 import '../../../owner/presentation/pages/owner_home_page.dart';
+import '/features/owner/presentation/pages/create_product_page.dart';
+import '/features/owner/presentation/pages/create_store_page.dart';
+import '/features/owner/presentation/pages/employees_page.dart';
+import '/features/owner/presentation/pages/payment_methods_page.dart';
+import '/features/owner/presentation/pages/tables_page.dart';
 
 import '/features/cashier/data/cashier_shift_api.dart';
 import '/features/cashier/presentation/pages/opening_cash_dialog.dart';
@@ -83,6 +88,7 @@ class _CashierHomePageState extends State<CashierHomePage>
   bool _isBootstrapping = true;
   String _bootstrapPhase = 'Menyiapkan kasir…';
   String? _bootstrapError;
+  String? _bootstrapSetupStep;
   bool _usedCacheFallback = false;
   Map<String, dynamic>? _queuedFcmTap;
 
@@ -236,7 +242,98 @@ class _CashierHomePageState extends State<CashierHomePage>
     setState(() {
       _bootstrapPhase = phase;
       _bootstrapError = null;
+      _bootstrapSetupStep = null;
     });
+  }
+
+  bool _isConnectionMessage(String? message) {
+    final text = (message ?? '').toLowerCase();
+    if (text.isEmpty) return false;
+    return text.contains('koneksi') ||
+        text.contains('offline') ||
+        text.contains('terhubung') ||
+        text.contains('socket') ||
+        text.contains('timeout');
+  }
+
+  String _cashierSetupStep(String? nextStep) {
+    switch (nextStep) {
+      case 'create_store':
+      case 'create_payment_method':
+      case 'create_table':
+      case 'create_employee':
+        return nextStep!;
+      case 'create_master_product':
+        return 'create_product';
+      default:
+        return 'create_product';
+    }
+  }
+
+  String _setupHint(String step) {
+    switch (step) {
+      case 'create_store':
+        return 'Belum ada toko. Buat toko dulu sebelum membuka kasir.';
+      case 'create_payment_method':
+        return 'Belum ada metode pembayaran. Buat metode pembayaran dulu sebelum membuka kasir.';
+      case 'create_table':
+        return 'Belum ada meja. Buat meja dulu sebelum membuka kasir.';
+      case 'create_employee':
+        return 'Belum ada pegawai kasir. Buat pegawai kasir dulu sebelum membuka kasir.';
+      default:
+        return 'Belum ada produk di toko ini. Tambahkan produk dulu sebelum membuka kasir.';
+    }
+  }
+
+  String _setupActionLabel(String step) {
+    switch (step) {
+      case 'create_store':
+        return 'Buat toko Anda';
+      case 'create_payment_method':
+        return 'Buat metode pembayaran';
+      case 'create_table':
+        return 'Buat meja';
+      case 'create_employee':
+        return 'Buat pegawai kasir';
+      default:
+        return 'Tambahkan produk toko';
+    }
+  }
+
+  Future<void> _openSetupStep() async {
+    final step = _bootstrapSetupStep;
+    if (step == null || !mounted) return;
+    final Widget page = switch (step) {
+      'create_store' => const CreateStorePage(),
+      'create_payment_method' => const PaymentMethodsPage(),
+      'create_table' => const TablesPage(),
+      'create_employee' => const EmployeesPage(),
+      _ => const CreateProductPage(),
+    };
+
+    await context.read<NotificationsProvider>().clear();
+    await context.read<PaymentProvider>().clearStateAndCache();
+    await context.read<ProcessProvider>().clearStateAndCache();
+    await context.read<DoneProvider>().clearStateAndCache();
+    await context.read<SyncService>().clearCashierSessionData();
+    if (!mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final nav = Navigator.of(context);
+    final ok = await auth.returnToOwner();
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? 'Gagal kembali ke owner')),
+      );
+      return;
+    }
+
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const OwnerHomePage()),
+      (_) => false,
+    );
+    nav.push(MaterialPageRoute(builder: (_) => page));
   }
 
   Future<void> _bootstrapAfterLogin() async {
@@ -245,6 +342,7 @@ class _CashierHomePageState extends State<CashierHomePage>
     setState(() {
       _isBootstrapping = true;
       _bootstrapError = null;
+      _bootstrapSetupStep = null;
       _usedCacheFallback = false;
       _bootstrapPhase = 'Cek koneksi…';
     });
@@ -292,12 +390,22 @@ class _CashierHomePageState extends State<CashierHomePage>
       final hasMenu = purchase.products.isNotEmpty;
       if (!hasMenu) {
         final offline = !context.read<ConnectivityStatusProvider>().isOnline;
+        final loadError = purchase.error;
+        final connectionProblem = offline || _isConnectionMessage(loadError);
+        final setupStep = connectionProblem || (loadError ?? '').isNotEmpty
+            ? null
+            : _cashierSetupStep(
+                context.read<AuthProvider>().owner?.onboarding?.nextStep,
+              );
         setState(() {
           _isBootstrapping = true;
-          _bootstrapError = offline
-              ? 'Mode offline — data menu belum tersedia. Sambungkan internet lalu coba lagi.'
-              : (purchase.error ??
-                  'Data menu gagal dimuat. Periksa koneksi lalu coba lagi.');
+          _bootstrapSetupStep = setupStep;
+          _bootstrapError = setupStep != null
+              ? _setupHint(setupStep)
+              : offline
+                  ? 'Mode offline — data menu belum tersedia. Sambungkan internet lalu coba lagi.'
+                  : (loadError ??
+                      'Data menu gagal dimuat. Periksa koneksi lalu coba lagi.');
         });
         return;
       }
@@ -322,6 +430,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       setState(() {
         _isBootstrapping = false;
         _bootstrapError = null;
+        _bootstrapSetupStep = null;
         _bootstrapPhase = 'Siap';
       });
 
@@ -348,6 +457,7 @@ class _CashierHomePageState extends State<CashierHomePage>
         _isBootstrapping = true;
         _bootstrapError =
             'Gagal menyiapkan kasir. Periksa koneksi lalu coba lagi.';
+        _bootstrapSetupStep = null;
       });
     }
   }
@@ -1507,8 +1617,10 @@ class _CashierHomePageState extends State<CashierHomePage>
                       ),
                     ),
                   ] else ...[
-                    const Icon(
-                      Icons.cloud_off_rounded,
+                    Icon(
+                      _bootstrapSetupStep == null
+                          ? Icons.cloud_off_rounded
+                          : Icons.flag_rounded,
                       color: Colors.white,
                       size: 42,
                     ),
@@ -1524,23 +1636,59 @@ class _CashierHomePageState extends State<CashierHomePage>
                       ),
                     ),
                     const SizedBox(height: 22),
+                    if (_bootstrapSetupStep != null) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _openSetupStep,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: brand,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            _setupActionLabel(_bootstrapSetupStep!),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       height: 48,
-                      child: ElevatedButton(
-                        onPressed: _retryBootstrap,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: brand,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          'Coba lagi',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
+                      child: _bootstrapSetupStep == null
+                          ? ElevatedButton(
+                              onPressed: _retryBootstrap,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: brand,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Coba lagi',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            )
+                          : OutlinedButton(
+                              onPressed: _retryBootstrap,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Coba lagi',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
                     ),
                     if (viaOwner) ...[
                       const SizedBox(height: 10),
