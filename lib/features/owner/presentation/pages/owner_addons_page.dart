@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:provider/provider.dart';
 
 import '/core/services/push_notification_service.dart';
@@ -588,12 +589,31 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     }
 
     final billingType = (addon['billing_type'] ?? '').toString();
-    final param = PurchaseParam(productDetails: details);
-    if (billingType == 'subscription') {
-      await _iap.buyNonConsumable(purchaseParam: param);
-    } else {
-      await _iap.buyNonConsumable(purchaseParam: param);
+    await _iap.buyNonConsumable(
+      purchaseParam: _purchaseParam(
+        details,
+        subscription: billingType == 'subscription',
+      ),
+    );
+  }
+
+  PurchaseParam _purchaseParam(
+    ProductDetails details, {
+    required bool subscription,
+  }) {
+    if (!subscription || details is! GooglePlayProductDetails) {
+      return PurchaseParam(productDetails: details);
     }
+    final offers = details.productDetails.subscriptionOfferDetails;
+    var token = details.offerToken;
+    if (offers != null && offers.isNotEmpty) {
+      final base = offers.where((offer) => (offer.offerId ?? '').isEmpty);
+      token = (base.isEmpty ? offers.first : base.first).offerIdToken;
+    }
+    return GooglePlayPurchaseParam(
+      productDetails: details,
+      offerToken: token,
+    );
   }
 
   Future<void> _buyPlan(Map<String, dynamic> plan) async {
@@ -652,7 +672,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     }
 
     await _iap.buyNonConsumable(
-      purchaseParam: PurchaseParam(productDetails: details),
+      purchaseParam: _purchaseParam(details, subscription: true),
     );
   }
 
