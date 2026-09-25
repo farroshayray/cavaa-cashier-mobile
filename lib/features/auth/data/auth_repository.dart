@@ -64,6 +64,40 @@ class AuthRepository {
     return owner;
   }
 
+  Future<OwnerModel> ownerUpdateProfile({
+    required String name,
+    String? phoneNumber,
+  }) async {
+    final data = await api.ownerUpdateProfile(
+      name: name,
+      phoneNumber: phoneNumber,
+    );
+    return _ownerFromUserPayload(data);
+  }
+
+  Future<OwnerModel> ownerChangePassword({
+    required String currentPassword,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    final data = await api.ownerChangePassword(
+      currentPassword: currentPassword,
+      password: password,
+      passwordConfirmation: passwordConfirmation,
+    );
+    return _ownerFromUserPayload(data);
+  }
+
+  Future<OwnerModel> _ownerFromUserPayload(Map<String, dynamic> data) async {
+    final userMap = data['user'];
+    if (userMap is! Map) {
+      throw Exception('Invalid owner profile response');
+    }
+    final owner = OwnerModel.fromJson(Map<String, dynamic>.from(userMap));
+    await storage.saveCachedOwner(owner);
+    return owner;
+  }
+
   Future<OwnerModel> _persistOwnerSession(Map<String, dynamic> data) async {
     final token = data['token']?.toString() ?? '';
     final userMap = data['user'];

@@ -27,6 +27,19 @@ String _formatMoney(num n) {
       );
 }
 
+String promotionDiscountLabel(Map<String, dynamic> p) {
+  final type = p['promotion_type']?.toString() ?? p['type']?.toString() ?? '';
+  final raw = p['promotion_value'] ?? p['value'];
+  final n = raw is num ? raw : num.tryParse('$raw');
+  if (n == null || type.isEmpty) return '';
+  if (type == 'percentage') {
+    final shown = n == n.roundToDouble() ? '${n.toInt()}' : '$n';
+    return '$shown%';
+  }
+  if (type == 'amount') return 'Rp ${_formatMoney(n)}';
+  return '';
+}
+
 String _pad2(int n) => n.toString().padLeft(2, '0');
 
 String _formatDateTime(DateTime? dt) {
@@ -778,9 +791,10 @@ class PromotionSelectWithManage extends StatelessWidget {
         const SizedBox(height: 6),
         DropdownButtonFormField<int?>(
           key: ValueKey(
-            'promo-dd-${promotions.map((p) => p['id']).join('-')}-$validId',
+            'promo-dd-${promotions.map((p) => '${p['id']}-${p['promotion_type']}-${p['promotion_value']}').join('-')}-$validId',
           ),
           initialValue: validId,
+          isExpanded: true,
           decoration: const InputDecoration(
             hintText: 'Pilih promo (opsional)',
             border: OutlineInputBorder(),
@@ -795,9 +809,14 @@ class PromotionSelectWithManage extends StatelessWidget {
               if (id == null) return null;
               final name =
                   p['name']?.toString() ?? p['promotion_name']?.toString();
+              final discount = promotionDiscountLabel(p);
+              final label = (name == null || name.isEmpty) ? '-' : name;
               return DropdownMenuItem<int?>(
                 value: id,
-                child: Text(name ?? '-'),
+                child: Text(
+                  discount.isEmpty ? label : '$label · $discount',
+                  overflow: TextOverflow.ellipsis,
+                ),
               );
             }).whereType<DropdownMenuItem<int?>>(),
           ],

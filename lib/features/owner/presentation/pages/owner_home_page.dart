@@ -20,6 +20,7 @@ import 'store_settings_page.dart';
 import 'tables_page.dart';
 import 'owner_cash_book_page.dart';
 import 'promotions_page.dart';
+import 'owner_account_page.dart';
 import 'owner_addons_page.dart';
 import '../widgets/owner_mobile_carousel.dart';
 
@@ -427,6 +428,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         elevation: 0,
         actions: [
           IconButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const OwnerAccountPage()),
+            ),
+            icon: const Icon(Icons.person_rounded),
+            tooltip: 'Akun',
+          ),
+          IconButton(
             onPressed: auth.isLoading ? null : _logout,
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',
@@ -451,6 +459,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 child: _OwnerHeader(
                   name: owner?.name ?? 'Owner',
                   email: owner?.email ?? '',
+                  onAccount: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const OwnerAccountPage()),
+                  ),
                   stores: stores,
                   selectedStoreId: selectedId,
                   selecting: _selectingStore || auth.isLoading,
@@ -547,6 +558,7 @@ class _OwnerHeader extends StatelessWidget {
   const _OwnerHeader({
     required this.name,
     required this.email,
+    required this.onAccount,
     required this.stores,
     required this.selectedStoreId,
     required this.selecting,
@@ -557,6 +569,7 @@ class _OwnerHeader extends StatelessWidget {
 
   final String name;
   final String email;
+  final VoidCallback onAccount;
   final List<OwnerStore> stores;
   final int? selectedStoreId;
   final bool selecting;
@@ -588,8 +601,11 @@ class _OwnerHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
+            InkWell(
+              onTap: onAccount,
+              borderRadius: BorderRadius.circular(12),
+              child: Row(
+                children: [
                 Container(
                   width: 54,
                   height: 54,
@@ -630,7 +646,9 @@ class _OwnerHeader extends StatelessWidget {
                     ],
                   ),
                 ),
+                const Icon(Icons.chevron_right_rounded, color: _brand),
               ],
+            ),
             ),
             const SizedBox(height: 14),
             Text(

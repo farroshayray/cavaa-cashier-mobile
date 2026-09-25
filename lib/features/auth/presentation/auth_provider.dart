@@ -254,6 +254,74 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateOwnerProfile({
+    required String name,
+    String? phoneNumber,
+  }) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+      owner = await repo.ownerUpdateProfile(
+        name: name,
+        phoneNumber: phoneNumber,
+      );
+      return true;
+    } on DioException catch (e) {
+      errorMessage = _messageFromDio(e, 'Gagal menyimpan profil');
+      return false;
+    } catch (_) {
+      errorMessage = 'Gagal menyimpan profil';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> changeOwnerPassword({
+    required String currentPassword,
+    required String password,
+    required String confirmation,
+  }) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+      owner = await repo.ownerChangePassword(
+        currentPassword: currentPassword,
+        password: password,
+        passwordConfirmation: confirmation,
+      );
+      return true;
+    } on DioException catch (e) {
+      errorMessage = _messageFromDio(e, 'Gagal mengganti password');
+      return false;
+    } catch (_) {
+      errorMessage = 'Gagal mengganti password';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  String _messageFromDio(DioException e, String fallback) {
+    final data = e.response?.data;
+    if (data is Map && data['message'] != null) {
+      return _messageFromErrorData(data);
+    }
+    if (data is Map && data['errors'] is Map) {
+      final errors = data['errors'] as Map;
+      final text = errors.values
+          .expand((v) => v is List ? v : [v])
+          .map((item) => item.toString())
+          .join('\n');
+      if (text.isNotEmpty) return text;
+    }
+    return fallback;
+  }
+
   Future<bool> enterCashierAsOwner({int? storeId}) async {
     try {
       isLoading = true;

@@ -82,6 +82,36 @@ class AuthApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> ownerUpdateProfile({
+    required String name,
+    String? phoneNumber,
+  }) async {
+    final Response res = await client.dio.patch(
+      '/api/v1/mobile/owner/profile',
+      data: {
+        'name': name,
+        'phone_number': phoneNumber,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> ownerChangePassword({
+    required String currentPassword,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    final Response res = await client.dio.post(
+      '/api/v1/mobile/owner/auth/change-password',
+      data: {
+        'current_password': currentPassword,
+        'password': password,
+        'password_confirmation': passwordConfirmation,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<OwnerModel> ownerMe() async {
     final Response res = await client.dio.get('/api/v1/mobile/owner/me');
     final data = res.data;
