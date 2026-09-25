@@ -34,6 +34,18 @@ class _ExpiryLine {
   final bool warning;
 }
 
+class _LinkedPlayPurchase {
+  const _LinkedPlayPurchase({
+    required this.purchase,
+    required this.itemName,
+    this.email,
+  });
+
+  final PurchaseDetails purchase;
+  final String itemName;
+  final String? email;
+}
+
 DateTime? _parseExpiry(Object? raw) {
   final text = (raw ?? '').toString();
   if (text.isEmpty) return null;
@@ -500,6 +512,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     setState(() => _busy = true);
     final successes = <String>[];
     final failures = <String>[];
+    final linked = <_LinkedPlayPurchase>[];
     try {
       for (final purchase in purchases) {
         try {
@@ -510,6 +523,17 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
           if (user != null && mounted) {
             await context.read<AuthProvider>().refreshOwner();
           }
+        } on DioException catch (e) {
+          final data = e.response?.data;
+          if (data is Map && data['code'] == 'linked_to_other_owner') {
+            linked.add(_LinkedPlayPurchase(
+              purchase: purchase,
+              itemName: (data['item_name'] ?? purchase.productID).toString(),
+              email: data['linked_email']?.toString(),
+            ));
+          } else {
+            failures.add(_confirmErrorMessage(e));
+          }
         } catch (e) {
           failures.add(_confirmErrorMessage(e));
         }
@@ -517,20 +541,77 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
           await _iap.completePurchase(purchase);
         }
       }
+      if (linked.isNotEmpty && mounted) {
+        final moved = await _askTransfer(linked);
+        if (moved && mounted) {
+          successes.add('Fitur Play dipindahkan ke akun ini.');
+        }
+      }
       if (successes.isNotEmpty && mounted) {
         await _load();
       }
       if (!mounted) return;
       final text = successes.isEmpty
-          ? failures.first
+          ? (failures.isEmpty ? null : failures.first)
           : failures.isEmpty
               ? successes.first
               : '${successes.first} ${failures.first}';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(text)),
-      );
+      if (text != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(text)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool> _askTransfer(List<_LinkedPlayPurchase> linked) async {
+    final names = linked.map((item) => item.itemName).toSet().join(', ');
+    final emails = linked
+        .map((item) => item.email)
+        .whereType<String>()
+        .where((email) => email.isNotEmpty)
+        .toSet()
+        .join(', ');
+    final who = emails.isEmpty ? 'akun lain' : emails;
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pindahkan fitur Play?'),
+        content: Text(
+          '$names tertaut ke $who. Pindahkan ke akun ini? Akun itu langsung kehilangan akses. Pembayaran manual tidak ikut pindah.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Pindahkan'),
+          ),
+        ],
+      ),
+    );
+    if (agreed != true || !mounted) return false;
+    try {
+      await ownerApiOf(context).transferPlayPurchases([
+        for (final item in linked)
+          (
+            productId: item.purchase.productID,
+            purchaseToken: item.purchase.verificationData.serverVerificationData,
+          ),
+      ]);
+      await context.read<AuthProvider>().refreshOwner();
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_confirmErrorMessage(e))),
+        );
+      }
+      return false;
     }
   }
 
@@ -643,7 +724,10 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     required bool subscription,
   }) {
     if (!subscription || details is! GooglePlayProductDetails) {
-      return PurchaseParam(productDetails: details);
+      return PurchaseParam(
+        productDetails: details,
+        applicationUserName: _playAccountId(),
+      );
     }
     final offers = details.productDetails.subscriptionOfferDetails;
     var token = details.offerToken;
@@ -653,8 +737,15 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     }
     return GooglePlayPurchaseParam(
       productDetails: details,
+      applicationUserName: _playAccountId(),
       offerToken: token,
     );
+  }
+
+  String? _playAccountId() {
+    final id = context.read<AuthProvider>().owner?.id;
+    if (id == null) return null;
+    return '$id';
   }
 
   Future<void> _buyPlan(Map<String, dynamic> plan) async {

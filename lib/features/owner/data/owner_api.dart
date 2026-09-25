@@ -859,6 +859,23 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> transferPlayPurchases(
+    List<({String productId, String purchaseToken})> purchases,
+  ) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/billing/transfer',
+      data: {
+        'purchases': purchases
+            .map((purchase) => {
+                  'product_id': purchase.productId,
+                  'purchase_token': purchase.purchaseToken,
+                })
+            .toList(),
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> confirmAddonPurchase({
     required String productId,
     required String purchaseToken,
