@@ -1402,6 +1402,8 @@ class _CashierHomePageState extends State<CashierHomePage>
       },
       child: Scaffold(
         drawer: _AppDrawer(
+          showReports: context.watch<PurchaseProvider>().partnerData?.canViewReports ==
+              true,
           onOpenProfile: () {
             Navigator.of(context).push(
               MaterialPageRoute(
@@ -2085,6 +2087,7 @@ class _NavItem extends StatelessWidget {
 
 class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
+    required this.showReports,
     required this.onOpenProfile,
     required this.onOpenReports,
     required this.onOpenCashBook,
@@ -2095,6 +2098,7 @@ class _AppDrawer extends StatelessWidget {
     this.onReturnToOwner,
   });
 
+  final bool showReports;
   final VoidCallback onOpenProfile;
   final VoidCallback onOpenReports;
   final VoidCallback onOpenCashBook;
@@ -2221,15 +2225,16 @@ class _AppDrawer extends StatelessWidget {
                       onOpenCashBook();
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.edit_document, color: brand),
-                    title: const Text('Laporan'),
-                    subtitle: const Text('Lihat laporan penjualan'),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      onOpenReports();
-                    },
-                  ),
+                  if (showReports)
+                    ListTile(
+                      leading: const Icon(Icons.edit_document, color: brand),
+                      title: const Text('Laporan'),
+                      subtitle: const Text('Lihat laporan penjualan'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onOpenReports();
+                      },
+                    ),
                   ListTile(
                     leading: const Icon(Icons.print_outlined, color: brand),
                     title: const Text('Pairing Printer'),

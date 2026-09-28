@@ -8,6 +8,7 @@ import '/features/auth/data/models/owner_model.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/auth/presentation/pages/login_page.dart';
 import '/features/cashier/presentation/pages/cashier_home_page.dart';
+import '/features/cashier/presentation/pages/reports/reports_page.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 import '/core/network/dio_client.dart';
 import '/core/services/connectivity_status_provider.dart';
@@ -209,6 +210,35 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
+  Future<void> _openReports(bool allowed) async {
+    if (!allowed) {
+      await _openAddonsPaywall(
+        'Laporan penjualan memerlukan add-on atau paket yang mendukung.',
+        highlightFeatureKey: 'report_sales',
+        highlightAddonCode: 'reports',
+      );
+      return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    final storeId = auth.owner?.onboarding?.selectedStoreId ??
+        auth.owner?.selectedPartnerId;
+    final ok = await auth.enterCashierAsOwner(storeId: storeId);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? 'Gagal membuka laporan')),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ReportsPage()),
+    );
+    if (!mounted) return;
+    await auth.returnToOwner();
+  }
+
   Future<void> _logout() async {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
@@ -320,6 +350,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
 
     final canPromo = owner?.hasFeature('products_promotions') ?? false;
     final canScanTable = owner?.hasFeature('feature_scan_table') ?? false;
+    final canReport = owner?.hasFeature('report_sales') ?? false;
 
     final menus = <_MenuItemData>[
       _MenuItemData(
@@ -406,6 +437,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 if (mounted) _loadPendingCashBooks();
               }
             : null,
+      ),
+      _MenuItemData(
+        icon: Icons.bar_chart_rounded,
+        title: 'Laporan',
+        enabled: hasStore,
+        onTap: hasStore ? () => _openReports(canReport) : null,
       ),
       _MenuItemData(
         icon: Icons.card_membership_rounded,
