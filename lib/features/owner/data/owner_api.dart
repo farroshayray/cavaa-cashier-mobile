@@ -979,6 +979,17 @@ class OwnerApi {
     });
   }
 
+  Future<void> setStockMinimum({
+    required int id,
+    required num? quantity,
+    int? unitId,
+  }) async {
+    await client.dio.post('/api/v1/mobile/owner/stocks/$id/minimum', data: {
+      'quantity': quantity,
+      if (unitId != null) 'unit_id': unitId,
+    });
+  }
+
   Future<void> deleteStock(int id) async {
     await client.dio.delete('/api/v1/mobile/owner/stocks/$id');
   }

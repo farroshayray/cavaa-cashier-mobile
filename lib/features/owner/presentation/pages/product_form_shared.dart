@@ -446,6 +446,7 @@ class ProductMenuOptionsEditor extends StatelessWidget {
                             LinkedRecipeEditor(
                               lines: opt.recipes,
                               ingredients: ingredients,
+                              sellPrice: num.tryParse(opt.price.replaceAll('.', '').trim()),
                               onChanged: (next) {
                                 opt.recipes = next;
                                 _emit();
@@ -524,11 +525,13 @@ class LinkedRecipeEditor extends StatelessWidget {
     required this.lines,
     required this.ingredients,
     required this.onChanged,
+    this.sellPrice,
   });
 
   final List<RecipeLine> lines;
   final List<Map<String, dynamic>> ingredients;
   final ValueChanged<List<RecipeLine>> onChanged;
+  final num? sellPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -565,8 +568,72 @@ class LinkedRecipeEditor extends StatelessWidget {
             label: const Text('Bahan resep'),
           ),
         ),
+        _costEstimate(),
       ],
     );
+  }
+
+  Widget _costEstimate() {
+    final hpp = _estimatedCost();
+    if (hpp <= 0) return const SizedBox.shrink();
+    final sell = sellPrice;
+    final gap = sell == null ? null : sell - hpp;
+    String money(num value) {
+      final rounded = value.round();
+      final text = rounded.abs().toString();
+      final buffer = StringBuffer(rounded < 0 ? '-' : '');
+      for (var i = 0; i < text.length; i++) {
+        if (i > 0 && (text.length - i) % 3 == 0) buffer.write('.');
+        buffer.write(text[i]);
+      }
+      return 'Rp $buffer';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Perkiraan HPP ${money(hpp)}',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          if (gap != null)
+            Text(
+              'Selisih terhadap harga jual ${money(gap)}',
+              style: TextStyle(
+                color: gap < 0 ? const Color(0xFFB42318) : Colors.black54,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  double _estimatedCost() {
+    var total = 0.0;
+    for (final line in lines) {
+      Map<String, dynamic>? ingredient;
+      for (final item in ingredients) {
+        if (int.tryParse('${item['id']}') == line.stockId) ingredient = item;
+      }
+      if (ingredient == null) continue;
+      final qty = double.tryParse(line.quantity.replaceAll(',', '.')) ?? 0;
+      final basePrice = ingredient['base_price'];
+      final price = basePrice is num ? basePrice.toDouble() : double.tryParse('$basePrice') ?? 0;
+      var toBase = 0.0;
+      final units = ingredient['available_units'];
+      if (units is List) {
+        for (final unit in units.whereType<Map>()) {
+          if (int.tryParse('${unit['id']}') == line.unitId) {
+            final factor = unit['to_base'];
+            toBase = factor is num ? factor.toDouble() : double.tryParse('$factor') ?? 0;
+          }
+        }
+      }
+      total += qty * toBase * price;
+    }
+    return total;
   }
 }
 

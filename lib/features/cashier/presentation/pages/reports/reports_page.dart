@@ -479,6 +479,8 @@ class _ReportsPageState extends State<ReportsPage> {
                   ? 'Mengambil data laporan dari server.'
                   : 'Filter aktif: $_activeFilterSummary.',
               omzet: _formatCurrency(_summary?.omzet ?? 0),
+              totalCogs: _formatCurrency(_summary?.totalCogs ?? 0),
+              grossProfit: _formatCurrency(_summary?.grossProfit ?? 0),
               totalTransactions: '${_summary?.totalTransactions ?? 0} Order',
               averageTransaction: _formatCurrency(
                 _summary?.averageTransaction ?? 0,
@@ -577,6 +579,8 @@ class _SummarySection extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.omzet,
+    required this.totalCogs,
+    required this.grossProfit,
     required this.totalTransactions,
     required this.averageTransaction,
     required this.cashVsNonCash,
@@ -586,6 +590,8 @@ class _SummarySection extends StatelessWidget {
   final String title;
   final String subtitle;
   final String omzet;
+  final String totalCogs;
+  final String grossProfit;
   final String totalTransactions;
   final String averageTransaction;
   final String cashVsNonCash;
@@ -641,6 +647,31 @@ class _SummarySection extends StatelessWidget {
                   icon: Icons.point_of_sale_outlined,
                   label: 'Tunai/Non Tunai',
                   cashVsNonCash: cashVsNonCash,
+                  isLoading: isLoading,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _SummaryCard(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'HPP',
+                  value: totalCogs,
+                  isLoading: isLoading,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SummaryCard(
+                  icon: Icons.savings_outlined,
+                  label: 'Laba kotor',
+                  value: grossProfit,
                   isLoading: isLoading,
                 ),
               ),
@@ -1154,6 +1185,8 @@ class _EmptyStateCard extends StatelessWidget {
 class _ReportSummaryData {
   const _ReportSummaryData({
     required this.omzet,
+    required this.totalCogs,
+    required this.grossProfit,
     required this.totalTransactions,
     required this.averageTransaction,
     required this.cashAmount,
@@ -1161,6 +1194,8 @@ class _ReportSummaryData {
   });
 
   final num omzet;
+  final num totalCogs;
+  final num grossProfit;
   final int totalTransactions;
   final num averageTransaction;
   final num cashAmount;
@@ -1182,6 +1217,8 @@ class _ReportSummaryData {
 
     return _ReportSummaryData(
       omzet: _asNum(summary['omzet']),
+      totalCogs: _asNum(summary['total_cogs']),
+      grossProfit: _asNum(summary['gross_profit']),
       totalTransactions: _asNum(summary['total_transactions']).toInt(),
       averageTransaction: _asNum(summary['average_transaction']),
       cashAmount: _asNum(cash['amount']),

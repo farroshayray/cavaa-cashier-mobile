@@ -1080,6 +1080,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                         controller: _price,
                         enabled: !_saving,
                         keyboardType: TextInputType.number,
+                        onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(
                           labelText: 'Harga toko',
                           border: OutlineInputBorder(),
@@ -1202,6 +1203,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                           LinkedRecipeEditor(
                             lines: _recipes,
                             ingredients: _ingredients,
+                            sellPrice: num.tryParse(_price.text.replaceAll('.', '').trim()),
                             onChanged: (next) => setState(() => _recipes = next),
                           ),
                       ] else ...[

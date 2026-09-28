@@ -207,14 +207,17 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
     final price = TextEditingController();
     var stock = _stocks.first;
     var direction = 'in';
+    var outCategory = 'damaged';
     var locationTo = _locations
         .map((e) => e['id']?.toString() ?? '')
         .firstWhere((id) => id.isNotEmpty && id != _location, orElse: () => '');
-    final title = type == 'in'
-        ? 'Stok masuk'
-        : type == 'transfer'
-            ? 'Transfer'
-            : 'Penyesuaian';
+    final title = switch (type) {
+      'in' => 'Stok masuk',
+      'transfer' => 'Transfer',
+      'out' => 'Stok keluar',
+      'opname' => 'Stok opname',
+      _ => 'Penyesuaian',
+    };
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -233,7 +236,12 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
           child: StatefulBuilder(
             builder: (ctx, setLocal) {
               final unitName = stock['display_unit_name']?.toString() ?? '';
-              return Column(
+              final qtyValue = num.tryParse(qty.text.trim().replaceAll(',', '.')) ?? 0;
+              final totalBuy = num.tryParse(price.text.trim().replaceAll(',', '.')) ?? 0;
+              final perUnit = qtyValue > 0 ? totalBuy / qtyValue : 0;
+              final showPurchase = type == 'in' || (type == 'adjustment' && direction == 'in');
+              return SingleChildScrollView(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -280,16 +288,41 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
                   TextField(
                     controller: qty,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setLocal(() {}),
                     decoration: _field(
-                      'Jumlah${unitName.isEmpty ? '' : ' ($unitName)'}',
+                      type == 'opname'
+                          ? 'Hasil hitung${unitName.isEmpty ? '' : ' ($unitName)'}'
+                          : 'Jumlah${unitName.isEmpty ? '' : ' ($unitName)'}',
                     ),
                   ),
-                  if (type == 'in') ...[
+                  if (showPurchase) ...[
                     const SizedBox(height: 12),
                     TextField(
                       controller: price,
                       keyboardType: TextInputType.number,
+                      onChanged: (_) => setLocal(() {}),
                       decoration: _field('Total harga beli (opsional)'),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Harga per ${unitName.isEmpty ? 'satuan' : unitName}: ${_money(perUnit)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
+                  if (type == 'out') ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: outCategory,
+                      decoration: _field('Alasan keluar'),
+                      items: const [
+                        DropdownMenuItem(value: 'damaged', child: Text('Rusak')),
+                        DropdownMenuItem(value: 'expired', child: Text('Kedaluwarsa')),
+                        DropdownMenuItem(value: 'internal_use', child: Text('Pemakaian internal')),
+                      ],
+                      onChanged: (v) => setLocal(() => outCategory = v ?? 'damaged'),
                     ),
                   ],
                   if (type == 'adjustment') ...[
@@ -330,6 +363,7 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
                     child: const Text('Simpan'),
                   ),
                 ],
+                ),
               );
             },
           ),
@@ -338,8 +372,8 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
     );
     if (saved != true || !mounted) return;
     final amount = num.tryParse(qty.text.trim().replaceAll(',', '.'));
-    if (amount == null || amount <= 0) {
-      _snack('Jumlah wajib diisi');
+    if (amount == null || (type == 'opname' ? amount < 0 : amount <= 0)) {
+      _snack(type == 'opname' ? 'Isi hasil hitung' : 'Jumlah wajib diisi');
       return;
     }
     final unitId = int.tryParse('${stock['display_unit_id']}');
@@ -356,7 +390,8 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
           'stock_id': '$stockId',
           'unit_id': unitId,
           'quantity': amount,
-          if (type == 'in') 'unit_price': num.tryParse(price.text.trim()) ?? 0,
+          if (type == 'in' || (type == 'adjustment' && direction == 'in'))
+            'unit_price': num.tryParse(price.text.trim()) ?? 0,
           if (type == 'adjustment') 'direction': direction,
         },
       ],
@@ -367,6 +402,11 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
     } else if (type == 'adjustment') {
       body['location'] = _location;
       body['category'] = 'audit_adjustment';
+    } else if (type == 'out') {
+      body['location_from'] = _location;
+      body['category'] = outCategory;
+    } else if (type == 'opname') {
+      body['location'] = _location;
     } else {
       if (locationTo.isEmpty) {
         _snack('Pilih lokasi tujuan');
@@ -391,12 +431,69 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  String _money(dynamic value) {
+    final number = value is num ? value.round() : int.tryParse('$value') ?? 0;
+    final text = number.abs().toString();
+    final buffer = StringBuffer(number < 0 ? '-' : '');
+    for (var i = 0; i < text.length; i++) {
+      if (i > 0 && (text.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(text[i]);
+    }
+    return 'Rp $buffer';
+  }
+
   String _qty(dynamic value) {
     if (value is num) {
       final text = value.toStringAsFixed(2);
       return text.replaceFirst(RegExp(r'\.?0+$'), '');
     }
     return value?.toString() ?? '0';
+  }
+
+  Future<void> _setMinimum(Map<String, dynamic> stock) async {
+    final current = stock['min_quantity'];
+    final input = TextEditingController(
+      text: current == null ? '' : _qty(current),
+    );
+    final unit = stock['display_unit_name']?.toString() ?? '';
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Stok minimum', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: TextField(
+          controller: input,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: _field('Minimum${unit.isEmpty ? '' : ' ($unit)'}'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: _primaryButton(),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final raw = input.text.trim().replaceAll(',', '.');
+    final id = int.tryParse('${stock['id']}');
+    final unitId = int.tryParse('${stock['display_unit_id']}');
+    if (id == null) return;
+    try {
+      await ownerApiOf(context).setStockMinimum(
+        id: id,
+        quantity: raw.isEmpty ? null : num.tryParse(raw),
+        unitId: unitId,
+      );
+      if (!mounted) return;
+      await _load();
+    } on DioException catch (e) {
+      _snack(_message(e));
+    }
   }
 
   @override
@@ -492,54 +589,59 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
     const actions = [
       (id: 'add', icon: Icons.add_rounded, label: 'Bahan'),
       (id: 'in', icon: Icons.south_rounded, label: 'Masuk'),
+      (id: 'out', icon: Icons.north_rounded, label: 'Keluar'),
       (id: 'adjustment', icon: Icons.tune_rounded, label: 'Sesuaikan'),
+      (id: 'opname', icon: Icons.fact_check_rounded, label: 'Opname'),
       (id: 'transfer', icon: Icons.swap_horiz_rounded, label: 'Transfer'),
     ];
-    return Row(
-      children: [
-        for (var i = 0; i < actions.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: Material(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  if (actions[i].id == 'add') {
-                    _addIngredient();
-                  } else {
-                    _movement(actions[i].id);
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: _brand.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(actions[i].icon, color: _brand, size: 20),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        actions[i].label,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+    Widget tile(int i) {
+      return Expanded(
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              if (actions[i].id == 'add') {
+                _addIngredient();
+              } else {
+                _movement(actions[i].id);
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _brand.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(actions[i].icon, color: _brand, size: 20),
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  Text(
+                    actions[i].label,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Row(children: [tile(0), const SizedBox(width: 8), tile(1), const SizedBox(width: 8), tile(2)]),
+        const SizedBox(height: 8),
+        Row(children: [tile(3), const SizedBox(width: 8), tile(4), const SizedBox(width: 8), tile(5)]),
       ],
     );
   }
@@ -602,6 +704,34 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
                         color: Colors.black.withValues(alpha: 0.4),
                       ),
                     ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Rata-rata ${_money(stock['average_price'])}${unit.isEmpty ? '' : '/$unit'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black.withValues(alpha: 0.55),
+                    ),
+                  ),
+                  Text(
+                    'Nilai ${_money(stock['inventory_value'])}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withValues(alpha: 0.45),
+                    ),
+                  ),
+                  if (stock['below_minimum'] == true)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Di bawah stok minimum',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFB42318),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -625,6 +755,15 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
                     ),
                   ),
               ],
+            ),
+            IconButton(
+              onPressed: () => _setMinimum(stock),
+              icon: Icon(
+                Icons.flag_outlined,
+                color: stock['below_minimum'] == true
+                    ? const Color(0xFFB42318)
+                    : Colors.black.withValues(alpha: 0.35),
+              ),
             ),
             IconButton(
               onPressed: () => _delete(stock),
