@@ -182,6 +182,10 @@ class OwnerModel {
   final OwnerPlanInfo? plan;
   final Map<String, bool> features;
   final OwnerOnboarding? onboarding;
+  final int cavaaPointsBalance;
+  final String? referralCode;
+  final String? referredCode;
+  final bool needsReferralPrompt;
 
   const OwnerModel({
     required this.id,
@@ -200,6 +204,10 @@ class OwnerModel {
     this.plan,
     this.features = const {},
     this.onboarding,
+    this.cavaaPointsBalance = 0,
+    this.referralCode,
+    this.referredCode,
+    this.needsReferralPrompt = false,
   });
 
   bool hasFeature(String key) => features[key] == true;
@@ -245,6 +253,12 @@ class OwnerModel {
           : null,
       features: features,
       onboarding: onboarding,
+      cavaaPointsBalance: json['cavaa_points_balance'] is int
+          ? json['cavaa_points_balance'] as int
+          : int.tryParse('${json['cavaa_points_balance'] ?? 0}') ?? 0,
+      referralCode: json['referral_code']?.toString(),
+      referredCode: json['referred_code']?.toString(),
+      needsReferralPrompt: json['needs_referral_prompt'] == true,
     );
   }
 
@@ -266,6 +280,10 @@ class OwnerModel {
       'plan': plan?.toJson(),
       'features': features,
       'onboarding': onboarding?.toJson(),
+      'cavaa_points_balance': cavaaPointsBalance,
+      'referral_code': referralCode,
+      'referred_code': referredCode,
+      'needs_referral_prompt': needsReferralPrompt,
     };
   }
 
@@ -295,6 +313,10 @@ class OwnerModel {
       plan: plan,
       features: features ?? this.features,
       onboarding: onboarding ?? this.onboarding,
+      cavaaPointsBalance: cavaaPointsBalance,
+      referralCode: referralCode,
+      referredCode: referredCode,
+      needsReferralPrompt: needsReferralPrompt,
     );
   }
 }

@@ -1049,4 +1049,50 @@ class OwnerApi {
     }
     return null;
   }
+
+  Future<Map<String, dynamic>> checkReferral(String code) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/referral/check',
+      data: {'code': code},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> applyReferral(String code) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/referral/apply',
+      data: {'code': code},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> skipReferral() async {
+    final res = await client.dio.post('/api/v1/mobile/owner/referral/skip');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> cavaaPoints() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/cavaa-points');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> purchaseWithPoints({
+    required String kind,
+    required int id,
+    required String mode,
+    String? period,
+    int? days,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/cavaa-points/purchase',
+      data: {
+        'kind': kind,
+        'id': id,
+        'mode': mode,
+        if (period != null) 'period': period,
+        if (days != null) 'days': days,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
 }

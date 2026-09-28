@@ -23,6 +23,11 @@ class AuthProvider extends ChangeNotifier {
   bool get isOwner => authRole == 'owner';
   bool get isCashier => authRole == 'cashier';
 
+  void applyOwner(OwnerModel next) {
+    owner = next;
+    notifyListeners();
+  }
+
   Future<void> bootstrap() async {
     final hasToken = await repo.hasToken();
     authRole = await repo.getAuthRole();

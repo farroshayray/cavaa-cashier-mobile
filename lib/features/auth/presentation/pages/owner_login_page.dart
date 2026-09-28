@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '/core/config/env.dart';
 import '../auth_provider.dart';
 import '../../../owner/presentation/pages/owner_home_page.dart';
+import '../../../owner/presentation/pages/referral_prompt_dialog.dart';
 import 'owner_set_password_page.dart';
 
 class OwnerLoginPage extends StatefulWidget {
@@ -30,7 +31,11 @@ class _OwnerLoginPageState extends State<OwnerLoginPage> {
     super.dispose();
   }
 
-  void _goAfterOwnerLogin() {
+  Future<void> _goAfterOwnerLogin() async {
+    if (context.read<AuthProvider>().owner?.needsReferralPrompt == true) {
+      await showReferralPrompt(context);
+      if (!mounted) return;
+    }
     final auth = context.read<AuthProvider>();
     final needsPassword = auth.owner?.needsPassword == true;
     Navigator.of(context).pushAndRemoveUntil(
@@ -99,7 +104,7 @@ class _OwnerLoginPageState extends State<OwnerLoginPage> {
         return;
       }
 
-      _goAfterOwnerLogin();
+      await _goAfterOwnerLogin();
     } catch (e) {
       if (!mounted) return;
       setState(() {

@@ -7,6 +7,7 @@ import '/core/config/env.dart';
 import '/core/network/dio_client.dart';
 import '../auth_provider.dart';
 import '../../../owner/presentation/pages/owner_home_page.dart';
+import '../../../owner/presentation/pages/referral_prompt_dialog.dart';
 import 'cashier_login_page.dart';
 import 'owner_login_page.dart';
 import 'owner_set_password_page.dart';
@@ -86,6 +87,9 @@ class _LoginPageState extends State<LoginPage> {
         });
         return;
       }
+
+      await showReferralPrompt(context);
+      if (!mounted) return;
 
       final needsPassword = auth.owner?.needsPassword == true;
       Navigator.of(context).pushReplacement(

@@ -12,6 +12,7 @@ import '/core/services/push_notification_service.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
 import '/features/owner/presentation/pages/owner_manual_checkout_page.dart';
+import '/features/owner/presentation/pages/owner_cavaa_points_page.dart';
 
 const _monthShort = [
   'Jan',
@@ -335,6 +336,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   bool _playConfigured = false;
   bool _allowPlay = true;
   bool _allowManual = false;
+  bool _pointsEnabled = true;
   final ScrollController _scrollController = ScrollController();
 
   final InAppPurchase _iap = InAppPurchase.instance;
@@ -433,6 +435,8 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
           plansRes['play_configured'] == true;
       _readBilling(res);
       _readBilling(plansRes);
+      _readPoints(res);
+      _readPoints(plansRes);
 
       final ids = {
         ..._addons.map((a) => (a['play_product_id'] ?? '').toString()),
@@ -498,6 +502,12 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     if (billing is Map) {
       _allowPlay = billing['play'] == true;
       _allowManual = billing['manual'] == true;
+    }
+  }
+
+  void _readPoints(Map<String, dynamic> res) {
+    if (res.containsKey('referral_points_enabled')) {
+      _pointsEnabled = res['referral_points_enabled'] == true;
     }
   }
 
@@ -598,44 +608,54 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   }) async {
     final play = _allowPlay && hasPlaySku;
     final manual = _allowManual;
-    if (!play && !manual) return;
+    if (!play && !manual) {
+      if (_pointsEnabled) await _payWithPoints(kind, item);
+      return;
+    }
 
-    var usePlay = play;
-    if (play && manual) {
-      final choice = await showModalBottomSheet<String>(
-        context: context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const ListTile(
-                title: Text(
-                  'Pilih cara pembayaran',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'Pilih cara pembayaran',
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
+            ),
+            if (play)
               ListTile(
                 leading: const Icon(Icons.shop_rounded),
                 title: const Text('Google Play'),
                 onTap: () => Navigator.pop(ctx, 'play'),
               ),
+            if (manual)
               ListTile(
                 leading: const Icon(Icons.account_balance_rounded),
                 title: const Text('Transfer bank'),
                 subtitle: const Text('Kirim bukti transfer'),
                 onTap: () => Navigator.pop(ctx, 'manual'),
               ),
-              const SizedBox(height: 8),
-            ],
-          ),
+            if (_pointsEnabled)
+              ListTile(
+                leading: const Icon(Icons.stars_rounded),
+                title: const Text('Cavaa Points'),
+                subtitle: Text(
+                  'Saldo ${context.read<AuthProvider>().owner?.cavaaPointsBalance ?? 0} poin',
+                ),
+                onTap: () => Navigator.pop(ctx, 'points'),
+              ),
+            const SizedBox(height: 8),
+          ],
         ),
-      );
-      if (!mounted || choice == null) return;
-      usePlay = choice == 'play';
-    }
+      ),
+    );
+    if (!mounted || choice == null) return;
 
-    if (usePlay) {
+    if (choice == 'play') {
       if (kind == 'plan') {
         await _buyPlan(item);
       } else {
@@ -643,8 +663,78 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       }
       return;
     }
+    if (choice == 'points') {
+      await _payWithPoints(kind, item);
+      return;
+    }
 
     await _openManualCheckout(kind, item);
+  }
+
+  Future<void> _payWithPoints(String kind, Map<String, dynamic> item) async {
+    final id = int.tryParse('${item['id']}');
+    if (id == null) return;
+    final isSub = (item['billing_type'] ?? '').toString() == 'subscription';
+    String? period;
+    var amount = _money(kind == 'plan' ? item['price'] : item['price_idr']);
+    if (kind == 'addon' && isSub) {
+      final choice = await _chooseManualPeriod(item);
+      if (!mounted || choice == null) return;
+      period = choice.period;
+      amount = choice.amount;
+    } else if (kind == 'plan') {
+      period = '1m';
+    }
+    final balance = context.read<AuthProvider>().owner?.cavaaPointsBalance ?? 0;
+    if (amount > balance) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saldo Cavaa Points tidak cukup.')),
+      );
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Bayar dengan Cavaa Points?'),
+        content: Text('${item['name']} membutuhkan $amount poin.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bayar')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final res = await ownerApiOf(context).purchaseWithPoints(
+        kind: kind,
+        id: id,
+        mode: 'period',
+        period: period,
+      );
+      final user = ownerApiOf(context).parseUser(res);
+      if (user != null && mounted) {
+        context.read<AuthProvider>().applyOwner(user);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text((res['message'] ?? 'Berhasil').toString())),
+      );
+      await _load();
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              data is Map ? (data['message'] ?? 'Pembelian gagal').toString() : 'Pembelian gagal',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _openManualCheckout(String type, Map<String, dynamic> item) async {
@@ -1499,6 +1589,19 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
                     children: [
                       const _HeroBanner(),
+                      if (_pointsEnabled) ...[
+                        const SizedBox(height: 12),
+                        _PointsEntry(
+                          balance: context.watch<AuthProvider>().owner?.cavaaPointsBalance ?? 0,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const OwnerCavaaPointsPage(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                       if (_currentPlan != null) ...[
                         const SizedBox(height: 12),
                         _CurrentPlanBanner(plan: _currentPlan!),
@@ -1696,6 +1799,47 @@ class _AddonVisual {
   final IconData icon;
   final Color accent;
   final Color soft;
+}
+
+class _PointsEntry extends StatelessWidget {
+  const _PointsEntry({required this.balance, required this.onTap});
+
+  final int balance;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.stars_rounded, color: Color(0xFFAE1504)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cavaa Points',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text('Saldo $balance poin'),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _HeroBanner extends StatelessWidget {
