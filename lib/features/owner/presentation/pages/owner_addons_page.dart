@@ -9,9 +9,9 @@ import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:provider/provider.dart';
 
 import '/core/services/push_notification_service.dart';
-import '/core/utils/open_url.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
+import '/features/owner/presentation/pages/owner_manual_checkout_page.dart';
 
 const _monthShort = [
   'Jan',
@@ -68,9 +68,14 @@ class _PlanOption {
 }
 
 class _BasePlanPickerDialog extends StatefulWidget {
-  const _BasePlanPickerDialog({required this.options});
+  const _BasePlanPickerDialog({
+    required this.options,
+    this.subtitle =
+        'Harga dari Google Play. Akses aktif sesuai masa yang Anda pilih.',
+  });
 
   final List<_PlanOption> options;
+  final String subtitle;
 
   @override
   State<_BasePlanPickerDialog> createState() => _BasePlanPickerDialogState();
@@ -112,7 +117,7 @@ class _BasePlanPickerDialogState extends State<_BasePlanPickerDialog> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Harga dari Google Play. Akses aktif sesuai masa yang Anda pilih.',
+              widget.subtitle,
               style: TextStyle(color: Colors.grey.shade700, height: 1.35),
             ),
             const SizedBox(height: 14),
@@ -618,7 +623,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
               ListTile(
                 leading: const Icon(Icons.account_balance_rounded),
                 title: const Text('Transfer bank'),
-                subtitle: const Text('Dilanjutkan di browser'),
+                subtitle: const Text('Kirim bukti transfer'),
                 onTap: () => Navigator.pop(ctx, 'manual'),
               ),
               const SizedBox(height: 8),
@@ -639,39 +644,109 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       return;
     }
 
-    await _openManualCheckout(kind, item['id']);
+    await _openManualCheckout(kind, item);
   }
 
-  Future<void> _openManualCheckout(String type, Object? id) async {
-    final itemId = id is int ? id : int.tryParse('$id');
+  Future<void> _openManualCheckout(String type, Map<String, dynamic> item) async {
+    final rawId = item['id'];
+    final itemId = rawId is int ? rawId : int.tryParse('$rawId');
     if (itemId == null || itemId <= 0) return;
-    final api = ownerApiOf(context);
-    setState(() => _busy = true);
-    try {
-      final res = await api.createCheckoutLink(type: type, itemId: itemId);
-      final url = (res['url'] ?? '').toString();
-      if (url.isEmpty) {
-        throw Exception('Tautan pembayaran kosong');
+
+    String? period;
+    String? periodLabel;
+    var amount = _money(type == 'plan' ? item['price'] : item['price_idr']);
+    if (type == 'addon' && (item['billing_type'] ?? '').toString() == 'subscription') {
+      final choice = await _chooseManualPeriod(item);
+      if (!mounted || choice == null) return;
+      period = choice.period;
+      periodLabel = choice.title;
+      amount = choice.amount;
+    }
+
+    final message = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OwnerManualCheckoutPage(
+          type: type,
+          itemId: itemId,
+          itemName: (item['name'] ?? '').toString(),
+          amount: amount,
+          period: period,
+          periodLabel: periodLabel,
+        ),
+      ),
+    );
+    if (!mounted || message == null || message.isEmpty) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    await _load();
+  }
+
+  Future<({String period, String title, int amount})?> _chooseManualPeriod(
+    Map<String, dynamic> addon,
+  ) async {
+    final flags = addon['play_periods'];
+    final prices = addon['manual_prices'];
+    final options = <({String period, String title, int amount, int days})>[];
+    if (flags is Map && prices is Map) {
+      const specs = [
+        ('3d', '3 hari', 3),
+        ('7d', '7 hari', 7),
+        ('1m', '1 bulan', 30),
+      ];
+      for (final spec in specs) {
+        final flag = flags[spec.$1];
+        final amount = _money(prices[spec.$1]);
+        final enabled = flag == true || flag == 1;
+        if (enabled && amount > 0) {
+          options.add((
+            period: spec.$1,
+            title: spec.$2,
+            amount: amount,
+            days: spec.$3,
+          ));
+        }
       }
-      await openExternalUrl(url);
+    }
+    if (options.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Lanjutkan transfer di browser. Setelah disetujui, tarik halaman ini untuk memperbarui akses.',
-            ),
+            content: Text('Tidak ada pilihan masa langganan yang aktif.'),
           ),
         );
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      return null;
     }
+    if (options.length == 1) {
+      final only = options.first;
+      return (period: only.period, title: only.title, amount: only.amount);
+    }
+    final token = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _BasePlanPickerDialog(
+        subtitle:
+            'Harga transfer bank. Akses aktif sesuai masa yang Anda pilih.',
+        options: [
+          for (final option in options)
+            _PlanOption(
+              token: option.period,
+              title: option.title,
+              price: 'Rp ${_formatIdr(option.amount)}',
+              caption: 'Dibayar lewat transfer',
+              days: option.days,
+              amountMicros: option.amount * 1000000,
+            ),
+        ],
+      ),
+    );
+    if (token == null) return null;
+    final picked = options.firstWhere((option) => option.period == token);
+    return (period: picked.period, title: picked.title, amount: picked.amount);
+  }
+
+  int _money(Object? raw) {
+    if (raw is num) return raw.round();
+    return int.tryParse('$raw') ?? 0;
   }
 
   bool _isPlanProduct(String productId) {
@@ -890,7 +965,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     final isSubscription = billingType == 'subscription';
     String? offerToken;
     if (isSubscription) {
-      offerToken = await _chooseBasePlan(details);
+      offerToken = await _chooseBasePlan(details, addon: addon);
       if (!mounted || offerToken == null) return;
     }
     final started = await _iap.buyNonConsumable(
@@ -964,14 +1039,33 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     );
   }
 
-  Future<String?> _chooseBasePlan(ProductDetails details) async {
+  Future<String?> _chooseBasePlan(
+    ProductDetails details, {
+    Map<String, dynamic>? addon,
+  }) async {
     if (details is! GooglePlayProductDetails) return null;
     final offers = details.productDetails.subscriptionOfferDetails ?? [];
-    final base = offers.where((offer) => (offer.offerId ?? '').isEmpty).toList();
-    if (base.length <= 1) {
-      if (base.isEmpty) return details.offerToken;
-      return base.first.offerIdToken;
+    final allowed = _allowedPeriods(addon);
+    final base = offers.where((offer) {
+      if ((offer.offerId ?? '').isNotEmpty) return false;
+      if (allowed == null) return true;
+      final phase = offer.pricingPhases.isEmpty ? null : offer.pricingPhases.first;
+      return _periodAllowed(phase?.billingPeriod ?? '', allowed);
+    }).toList();
+    if (base.isEmpty) {
+      if (allowed != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Tidak ada pilihan masa langganan yang aktif.'),
+            ),
+          );
+        }
+        return null;
+      }
+      return details.offerToken;
     }
+    if (base.length == 1) return base.first.offerIdToken;
     final options = base.map((offer) {
       final phase = offer.pricingPhases.isEmpty ? null : offer.pricingPhases.first;
       final period = phase?.billingPeriod ?? '';
@@ -989,6 +1083,32 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       context: context,
       builder: (ctx) => _BasePlanPickerDialog(options: options),
     );
+  }
+
+  Map<String, dynamic>? _allowedPeriods(Map<String, dynamic>? addon) {
+    final raw = addon?['play_periods'];
+    if (raw is! Map) return null;
+    return Map<String, dynamic>.from(raw);
+  }
+
+  bool _periodAllowed(String period, Map<String, dynamic> allowed) {
+    final bucket = _periodBucket(period);
+    if (bucket == null) return false;
+    final flag = allowed[bucket];
+    return flag == true || flag == 1;
+  }
+
+  String? _periodBucket(String period) {
+    final match = RegExp(r'^P(\d+)([DWMY])').firstMatch(period);
+    if (match == null) return null;
+    final count = int.tryParse(match.group(1) ?? '') ?? 0;
+    return switch (match.group(2)) {
+      'D' when count == 3 => '3d',
+      'D' when count == 7 => '7d',
+      'W' when count == 1 => '7d',
+      'M' when count == 1 => '1m',
+      _ => null,
+    };
   }
 
   String _renewCaption(RecurrenceMode? mode) {

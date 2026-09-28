@@ -807,6 +807,32 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> listTransferBanks() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/billing/banks');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> submitManualPayment({
+    required String type,
+    required int itemId,
+    String? period,
+    required String proofPath,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/billing/manual-payments',
+      data: FormData.fromMap({
+        'type': type,
+        'item_id': itemId,
+        if (period != null && period.isNotEmpty) 'period': period,
+        'payment_proof': await MultipartFile.fromFile(
+          proofPath,
+          filename: 'bukti.jpg',
+        ),
+      }),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> createCheckoutLink({
     required String type,
     required int itemId,
