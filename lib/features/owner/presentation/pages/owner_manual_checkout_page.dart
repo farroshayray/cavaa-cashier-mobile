@@ -34,6 +34,7 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
   static const _brand = Color(0xFFAE1504);
 
   List<Map<String, dynamic>> _banks = [];
+  int? _selectedBankId;
   String? _proofPath;
   bool _loading = true;
   bool _sending = false;
@@ -60,6 +61,7 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
       if (!mounted) return;
       setState(() {
         _banks = banks;
+        _selectedBankId = banks.length == 1 ? _bankId(banks.first) : null;
         _loading = false;
         _error = banks.isEmpty ? 'Rekening tujuan tidak tersedia.' : null;
       });
@@ -83,13 +85,15 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
 
   Future<void> _submit() async {
     final path = _proofPath;
-    if (path == null || _banks.isEmpty || _sending) return;
+    final bankId = _selectedBankId;
+    if (path == null || bankId == null || _banks.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
       final res = await ownerApiOf(context).submitManualPayment(
         type: widget.type,
         itemId: widget.itemId,
         period: widget.period,
+        bankId: bankId,
         proofPath: path,
       );
       if (!mounted) return;
@@ -125,6 +129,12 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
       }
     }
     return 'Bukti transfer gagal dikirim.';
+  }
+
+  int? _bankId(Map<String, dynamic> bank) {
+    final raw = bank['id'];
+    if (raw is int) return raw;
+    return int.tryParse('$raw');
   }
 
   String _idr(int n) {
@@ -179,7 +189,7 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Transfer sesuai nominal ini ke salah satu rekening di bawah.',
+                        'Pilih satu rekening tujuan, lalu transfer sesuai nominal.',
                         style: TextStyle(
                           color: Colors.grey.shade700,
                           height: 1.35,
@@ -201,49 +211,47 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
                         const SizedBox(height: 8),
                         Text(_error!, style: const TextStyle(color: _brand)),
                       ],
-                      for (final bank in _banks) ...[
-                        const Divider(height: 20),
-                        Text(
-                          (bank['bank_name'] ?? '').toString(),
-                          style: TextStyle(color: Colors.grey.shade700),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
+                      RadioGroup<int>(
+                        groupValue: _selectedBankId,
+                        onChanged: (value) {
+                          if (value == null || value < 1) return;
+                          setState(() => _selectedBankId = value);
+                        },
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: Text(
-                                (bank['account_no'] ?? '').toString(),
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.4,
+                            for (final bank in _banks)
+                              RadioListTile<int>(
+                                value: _bankId(bank) ?? -1,
+                                activeColor: _brand,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  (bank['bank_name'] ?? '').toString(),
+                                  style: const TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                                subtitle: Text(
+                                  '${bank['account_no'] ?? ''}\na.n ${bank['account_name'] ?? ''}',
+                                ),
+                                secondary: IconButton(
+                                  tooltip: 'Salin nomor',
+                                  onPressed: () async {
+                                    await Clipboard.setData(
+                                      ClipboardData(
+                                        text: (bank['account_no'] ?? '').toString(),
+                                      ),
+                                    );
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Nomor rekening disalin'),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.copy_rounded),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              tooltip: 'Salin nomor',
-                              onPressed: () async {
-                                await Clipboard.setData(
-                                  ClipboardData(
-                                    text: (bank['account_no'] ?? '').toString(),
-                                  ),
-                                );
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Nomor rekening disalin'),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.copy_rounded),
-                            ),
                           ],
                         ),
-                        Text(
-                          'a.n ${(bank['account_name'] ?? '').toString()}',
-                          style: TextStyle(color: Colors.grey.shade700),
-                        ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
@@ -280,6 +288,7 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
                         height: 48,
                         child: FilledButton(
                           onPressed: _proofPath == null ||
+                                  _selectedBankId == null ||
                                   _banks.isEmpty ||
                                   _sending
                               ? null

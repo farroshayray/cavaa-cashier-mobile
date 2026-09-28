@@ -816,6 +816,7 @@ class OwnerApi {
     required String type,
     required int itemId,
     String? period,
+    required int bankId,
     required String proofPath,
   }) async {
     final res = await client.dio.post(
@@ -823,6 +824,7 @@ class OwnerApi {
       data: FormData.fromMap({
         'type': type,
         'item_id': itemId,
+        'bank_id': bankId,
         if (period != null && period.isNotEmpty) 'period': period,
         'payment_proof': await MultipartFile.fromFile(
           proofPath,
