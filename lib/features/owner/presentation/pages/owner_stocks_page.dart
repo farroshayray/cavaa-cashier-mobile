@@ -203,198 +203,24 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
       _snack('Belum ada bahan di lokasi ini');
       return;
     }
-    final qty = TextEditingController();
-    final price = TextEditingController();
-    var stock = _stocks.first;
-    var direction = 'in';
-    var outCategory = 'damaged';
-    var locationTo = _locations
-        .map((e) => e['id']?.toString() ?? '')
-        .firstWhere((id) => id.isNotEmpty && id != _location, orElse: () => '');
-    final title = switch (type) {
-      'in' => 'Stok masuk',
-      'transfer' => 'Transfer',
-      'out' => 'Stok keluar',
-      'opname' => 'Stok opname',
-      _ => 'Penyesuaian',
-    };
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    final draft = await Navigator.of(context).push<_MovementDraft>(
+      MaterialPageRoute(
+        builder: (_) => _StockMovementPage(
+          type: type,
+          locationName: _locationName,
+          stocks: _stocks,
+          locations: _locations
+              .where((loc) => (loc['id']?.toString() ?? '') != _location)
+              .map((loc) => Map<String, dynamic>.from(loc))
+              .toList(),
+        ),
       ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 12,
-            bottom: MediaQuery.viewInsetsOf(ctx).bottom + 20,
-          ),
-          child: StatefulBuilder(
-            builder: (ctx, setLocal) {
-              final unitName = stock['display_unit_name']?.toString() ?? '';
-              final qtyValue = num.tryParse(qty.text.trim().replaceAll(',', '.')) ?? 0;
-              final totalBuy = num.tryParse(price.text.trim().replaceAll(',', '.')) ?? 0;
-              final perUnit = qtyValue > 0 ? totalBuy / qtyValue : 0;
-              final showPurchase = type == 'in' || (type == 'adjustment' && direction == 'in');
-              return SingleChildScrollView(
-                child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _locationName,
-                    style: TextStyle(color: Colors.black.withValues(alpha: 0.5)),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    initialValue: int.tryParse('${stock['id']}'),
-                    decoration: _field('Bahan'),
-                    items: [
-                      for (final item in _stocks)
-                        DropdownMenuItem(
-                          value: int.tryParse('${item['id']}'),
-                          child: Text(item['stock_name']?.toString() ?? '-'),
-                        ),
-                    ],
-                    onChanged: (id) {
-                      Map<String, dynamic>? next;
-                      for (final item in _stocks) {
-                        if (int.tryParse('${item['id']}') == id) next = item;
-                      }
-                      if (next != null) setLocal(() => stock = next!);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: qty,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: (_) => setLocal(() {}),
-                    decoration: _field(
-                      type == 'opname'
-                          ? 'Hasil hitung${unitName.isEmpty ? '' : ' ($unitName)'}'
-                          : 'Jumlah${unitName.isEmpty ? '' : ' ($unitName)'}',
-                    ),
-                  ),
-                  if (showPurchase) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: price,
-                      keyboardType: TextInputType.number,
-                      onChanged: (_) => setLocal(() {}),
-                      decoration: _field('Total harga beli (opsional)'),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Harga per ${unitName.isEmpty ? 'satuan' : unitName}: ${_money(perUnit)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black.withValues(alpha: 0.55),
-                      ),
-                    ),
-                  ],
-                  if (type == 'out') ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: outCategory,
-                      decoration: _field('Alasan keluar'),
-                      items: const [
-                        DropdownMenuItem(value: 'damaged', child: Text('Rusak')),
-                        DropdownMenuItem(value: 'expired', child: Text('Kedaluwarsa')),
-                        DropdownMenuItem(value: 'internal_use', child: Text('Pemakaian internal')),
-                      ],
-                      onChanged: (v) => setLocal(() => outCategory = v ?? 'damaged'),
-                    ),
-                  ],
-                  if (type == 'adjustment') ...[
-                    const SizedBox(height: 12),
-                    SegmentedButton<String>(
-                      style: SegmentedButton.styleFrom(
-                        selectedBackgroundColor: _brand.withValues(alpha: 0.12),
-                        selectedForegroundColor: _brand,
-                      ),
-                      segments: const [
-                        ButtonSegment(value: 'in', label: Text('Tambah'), icon: Icon(Icons.add_rounded)),
-                        ButtonSegment(value: 'out', label: Text('Kurangi'), icon: Icon(Icons.remove_rounded)),
-                      ],
-                      selected: {direction},
-                      onSelectionChanged: (v) => setLocal(() => direction = v.first),
-                    ),
-                  ],
-                  if (type == 'transfer') ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: locationTo.isEmpty ? null : locationTo,
-                      decoration: _field('Lokasi tujuan'),
-                      items: [
-                        for (final loc in _locations)
-                          if ((loc['id']?.toString() ?? '') != _location)
-                            DropdownMenuItem(
-                              value: loc['id']?.toString(),
-                              child: Text(loc['name']?.toString() ?? '-'),
-                            ),
-                      ],
-                      onChanged: (v) => setLocal(() => locationTo = v ?? ''),
-                    ),
-                  ],
-                  const SizedBox(height: 18),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: _primaryButton(),
-                    child: const Text('Simpan'),
-                  ),
-                ],
-                ),
-              );
-            },
-          ),
-        );
-      },
     );
-    if (saved != true || !mounted) return;
-    final amount = num.tryParse(qty.text.trim().replaceAll(',', '.'));
-    if (amount == null || (type == 'opname' ? amount < 0 : amount <= 0)) {
-      _snack(type == 'opname' ? 'Isi hasil hitung' : 'Jumlah wajib diisi');
-      return;
-    }
-    final unitId = int.tryParse('${stock['display_unit_id']}');
-    final stockId = int.tryParse('${stock['id']}');
-    if (unitId == null || stockId == null) {
-      _snack('Satuan bahan belum diatur');
-      return;
-    }
+    if (draft == null || !mounted) return;
     final body = <String, dynamic>{
       'movement_type': type,
       'notes': '',
-      'items': [
-        {
-          'stock_id': '$stockId',
-          'unit_id': unitId,
-          'quantity': amount,
-          if (type == 'in' || (type == 'adjustment' && direction == 'in'))
-            'unit_price': num.tryParse(price.text.trim()) ?? 0,
-          if (type == 'adjustment') 'direction': direction,
-        },
-      ],
+      'items': draft.items,
     };
     if (type == 'in') {
       body['location_to'] = _location;
@@ -404,22 +230,20 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
       body['category'] = 'audit_adjustment';
     } else if (type == 'out') {
       body['location_from'] = _location;
-      body['category'] = outCategory;
+      body['category'] = draft.outCategory;
     } else if (type == 'opname') {
       body['location'] = _location;
     } else {
-      if (locationTo.isEmpty) {
-        _snack('Pilih lokasi tujuan');
-        return;
-      }
       body['location_from'] = _location;
-      body['location_to'] = locationTo;
+      body['location_to'] = draft.locationTo;
       body['category'] = 'transfer';
     }
     try {
       await ownerApiOf(context).submitStockMovement(body);
       if (!mounted) return;
-      _snack('Mutasi stok tercatat');
+      _snack(draft.items.length == 1
+          ? 'Mutasi stok tercatat'
+          : '${draft.items.length} bahan tercatat');
       await _load();
     } on DioException catch (e) {
       _snack(_message(e));
@@ -812,6 +636,398 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
       ),
     );
   }
+}
+
+class _MovementDraft {
+  const _MovementDraft({
+    required this.items,
+    required this.outCategory,
+    required this.locationTo,
+  });
+
+  final List<Map<String, dynamic>> items;
+  final String outCategory;
+  final String locationTo;
+}
+
+class _MoveLine {
+  int? stockId;
+  final qty = TextEditingController();
+  final price = TextEditingController();
+
+  void dispose() {
+    qty.dispose();
+    price.dispose();
+  }
+}
+
+class _StockMovementPage extends StatefulWidget {
+  const _StockMovementPage({
+    required this.type,
+    required this.locationName,
+    required this.stocks,
+    required this.locations,
+  });
+
+  final String type;
+  final String locationName;
+  final List<Map<String, dynamic>> stocks;
+  final List<Map<String, dynamic>> locations;
+
+  @override
+  State<_StockMovementPage> createState() => _StockMovementPageState();
+}
+
+class _StockMovementPageState extends State<_StockMovementPage> {
+  final _lines = <_MoveLine>[_MoveLine()];
+  var _direction = 'in';
+  var _outCategory = 'damaged';
+  var _locationTo = '';
+
+  @override
+  void dispose() {
+    for (final line in _lines) {
+      line.dispose();
+    }
+    super.dispose();
+  }
+
+  String get _title => switch (widget.type) {
+        'in' => 'Stok masuk',
+        'transfer' => 'Transfer',
+        'out' => 'Stok keluar',
+        'opname' => 'Stok opname',
+        _ => 'Penyesuaian',
+      };
+
+  String get _hint => switch (widget.type) {
+        'in' => 'Isi jumlah dan total belanja untuk tiap bahan.',
+        'opname' => 'Isi hasil hitung fisik tiap bahan.',
+        'out' => 'Alasan keluar berlaku untuk semua bahan di bawah.',
+        'adjustment' => 'Arah penyesuaian berlaku untuk semua bahan di bawah.',
+        _ => 'Pilih lokasi tujuan, lalu isi bahan yang dipindahkan.',
+      };
+
+  bool get _showPurchase =>
+      widget.type == 'in' || (widget.type == 'adjustment' && _direction == 'in');
+
+  Map<String, dynamic>? _stockById(int? id) {
+    for (final stock in widget.stocks) {
+      if (int.tryParse('${stock['id']}') == id) return stock;
+    }
+    return null;
+  }
+
+  void _snack(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _save() {
+    if (widget.type == 'transfer' && _locationTo.isEmpty) {
+      _snack('Pilih lokasi tujuan');
+      return;
+    }
+    final items = <Map<String, dynamic>>[];
+    final seen = <int>{};
+    for (var i = 0; i < _lines.length; i++) {
+      final line = _lines[i];
+      final qtyText = line.qty.text.trim();
+      final priceText = line.price.text.trim();
+      final blank = line.stockId == null && qtyText.isEmpty && priceText.isEmpty;
+      if (blank && _lines.length > 1) continue;
+      final label = 'Bahan ${i + 1}';
+      if (line.stockId == null) {
+        _snack('$label belum dipilih');
+        return;
+      }
+      if (!seen.add(line.stockId!)) {
+        _snack('$label sudah ada di daftar');
+        return;
+      }
+      final amount = num.tryParse(qtyText.replaceAll(',', '.'));
+      if (amount == null || (widget.type == 'opname' ? amount < 0 : amount <= 0)) {
+        _snack('Jumlah $label belum diisi');
+        return;
+      }
+      final unitId = int.tryParse('${_stockById(line.stockId)?['display_unit_id']}');
+      if (unitId == null) {
+        _snack('Satuan $label belum diatur');
+        return;
+      }
+      items.add({
+        'stock_id': '${line.stockId}',
+        'unit_id': unitId,
+        'quantity': amount,
+        if (_showPurchase) 'unit_price': num.tryParse(priceText) ?? 0,
+        if (widget.type == 'adjustment') 'direction': _direction,
+      });
+    }
+    if (items.isEmpty) {
+      _snack('Tambah minimal satu bahan');
+      return;
+    }
+    Navigator.pop(
+      context,
+      _MovementDraft(
+        items: items,
+        outCategory: _outCategory,
+        locationTo: _locationTo,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        title: Text(_title, style: const TextStyle(fontWeight: FontWeight.w800)),
+        backgroundColor: _brand,
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        children: [
+          Text(
+            widget.locationName,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 4),
+          Text(_hint, style: TextStyle(color: Colors.black.withValues(alpha: 0.55))),
+          if (widget.type == 'out') ...[
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _outCategory,
+              decoration: _field('Alasan keluar'),
+              items: const [
+                DropdownMenuItem(value: 'damaged', child: Text('Rusak')),
+                DropdownMenuItem(value: 'expired', child: Text('Kedaluwarsa')),
+                DropdownMenuItem(value: 'internal_use', child: Text('Pemakaian internal')),
+              ],
+              onChanged: (value) => setState(() => _outCategory = value ?? 'damaged'),
+            ),
+          ],
+          if (widget.type == 'adjustment') ...[
+            const SizedBox(height: 14),
+            SegmentedButton<String>(
+              style: SegmentedButton.styleFrom(
+                selectedBackgroundColor: _brand.withValues(alpha: 0.12),
+                selectedForegroundColor: _brand,
+              ),
+              segments: const [
+                ButtonSegment(value: 'in', label: Text('Tambah'), icon: Icon(Icons.add_rounded)),
+                ButtonSegment(value: 'out', label: Text('Kurangi'), icon: Icon(Icons.remove_rounded)),
+              ],
+              selected: {_direction},
+              onSelectionChanged: (value) => setState(() => _direction = value.first),
+            ),
+          ],
+          if (widget.type == 'transfer') ...[
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _locationTo.isEmpty ? null : _locationTo,
+              decoration: _field('Lokasi tujuan'),
+              items: [
+                for (final loc in widget.locations)
+                  DropdownMenuItem(
+                    value: loc['id']?.toString(),
+                    child: Text(loc['name']?.toString() ?? '-'),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _locationTo = value ?? ''),
+            ),
+          ],
+          const SizedBox(height: 16),
+          for (var i = 0; i < _lines.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            _MoveLineCard(
+              index: i,
+              line: _lines[i],
+              stocks: widget.stocks,
+              takenIds: {
+                for (final other in _lines)
+                  if (!identical(other, _lines[i]) && other.stockId != null) other.stockId!,
+              },
+              showPurchase: _showPurchase,
+              quantityLabel: widget.type == 'opname' ? 'Hasil hitung' : 'Jumlah',
+              canRemove: _lines.length > 1,
+              onChanged: () => setState(() {}),
+              onRemove: () {
+                final line = _lines.removeAt(i);
+                line.dispose();
+                setState(() {});
+              },
+            ),
+          ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => setState(() => _lines.add(_MoveLine())),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _brand,
+              side: BorderSide(color: _brand.withValues(alpha: 0.35)),
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.add),
+            label: const Text('Tambah bahan', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: _save,
+            style: _primaryButton(),
+            child: Text('Simpan ${_lines.length} bahan'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoveLineCard extends StatelessWidget {
+  const _MoveLineCard({
+    required this.index,
+    required this.line,
+    required this.stocks,
+    required this.takenIds,
+    required this.showPurchase,
+    required this.quantityLabel,
+    required this.canRemove,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final int index;
+  final _MoveLine line;
+  final List<Map<String, dynamic>> stocks;
+  final Set<int> takenIds;
+  final bool showPurchase;
+  final String quantityLabel;
+  final bool canRemove;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  Map<String, dynamic>? get _stock {
+    for (final stock in stocks) {
+      if (int.tryParse('${stock['id']}') == line.stockId) return stock;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stock = _stock;
+    final unit = stock?['display_unit_name']?.toString() ?? '';
+    final qtyValue = num.tryParse(line.qty.text.trim().replaceAll(',', '.')) ?? 0;
+    final totalBuy = num.tryParse(line.price.text.trim().replaceAll(',', '.')) ?? 0;
+    final perUnit = qtyValue > 0 ? totalBuy / qtyValue : 0;
+    final choices = [
+      for (final item in stocks)
+        if (!takenIds.contains(int.tryParse('${item['id']}')))
+          item,
+    ];
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _brand.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: _brand),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  stock?['stock_name']?.toString().trim().isNotEmpty == true
+                      ? stock!['stock_name'].toString()
+                      : 'Bahan ${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (canRemove)
+                IconButton(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline, color: _brand),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            key: ValueKey(line.stockId),
+            isExpanded: true,
+            initialValue: line.stockId,
+            decoration: _field('Bahan'),
+            items: [
+              for (final item in choices)
+                DropdownMenuItem(
+                  value: int.tryParse('${item['id']}'),
+                  child: Text(
+                    item['stock_name']?.toString() ?? '-',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (id) {
+              line.stockId = id;
+              onChanged();
+            },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: line.qty,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => onChanged(),
+            decoration: _field(
+              unit.isEmpty ? quantityLabel : '$quantityLabel ($unit)',
+            ),
+          ),
+          if (showPurchase) ...[
+            const SizedBox(height: 10),
+            TextField(
+              controller: line.price,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => onChanged(),
+              decoration: _field('Total harga beli (opsional)'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Harga per ${unit.isEmpty ? 'satuan' : unit}: ${_rupiah(perUnit)}',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.black.withValues(alpha: 0.55),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _rupiah(dynamic value) {
+  final number = value is num ? value.round() : int.tryParse('$value') ?? 0;
+  final text = number.abs().toString();
+  final buffer = StringBuffer(number < 0 ? '-' : '');
+  for (var i = 0; i < text.length; i++) {
+    if (i > 0 && (text.length - i) % 3 == 0) buffer.write('.');
+    buffer.write(text[i]);
+  }
+  return 'Rp $buffer';
 }
 
 InputDecoration _field(String label) {

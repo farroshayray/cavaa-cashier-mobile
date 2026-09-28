@@ -944,6 +944,74 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
     }
   }
 
+  void _applyStockMode(String mode) {
+    _stockMode = mode;
+    _alwaysAvailable = mode == 'always';
+    _stockType = mode == 'linked' ? 'linked' : 'direct';
+    _stockEditable = mode == 'direct';
+    if (mode == 'linked' && _recipes.isEmpty) {
+      _recipes = [RecipeLine()];
+    }
+  }
+
+  Widget _productStockCard() {
+    final summary = productStockSummary(
+      mode: _stockMode,
+      quantity: _stock.text,
+      recipes: _recipes,
+      ingredients: _ingredients,
+    );
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: _saving
+            ? null
+            : () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ProductStockEditorPage(
+                      mode: _stockMode,
+                      quantity: _stock,
+                      recipes: _recipes,
+                      ingredients: _ingredients,
+                      sellPrice: num.tryParse(_price.text.replaceAll('.', '').trim()),
+                      onModeChanged: _applyStockMode,
+                      onRecipesChanged: (next) => _recipes = next,
+                    ),
+                  ),
+                );
+                if (mounted) setState(() {});
+              },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Stok produk',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      summary,
+                      style: TextStyle(color: Colors.black.withValues(alpha: 0.55)),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.black.withValues(alpha: 0.35)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1160,52 +1228,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                         onChanged: (next) => setState(() => _groups = next),
                       ),
                       if (widget.canManageStock) ...[
-                        const Text(
-                          'Stok produk',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 8),
-                        SegmentedButton<String>(
-                          segments: const [
-                            ButtonSegment(value: 'always', label: Text('Selalu')),
-                            ButtonSegment(value: 'direct', label: Text('Pcs')),
-                            ButtonSegment(value: 'linked', label: Text('Resep')),
-                          ],
-                          selected: {_stockMode},
-                          onSelectionChanged: (v) {
-                            if (_saving) return;
-                            setState(() {
-                              _stockMode = v.first;
-                              _alwaysAvailable = _stockMode == 'always';
-                              _stockType =
-                                  _stockMode == 'linked' ? 'linked' : 'direct';
-                              _stockEditable = _stockMode == 'direct';
-                              if (_stockMode == 'linked' && _recipes.isEmpty) {
-                                _recipes = [RecipeLine()];
-                              }
-                            });
-                          },
-                        ),
-                        if (_stockMode == 'direct')
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8, bottom: 8),
-                            child: TextField(
-                              controller: _stock,
-                              enabled: !_saving,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Stok (pcs)',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                        if (_stockMode == 'linked')
-                          LinkedRecipeEditor(
-                            lines: _recipes,
-                            ingredients: _ingredients,
-                            sellPrice: num.tryParse(_price.text.replaceAll('.', '').trim()),
-                            onChanged: (next) => setState(() => _recipes = next),
-                          ),
+                        _productStockCard(),
                       ] else ...[
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,

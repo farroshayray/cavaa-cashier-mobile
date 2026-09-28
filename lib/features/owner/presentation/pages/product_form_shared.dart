@@ -199,6 +199,89 @@ String formatProductPrice(dynamic price) {
       );
 }
 
+String formatRupiah(num value) {
+  final rounded = value.round();
+  final text = rounded.abs().toString();
+  final buffer = StringBuffer(rounded < 0 ? '-' : '');
+  for (var i = 0; i < text.length; i++) {
+    if (i > 0 && (text.length - i) % 3 == 0) buffer.write('.');
+    buffer.write(text[i]);
+  }
+  return 'Rp $buffer';
+}
+
+double estimateRecipeCost(
+  List<RecipeLine> lines,
+  List<Map<String, dynamic>> ingredients,
+) {
+  var total = 0.0;
+  for (final line in lines) {
+    Map<String, dynamic>? ingredient;
+    for (final item in ingredients) {
+      if (int.tryParse('${item['id']}') == line.stockId) ingredient = item;
+    }
+    if (ingredient == null) continue;
+    final qty = double.tryParse(line.quantity.replaceAll(',', '.')) ?? 0;
+    final basePrice = ingredient['base_price'];
+    final price = basePrice is num
+        ? basePrice.toDouble()
+        : double.tryParse('$basePrice') ?? 0;
+    var toBase = 0.0;
+    final units = ingredient['available_units'];
+    if (units is List) {
+      for (final unit in units.whereType<Map>()) {
+        if (int.tryParse('${unit['id']}') == line.unitId) {
+          final factor = unit['to_base'];
+          toBase = factor is num ? factor.toDouble() : double.tryParse('$factor') ?? 0;
+        }
+      }
+    }
+    total += qty * toBase * price;
+  }
+  return total;
+}
+
+int filledRecipeCount(List<RecipeLine> lines) {
+  return lines.where((line) => line.stockId != null).length;
+}
+
+String productStockSummary({
+  required String mode,
+  required String quantity,
+  required List<RecipeLine> recipes,
+  required List<Map<String, dynamic>> ingredients,
+}) {
+  if (mode == 'always') return 'Selalu tersedia';
+  if (mode == 'direct') {
+    return 'Pcs · ${quantity.trim().isEmpty ? '0' : quantity.trim()}';
+  }
+  final count = filledRecipeCount(recipes);
+  final hpp = estimateRecipeCost(recipes, ingredients);
+  if (hpp <= 0) return 'Resep · $count bahan';
+  return 'Resep · $count bahan · HPP ${formatRupiah(hpp)}';
+}
+
+String optionStockLabel(
+  MenuOptionItem option, {
+  required bool showOptionStock,
+  required bool canManageStock,
+}) {
+  if (!showOptionStock) return '';
+  if (canManageStock && option.stockType == 'linked') {
+    return 'Resep · ${filledRecipeCount(option.recipes)} bahan';
+  }
+  if (option.alwaysAvailable) return 'Selalu';
+  final qty = option.stockQuantity.trim().isEmpty ? '0' : option.stockQuantity.trim();
+  return '$qty pcs';
+}
+
+String groupRuleLabel(MenuOptionGroup group) {
+  final rule = provisionChoices[group.provision] ?? group.provision;
+  final count = '${group.options.length} opsi';
+  if (group.provision == 'OPTIONAL') return '$rule · $count';
+  return '$rule ${group.provisionValue} · $count';
+}
+
 class ProductMenuOptionsEditor extends StatelessWidget {
   const ProductMenuOptionsEditor({
     super.key,
@@ -219,6 +302,21 @@ class ProductMenuOptionsEditor extends StatelessWidget {
 
   void _emit() => onChanged([...groups]);
 
+  Future<void> _openGroup(BuildContext context, MenuOptionGroup group) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => OptionGroupEditorPage(
+          group: group,
+          readOnly: readOnly,
+          showOptionStock: showOptionStock,
+          canManageStock: canManageStock,
+          ingredients: ingredients,
+        ),
+      ),
+    );
+    _emit();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -234,9 +332,10 @@ class ProductMenuOptionsEditor extends StatelessWidget {
             ),
             if (!readOnly)
               TextButton.icon(
-                onPressed: () {
-                  groups.add(MenuOptionGroup());
-                  _emit();
+                onPressed: () async {
+                  final group = MenuOptionGroup();
+                  groups.add(group);
+                  await _openGroup(context, group);
                 },
                 icon: const Icon(Icons.add),
                 label: const Text('Grup'),
@@ -250,271 +349,633 @@ class ProductMenuOptionsEditor extends StatelessWidget {
                 : 'Belum ada grup opsi. Tambah jika produk punya pilihan.',
             style: TextStyle(color: Colors.black.withValues(alpha: 0.5)),
           ),
-        ...List.generate(groups.length, (gi) {
-          final g = groups[gi];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-            ),
+        for (var gi = 0; gi < groups.length; gi++)
+          _OptionGroupSummary(
+            group: groups[gi],
+            showOptionStock: showOptionStock,
+            canManageStock: canManageStock,
+            onOpen: () => _openGroup(context, groups[gi]),
+            onDelete: readOnly
+                ? null
+                : () {
+                    groups.removeAt(gi);
+                    _emit();
+                  },
+          ),
+      ],
+    );
+  }
+}
+
+class _OptionGroupSummary extends StatelessWidget {
+  const _OptionGroupSummary({
+    required this.group,
+    required this.showOptionStock,
+    required this.canManageStock,
+    required this.onOpen,
+    required this.onDelete,
+  });
+
+  final MenuOptionGroup group;
+  final bool showOptionStock;
+  final bool canManageStock;
+  final VoidCallback onOpen;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = group.name.trim().isEmpty ? 'Grup tanpa nama' : group.name.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        'Grup #${gi + 1}',
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                    if (!readOnly)
-                      IconButton(
-                        onPressed: () {
-                          groups.removeAt(gi);
-                          _emit();
-                        },
-                        icon: const Icon(Icons.delete_outline, color: productBrand),
-                      ),
-                  ],
-                ),
-                TextField(
-                  controller: TextEditingController(text: g.name)
-                    ..selection = TextSelection.collapsed(offset: g.name.length),
-                  enabled: !readOnly,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama grup (mis. Level Pedas)',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (v) {
-                    g.name = v;
-                  },
-                ),
-                const SizedBox(height: 8),
-                if (!readOnly) ...[
-                  DropdownButtonFormField<String>(
-                    initialValue: provisionChoices.containsKey(g.provision)
-                        ? g.provision
-                        : 'OPTIONAL',
-                    decoration: const InputDecoration(
-                      labelText: 'Aturan pilihan',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: provisionChoices.entries
-                        .map(
-                          (e) => DropdownMenuItem(
-                            value: e.key,
-                            child: Text(e.value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      g.provision = v;
-                      _emit();
-                    },
-                  ),
-                  if (g.provision != 'OPTIONAL') ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: TextEditingController(text: g.provisionValue),
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Nilai aturan',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (v) => g.provisionValue = v,
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: TextEditingController(text: g.description),
-                    decoration: const InputDecoration(
-                      labelText: 'Deskripsi grup (opsional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (v) => g.description = v,
-                  ),
-                ] else ...[
-                  Text(
-                    '${provisionChoices[g.provision] ?? g.provision}'
-                    '${g.provision != 'OPTIONAL' ? ' · ${g.provisionValue}' : ''}',
-                    style: TextStyle(color: Colors.black.withValues(alpha: 0.55)),
-                  ),
-                  if (g.description.isNotEmpty) Text(g.description),
-                ],
-                const SizedBox(height: 10),
-                ...List.generate(g.options.length, (oi) {
-                  final opt = g.options[oi];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: TextEditingController(text: opt.name)
-                                  ..selection = TextSelection.collapsed(
-                                    offset: opt.name.length,
-                                  ),
-                                enabled: !readOnly,
-                                decoration: InputDecoration(
-                                  labelText: 'Opsi #${oi + 1}',
-                                  border: const OutlineInputBorder(),
-                                ),
-                                onChanged: (v) => opt.name = v,
-                              ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 2),
+                          Text(
+                            groupRuleLabel(group),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black.withValues(alpha: 0.5),
                             ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 100,
-                              child: TextField(
-                                controller:
-                                    TextEditingController(text: opt.price)
-                                      ..selection = TextSelection.collapsed(
-                                        offset: opt.price.length,
-                                      ),
-                                enabled: !readOnly,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: 'Harga',
-                                  border: OutlineInputBorder(),
-                                ),
-                                onChanged: (v) => opt.price = v,
-                              ),
-                            ),
-                            if (!readOnly)
-                              IconButton(
-                                onPressed: g.options.length <= 1
-                                    ? null
-                                    : () {
-                                        g.options.removeAt(oi);
-                                        _emit();
-                                      },
-                                icon: const Icon(Icons.close),
-                              ),
-                          ],
-                        ),
-                        if (showOptionStock && canManageStock) ...[
-                          const SizedBox(height: 8),
-                          SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(value: 'always', label: Text('Selalu')),
-                              ButtonSegment(value: 'direct', label: Text('Pcs')),
-                              ButtonSegment(value: 'linked', label: Text('Resep')),
-                            ],
-                            selected: {
-                              opt.stockType == 'linked'
-                                  ? 'linked'
-                                  : opt.alwaysAvailable
-                                      ? 'always'
-                                      : 'direct',
-                            },
-                            onSelectionChanged: (v) {
-                              final mode = v.first;
-                              opt.stockType = mode == 'linked' ? 'linked' : 'direct';
-                              opt.alwaysAvailable = mode == 'always';
-                              opt.stockEditable = mode == 'direct';
-                              if (mode == 'linked' && opt.recipes.isEmpty) {
-                                opt.recipes.add(RecipeLine());
-                              }
-                              _emit();
-                            },
-                          ),
-                          if (opt.stockType != 'linked' && !opt.alwaysAvailable)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8, bottom: 8),
-                              child: TextField(
-                                controller: TextEditingController(
-                                  text: opt.stockQuantity,
-                                )..selection = TextSelection.collapsed(
-                                    offset: opt.stockQuantity.length,
-                                  ),
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: 'Stok (pcs)',
-                                  border: OutlineInputBorder(),
-                                ),
-                                onChanged: (v) => opt.stockQuantity = v,
-                              ),
-                            ),
-                          if (opt.stockType == 'linked')
-                            LinkedRecipeEditor(
-                              lines: opt.recipes,
-                              ingredients: ingredients,
-                              sellPrice: num.tryParse(opt.price.replaceAll('.', '').trim()),
-                              onChanged: (next) {
-                                opt.recipes = next;
-                                _emit();
-                              },
-                            ),
-                        ] else ...[
-                        if (showOptionStock)
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            activeThumbColor: productBrand,
-                            title: const Text('Opsi selalu tersedia'),
-                            value: opt.alwaysAvailable,
-                            onChanged: (v) {
-                              opt.alwaysAvailable = v;
-                              _emit();
-                            },
-                          ),
-                        if (showOptionStock && !opt.alwaysAvailable)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: opt.stockEditable
-                                ? TextField(
-                                    controller: TextEditingController(
-                                      text: opt.stockQuantity,
-                                    )..selection = TextSelection.collapsed(
-                                        offset: opt.stockQuantity.length,
-                                      ),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Stok (pcs)',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    onChanged: (v) => opt.stockQuantity = v,
-                                  )
-                                : InputDecorator(
-                                    decoration: const InputDecoration(
-                                      labelText: 'Stok dari resep (pcs)',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    child: Text(
-                                      opt.stockQuantity.isEmpty
-                                          ? '0'
-                                          : opt.stockQuantity,
-                                    ),
-                                  ),
                           ),
                         ],
-                      ],
+                      ),
                     ),
-                  );
-                }),
-                if (!readOnly)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        g.options.add(MenuOptionItem());
-                        _emit();
-                      },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Tambah opsi'),
+                    if (onDelete != null)
+                      IconButton(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline, color: productBrand),
+                      ),
+                    Icon(
+                      Icons.chevron_right,
+                      color: Colors.black.withValues(alpha: 0.35),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                  ],
+                ),
+                if (group.options.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  for (final option in group.options)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  option.name.trim().isEmpty
+                                      ? 'Opsi tanpa nama'
+                                      : option.name.trim(),
+                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                if (showOptionStock)
+                                  Text(
+                                    optionStockLabel(
+                                      option,
+                                      showOptionStock: showOptionStock,
+                                      canManageStock: canManageStock,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black.withValues(alpha: 0.45),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            'Rp ${formatProductPrice(option.price.replaceAll('.', ''))}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ),
+                    ),
+                ],
               ],
             ),
-          );
-        }),
-      ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ProductStockEditorPage extends StatefulWidget {
+  const ProductStockEditorPage({
+    super.key,
+    required this.mode,
+    required this.quantity,
+    required this.recipes,
+    required this.ingredients,
+    required this.sellPrice,
+    required this.onModeChanged,
+    required this.onRecipesChanged,
+  });
+
+  final String mode;
+  final TextEditingController quantity;
+  final List<RecipeLine> recipes;
+  final List<Map<String, dynamic>> ingredients;
+  final num? sellPrice;
+  final ValueChanged<String> onModeChanged;
+  final ValueChanged<List<RecipeLine>> onRecipesChanged;
+
+  @override
+  State<ProductStockEditorPage> createState() => _ProductStockEditorPageState();
+}
+
+class _ProductStockEditorPageState extends State<ProductStockEditorPage> {
+  late String _mode;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.mode;
+  }
+
+  void _setMode(String mode) {
+    setState(() {
+      _mode = mode;
+      if (mode == 'linked' && widget.recipes.isEmpty) {
+        widget.recipes.add(RecipeLine());
+      }
+    });
+    widget.onModeChanged(mode);
+    widget.onRecipesChanged(widget.recipes);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7F9),
+      appBar: AppBar(
+        title: const Text('Stok produk', style: TextStyle(fontWeight: FontWeight.w800)),
+        backgroundColor: productBrand,
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        children: [
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'always', label: Text('Selalu')),
+              ButtonSegment(value: 'direct', label: Text('Pcs')),
+              ButtonSegment(value: 'linked', label: Text('Resep')),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (value) => _setMode(value.first),
+          ),
+          if (_mode == 'direct') ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: widget.quantity,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Stok (pcs)',
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+          ],
+          if (_mode == 'linked') ...[
+            const SizedBox(height: 8),
+            LinkedRecipeEditor(
+              lines: widget.recipes,
+              ingredients: widget.ingredients,
+              sellPrice: widget.sellPrice,
+              onChanged: (next) {
+                widget.onRecipesChanged(next);
+                setState(() {});
+              },
+            ),
+          ],
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 48,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context),
+              style: FilledButton.styleFrom(
+                backgroundColor: productBrand,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class OptionGroupEditorPage extends StatefulWidget {
+  const OptionGroupEditorPage({
+    super.key,
+    required this.group,
+    required this.readOnly,
+    required this.showOptionStock,
+    required this.canManageStock,
+    required this.ingredients,
+  });
+
+  final MenuOptionGroup group;
+  final bool readOnly;
+  final bool showOptionStock;
+  final bool canManageStock;
+  final List<Map<String, dynamic>> ingredients;
+
+  @override
+  State<OptionGroupEditorPage> createState() => _OptionGroupEditorPageState();
+}
+
+class _OptionGroupEditorPageState extends State<OptionGroupEditorPage> {
+  late final TextEditingController _name;
+  late final TextEditingController _provisionValue;
+  late final TextEditingController _description;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.group.name);
+    _provisionValue = TextEditingController(text: widget.group.provisionValue);
+    _description = TextEditingController(text: widget.group.description);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _provisionValue.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openOption(MenuOptionItem option) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => OptionItemEditorPage(
+          option: option,
+          readOnly: widget.readOnly,
+          showOptionStock: widget.showOptionStock,
+          canManageStock: widget.canManageStock,
+          ingredients: widget.ingredients,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final group = widget.group;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7F9),
+      appBar: AppBar(
+        title: const Text('Grup opsi', style: TextStyle(fontWeight: FontWeight.w800)),
+        backgroundColor: productBrand,
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        children: [
+          TextField(
+            controller: _name,
+            enabled: !widget.readOnly,
+            decoration: const InputDecoration(
+              labelText: 'Nama grup (mis. Level Pedas)',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            onChanged: (value) => group.name = value,
+          ),
+          const SizedBox(height: 12),
+          if (widget.readOnly)
+            Text(
+              groupRuleLabel(group),
+              style: TextStyle(color: Colors.black.withValues(alpha: 0.6)),
+            )
+          else ...[
+            DropdownButtonFormField<String>(
+              initialValue: provisionChoices.containsKey(group.provision)
+                  ? group.provision
+                  : 'OPTIONAL',
+              decoration: const InputDecoration(
+                labelText: 'Aturan pilihan',
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+              items: [
+                for (final entry in provisionChoices.entries)
+                  DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => group.provision = value);
+              },
+            ),
+            if (group.provision != 'OPTIONAL') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _provisionValue,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Nilai aturan',
+                  border: OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                onChanged: (value) => group.provisionValue = value,
+              ),
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _description,
+              decoration: const InputDecoration(
+                labelText: 'Deskripsi grup (opsional)',
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+              onChanged: (value) => group.description = value,
+            ),
+          ],
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Opsi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              ),
+              if (!widget.readOnly)
+                TextButton.icon(
+                  onPressed: () {
+                    final option = MenuOptionItem();
+                    setState(() => group.options.add(option));
+                    _openOption(option);
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Opsi'),
+                ),
+            ],
+          ),
+          for (var i = 0; i < group.options.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  title: Text(
+                    group.options[i].name.trim().isEmpty
+                        ? 'Opsi tanpa nama'
+                        : group.options[i].name.trim(),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    [
+                      'Rp ${formatProductPrice(group.options[i].price.replaceAll('.', ''))}',
+                      if (widget.showOptionStock)
+                        optionStockLabel(
+                          group.options[i],
+                          showOptionStock: true,
+                          canManageStock: widget.canManageStock,
+                        ),
+                    ].join(' · '),
+                  ),
+                  trailing: widget.readOnly || group.options.length <= 1
+                      ? const Icon(Icons.chevron_right)
+                      : IconButton(
+                          onPressed: () => setState(() => group.options.removeAt(i)),
+                          icon: const Icon(Icons.close),
+                        ),
+                  onTap: () => _openOption(group.options[i]),
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context),
+              style: FilledButton.styleFrom(
+                backgroundColor: productBrand,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class OptionItemEditorPage extends StatefulWidget {
+  const OptionItemEditorPage({
+    super.key,
+    required this.option,
+    required this.readOnly,
+    required this.showOptionStock,
+    required this.canManageStock,
+    required this.ingredients,
+  });
+
+  final MenuOptionItem option;
+  final bool readOnly;
+  final bool showOptionStock;
+  final bool canManageStock;
+  final List<Map<String, dynamic>> ingredients;
+
+  @override
+  State<OptionItemEditorPage> createState() => _OptionItemEditorPageState();
+}
+
+class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
+  late final TextEditingController _name;
+  late final TextEditingController _price;
+  late final TextEditingController _quantity;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.option.name);
+    _price = TextEditingController(text: widget.option.price);
+    _quantity = TextEditingController(text: widget.option.stockQuantity);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _price.dispose();
+    _quantity.dispose();
+    super.dispose();
+  }
+
+  String get _mode {
+    final option = widget.option;
+    if (option.stockType == 'linked') return 'linked';
+    if (option.alwaysAvailable) return 'always';
+    return 'direct';
+  }
+
+  void _setMode(String mode) {
+    final option = widget.option;
+    setState(() {
+      option.stockType = mode == 'linked' ? 'linked' : 'direct';
+      option.alwaysAvailable = mode == 'always';
+      option.stockEditable = mode == 'direct';
+      if (mode == 'linked' && option.recipes.isEmpty) {
+        option.recipes.add(RecipeLine());
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final option = widget.option;
+    final sellPrice = num.tryParse(_price.text.replaceAll('.', '').trim());
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7F9),
+      appBar: AppBar(
+        title: const Text('Opsi', style: TextStyle(fontWeight: FontWeight.w800)),
+        backgroundColor: productBrand,
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        children: [
+          TextField(
+            controller: _name,
+            enabled: !widget.readOnly,
+            decoration: const InputDecoration(
+              labelText: 'Nama opsi',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            onChanged: (value) => option.name = value,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _price,
+            enabled: !widget.readOnly,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Harga',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            onChanged: (value) {
+              option.price = value;
+              setState(() {});
+            },
+          ),
+          if (widget.showOptionStock && widget.canManageStock) ...[
+            const SizedBox(height: 16),
+            const Text('Stok opsi', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'always', label: Text('Selalu')),
+                ButtonSegment(value: 'direct', label: Text('Pcs')),
+                ButtonSegment(value: 'linked', label: Text('Resep')),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (value) {
+              if (widget.readOnly) return;
+              _setMode(value.first);
+            },
+            ),
+            if (_mode == 'direct') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _quantity,
+                enabled: !widget.readOnly,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Stok (pcs)',
+                  border: OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                onChanged: (value) => option.stockQuantity = value,
+              ),
+            ],
+            if (_mode == 'linked')
+              LinkedRecipeEditor(
+                lines: option.recipes,
+                ingredients: widget.ingredients,
+                sellPrice: sellPrice,
+                onChanged: (next) => setState(() => option.recipes = next),
+              ),
+          ] else if (widget.showOptionStock) ...[
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: productBrand,
+              title: const Text('Opsi selalu tersedia'),
+              value: option.alwaysAvailable,
+              onChanged: widget.readOnly
+                  ? null
+                  : (value) => setState(() => option.alwaysAvailable = value),
+            ),
+            if (!option.alwaysAvailable)
+              option.stockEditable
+                  ? TextField(
+                      controller: _quantity,
+                      enabled: !widget.readOnly,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Stok (pcs)',
+                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      onChanged: (value) => option.stockQuantity = value,
+                    )
+                  : InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Stok dari resep (pcs)',
+                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      child: Text(option.stockQuantity.isEmpty ? '0' : option.stockQuantity),
+                    ),
+          ],
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 48,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context),
+              style: FilledButton.styleFrom(
+                backgroundColor: productBrand,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -536,16 +997,33 @@ class LinkedRecipeEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (ingredients.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.only(top: 8, bottom: 8),
-        child: Text('Tambah bahan dulu di menu Stok.'),
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Text(
+          'Belum ada bahan. Tambah bahan dulu di menu Stok, lalu susun resep di sini.',
+        ),
       );
     }
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const SizedBox(height: 16),
+        Text(
+          'Setiap kartu adalah satu bahan untuk satu porsi.',
+          style: TextStyle(color: Colors.black.withValues(alpha: 0.55)),
+        ),
+        const SizedBox(height: 10),
         for (var i = 0; i < lines.length; i++) ...[
-          const SizedBox(height: 8),
+          if (i > 0) const SizedBox(height: 10),
           _RecipeLineFields(
+            key: ObjectKey(lines[i]),
+            index: i,
             line: lines[i],
             ingredients: ingredients,
             onChanged: () => onChanged([...lines]),
@@ -557,101 +1035,103 @@ class LinkedRecipeEditor extends StatelessWidget {
                   },
           ),
         ],
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () {
-              lines.add(RecipeLine());
-              onChanged([...lines]);
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Bahan resep'),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () {
+            lines.add(RecipeLine());
+            onChanged([...lines]);
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: productBrand,
+            side: BorderSide(color: productBrand.withValues(alpha: 0.35)),
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
+          icon: const Icon(Icons.add),
+          label: const Text('Tambah bahan', style: TextStyle(fontWeight: FontWeight.w700)),
         ),
+        const SizedBox(height: 12),
         _costEstimate(),
       ],
     );
   }
 
   Widget _costEstimate() {
-    final hpp = _estimatedCost();
-    if (hpp <= 0) return const SizedBox.shrink();
+    final hpp = estimateRecipeCost(lines, ingredients);
     final sell = sellPrice;
     final gap = sell == null ? null : sell - hpp;
-    String money(num value) {
-      final rounded = value.round();
-      final text = rounded.abs().toString();
-      final buffer = StringBuffer(rounded < 0 ? '-' : '');
-      for (var i = 0; i < text.length; i++) {
-        if (i > 0 && (text.length - i) % 3 == 0) buffer.write('.');
-        buffer.write(text[i]);
-      }
-      return 'Rp $buffer';
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 8),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: productBrand.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Perkiraan HPP ${money(hpp)}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            'Perkiraan HPP satu porsi',
+            style: TextStyle(color: Colors.black.withValues(alpha: 0.55)),
           ),
-          if (gap != null)
+          const SizedBox(height: 4),
+          Text(
+            hpp <= 0 ? 'Isi bahan dan jumlah dulu' : formatRupiah(hpp),
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          ),
+          if (gap != null) ...[
+            const SizedBox(height: 4),
             Text(
-              'Selisih terhadap harga jual ${money(gap)}',
+              'Selisih terhadap harga jual ${formatRupiah(gap)}',
               style: TextStyle(
-                color: gap < 0 ? const Color(0xFFB42318) : Colors.black54,
+                fontWeight: FontWeight.w700,
+                color: gap < 0 ? const Color(0xFFB42318) : const Color(0xFF0B6E4F),
               ),
             ),
+          ],
         ],
       ),
     );
   }
 
-  double _estimatedCost() {
-    var total = 0.0;
-    for (final line in lines) {
-      Map<String, dynamic>? ingredient;
-      for (final item in ingredients) {
-        if (int.tryParse('${item['id']}') == line.stockId) ingredient = item;
-      }
-      if (ingredient == null) continue;
-      final qty = double.tryParse(line.quantity.replaceAll(',', '.')) ?? 0;
-      final basePrice = ingredient['base_price'];
-      final price = basePrice is num ? basePrice.toDouble() : double.tryParse('$basePrice') ?? 0;
-      var toBase = 0.0;
-      final units = ingredient['available_units'];
-      if (units is List) {
-        for (final unit in units.whereType<Map>()) {
-          if (int.tryParse('${unit['id']}') == line.unitId) {
-            final factor = unit['to_base'];
-            toBase = factor is num ? factor.toDouble() : double.tryParse('$factor') ?? 0;
-          }
-        }
-      }
-      total += qty * toBase * price;
-    }
-    return total;
-  }
 }
 
-class _RecipeLineFields extends StatelessWidget {
+class _RecipeLineFields extends StatefulWidget {
   const _RecipeLineFields({
+    super.key,
+    required this.index,
     required this.line,
     required this.ingredients,
     required this.onChanged,
     required this.onRemove,
   });
 
+  final int index;
   final RecipeLine line;
   final List<Map<String, dynamic>> ingredients;
   final VoidCallback onChanged;
   final VoidCallback? onRemove;
 
+  @override
+  State<_RecipeLineFields> createState() => _RecipeLineFieldsState();
+}
+
+class _RecipeLineFieldsState extends State<_RecipeLineFields> {
+  late final TextEditingController _quantity;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantity = TextEditingController(text: widget.line.quantity);
+  }
+
+  @override
+  void dispose() {
+    _quantity.dispose();
+    super.dispose();
+  }
+
   Map<String, dynamic>? _ingredient(int? stockId) {
-    for (final item in ingredients) {
+    for (final item in widget.ingredients) {
       if (int.tryParse('${item['id']}') == stockId) return item;
     }
     return null;
@@ -671,114 +1151,186 @@ class _RecipeLineFields extends StatelessWidget {
     ];
   }
 
+  String _unitName(List<Map<String, dynamic>> units) {
+    for (final unit in units) {
+      if (int.tryParse('${unit['id']}') == widget.line.unitId) {
+        return unit['name']?.toString() ?? '';
+      }
+    }
+    return '';
+  }
+
+  String _preview(List<Map<String, dynamic>> units) {
+    final name = widget.line.stockName.trim();
+    if (name.isEmpty) return 'Pilih bahan, jumlah, dan satuan';
+    final qty = _quantity.text.trim();
+    final unit = _unitName(units);
+    if (qty.isEmpty) return name;
+    return [qty, unit, name].where((part) => part.isNotEmpty).join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final line = widget.line;
     final units = _unitsFor(line.stockId);
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<int>(
-                isExpanded: true,
-                initialValue: ingredients.any(
-                  (e) => int.tryParse('${e['id']}') == line.stockId,
-                )
-                    ? line.stockId
-                    : null,
-                decoration: const InputDecoration(
-                  labelText: 'Bahan',
-                  border: OutlineInputBorder(),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: productBrand.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                selectedItemBuilder: (context) => [
-                  for (final item in ingredients)
+                child: Text(
+                  '${widget.index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: productBrand),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      item['stock_name']?.toString() ?? '-',
-                      overflow: TextOverflow.ellipsis,
+                      'Bahan ${widget.index + 1}',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                ],
-                items: [
-                  for (final item in ingredients)
-                    DropdownMenuItem(
-                      value: int.tryParse('${item['id']}'),
-                      child: Text(
-                        item['stock_name']?.toString() ?? '-',
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      _preview(units),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withValues(alpha: 0.5),
                       ),
                     ),
-                ],
-                onChanged: (id) {
-                  line.stockId = id;
-                  final ingredient = _ingredient(id);
-                  line.stockName = ingredient?['stock_name']?.toString() ?? '';
-                  line.unitId = int.tryParse('${ingredient?['display_unit_id'] ?? ''}');
-                  onChanged();
-                },
-              ),
-            ),
-            if (onRemove != null)
-              IconButton(onPressed: onRemove, icon: const Icon(Icons.close)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: TextField(
-                controller: TextEditingController(text: line.quantity)
-                  ..selection = TextSelection.collapsed(offset: line.quantity.length),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Jumlah',
-                  border: OutlineInputBorder(),
+                  ],
                 ),
-                onChanged: (v) => line.quantity = v,
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 3,
-              child: DropdownButtonFormField<int>(
-                isExpanded: true,
-                initialValue: units.any(
-                  (e) => int.tryParse('${e['id']}') == line.unitId,
-                )
-                    ? line.unitId
-                    : null,
-                decoration: const InputDecoration(
-                  labelText: 'Satuan',
-                  border: OutlineInputBorder(),
+              if (widget.onRemove != null)
+                IconButton(
+                  onPressed: widget.onRemove,
+                  icon: const Icon(Icons.delete_outline, color: productBrand),
                 ),
-                selectedItemBuilder: (context) => [
-                  for (final unit in units)
-                    Text(
-                      unit['name']?.toString() ?? '-',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-                items: [
-                  for (final unit in units)
-                    DropdownMenuItem(
-                      value: int.tryParse('${unit['id']}'),
-                      child: Text(
+            ],
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            isExpanded: true,
+            initialValue: widget.ingredients.any(
+              (e) => int.tryParse('${e['id']}') == line.stockId,
+            )
+                ? line.stockId
+                : null,
+            decoration: const InputDecoration(
+              labelText: 'Bahan',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Color(0xFFF8FAFC),
+            ),
+            selectedItemBuilder: (context) => [
+              for (final item in widget.ingredients)
+                Text(
+                  item['stock_name']?.toString() ?? '-',
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+            items: [
+              for (final item in widget.ingredients)
+                DropdownMenuItem(
+                  value: int.tryParse('${item['id']}'),
+                  child: Text(
+                    item['stock_name']?.toString() ?? '-',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (id) {
+              line.stockId = id;
+              final ingredient = _ingredient(id);
+              line.stockName = ingredient?['stock_name']?.toString() ?? '';
+              line.unitId = int.tryParse('${ingredient?['display_unit_id'] ?? ''}');
+              widget.onChanged();
+            },
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _quantity,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Jumlah',
+                    border: OutlineInputBorder(),
+                    filled: true,
+                    fillColor: Color(0xFFF8FAFC),
+                  ),
+                  onChanged: (value) {
+                    line.quantity = value;
+                    setState(() {});
+                    widget.onChanged();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<int>(
+                  isExpanded: true,
+                  initialValue: units.any(
+                    (e) => int.tryParse('${e['id']}') == line.unitId,
+                  )
+                      ? line.unitId
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Satuan',
+                    border: OutlineInputBorder(),
+                    filled: true,
+                    fillColor: Color(0xFFF8FAFC),
+                  ),
+                  selectedItemBuilder: (context) => [
+                    for (final unit in units)
+                      Text(
                         unit['name']?.toString() ?? '-',
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                ],
-                onChanged: (id) {
-                  line.unitId = id;
-                  onChanged();
-                },
+                  ],
+                  items: [
+                    for (final unit in units)
+                      DropdownMenuItem(
+                        value: int.tryParse('${unit['id']}'),
+                        child: Text(
+                          unit['name']?.toString() ?? '-',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (id) {
+                    line.unitId = id;
+                    widget.onChanged();
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
+
 
 class ProductImagePickerRow extends StatelessWidget {
   const ProductImagePickerRow({
