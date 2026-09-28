@@ -186,6 +186,7 @@ class OwnerModel {
   final String? referralCode;
   final String? referredCode;
   final bool needsReferralPrompt;
+  final bool referralPointsEnabled;
 
   const OwnerModel({
     required this.id,
@@ -208,6 +209,7 @@ class OwnerModel {
     this.referralCode,
     this.referredCode,
     this.needsReferralPrompt = false,
+    this.referralPointsEnabled = true,
   });
 
   bool hasFeature(String key) => features[key] == true;
@@ -259,6 +261,9 @@ class OwnerModel {
       referralCode: json['referral_code']?.toString(),
       referredCode: json['referred_code']?.toString(),
       needsReferralPrompt: json['needs_referral_prompt'] == true,
+      referralPointsEnabled: json.containsKey('referral_points_enabled')
+          ? json['referral_points_enabled'] == true
+          : true,
     );
   }
 
@@ -284,6 +289,7 @@ class OwnerModel {
       'referral_code': referralCode,
       'referred_code': referredCode,
       'needs_referral_prompt': needsReferralPrompt,
+      'referral_points_enabled': referralPointsEnabled,
     };
   }
 
@@ -317,6 +323,7 @@ class OwnerModel {
       referralCode: referralCode,
       referredCode: referredCode,
       needsReferralPrompt: needsReferralPrompt,
+      referralPointsEnabled: referralPointsEnabled,
     );
   }
 }

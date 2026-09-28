@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/auth/presentation/pages/login_page.dart';
 import '/features/auth/presentation/pages/owner_set_password_page.dart';
+import 'owner_cavaa_points_page.dart';
 
 class OwnerAccountPage extends StatefulWidget {
   const OwnerAccountPage({super.key});
@@ -31,6 +32,9 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
     final owner = context.read<AuthProvider>().owner;
     _name = TextEditingController(text: owner?.name ?? '');
     _phone = TextEditingController(text: owner?.phoneNumber ?? '');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AuthProvider>().refreshOwner();
+    });
   }
 
   @override
@@ -139,6 +143,21 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
+          if (owner?.referralPointsEnabled != false) ...[
+            _PointsEntry(
+              balance: owner?.cavaaPointsBalance ?? 0,
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const OwnerCavaaPointsPage(),
+                  ),
+                );
+                if (!context.mounted) return;
+                await context.read<AuthProvider>().refreshOwner();
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
           _Card(
             child: Row(
               children: [
@@ -317,6 +336,47 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PointsEntry extends StatelessWidget {
+  const _PointsEntry({required this.balance, required this.onTap});
+
+  final int balance;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.stars_rounded, color: Color(0xFFAE1504)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cavaa Points',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text('Saldo $balance poin'),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
       ),
     );
   }
