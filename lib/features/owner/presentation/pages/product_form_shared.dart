@@ -8,6 +8,52 @@ import '/core/config/env.dart';
 
 const productBrand = Color(0xFFAE1504);
 
+class RecipeLine {
+  RecipeLine({
+    this.stockId,
+    this.quantity = '1',
+    this.unitId,
+    this.stockName = '',
+  });
+
+  int? stockId;
+  String quantity;
+  int? unitId;
+  String stockName;
+
+  factory RecipeLine.fromJson(Map<String, dynamic> json) {
+    final raw = json['quantity'] ?? json['quantity_used'];
+    String qty = '1';
+    if (raw is num) {
+      qty = raw == raw.roundToDouble() ? raw.toStringAsFixed(0) : raw.toString();
+    } else if (raw != null && raw.toString().isNotEmpty) {
+      qty = raw.toString();
+    }
+    return RecipeLine(
+      stockId: int.tryParse('${json['stock_id'] ?? ''}'),
+      quantity: qty,
+      unitId: int.tryParse('${json['unit_id'] ?? ''}'),
+      stockName: json['stock_name']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toPayload() {
+    return {
+      'stock_id': stockId,
+      'quantity': num.tryParse(quantity.trim().replaceAll(',', '.')) ?? 0,
+      'unit_id': unitId,
+    };
+  }
+}
+
+List<RecipeLine> recipeLinesFrom(dynamic raw) {
+  if (raw is! List) return [];
+  return raw
+      .whereType<Map>()
+      .map((e) => RecipeLine.fromJson(Map<String, dynamic>.from(e)))
+      .toList();
+}
+
 const provisionChoices = <String, String>{
   'OPTIONAL': 'Opsional',
   'OPTIONAL MAX': 'Opsional (maks)',
@@ -26,7 +72,8 @@ class MenuOptionItem {
     this.stockType = 'direct',
     this.stockQuantity = '',
     this.stockEditable = true,
-  });
+    List<RecipeLine>? recipes,
+  }) : recipes = recipes ?? [];
 
   int? optionId;
   String name;
@@ -36,6 +83,7 @@ class MenuOptionItem {
   String stockType;
   String stockQuantity;
   bool stockEditable;
+  List<RecipeLine> recipes;
 
   factory MenuOptionItem.fromJson(Map<String, dynamic> json) {
     return MenuOptionItem(
@@ -60,6 +108,7 @@ class MenuOptionItem {
       }(),
       stockEditable: json['stock_editable'] != false &&
           (json['stock_type']?.toString() ?? 'direct') != 'linked',
+      recipes: recipeLinesFrom(json['recipes']),
     );
   }
 
@@ -157,12 +206,16 @@ class ProductMenuOptionsEditor extends StatelessWidget {
     required this.onChanged,
     this.readOnly = false,
     this.showOptionStock = false,
+    this.canManageStock = false,
+    this.ingredients = const [],
   });
 
   final List<MenuOptionGroup> groups;
   final ValueChanged<List<MenuOptionGroup>> onChanged;
   final bool readOnly;
   final bool showOptionStock;
+  final bool canManageStock;
+  final List<Map<String, dynamic>> ingredients;
 
   void _emit() => onChanged([...groups]);
 
@@ -346,6 +399,59 @@ class ProductMenuOptionsEditor extends StatelessWidget {
                               ),
                           ],
                         ),
+                        if (showOptionStock && canManageStock) ...[
+                          const SizedBox(height: 8),
+                          SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(value: 'always', label: Text('Selalu')),
+                              ButtonSegment(value: 'direct', label: Text('Pcs')),
+                              ButtonSegment(value: 'linked', label: Text('Resep')),
+                            ],
+                            selected: {
+                              opt.stockType == 'linked'
+                                  ? 'linked'
+                                  : opt.alwaysAvailable
+                                      ? 'always'
+                                      : 'direct',
+                            },
+                            onSelectionChanged: (v) {
+                              final mode = v.first;
+                              opt.stockType = mode == 'linked' ? 'linked' : 'direct';
+                              opt.alwaysAvailable = mode == 'always';
+                              opt.stockEditable = mode == 'direct';
+                              if (mode == 'linked' && opt.recipes.isEmpty) {
+                                opt.recipes.add(RecipeLine());
+                              }
+                              _emit();
+                            },
+                          ),
+                          if (opt.stockType != 'linked' && !opt.alwaysAvailable)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8, bottom: 8),
+                              child: TextField(
+                                controller: TextEditingController(
+                                  text: opt.stockQuantity,
+                                )..selection = TextSelection.collapsed(
+                                    offset: opt.stockQuantity.length,
+                                  ),
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Stok (pcs)',
+                                  border: OutlineInputBorder(),
+                                ),
+                                onChanged: (v) => opt.stockQuantity = v,
+                              ),
+                            ),
+                          if (opt.stockType == 'linked')
+                            LinkedRecipeEditor(
+                              lines: opt.recipes,
+                              ingredients: ingredients,
+                              onChanged: (next) {
+                                opt.recipes = next;
+                                _emit();
+                              },
+                            ),
+                        ] else ...[
                         if (showOptionStock)
                           SwitchListTile(
                             contentPadding: EdgeInsets.zero,
@@ -386,6 +492,7 @@ class ProductMenuOptionsEditor extends StatelessWidget {
                                     ),
                                   ),
                           ),
+                        ],
                       ],
                     ),
                   );
@@ -406,6 +513,201 @@ class ProductMenuOptionsEditor extends StatelessWidget {
             ),
           );
         }),
+      ],
+    );
+  }
+}
+
+class LinkedRecipeEditor extends StatelessWidget {
+  const LinkedRecipeEditor({
+    super.key,
+    required this.lines,
+    required this.ingredients,
+    required this.onChanged,
+  });
+
+  final List<RecipeLine> lines;
+  final List<Map<String, dynamic>> ingredients;
+  final ValueChanged<List<RecipeLine>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (ingredients.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 8, bottom: 8),
+        child: Text('Tambah bahan dulu di menu Stok.'),
+      );
+    }
+    return Column(
+      children: [
+        for (var i = 0; i < lines.length; i++) ...[
+          const SizedBox(height: 8),
+          _RecipeLineFields(
+            line: lines[i],
+            ingredients: ingredients,
+            onChanged: () => onChanged([...lines]),
+            onRemove: lines.length <= 1
+                ? null
+                : () {
+                    lines.removeAt(i);
+                    onChanged([...lines]);
+                  },
+          ),
+        ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () {
+              lines.add(RecipeLine());
+              onChanged([...lines]);
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Bahan resep'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecipeLineFields extends StatelessWidget {
+  const _RecipeLineFields({
+    required this.line,
+    required this.ingredients,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final RecipeLine line;
+  final List<Map<String, dynamic>> ingredients;
+  final VoidCallback onChanged;
+  final VoidCallback? onRemove;
+
+  Map<String, dynamic>? _ingredient(int? stockId) {
+    for (final item in ingredients) {
+      if (int.tryParse('${item['id']}') == stockId) return item;
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _unitsFor(int? stockId) {
+    final ingredient = _ingredient(stockId);
+    final raw = ingredient?['available_units'];
+    if (raw is List && raw.isNotEmpty) {
+      return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    final unitId = int.tryParse('${ingredient?['display_unit_id'] ?? ''}');
+    final unitName = ingredient?['display_unit_name']?.toString() ?? '';
+    if (unitId == null) return [];
+    return [
+      {'id': unitId, 'name': unitName.isEmpty ? 'satuan' : unitName},
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final units = _unitsFor(line.stockId);
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                isExpanded: true,
+                initialValue: ingredients.any(
+                  (e) => int.tryParse('${e['id']}') == line.stockId,
+                )
+                    ? line.stockId
+                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'Bahan',
+                  border: OutlineInputBorder(),
+                ),
+                selectedItemBuilder: (context) => [
+                  for (final item in ingredients)
+                    Text(
+                      item['stock_name']?.toString() ?? '-',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+                items: [
+                  for (final item in ingredients)
+                    DropdownMenuItem(
+                      value: int.tryParse('${item['id']}'),
+                      child: Text(
+                        item['stock_name']?.toString() ?? '-',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                onChanged: (id) {
+                  line.stockId = id;
+                  final ingredient = _ingredient(id);
+                  line.stockName = ingredient?['stock_name']?.toString() ?? '';
+                  line.unitId = int.tryParse('${ingredient?['display_unit_id'] ?? ''}');
+                  onChanged();
+                },
+              ),
+            ),
+            if (onRemove != null)
+              IconButton(onPressed: onRemove, icon: const Icon(Icons.close)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: TextField(
+                controller: TextEditingController(text: line.quantity)
+                  ..selection = TextSelection.collapsed(offset: line.quantity.length),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Jumlah',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) => line.quantity = v,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 3,
+              child: DropdownButtonFormField<int>(
+                isExpanded: true,
+                initialValue: units.any(
+                  (e) => int.tryParse('${e['id']}') == line.unitId,
+                )
+                    ? line.unitId
+                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'Satuan',
+                  border: OutlineInputBorder(),
+                ),
+                selectedItemBuilder: (context) => [
+                  for (final unit in units)
+                    Text(
+                      unit['name']?.toString() ?? '-',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+                items: [
+                  for (final unit in units)
+                    DropdownMenuItem(
+                      value: int.tryParse('${unit['id']}'),
+                      child: Text(
+                        unit['name']?.toString() ?? '-',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                onChanged: (id) {
+                  line.unitId = id;
+                  onChanged();
+                },
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

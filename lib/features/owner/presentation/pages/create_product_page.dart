@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '/features/auth/presentation/auth_provider.dart';
+import '../../data/owner_api.dart';
 import 'master_products_page.dart';
 import 'owner_home_page.dart';
 import 'product_form_shared.dart';
@@ -144,6 +145,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
           assignableMasters: _assignableMasters,
           categories: _categories,
           promotions: _promotions,
+          canManageStock: context.read<AuthProvider>().owner?.hasFeature('products_stocks') ?? false,
         ),
       ),
     );
@@ -280,6 +282,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                       final thumb = resolveProductImageUrl(p['pictures']);
                       final always = p['always_available'] == true ||
                           p['always_available'] == 1;
+                      final linked = p['stock_type']?.toString() == 'linked';
                       final rawQty = p['stock_quantity'];
                       final qty = rawQty is num
                           ? rawQty.toInt()
@@ -331,17 +334,22 @@ class _CreateProductPageState extends State<CreateProductPage> {
                                     p['product_code'].toString(),
                                 ].join(' · '),
                               ),
-                              if (always || showQty) ...[
+                              if (linked || always || showQty) ...[
                                 const SizedBox(height: 6),
                                 Wrap(
                                   spacing: 6,
                                   runSpacing: 4,
                                   children: [
-                                    if (showQty)
+                                    if (linked)
+                                      const _StoreStockChip(
+                                        label: 'Stok terhubung',
+                                        filled: true,
+                                      )
+                                    else if (showQty)
                                       _StoreStockChip(
                                         label: 'Stok $qty pcs',
                                       ),
-                                    if (always)
+                                    if (always && !linked)
                                       const _StoreStockChip(
                                         label: 'Selalu tersedia',
                                         filled: true,
@@ -351,7 +359,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                               ],
                             ],
                           ),
-                          isThreeLine: always || showQty,
+                          isThreeLine: linked || always || showQty,
                           trailing: Icon(
                             (p['is_active'] == true || p['is_active'] == 1)
                                 ? Icons.check_circle_rounded
@@ -379,12 +387,14 @@ class StoreProductEditorPage extends StatefulWidget {
     required this.assignableMasters,
     required this.categories,
     required this.promotions,
+    this.canManageStock = false,
   });
 
   final Map<String, dynamic>? product;
   final List<Map<String, dynamic>> assignableMasters;
   final List<Map<String, dynamic>> categories;
   final List<Map<String, dynamic>> promotions;
+  final bool canManageStock;
 
   @override
   State<StoreProductEditorPage> createState() => _StoreProductEditorPageState();
@@ -415,6 +425,9 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
   bool _loading = false;
   bool _saving = false;
   String? _error;
+  String _stockMode = 'always';
+  List<RecipeLine> _recipes = [];
+  List<Map<String, dynamic>> _ingredients = [];
 
   bool get _isEdit => widget.product != null;
   bool get _fromCatalog => _selectedMaster != null;
@@ -429,6 +442,9 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
     if (_isEdit) {
       _loading = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadDetail());
+    }
+    if (widget.canManageStock) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadIngredients());
     }
   }
 
@@ -498,6 +514,16 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
         product['always_available'] == true || product['always_available'] == 1;
     _stockType = product['stock_type']?.toString() ?? 'direct';
     _stockEditable = product['stock_editable'] != false && _stockType != 'linked';
+    _recipes = recipeLinesFrom(product['recipes']);
+    if (_stockType == 'linked') {
+      _stockMode = 'linked';
+      _alwaysAvailable = false;
+      if (_recipes.isEmpty) _recipes = [RecipeLine()];
+    } else if (_alwaysAvailable) {
+      _stockMode = 'always';
+    } else {
+      _stockMode = 'direct';
+    }
     final stockQty = product['stock_quantity'];
     _stock.text = stockQty is num
         ? stockQty.toStringAsFixed(0)
@@ -642,6 +668,105 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
     }
   }
 
+  bool _recipeReady(List<RecipeLine> lines) {
+    if (lines.isEmpty) return false;
+    for (final line in lines) {
+      final qty = num.tryParse(line.quantity.trim().replaceAll(',', '.'));
+      if (line.stockId == null || line.unitId == null || qty == null || qty <= 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> _loadIngredients() async {
+    try {
+      final data = await ownerApiOf(context).listStockIngredients();
+      final raw = data['ingredients'];
+      if (!mounted || raw is! List) return;
+      setState(() {
+        _ingredients = raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      });
+    } catch (_) {}
+  }
+
+  void _copyOptionIds(Map<String, dynamic> product) {
+    final groups = product['menu_options'];
+    if (groups is! List) return;
+    for (var gi = 0; gi < _groups.length && gi < groups.length; gi++) {
+      final saved = groups[gi];
+      if (saved is! Map) continue;
+      final options = saved['options'];
+      if (options is! List) continue;
+      for (var oi = 0; oi < _groups[gi].options.length && oi < options.length; oi++) {
+        final row = options[oi];
+        if (row is! Map) continue;
+        _groups[gi].options[oi].optionId ??= int.tryParse('${row['option_id']}');
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> _optionSettings() {
+    final optionSettings = <Map<String, dynamic>>[];
+    for (final g in _groups) {
+      for (final o in g.options) {
+        if (o.optionId == null) continue;
+        optionSettings.add({
+          'option_id': o.optionId,
+          'always_available': o.alwaysAvailable,
+          'stock_type': o.stockType == 'linked' ? 'linked' : 'direct',
+          if (!o.alwaysAvailable && o.stockType != 'linked')
+            'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
+        });
+      }
+    }
+    return optionSettings;
+  }
+
+  Future<void> _updateStockMode(
+    OwnerApi api,
+    int id,
+    num price,
+    int? stockQty,
+  ) async {
+    await api.updateProduct(
+      id: id,
+      price: price,
+      alwaysAvailable: _alwaysAvailable,
+      stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+      stockType: _stockType,
+      isActive: _isActive,
+      isHotProduct: _isHot,
+      promotionId: _promotionId,
+      clearPromotion: _promotionId == null,
+      optionSettings: _optionSettings(),
+    );
+  }
+
+  Future<void> _saveRecipes(OwnerApi api, int productId) async {
+    if (!widget.canManageStock) return;
+    if (_stockType == 'linked') {
+      await api.saveStockRecipe(
+        itemType: 'product',
+        itemId: productId,
+        items: _recipes.map((e) => e.toPayload()).toList(),
+      );
+    }
+    for (final g in _groups) {
+      for (final o in g.options) {
+        if (o.optionId == null || o.stockType != 'linked') continue;
+        await api.saveStockRecipe(
+          itemType: 'option',
+          itemId: o.optionId!,
+          items: o.recipes.map((e) => e.toPayload()).toList(),
+        );
+      }
+    }
+  }
+
   Future<void> _save() async {
     final price = num.tryParse(_price.text.replaceAll('.', '').trim());
     if (!_identityLocked && _name.text.trim().isEmpty) {
@@ -652,15 +777,33 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       setState(() => _error = 'Harga wajib diisi');
       return;
     }
+    if (widget.canManageStock) {
+      _alwaysAvailable = _stockMode == 'always';
+      _stockType = _stockMode == 'linked' ? 'linked' : 'direct';
+      _stockEditable = _stockMode == 'direct';
+    }
     final stockQty = int.tryParse(_stock.text.trim());
-    if (!_alwaysAvailable && _stockEditable && stockQty == null) {
+    if (widget.canManageStock && _stockMode == 'linked') {
+      if (!_recipeReady(_recipes)) {
+        setState(() => _error = 'Resep produk wajib diisi');
+        return;
+      }
+    } else if (!_alwaysAvailable && _stockEditable && stockQty == null) {
       setState(() => _error = 'Stok (pcs) wajib diisi');
       return;
     }
-    if (_isEdit && !_alwaysAvailable) {
+    if (widget.canManageStock || (_isEdit && !_alwaysAvailable)) {
       for (final g in _groups) {
         for (final o in g.options) {
+          if (widget.canManageStock && o.stockType == 'linked') {
+            if (!_recipeReady(o.recipes)) {
+              setState(() => _error = 'Resep opsi wajib diisi');
+              return;
+            }
+            continue;
+          }
           if (o.alwaysAvailable || !o.stockEditable) continue;
+          if (!widget.canManageStock && !_isEdit) continue;
           if (int.tryParse(o.stockQuantity.trim()) == null) {
             setState(() => _error = 'Stok opsi wajib diisi');
             return;
@@ -692,7 +835,11 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
             optionSettings.add({
               'option_id': o.optionId,
               'always_available': o.alwaysAvailable,
-              if (!o.alwaysAvailable && o.stockEditable)
+              if (widget.canManageStock)
+                'stock_type': o.stockType == 'linked' ? 'linked' : 'direct',
+              if (!o.alwaysAvailable &&
+                  o.stockType != 'linked' &&
+                  (o.stockEditable || widget.canManageStock))
                 'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
             });
           }
@@ -701,13 +848,15 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           id: _productId!,
           price: price,
           alwaysAvailable: _alwaysAvailable,
-          stockQuantity: (!_alwaysAvailable && _stockEditable) ? stockQty : null,
+          stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+          stockType: widget.canManageStock ? _stockType : null,
           isActive: _isActive,
           isHotProduct: _isHot,
           promotionId: _promotionId,
           clearPromotion: _promotionId == null,
           optionSettings: optionSettings,
         );
+        await _saveRecipes(api, _productId!);
       } else if (_fromCatalog) {
         final masterId = int.tryParse('${_selectedMaster!['id'] ?? ''}');
         if (masterId == null) {
@@ -717,17 +866,30 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           });
           return;
         }
-        await api.assignProductsToStore(
+        final assigned = await api.assignProductsToStore(
           [masterId],
           price: price,
-          alwaysAvailable: _alwaysAvailable,
-          stockQuantity: (!_alwaysAvailable && _stockEditable) ? stockQty : null,
+          alwaysAvailable: _stockType == 'linked' ? true : _alwaysAvailable,
+          stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
           isActive: _isActive,
           isHotProduct: _isHot,
           promotionId: _promotionId,
         );
+        final created = assigned['created_ids'];
+        final newId = created is List && created.isNotEmpty
+            ? int.tryParse('${created.first}')
+            : null;
+        if (widget.canManageStock && newId != null) {
+          final detail = await api.getProduct(newId);
+          final product = detail['product'];
+          if (product is Map) {
+            _copyOptionIds(Map<String, dynamic>.from(product));
+          }
+          await _updateStockMode(api, newId, price, stockQty);
+          await _saveRecipes(api, newId);
+        }
       } else {
-        await api.createProduct(
+        final created = await api.createProduct(
           name: _name.text.trim(),
           price: price,
           description:
@@ -737,13 +899,22 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
               ? 'Umum'
               : _category.text.trim(),
           promotionId: _promotionId,
-          alwaysAvailable: _alwaysAvailable,
-          stockQuantity: (!_alwaysAvailable && _stockEditable) ? stockQty : null,
+          alwaysAvailable: _stockType == 'linked' ? true : _alwaysAvailable,
+          stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
           isActive: _isActive,
           isHotProduct: _isHot,
           menuOptions: _groups.map((e) => e.toJson()).toList(),
           imagePaths: _pickedImages.isEmpty ? null : _pickedImages,
         );
+        if (widget.canManageStock) {
+          final product = created['product'];
+          final newId = product is Map ? int.tryParse('${product['id']}') : null;
+          if (product is Map) _copyOptionIds(Map<String, dynamic>.from(product));
+          if (newId != null) {
+            await _updateStockMode(api, newId, price, stockQty);
+            await _saveRecipes(api, newId);
+          }
+        }
       }
 
       if (!mounted) return;
@@ -982,9 +1153,58 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                       ProductMenuOptionsEditor(
                         groups: _groups,
                         readOnly: _identityLocked,
-                        showOptionStock: _isEdit,
+                        showOptionStock: _isEdit || widget.canManageStock,
+                        canManageStock: widget.canManageStock,
+                        ingredients: _ingredients,
                         onChanged: (next) => setState(() => _groups = next),
                       ),
+                      if (widget.canManageStock) ...[
+                        const Text(
+                          'Stok produk',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 8),
+                        SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(value: 'always', label: Text('Selalu')),
+                            ButtonSegment(value: 'direct', label: Text('Pcs')),
+                            ButtonSegment(value: 'linked', label: Text('Resep')),
+                          ],
+                          selected: {_stockMode},
+                          onSelectionChanged: (v) {
+                            if (_saving) return;
+                            setState(() {
+                              _stockMode = v.first;
+                              _alwaysAvailable = _stockMode == 'always';
+                              _stockType =
+                                  _stockMode == 'linked' ? 'linked' : 'direct';
+                              _stockEditable = _stockMode == 'direct';
+                              if (_stockMode == 'linked' && _recipes.isEmpty) {
+                                _recipes = [RecipeLine()];
+                              }
+                            });
+                          },
+                        ),
+                        if (_stockMode == 'direct')
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, bottom: 8),
+                            child: TextField(
+                              controller: _stock,
+                              enabled: !_saving,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Stok (pcs)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        if (_stockMode == 'linked')
+                          LinkedRecipeEditor(
+                            lines: _recipes,
+                            ingredients: _ingredients,
+                            onChanged: (next) => setState(() => _recipes = next),
+                          ),
+                      ] else ...[
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         activeThumbColor: _brand,
@@ -1020,6 +1240,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                                   ),
                                 ),
                         ),
+                      ],
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         activeThumbColor: _brand,

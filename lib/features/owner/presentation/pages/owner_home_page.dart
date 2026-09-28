@@ -15,6 +15,7 @@ import '/core/services/connectivity_status_provider.dart';
 import '../../data/owner_api.dart';
 import 'create_store_page.dart';
 import 'create_product_page.dart';
+import 'owner_stocks_page.dart';
 import 'payment_methods_page.dart';
 import 'employees_page.dart';
 import 'store_settings_page.dart';
@@ -210,6 +211,21 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
+  Future<void> _openStocks(bool allowed) async {
+    if (!allowed) {
+      await _openAddonsPaywall(
+        'Stok memerlukan add-on atau paket yang mendukung.',
+        highlightFeatureKey: 'products_stocks',
+        highlightAddonCode: 'stocks',
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const OwnerStocksPage()),
+    );
+  }
+
   Future<void> _openReports(bool allowed) async {
     if (!allowed) {
       await _openAddonsPaywall(
@@ -351,6 +367,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     final canPromo = owner?.hasFeature('products_promotions') ?? false;
     final canScanTable = owner?.hasFeature('feature_scan_table') ?? false;
     final canReport = owner?.hasFeature('report_sales') ?? false;
+    final canStock = owner?.hasFeature('products_stocks') ?? false;
 
     final menus = <_MenuItemData>[
       _MenuItemData(
@@ -382,6 +399,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   MaterialPageRoute(builder: (_) => const CreateProductPage()),
                 ).then((_) => auth.refreshOwner())
             : null,
+      ),
+      _MenuItemData(
+        icon: Icons.inventory_2_rounded,
+        title: 'Stok',
+        enabled: hasStore,
+        onTap: hasStore ? () => _openStocks(canStock) : null,
       ),
       _MenuItemData(
         icon: Icons.local_offer_rounded,

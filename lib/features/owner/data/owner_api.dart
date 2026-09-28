@@ -188,6 +188,7 @@ class OwnerApi {
     required num price,
     bool? alwaysAvailable,
     int? stockQuantity,
+    String? stockType,
     bool? isActive,
     bool? isHotProduct,
     int? promotionId,
@@ -202,6 +203,7 @@ class OwnerApi {
           'always_available': alwaysAvailable ? 1 : 0,
         if (alwaysAvailable == false && stockQuantity != null)
           'stock_quantity': stockQuantity,
+        if (stockType != null) 'stock_type': stockType,
         if (isActive != null) 'is_active': isActive ? 1 : 0,
         if (isHotProduct != null) 'is_hot_product': isHotProduct ? 1 : 0,
         if (clearPromotion)
@@ -953,6 +955,80 @@ class OwnerApi {
 
   Future<void> rejectCashierShift(int id) async {
     await client.dio.post('/api/v1/mobile/owner/cashier-shifts/$id/reject');
+  }
+
+  Future<Map<String, dynamic>> listStocks({String? location}) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/stocks',
+      queryParameters: {
+        if (location != null) 'location': location,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<void> createStock({
+    required String stockName,
+    required int unitId,
+    String? description,
+  }) async {
+    await client.dio.post('/api/v1/mobile/owner/stocks', data: {
+      'stock_name': stockName,
+      'unit_id': unitId,
+      if (description != null && description.isNotEmpty) 'description': description,
+    });
+  }
+
+  Future<void> deleteStock(int id) async {
+    await client.dio.delete('/api/v1/mobile/owner/stocks/$id');
+  }
+
+  Future<Map<String, dynamic>> submitStockMovement(
+    Map<String, dynamic> body,
+  ) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/stocks/movements',
+      data: body,
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listStockIngredients() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/stocks/ingredients');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> loadStockRecipe({
+    required String itemType,
+    required int itemId,
+  }) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/stocks/recipes',
+      queryParameters: {
+        'item_type': itemType,
+        'item_id': itemId,
+      },
+    );
+    final data = res.data;
+    if (data is Map && data['recipe'] is List) {
+      return (data['recipe'] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    return [];
+  }
+
+  Future<void> saveStockRecipe({
+    required String itemType,
+    required int itemId,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    await client.dio.post('/api/v1/mobile/owner/stocks/recipes', data: {
+      'item_type': itemType,
+      'item_id': itemId,
+      'recipe_items': items,
+    });
   }
 
   OwnerModel? parseUser(Map<String, dynamic> data) {
