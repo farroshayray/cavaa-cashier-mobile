@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/billing_client_wrappers.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:provider/provider.dart';
 
@@ -44,6 +45,219 @@ class _LinkedPlayPurchase {
   final PurchaseDetails purchase;
   final String itemName;
   final String? email;
+}
+
+class _PlanOption {
+  const _PlanOption({
+    required this.token,
+    required this.title,
+    required this.price,
+    required this.caption,
+    required this.days,
+    required this.amountMicros,
+  });
+
+  final String token;
+  final String title;
+  final String price;
+  final String caption;
+  final int days;
+  final int amountMicros;
+
+  double get perDay => days <= 0 ? amountMicros.toDouble() : amountMicros / days;
+}
+
+class _BasePlanPickerDialog extends StatefulWidget {
+  const _BasePlanPickerDialog({required this.options});
+
+  final List<_PlanOption> options;
+
+  @override
+  State<_BasePlanPickerDialog> createState() => _BasePlanPickerDialogState();
+}
+
+class _BasePlanPickerDialogState extends State<_BasePlanPickerDialog> {
+  static const _brand = Color(0xFFAE1504);
+
+  late String _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = _recommended?.token ?? widget.options.first.token;
+  }
+
+  _PlanOption? get _recommended {
+    if (widget.options.length < 2) return null;
+    return widget.options.reduce(
+      (best, item) => item.perDay < best.perDay ? item : best,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFFF6F7F9),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Pilih masa langganan',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Harga dari Google Play. Akses aktif sesuai masa yang Anda pilih.',
+              style: TextStyle(color: Colors.grey.shade700, height: 1.35),
+            ),
+            const SizedBox(height: 14),
+            for (final option in widget.options) ...[
+              _PlanOptionCard(
+                option: option,
+                selected: option.token == _selected,
+                recommended: option.token == _recommended?.token,
+                onTap: () => setState(() => _selected = option.token),
+              ),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, _selected),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _brand,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Lanjut bayar',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanOptionCard extends StatelessWidget {
+  const _PlanOptionCard({
+    required this.option,
+    required this.selected,
+    required this.recommended,
+    required this.onTap,
+  });
+
+  final _PlanOption option;
+  final bool selected;
+  final bool recommended;
+  final VoidCallback onTap;
+
+  static const _brand = Color(0xFFAE1504);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? _brand : const Color(0xFFE5E7EB),
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: selected ? _brand : Colors.grey.shade400,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            option.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        if (recommended) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _brand.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: const Text(
+                              'Hemat',
+                              style: TextStyle(
+                                color: _brand,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      option.caption,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                option.price,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 DateTime? _parseExpiry(Object? raw) {
@@ -673,10 +887,17 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     }
 
     final billingType = (addon['billing_type'] ?? '').toString();
+    final isSubscription = billingType == 'subscription';
+    String? offerToken;
+    if (isSubscription) {
+      offerToken = await _chooseBasePlan(details);
+      if (!mounted || offerToken == null) return;
+    }
     final started = await _iap.buyNonConsumable(
       purchaseParam: _purchaseParam(
         details,
-        subscription: billingType == 'subscription',
+        subscription: isSubscription,
+        offerToken: offerToken,
       ),
     );
     if (!started && billingType != 'subscription') {
@@ -722,6 +943,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   PurchaseParam _purchaseParam(
     ProductDetails details, {
     required bool subscription,
+    String? offerToken,
   }) {
     if (!subscription || details is! GooglePlayProductDetails) {
       return PurchaseParam(
@@ -730,8 +952,8 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       );
     }
     final offers = details.productDetails.subscriptionOfferDetails;
-    var token = details.offerToken;
-    if (offers != null && offers.isNotEmpty) {
+    var token = offerToken ?? details.offerToken;
+    if (offerToken == null && offers != null && offers.isNotEmpty) {
       final base = offers.where((offer) => (offer.offerId ?? '').isEmpty);
       token = (base.isEmpty ? offers.first : base.first).offerIdToken;
     }
@@ -740,6 +962,70 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       applicationUserName: _playAccountId(),
       offerToken: token,
     );
+  }
+
+  Future<String?> _chooseBasePlan(ProductDetails details) async {
+    if (details is! GooglePlayProductDetails) return null;
+    final offers = details.productDetails.subscriptionOfferDetails ?? [];
+    final base = offers.where((offer) => (offer.offerId ?? '').isEmpty).toList();
+    if (base.length <= 1) {
+      if (base.isEmpty) return details.offerToken;
+      return base.first.offerIdToken;
+    }
+    final options = base.map((offer) {
+      final phase = offer.pricingPhases.isEmpty ? null : offer.pricingPhases.first;
+      final period = phase?.billingPeriod ?? '';
+      return _PlanOption(
+        token: offer.offerIdToken,
+        title: _periodLabel(period).isEmpty ? offer.basePlanId : _periodLabel(period),
+        price: phase?.formattedPrice ?? '',
+        caption: _renewCaption(phase?.recurrenceMode),
+        days: _periodDays(period),
+        amountMicros: phase?.priceAmountMicros ?? 0,
+      );
+    }).toList()
+      ..sort((a, b) => a.days.compareTo(b.days));
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => _BasePlanPickerDialog(options: options),
+    );
+  }
+
+  String _renewCaption(RecurrenceMode? mode) {
+    return switch (mode) {
+      RecurrenceMode.infiniteRecurring => 'Diperpanjang otomatis',
+      RecurrenceMode.finiteRecurring => 'Berlaku sesuai masa dipilih',
+      RecurrenceMode.nonRecurring => 'Sekali bayar, tanpa perpanjangan',
+      _ => 'Harga dari Google Play',
+    };
+  }
+
+  int _periodDays(String period) {
+    final match = RegExp(r'^P(\d+)([DWMY])').firstMatch(period);
+    if (match == null) return 9999;
+    final count = int.tryParse(match.group(1) ?? '') ?? 1;
+    return switch (match.group(2)) {
+      'D' => count,
+      'W' => count * 7,
+      'M' => count * 30,
+      'Y' => count * 365,
+      _ => 9999,
+    };
+  }
+
+  String _periodLabel(String period) {
+    final match = RegExp(r'^P(\d+)([DWMY])').firstMatch(period);
+    if (match == null) return '';
+    final count = int.tryParse(match.group(1) ?? '') ?? 0;
+    final unit = switch (match.group(2)) {
+      'D' => 'hari',
+      'W' => 'minggu',
+      'M' => 'bulan',
+      'Y' => 'tahun',
+      _ => '',
+    };
+    if (count < 1 || unit.isEmpty) return '';
+    return '$count $unit';
   }
 
   String? _playAccountId() {
@@ -803,8 +1089,14 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       return;
     }
 
+    final offerToken = await _chooseBasePlan(details);
+    if (!mounted || offerToken == null) return;
     await _iap.buyNonConsumable(
-      purchaseParam: _purchaseParam(details, subscription: true),
+      purchaseParam: _purchaseParam(
+        details,
+        subscription: true,
+        offerToken: offerToken,
+      ),
     );
   }
 
