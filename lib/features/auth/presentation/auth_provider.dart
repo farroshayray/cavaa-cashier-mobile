@@ -410,6 +410,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> refreshOwner() async {
+    if (authRole != 'owner') return;
     await fetchOwnerMe();
   }
 

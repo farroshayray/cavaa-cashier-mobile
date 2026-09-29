@@ -15,12 +15,6 @@ import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 import '../../../owner/presentation/pages/owner_home_page.dart';
-import '/features/owner/presentation/pages/create_product_page.dart';
-import '/features/owner/presentation/pages/create_store_page.dart';
-import '/features/owner/presentation/pages/employees_page.dart';
-import '/features/owner/presentation/pages/payment_methods_page.dart';
-import '/features/owner/presentation/pages/tables_page.dart';
-
 import '/features/cashier/data/cashier_shift_api.dart';
 import '/features/cashier/presentation/pages/opening_cash_dialog.dart';
 import '/features/cashier/presentation/pages/cash_book_page.dart';
@@ -303,13 +297,6 @@ class _CashierHomePageState extends State<CashierHomePage>
   Future<void> _openSetupStep() async {
     final step = _bootstrapSetupStep;
     if (step == null || !mounted) return;
-    final Widget page = switch (step) {
-      'create_store' => const CreateStorePage(),
-      'create_payment_method' => const PaymentMethodsPage(),
-      'create_table' => const TablesPage(),
-      'create_employee' => const EmployeesPage(),
-      _ => const CreateProductPage(),
-    };
 
     await context.read<NotificationsProvider>().clear();
     await context.read<PaymentProvider>().clearStateAndCache();
@@ -330,10 +317,11 @@ class _CashierHomePageState extends State<CashierHomePage>
     }
 
     nav.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const OwnerHomePage()),
+      MaterialPageRoute(
+        builder: (_) => OwnerHomePage(initialStep: step),
+      ),
       (_) => false,
     );
-    nav.push(MaterialPageRoute(builder: (_) => page));
   }
 
   Future<void> _bootstrapAfterLogin() async {

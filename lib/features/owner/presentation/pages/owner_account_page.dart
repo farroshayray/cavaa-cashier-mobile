@@ -149,7 +149,7 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
   Future<void> _logout() async {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
     );

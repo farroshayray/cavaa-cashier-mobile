@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '/core/config/env.dart';
@@ -33,8 +34,19 @@ import '../widgets/owner_mobile_carousel.dart';
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
 
+enum _BarPage { none, report, account }
+
+class _OpenSection {
+  const _OpenSection({required this.icon, required this.tooltip});
+
+  final IconData icon;
+  final String tooltip;
+}
+
 class OwnerHomePage extends StatefulWidget {
-  const OwnerHomePage({super.key});
+  const OwnerHomePage({super.key, this.initialStep});
+
+  final String? initialStep;
 
   @override
   State<OwnerHomePage> createState() => _OwnerHomePageState();
@@ -50,6 +62,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   int _pendingCashBooks = 0;
   String _cashBookStoreName = '';
   List<Map<String, dynamic>> _otherCashBookStores = [];
+  final _menuScroll = ScrollController();
+  final _sectionNav = GlobalKey<NavigatorState>();
+  var _navGen = 0;
+  var _barPage = _BarPage.none;
+  _OpenSection? _section;
+  Future<void>? _sectionTask;
 
   @override
   void initState() {
@@ -90,6 +108,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   }
 
   Future<void> _loadPendingCashBooks() async {
+    if (!mounted || context.read<AuthProvider>().authRole != 'owner') return;
     try {
       final summary = await ownerApiOf(context).cashierShiftSummary();
       final pending = summary['pending'];
@@ -112,10 +131,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _billingNotifSub?.cancel();
+    _menuScroll.dispose();
     super.dispose();
   }
 
   Future<void> _loadCarousels() async {
+    if (!mounted || context.read<AuthProvider>().authRole != 'owner') return;
     try {
       final data = await ownerApiOf(context).listCarousels();
       final list = data['carousels'];
@@ -133,6 +154,80 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     }
   }
 
+  Future<void> _pushSection(
+    Widget page, {
+    _BarPage bar = _BarPage.none,
+    IconData? icon,
+    String tooltip = '',
+    Future<void> Function()? after,
+  }) async {
+    final nav = _sectionNav.currentState;
+    if (nav == null || !mounted) return;
+    await _retireOpenSection();
+    if (!mounted) return;
+    final current = _sectionNav.currentState;
+    if (current == null) return;
+
+    final gen = ++_navGen;
+    setState(() {
+      _barPage = bar;
+      _section = icon == null
+          ? null
+          : _OpenSection(icon: icon, tooltip: tooltip);
+    });
+    final task = _showSection(current, page, gen, after);
+    _sectionTask = task;
+    try {
+      await task;
+    } finally {
+      if (identical(_sectionTask, task)) _sectionTask = null;
+    }
+  }
+
+  Future<void> _showSection(
+    NavigatorState nav,
+    Widget page,
+    int gen,
+    Future<void> Function()? after,
+  ) async {
+    await nav.push(MaterialPageRoute(builder: (_) => page));
+    if (!mounted) return;
+    if (gen == _navGen) {
+      setState(() {
+        _barPage = _BarPage.none;
+        _section = null;
+      });
+    }
+    if (after != null) await after();
+  }
+
+  Future<void> _retireOpenSection() async {
+    final pending = _sectionTask;
+    final nav = _sectionNav.currentState;
+    if (nav != null && nav.canPop()) {
+      _navGen++;
+      nav.popUntil((route) => route.isFirst);
+    }
+    if (pending == null) return;
+    try {
+      await pending;
+    } catch (_) {}
+  }
+
+  Future<void> _goHome() async {
+    setState(() {
+      _barPage = _BarPage.none;
+      _section = null;
+    });
+    await _retireOpenSection();
+    if (!mounted || !_menuScroll.hasClients) return;
+    _menuScroll.animateTo(
+      0,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   Future<void> _checkOnboarding() async {
     final auth = context.read<AuthProvider>();
     try {
@@ -144,12 +239,20 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     final storesEmpty = auth.owner?.onboarding?.stores.isEmpty ?? true;
     if (!storesEmpty) await _maybeWelcomeGift();
 
+    final requested = widget.initialStep;
+    if (requested != null && requested != 'ready' && !_routingChecked) {
+      _routingChecked = true;
+      await _openStep(requested);
+      if (mounted && requested == 'create_store') await _maybeWelcomeGift();
+      return;
+    }
+
     // Auto-push wizard only for brand-new owners without any store.
     final force = auth.owner?.forceOnboarding == true || storesEmpty;
     final step = auth.owner?.onboarding?.nextStep ?? 'ready';
     if (force && step != 'ready' && !_routingChecked) {
       _routingChecked = true;
-      await _openStep(step, replace: false);
+      await _openStep(step);
       if (mounted && step == 'create_store') await _maybeWelcomeGift();
     }
   }
@@ -170,14 +273,16 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     final openPoints = await showWelcomeGiftDialog(context, points: points);
     await WelcomeGiftStore.clear(owner.id);
     if (openPoints == true && mounted) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const OwnerCavaaPointsPage()),
+      await _pushSection(
+        const OwnerCavaaPointsPage(),
+        icon: Icons.stars_rounded,
+        tooltip: 'Cavaa Points',
+        after: () => auth.refreshOwner(),
       );
-      if (mounted) await auth.refreshOwner();
     }
   }
 
-  Future<void> _openStep(String step, {bool replace = false}) async {
+  Future<void> _openStep(String step) async {
     Widget? page;
     switch (step) {
       case 'create_store':
@@ -202,16 +307,22 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         return;
     }
 
-    final route = MaterialPageRoute(builder: (_) => page!);
-    if (replace) {
-      await Navigator.of(context).pushReplacement(route);
-    } else {
-      await Navigator.of(context).push(route);
-    }
-    if (mounted) {
-      await context.read<AuthProvider>().refreshOwner();
-      setState(() {});
-    }
+    final routePage = page;
+    final icon = switch (step) {
+      'create_product' || 'create_master_product' => Icons.shopping_bag_rounded,
+      'create_payment_method' => Icons.payments_rounded,
+      'create_table' => Icons.table_restaurant_rounded,
+      'create_employee' => Icons.badge_rounded,
+      _ => Icons.store_mall_directory_rounded,
+    };
+    await _pushSection(
+      routePage,
+      icon: icon,
+      tooltip: _stepLabel(step),
+      after: () async {
+        if (mounted) await context.read<AuthProvider>().refreshOwner();
+      },
+    );
   }
 
   Future<void> _enterCashier() async {
@@ -236,7 +347,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     } catch (_) {}
 
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const CashierHomePage()),
       (_) => false,
     );
@@ -252,8 +363,10 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       return;
     }
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const OwnerStocksPage()),
+    await _pushSection(
+      const OwnerStocksPage(),
+      icon: Icons.inventory_2_rounded,
+      tooltip: 'Stok',
     );
   }
 
@@ -267,6 +380,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       return;
     }
 
+    await _retireOpenSection();
+    if (!mounted) return;
+
     final auth = context.read<AuthProvider>();
     final storeId = auth.owner?.onboarding?.selectedStoreId ??
         auth.owner?.selectedPartnerId;
@@ -279,17 +395,17 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       return;
     }
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ReportsPage()),
+    await _pushSection(
+      const ReportsPage(),
+      bar: _BarPage.report,
+      after: () => auth.returnToOwner(),
     );
-    if (!mounted) return;
-    await auth.returnToOwner();
   }
 
   Future<void> _logout() async {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
     );
@@ -360,20 +476,69 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       ),
     );
     if (go == true && mounted) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => OwnerAddonsPage(
-            highlightFeatureKey: highlightFeatureKey,
-            highlightAddonCode: highlightAddonCode,
-          ),
+      await _pushSection(
+        OwnerAddonsPage(
+          highlightFeatureKey: highlightFeatureKey,
+          highlightAddonCode: highlightAddonCode,
         ),
+        icon: Icons.card_membership_rounded,
+        tooltip: 'Paket',
+        after: () async {
+          if (mounted) await context.read<AuthProvider>().refreshOwner();
+        },
       );
-      if (mounted) await context.read<AuthProvider>().refreshOwner();
     }
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final owner = auth.owner;
+    final stores = owner?.onboarding?.stores ?? const <OwnerStore>[];
+    final hasStore = stores.isNotEmpty;
+    final canReport = owner?.hasFeature('report_sales') ?? false;
+    final unreadOrders = context.watch<NotificationsProvider>().unread;
+
+    return _OwnerHost(
+      state: this,
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          final nav = _sectionNav.currentState;
+          if (nav != null && nav.canPop()) {
+            nav.maybePop();
+            return;
+          }
+          SystemNavigator.pop();
+        },
+        child: Scaffold(
+          backgroundColor: _bg,
+          bottomNavigationBar: _OwnerDock(
+            cashierEnabled: hasStore,
+            reportEnabled: hasStore,
+            orderBadge: unreadOrders,
+            barPage: _barPage,
+            section: _section,
+            onCashier: hasStore ? _enterCashier : null,
+            onHome: _goHome,
+            onReport: hasStore ? () => _openReports(canReport) : null,
+            onAccount: () => _pushSection(
+              const OwnerAccountPage(),
+              bar: _BarPage.account,
+            ),
+          ),
+          body: const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: _OwnerSectionNavigator(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenu(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final owner = auth.owner;
     final onboarding = owner?.onboarding;
@@ -383,52 +548,72 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         onboarding?.selectedStoreId ?? owner?.selectedPartnerId;
     final hasStore = stores.isNotEmpty;
     final forceOnboarding = owner?.forceOnboarding == true || !hasStore;
-    final width = MediaQuery.sizeOf(context).width;
-    // Phone: 4 per row keeps launcher denser; tablet/desktop scale up.
-    final crossAxisCount = width >= 900
-        ? 6
-        : width >= 600
-            ? 5
-            : 4;
-    final iconSize = width < 600 ? 54.0 : 62.0;
-    final iconGlyphSize = width < 600 ? 24.0 : 28.0;
-    final labelSize = width < 600 ? 11.5 : 12.5;
-    final unreadOrders = context.watch<NotificationsProvider>().unread;
 
     final canPromo = owner?.hasFeature('products_promotions') ?? false;
     final canScanTable = owner?.hasFeature('feature_scan_table') ?? false;
-    final canReport = owner?.hasFeature('report_sales') ?? false;
     final canStock = owner?.hasFeature('products_stocks') ?? false;
 
-    final menus = <_MenuItemData>[
+    final operasional = <_MenuItemData>[
       _MenuItemData(
-        icon: Icons.store_mall_directory_rounded,
-        title: 'Toko',
+        icon: Icons.account_balance_wallet_rounded,
+        title: 'Buku\nkasir',
         enabled: hasStore,
+        badgeCount: _pendingCashBooks,
         onTap: hasStore
-            ? () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const StoreSettingsPage(),
-                  ),
-                ).then((_) => auth.refreshOwner())
+            ? () => _pushSection(
+                  const OwnerCashBookPage(),
+                  icon: Icons.account_balance_wallet_rounded,
+                  tooltip: 'Buku kasir',
+                  after: _loadPendingCashBooks,
+                )
             : null,
       ),
       _MenuItemData(
-        icon: Icons.point_of_sale_rounded,
-        title: 'Kasir',
-        highlighted: true,
-        enabled: hasStore,
-        badgeCount: unreadOrders,
-        onTap: hasStore ? _enterCashier : null,
-      ),
-      _MenuItemData(
-        icon: Icons.shopping_bag_rounded,
-        title: 'Produk\nToko',
+        icon: canScanTable
+            ? Icons.qr_code_2_rounded
+            : Icons.table_restaurant_rounded,
+        title: canScanTable ? 'QR\nMeja' : 'Meja',
         enabled: hasStore,
         onTap: hasStore
-            ? () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CreateProductPage()),
-                ).then((_) => auth.refreshOwner())
+            ? () => _pushSection(
+                  const TablesPage(),
+                  icon: canScanTable
+                      ? Icons.qr_code_2_rounded
+                      : Icons.table_restaurant_rounded,
+                  tooltip: canScanTable ? 'QR Meja' : 'Meja',
+                )
+            : null,
+      ),
+      _MenuItemData(
+        icon: Icons.badge_rounded,
+        title: 'Pegawai',
+        enabled: hasStore,
+        onTap: hasStore
+            ? () => _pushSection(
+                  const EmployeesPage(),
+                  icon: Icons.badge_rounded,
+                  tooltip: 'Pegawai',
+                  after: () async {
+                    if (mounted) await auth.refreshOwner();
+                  },
+                )
+            : null,
+      ),
+    ];
+    final katalog = <_MenuItemData>[
+      _MenuItemData(
+        icon: Icons.shopping_bag_rounded,
+        title: 'Produk',
+        enabled: hasStore,
+        onTap: hasStore
+            ? () => _pushSection(
+                  const CreateProductPage(),
+                  icon: Icons.shopping_bag_rounded,
+                  tooltip: 'Produk',
+                  after: () async {
+                    if (mounted) await auth.refreshOwner();
+                  },
+                )
             : null,
       ),
       _MenuItemData(
@@ -449,61 +634,41 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             );
             return;
           }
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PromotionsPage()),
+          _pushSection(
+            const PromotionsPage(),
+            icon: Icons.local_offer_rounded,
+            tooltip: 'Promosi',
           );
         },
       ),
+    ];
+    final kelola = <_MenuItemData>[
       _MenuItemData(
-        icon: Icons.badge_rounded,
-        title: 'Pegawai',
+        icon: Icons.store_mall_directory_rounded,
+        title: 'Toko',
         enabled: hasStore,
         onTap: hasStore
-            ? () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const EmployeesPage()),
-                ).then((_) => auth.refreshOwner())
-            : null,
-      ),
-      _MenuItemData(
-        icon: canScanTable
-            ? Icons.qr_code_2_rounded
-            : Icons.table_restaurant_rounded,
-        title: canScanTable ? 'QR\nMeja' : 'Meja',
-        enabled: hasStore,
-        onTap: hasStore
-            ? () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const TablesPage()),
+            ? () => _pushSection(
+                  const StoreSettingsPage(),
+                  icon: Icons.store_mall_directory_rounded,
+                  tooltip: 'Toko',
+                  after: () async {
+                    if (mounted) await auth.refreshOwner();
+                  },
                 )
             : null,
       ),
       _MenuItemData(
-        icon: Icons.account_balance_wallet_rounded,
-        title: 'Buku\nkasir',
-        enabled: hasStore,
-        badgeCount: _pendingCashBooks,
-        onTap: hasStore
-            ? () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const OwnerCashBookPage(),
-                  ),
-                );
-                if (mounted) _loadPendingCashBooks();
-              }
-            : null,
-      ),
-      _MenuItemData(
-        icon: Icons.bar_chart_rounded,
-        title: 'Laporan',
-        enabled: hasStore,
-        onTap: hasStore ? () => _openReports(canReport) : null,
-      ),
-      _MenuItemData(
         icon: Icons.card_membership_rounded,
         title: 'Paket',
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const OwnerAddonsPage()),
-        ).then((_) => auth.refreshOwner()),
+        onTap: () => _pushSection(
+          const OwnerAddonsPage(),
+          icon: Icons.card_membership_rounded,
+          tooltip: 'Paket',
+          after: () async {
+            if (mounted) await auth.refreshOwner();
+          },
+        ),
       ),
     ];
 
@@ -519,13 +684,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         elevation: 0,
         actions: [
           IconButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const OwnerAccountPage()),
-            ),
-            icon: const Icon(Icons.person_rounded),
-            tooltip: 'Akun',
-          ),
-          IconButton(
             onPressed: auth.isLoading ? null : _logout,
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',
@@ -540,6 +698,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           await _loadPendingCashBooks();
         },
         child: CustomScrollView(
+          controller: _menuScroll,
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
@@ -551,19 +710,20 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   name: owner?.name ?? 'Owner',
                   email: owner?.email ?? '',
                   image: owner?.image,
-                  onAccount: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const OwnerAccountPage()),
+                  onAccount: () => _pushSection(
+                    const OwnerAccountPage(),
+                    bar: _BarPage.account,
                   ),
                   showPoints: owner?.referralPointsEnabled != false,
                   pointsBalance: owner?.cavaaPointsBalance ?? 0,
-                  onPoints: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const OwnerCavaaPointsPage(),
-                      ),
-                    );
-                    if (context.mounted) await auth.refreshOwner();
-                  },
+                  onPoints: () => _pushSection(
+                    const OwnerCavaaPointsPage(),
+                    icon: Icons.stars_rounded,
+                    tooltip: 'Cavaa Points',
+                    after: () async {
+                      if (mounted) await auth.refreshOwner();
+                    },
+                  ),
                   stores: stores,
                   selectedStoreId: selectedId,
                   selecting: _selectingStore || auth.isLoading,
@@ -583,14 +743,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                     activeCount: _pendingCashBooks,
                     storeName: _cashBookStoreName,
                     otherStores: _otherCashBookStores,
-                    onTap: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const OwnerCashBookPage(),
-                        ),
-                      );
-                      if (mounted) _loadPendingCashBooks();
-                    },
+                    onTap: () => _pushSection(
+                      const OwnerCashBookPage(),
+                      icon: Icons.account_balance_wallet_rounded,
+                      tooltip: 'Buku kasir',
+                      after: _loadPendingCashBooks,
+                    ),
                   ),
                 ),
               ),
@@ -612,22 +770,23 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 ),
               ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 28),
-              sliver: SliverGrid(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  mainAxisSpacing: 4,
-                  crossAxisSpacing: 4,
-                  childAspectRatio: 0.82,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _MenuIconButton(
-                    item: menus[index],
-                    iconSize: iconSize,
-                    iconGlyphSize: iconGlyphSize,
-                    labelSize: labelSize,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              sliver: SliverToBoxAdapter(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
                   ),
-                  childCount: menus.length,
+                  child: Column(
+                    children: [
+                      _MenuSection(title: 'Operasional', items: operasional),
+                      const _MenuDivider(),
+                      _MenuSection(title: 'Katalog', items: katalog),
+                      const _MenuDivider(),
+                      _MenuSection(title: 'Kelola', items: kelola),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -644,7 +803,6 @@ class _MenuItemData {
     required this.title,
     this.onTap,
     this.enabled = true,
-    this.highlighted = false,
     this.badgeCount = 0,
   });
 
@@ -652,7 +810,6 @@ class _MenuItemData {
   final String title;
   final VoidCallback? onTap;
   final bool enabled;
-  final bool highlighted;
   final int badgeCount;
 }
 
@@ -1088,6 +1245,369 @@ class _SetupBanner extends StatelessWidget {
   }
 }
 
+class _MenuDivider extends StatelessWidget {
+  const _MenuDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 14),
+      child: Divider(
+        height: 1,
+        thickness: 1,
+        color: Color(0xFFE5E7EB),
+      ),
+    );
+  }
+}
+
+class _MenuSection extends StatelessWidget {
+  const _MenuSection({
+    required this.title,
+    required this.items,
+  });
+
+  final String title;
+  final List<_MenuItemData> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 12, 6, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 2),
+            child: Text(
+              title.toUpperCase(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+                color: Colors.black.withValues(alpha: 0.42),
+              ),
+            ),
+          ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final count = items.isEmpty ? 1 : items.length;
+              const maxTile = 110.0;
+              final tileWidth = (constraints.maxWidth / count).clamp(0.0, maxTile);
+              final iconSize = tileWidth < 96 ? 46.0 : 50.0;
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final item in items)
+                      SizedBox(
+                        width: tileWidth,
+                        child: _MenuIconButton(
+                          item: item,
+                          iconSize: iconSize,
+                          iconGlyphSize: 22,
+                          labelSize: 11.5,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OwnerHost extends InheritedWidget {
+  const _OwnerHost({required this.state, required super.child});
+
+  final _OwnerHomePageState state;
+
+  static _OwnerHomePageState of(BuildContext context) {
+    final host = context.dependOnInheritedWidgetOfExactType<_OwnerHost>();
+    assert(host != null, 'OwnerHost tidak ditemukan');
+    return host!.state;
+  }
+
+  @override
+  bool updateShouldNotify(_OwnerHost oldWidget) => true;
+}
+
+class _OwnerSectionNavigator extends StatelessWidget {
+  const _OwnerSectionNavigator();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = _OwnerHost.of(context);
+    return Navigator(
+      key: state._sectionNav,
+      onGenerateRoute: (settings) => MaterialPageRoute(
+        settings: settings,
+        builder: (_) => const _OwnerDashboard(),
+      ),
+    );
+  }
+}
+
+class _OwnerDashboard extends StatelessWidget {
+  const _OwnerDashboard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _OwnerHost.of(context)._buildMenu(context);
+  }
+}
+
+class _OwnerDock extends StatelessWidget {
+  const _OwnerDock({
+    required this.cashierEnabled,
+    required this.reportEnabled,
+    required this.orderBadge,
+    required this.barPage,
+    required this.section,
+    required this.onCashier,
+    required this.onHome,
+    required this.onReport,
+    required this.onAccount,
+  });
+
+  final bool cashierEnabled;
+  final bool reportEnabled;
+  final int orderBadge;
+  final _BarPage barPage;
+  final _OpenSection? section;
+  final VoidCallback? onCashier;
+  final VoidCallback onHome;
+  final VoidCallback? onReport;
+  final VoidCallback onAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Container(
+            height: 64,
+            clipBehavior: Clip.antiAlias,
+            padding: const EdgeInsets.fromLTRB(5, 5, 4, 5),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFAE1504),
+                  Color(0xFF7A0E03),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _brand.withValues(alpha: 0.28),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: _DockCashier(
+                      enabled: cashierEnabled,
+                      badgeCount: orderBadge,
+                      onTap: onCashier,
+                    ),
+                  ),
+                ),
+                _DockItem(
+                  icon: Icons.home_rounded,
+                  tooltip: 'Beranda',
+                  active: barPage == _BarPage.none && section == null,
+                  onTap: onHome,
+                ),
+                if (section != null)
+                  _DockItem(
+                    icon: section!.icon,
+                    tooltip: section!.tooltip,
+                    active: true,
+                    onTap: () {},
+                  ),
+                _DockItem(
+                  icon: Icons.bar_chart_rounded,
+                  tooltip: 'Laporan',
+                  enabled: reportEnabled,
+                  active: barPage == _BarPage.report,
+                  onTap: onReport,
+                ),
+                _DockItem(
+                  icon: Icons.person_rounded,
+                  tooltip: 'Akun',
+                  active: barPage == _BarPage.account,
+                  onTap: onAccount,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DockItem extends StatelessWidget {
+  const _DockItem({
+    required this.icon,
+    required this.tooltip,
+    this.onTap,
+    this.enabled = true,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool enabled;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = enabled ? Colors.white : Colors.white.withValues(alpha: 0.45);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: Tooltip(
+        message: tooltip,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Material(
+            color: active
+                ? Colors.white.withValues(alpha: 0.18)
+                : Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: enabled ? onTap : null,
+              child: Icon(icon, color: color, size: 24),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DockCashier extends StatelessWidget {
+  const _DockCashier({
+    required this.enabled,
+    required this.badgeCount,
+    required this.onTap,
+  });
+
+  final bool enabled;
+  final int badgeCount;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const label = Colors.white;
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(27),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x803A0602),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(27),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Ink(
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.all(Radius.circular(27)),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFAE1504),
+                  Color(0xFF7A0E03),
+                ],
+              ),
+            ),
+            child: InkWell(
+              onTap: enabled ? onTap : null,
+              customBorder: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(27),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.point_of_sale_rounded,
+                      color: label,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Kasir',
+                      style: TextStyle(
+                        color: label,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    if (badgeCount > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          badgeCount > 99 ? '99+' : '$badgeCount',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: _brand,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MenuIconButton extends StatelessWidget {
   const _MenuIconButton({
     required this.item,
@@ -1128,24 +1648,13 @@ class _MenuIconButton extends StatelessWidget {
                         width: iconSize,
                         height: iconSize,
                         decoration: BoxDecoration(
-                          color: item.highlighted
-                              ? _brand
-                              : _brand.withValues(alpha: 0.10),
+                          color: _brand.withValues(alpha: 0.10),
                           shape: BoxShape.circle,
-                          boxShadow: item.highlighted
-                              ? [
-                                  BoxShadow(
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                    color: _brand.withValues(alpha: 0.28),
-                                  ),
-                                ]
-                              : null,
                         ),
                         child: Icon(
                           item.icon,
                           size: iconGlyphSize,
-                          color: item.highlighted ? Colors.white : _brand,
+                          color: _brand,
                         ),
                       ),
                       if (item.badgeCount > 0)
@@ -1190,7 +1699,7 @@ class _MenuIconButton extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     fontSize: labelSize,
                     height: 1.15,
-                    color: item.highlighted ? _brand : Colors.black87,
+                    color: Colors.black87,
                   ),
                 ),
               ],

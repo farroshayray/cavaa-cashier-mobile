@@ -252,7 +252,7 @@ class _ReferralPromptDialogState extends State<_ReferralPromptDialog> {
                           },
                           decoration: InputDecoration(
                             labelText: 'Kode referral',
-                            hintText: 'Contoh FARROS42',
+                            hintText: 'Contoh: OWNERQ2026',
                             filled: true,
                             fillColor: const Color(0xFFF9FAFB),
                             prefixIcon: const Icon(Icons.confirmation_number_outlined),
