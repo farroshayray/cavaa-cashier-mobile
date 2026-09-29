@@ -14,6 +14,8 @@ import '/features/cashier/presentation/providers/notifications_provider.dart';
 import '/core/network/dio_client.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '../../data/owner_api.dart';
+import '../../data/welcome_gift_store.dart';
+import 'welcome_gift_dialog.dart';
 import 'create_store_page.dart';
 import 'create_product_page.dart';
 import 'owner_stocks_page.dart';
@@ -41,6 +43,7 @@ class OwnerHomePage extends StatefulWidget {
 class _OwnerHomePageState extends State<OwnerHomePage>
     with WidgetsBindingObserver {
   bool _routingChecked = false;
+  bool _giftShown = false;
   bool _selectingStore = false;
   List<Map<String, dynamic>> _carousels = [];
   StreamSubscription<Map<String, dynamic>>? _billingNotifSub;
@@ -138,13 +141,39 @@ class _OwnerHomePageState extends State<OwnerHomePage>
 
     if (!mounted) return;
 
+    final storesEmpty = auth.owner?.onboarding?.stores.isEmpty ?? true;
+    if (!storesEmpty) await _maybeWelcomeGift();
+
     // Auto-push wizard only for brand-new owners without any store.
-    final force = auth.owner?.forceOnboarding == true ||
-        (auth.owner?.onboarding?.stores.isEmpty ?? true);
+    final force = auth.owner?.forceOnboarding == true || storesEmpty;
     final step = auth.owner?.onboarding?.nextStep ?? 'ready';
     if (force && step != 'ready' && !_routingChecked) {
       _routingChecked = true;
       await _openStep(step, replace: false);
+      if (mounted && step == 'create_store') await _maybeWelcomeGift();
+    }
+  }
+
+  Future<void> _maybeWelcomeGift() async {
+    if (_giftShown || !mounted) return;
+    final auth = context.read<AuthProvider>();
+    final owner = auth.owner;
+    if (owner == null) return;
+    if (owner.referralPointsEnabled == false) {
+      await WelcomeGiftStore.clear(owner.id);
+      return;
+    }
+    if (owner.onboarding?.stores.isEmpty ?? true) return;
+    final points = await WelcomeGiftStore.read(owner.id);
+    if (!mounted || points == null || points < 1) return;
+    _giftShown = true;
+    final openPoints = await showWelcomeGiftDialog(context, points: points);
+    await WelcomeGiftStore.clear(owner.id);
+    if (openPoints == true && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const OwnerCavaaPointsPage()),
+      );
+      if (mounted) await auth.refreshOwner();
     }
   }
 

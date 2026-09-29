@@ -23,7 +23,20 @@ class _OwnerSetPasswordPageState extends State<OwnerSetPasswordPage> {
   bool _obscureConfirm = true;
 
   @override
+  void initState() {
+    super.initState();
+    _pass.addListener(_onPasswordChanged);
+    _confirm.addListener(_onPasswordChanged);
+  }
+
+  void _onPasswordChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _pass.removeListener(_onPasswordChanged);
+    _confirm.removeListener(_onPasswordChanged);
     _pass.dispose();
     _confirm.dispose();
     super.dispose();
@@ -80,6 +93,8 @@ class _OwnerSetPasswordPageState extends State<OwnerSetPasswordPage> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final name = auth.owner?.name ?? 'Owner';
+    final longEnough = _pass.text.length >= 8;
+    final matches = _confirm.text.isNotEmpty && _pass.text == _confirm.text;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
@@ -99,31 +114,69 @@ class _OwnerSetPasswordPageState extends State<OwnerSetPasswordPage> {
           children: [
             Container(
               width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFAE1504), Color(0xFF6E0C02)],
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.lock_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Halo $name',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Buat password supaya bisa masuk tanpa Google.',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Halo $name',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Password ini untuk masuk tanpa Google. Simpan baik-baik, karena email tetap dipakai sebagai akun login.',
-                    style: TextStyle(
-                      height: 1.35,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   TextField(
                     controller: _pass,
                     obscureText: _obscurePass,
@@ -144,6 +197,7 @@ class _OwnerSetPasswordPageState extends State<OwnerSetPasswordPage> {
                   TextField(
                     controller: _confirm,
                     obscureText: _obscureConfirm,
+                    onSubmitted: (_) => auth.isLoading ? null : _submit(),
                     decoration: _field(
                       'Konfirmasi password',
                       suffix: IconButton(
@@ -156,6 +210,16 @@ class _OwnerSetPasswordPageState extends State<OwnerSetPasswordPage> {
                         ),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 14),
+                  _RuleRow(
+                    ok: longEnough,
+                    label: 'Minimal 8 karakter',
+                  ),
+                  const SizedBox(height: 6),
+                  _RuleRow(
+                    ok: matches,
+                    label: 'Kedua password sama',
                   ),
                   if (auth.errorMessage != null) ...[
                     const SizedBox(height: 12),
@@ -173,7 +237,7 @@ class _OwnerSetPasswordPageState extends State<OwnerSetPasswordPage> {
                         backgroundColor: _brand,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                       child: auth.isLoading
@@ -197,6 +261,35 @@ class _OwnerSetPasswordPageState extends State<OwnerSetPasswordPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RuleRow extends StatelessWidget {
+  const _RuleRow({required this.ok, required this.label});
+
+  final bool ok;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ok ? const Color(0xFF067647) : const Color(0xFF8A9099);
+    return Row(
+      children: [
+        Icon(
+          ok ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+          size: 18,
+          color: color,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }
