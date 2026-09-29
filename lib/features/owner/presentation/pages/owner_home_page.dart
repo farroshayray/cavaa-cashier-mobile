@@ -1421,26 +1421,37 @@ class _OwnerDock extends StatelessWidget {
                 Expanded(
                   child: SizedBox(
                     height: 54,
-                    child: _DockCashier(
-                      enabled: cashierEnabled,
-                      badgeCount: orderBadge,
-                      onTap: onCashier,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(27),
+                      child: _DockCashier(
+                        enabled: cashierEnabled,
+                        badgeCount: orderBadge,
+                        onTap: onCashier,
+                      ),
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 _DockItem(
                   icon: Icons.home_rounded,
                   tooltip: 'Beranda',
                   active: barPage == _BarPage.none && section == null,
                   onTap: onHome,
                 ),
-                if (section != null)
-                  _DockItem(
-                    icon: section!.icon,
-                    tooltip: section!.tooltip,
-                    active: true,
-                    onTap: () {},
-                  ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeInOutCubic,
+                  alignment: Alignment.centerLeft,
+                  child: section == null
+                      ? const SizedBox(width: 0, height: 48)
+                      : _DockItem(
+                          key: ValueKey(section!.tooltip),
+                          icon: section!.icon,
+                          tooltip: section!.tooltip,
+                          active: true,
+                          onTap: () {},
+                        ),
+                ),
                 _DockItem(
                   icon: Icons.bar_chart_rounded,
                   tooltip: 'Laporan',
@@ -1465,6 +1476,7 @@ class _OwnerDock extends StatelessWidget {
 
 class _DockItem extends StatelessWidget {
   const _DockItem({
+    super.key,
     required this.icon,
     required this.tooltip,
     this.onTap,
