@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/auth/presentation/pages/login_page.dart';
 import '/features/auth/presentation/pages/owner_set_password_page.dart';
-import 'owner_cavaa_points_page.dart';
+import 'store_image_crop_page.dart';
+import 'store_settings_page.dart';
 
 class OwnerAccountPage extends StatefulWidget {
   const OwnerAccountPage({super.key});
@@ -32,9 +34,6 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
     final owner = context.read<AuthProvider>().owner;
     _name = TextEditingController(text: owner?.name ?? '');
     _phone = TextEditingController(text: owner?.phoneNumber ?? '');
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<AuthProvider>().refreshOwner();
-    });
   }
 
   @override
@@ -110,6 +109,43 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
     _toast('Password berhasil diganti.');
   }
 
+  Future<void> _changePhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 95,
+    );
+    if (picked == null || !mounted) return;
+
+    final cropped = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => StoreImageCropPage(
+          sourcePath: picked.path,
+          title: 'Crop foto profil',
+          aspectRatio: 1,
+          outputWidth: 800,
+          outputHeight: 800,
+        ),
+      ),
+    );
+    if (cropped == null || !mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final name = _name.text.trim().isNotEmpty
+        ? _name.text.trim()
+        : (auth.owner?.name ?? '').trim();
+    if (name.isEmpty) {
+      _toast('Isi nama dulu sebelum mengganti foto.');
+      return;
+    }
+    final ok = await auth.updateOwnerProfile(
+      name: name,
+      phoneNumber: _phone.text.trim(),
+      imagePath: cropped,
+    );
+    if (!mounted) return;
+    _toast(ok ? 'Foto profil diperbarui.' : (auth.errorMessage ?? 'Gagal menyimpan foto'));
+  }
+
   Future<void> _logout() async {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
@@ -130,6 +166,7 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
     final name = (owner?.name ?? '').trim();
     final initial = name.isEmpty ? 'O' : name.characters.first.toUpperCase();
     final image = owner?.image?.trim() ?? '';
+    final photoUrl = resolveStoreImageUrl(image);
     final hasPassword = owner?.passwordIsSet == true;
 
     return Scaffold(
@@ -143,40 +180,49 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
-          if (owner?.referralPointsEnabled != false) ...[
-            _PointsEntry(
-              balance: owner?.cavaaPointsBalance ?? 0,
-              onTap: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const OwnerCavaaPointsPage(),
-                  ),
-                );
-                if (!context.mounted) return;
-                await context.read<AuthProvider>().refreshOwner();
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
           _Card(
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: _brand.withValues(alpha: 0.12),
-                  backgroundImage: image.startsWith('http')
-                      ? NetworkImage(image)
-                      : null,
-                  child: image.startsWith('http')
-                      ? null
-                      : Text(
-                          initial,
-                          style: const TextStyle(
+                InkWell(
+                  onTap: auth.isLoading ? null : _changePhoto,
+                  borderRadius: BorderRadius.circular(40),
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: _brand.withValues(alpha: 0.12),
+                        backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+                        child: photoUrl != null
+                            ? null
+                            : Text(
+                                initial,
+                                style: const TextStyle(
+                                  color: _brand,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 22,
+                                ),
+                              ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
                             color: _brand,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 22,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          child: const Icon(
+                            Icons.photo_camera_rounded,
+                            size: 11,
+                            color: Colors.white,
                           ),
                         ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -197,7 +243,7 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Email dipakai untuk masuk dan tidak bisa diubah di sini.',
+                        'Ketuk foto untuk mengganti. Email tidak bisa diubah di sini.',
                         style: TextStyle(
                           fontSize: 12,
                           height: 1.3,
@@ -336,47 +382,6 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PointsEntry extends StatelessWidget {
-  const _PointsEntry({required this.balance, required this.onTap});
-
-  final int balance;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              const Icon(Icons.stars_rounded, color: Color(0xFFAE1504)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Cavaa Points',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    Text('Saldo $balance poin'),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right),
-            ],
-          ),
-        ),
       ),
     );
   }

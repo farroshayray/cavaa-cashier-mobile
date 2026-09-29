@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '/core/config/env.dart';
 import '/core/services/push_notification_service.dart';
 import '/features/auth/data/models/owner_model.dart';
 import '/features/auth/presentation/auth_provider.dart';
@@ -24,6 +25,7 @@ import 'owner_cash_book_page.dart';
 import 'promotions_page.dart';
 import 'owner_account_page.dart';
 import 'owner_addons_page.dart';
+import 'owner_cavaa_points_page.dart';
 import '../widgets/owner_mobile_carousel.dart';
 
 const _brand = Color(0xFFAE1504);
@@ -519,9 +521,20 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 child: _OwnerHeader(
                   name: owner?.name ?? 'Owner',
                   email: owner?.email ?? '',
+                  image: owner?.image,
                   onAccount: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const OwnerAccountPage()),
                   ),
+                  showPoints: owner?.referralPointsEnabled != false,
+                  pointsBalance: owner?.cavaaPointsBalance ?? 0,
+                  onPoints: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerCavaaPointsPage(),
+                      ),
+                    );
+                    if (context.mounted) await auth.refreshOwner();
+                  },
                   stores: stores,
                   selectedStoreId: selectedId,
                   selecting: _selectingStore || auth.isLoading,
@@ -614,11 +627,44 @@ class _MenuItemData {
   final int badgeCount;
 }
 
+String _ownerPhotoUrl(String? raw) {
+  if (raw == null) return '';
+  final value = raw.trim();
+  if (value.isEmpty) return '';
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.path.contains('/storage/')) {
+      final base = Env.baseUrl.replaceAll(RegExp(r'/$'), '');
+      final query = uri.hasQuery ? '?${uri.query}' : '';
+      return '$base${uri.path}$query';
+    }
+    return value;
+  }
+  final base = Env.baseUrl.replaceAll(RegExp(r'/$'), '');
+  final clean = value.replaceFirst(RegExp(r'^/+'), '');
+  if (clean.startsWith('storage/')) return '$base/$clean';
+  return '$base/storage/$clean';
+}
+
+String _pointsLabel(int value) {
+  final raw = value.toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < raw.length; i++) {
+    if (i > 0 && (raw.length - i) % 3 == 0) buf.write('.');
+    buf.write(raw[i]);
+  }
+  return buf.toString();
+}
+
 class _OwnerHeader extends StatelessWidget {
   const _OwnerHeader({
     required this.name,
     required this.email,
+    required this.image,
     required this.onAccount,
+    required this.showPoints,
+    required this.pointsBalance,
+    required this.onPoints,
     required this.stores,
     required this.selectedStoreId,
     required this.selecting,
@@ -629,7 +675,11 @@ class _OwnerHeader extends StatelessWidget {
 
   final String name;
   final String email;
+  final String? image;
   final VoidCallback onAccount;
+  final bool showPoints;
+  final int pointsBalance;
+  final VoidCallback onPoints;
   final List<OwnerStore> stores;
   final int? selectedStoreId;
   final bool selecting;
@@ -673,11 +723,22 @@ class _OwnerHeader extends StatelessWidget {
                     color: _brand.withValues(alpha: 0.10),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: _brand,
-                    size: 28,
-                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _ownerPhotoUrl(image).isEmpty
+                      ? const Icon(
+                          Icons.person_rounded,
+                          color: _brand,
+                          size: 28,
+                        )
+                      : Image.network(
+                          _ownerPhotoUrl(image),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.person_rounded,
+                            color: _brand,
+                            size: 28,
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -710,7 +771,36 @@ class _OwnerHeader extends StatelessWidget {
               ],
             ),
             ),
-            const SizedBox(height: 14),
+            if (showPoints) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: onPoints,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.stars_rounded, size: 15, color: _brand),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Cavaa Points',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _pointsLabel(pointsBalance),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.black.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, size: 16, color: _brand),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
             Text(
               'Toko aktif',
               style: TextStyle(

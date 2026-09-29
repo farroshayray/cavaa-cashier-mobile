@@ -48,83 +48,147 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
     return int.tryParse('$raw') ?? 0;
   }
 
-  Future<void> _buy(Map<String, dynamic> product) async {
-    final kind = (product['kind'] ?? '').toString();
-    final id = _money(product['id']);
-    final once = _money(product['price_once']);
+  List<_DurationChoice> _choices(Map<String, dynamic> product, int balance) {
     final isOnce = (product['billing_type'] ?? '') == 'one_time';
     if (isOnce) {
-      await _purchase(kind: kind, id: id, mode: 'period', label: 'Beli sekali', amount: once);
+      final amount = _money(product['price_once']);
+      return [
+        _DurationChoice(
+          title: 'Beli sekali',
+          detail: amount > balance ? 'Saldo tidak cukup' : 'Berlaku tanpa perpanjangan hari',
+          amount: amount,
+          enabled: amount > 0 && amount <= balance,
+        ),
+      ];
+    }
+
+    final options = <_DurationChoice>[];
+    void addPeriod(String period, String title, int amount) {
+      if (amount < 1) return;
+      options.add(
+        _DurationChoice(
+          title: title,
+          detail: amount > balance ? 'Saldo tidak cukup' : 'Harga paket tetap',
+          amount: amount,
+          period: period,
+          enabled: amount <= balance,
+        ),
+      );
+    }
+
+    addPeriod('3d', '3 hari', _money(product['price_3d']));
+    addPeriod('7d', '7 hari', _money(product['price_7d']));
+    addPeriod('1m', '1 bulan', _money(product['price_1m']));
+
+    final daily = _money(product['daily']);
+    final maxDays = _money(product['max_custom_days']);
+    final customReady = daily > 0 && maxDays > 0;
+    options.add(
+      _DurationChoice(
+        title: 'Eceran',
+        detail: customReady
+            ? '${_moneyLabel(daily)} poin / hari, sampai $maxDays hari'
+            : 'Harga 3 hari belum diatur',
+        amount: daily,
+        custom: true,
+        enabled: customReady,
+      ),
+    );
+    return options;
+  }
+
+  bool _shortBalance(Map<String, dynamic> product, int balance) {
+    if ((product['billing_type'] ?? '') != 'one_time') return false;
+    final amount = _money(product['price_once']);
+    return amount > balance;
+  }
+
+  String _summary(Map<String, dynamic> product) {
+    if ((product['billing_type'] ?? '') == 'one_time') {
+      return 'Beli sekali · ${_moneyLabel(_money(product['price_once']))} poin';
+    }
+    final parts = <String>[];
+    if (_money(product['price_3d']) > 0) {
+      parts.add('3 hari ${_moneyLabel(_money(product['price_3d']))}');
+    }
+    if (_money(product['price_7d']) > 0) {
+      parts.add('7 hari ${_moneyLabel(_money(product['price_7d']))}');
+    }
+    if (_money(product['price_1m']) > 0) {
+      parts.add('1 bulan ${_moneyLabel(_money(product['price_1m']))}');
+    }
+    if (_money(product['daily']) > 0) {
+      parts.add('Eceran ${_moneyLabel(_money(product['daily']))}/hari');
+    }
+    if (parts.isEmpty) return 'Harga belum diatur';
+    return parts.join(' · ');
+  }
+
+  Future<void> _openBuy(Map<String, dynamic> product, int balance) async {
+    if (_busy) return;
+    final choices = _choices(product, balance);
+    if ((product['billing_type'] ?? '') == 'one_time') {
+      if (choices.isEmpty) return;
+      await _pick(product, choices.first);
       return;
     }
 
-    final choice = await showModalBottomSheet<String>(
+    final picked = await showModalBottomSheet<_DurationChoice>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const ListTile(
-              title: Text('Cara beli', style: TextStyle(fontWeight: FontWeight.w800)),
-            ),
-            ListTile(
-              title: const Text('Harga transfer'),
-              subtitle: const Text('3 hari, 7 hari, atau 1 bulan'),
-              onTap: () => Navigator.pop(ctx, 'period'),
-            ),
-            ListTile(
-              title: const Text('Eceran hari'),
-              subtitle: Text(
-                _money(product['daily']) > 0
-                    ? 'Rp ${_money(product['daily'])} per hari, maks ${_money(product['max_custom_days'])} hari'
-                    : 'Harga 3 hari belum diatur',
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    (product['name'] ?? '').toString(),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Pilih masa aktif',
+                    style: TextStyle(color: Color(0xFF8A9099)),
+                  ),
+                ],
               ),
-              enabled: _money(product['daily']) > 0 && _money(product['max_custom_days']) > 0,
-              onTap: () => Navigator.pop(ctx, 'custom'),
             ),
+            for (final choice in choices)
+              _ChoiceRow(
+                choice: choice,
+                busy: false,
+                moneyLabel: _moneyLabel,
+                onTap: () => Navigator.pop(ctx, choice),
+              ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
-    if (!mounted || choice == null) return;
-    if (choice == 'custom') {
+    if (picked == null || !mounted) return;
+    await _pick(product, picked);
+  }
+
+  Future<void> _pick(Map<String, dynamic> product, _DurationChoice choice) async {
+    if (_busy || !choice.enabled) return;
+    final kind = (product['kind'] ?? '').toString();
+    final id = _money(product['id']);
+    if (choice.custom) {
       await _buyCustom(product);
       return;
     }
-
-    final periods = <({String period, String title, int amount})>[
-      if (_money(product['price_3d']) > 0) (period: '3d', title: '3 hari', amount: _money(product['price_3d'])),
-      if (_money(product['price_7d']) > 0) (period: '7d', title: '7 hari', amount: _money(product['price_7d'])),
-      if (_money(product['price_1m']) > 0) (period: '1m', title: '1 bulan', amount: _money(product['price_1m'])),
-    ];
-    if (periods.isEmpty) {
-      _toast('Tidak ada harga periode untuk produk ini.');
-      return;
-    }
-    final picked = periods.length == 1
-        ? periods.first
-        : await showDialog<({String period, String title, int amount})>(
-            context: context,
-            builder: (ctx) => SimpleDialog(
-              title: const Text('Pilih masa'),
-              children: [
-                for (final item in periods)
-                  SimpleDialogOption(
-                    onPressed: () => Navigator.pop(ctx, item),
-                    child: Text('${item.title} · ${_moneyLabel(item.amount)} poin'),
-                  ),
-              ],
-            ),
-          );
-    if (picked == null) return;
     await _purchase(
       kind: kind,
       id: id,
       mode: 'period',
-      period: picked.period,
-      label: picked.title,
-      amount: picked.amount,
+      period: choice.period,
+      label: choice.title,
+      amount: choice.amount,
     );
   }
 
@@ -132,49 +196,22 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
     final maxDays = _money(product['max_custom_days']);
     final daily = _money(product['daily']);
     if (maxDays < 1 || daily < 1) {
-      _toast('Saldo tidak cukup untuk 1 hari.');
+      _toast('Harga eceran belum bisa dipakai.');
       return;
     }
-    var days = 1;
-    final picked = await showDialog<int>(
+    final picked = await showModalBottomSheet<int>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Beli eceran'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('$days hari · ${_moneyLabel(daily * days)} poin'),
-              Slider(
-                min: 1,
-                max: maxDays.toDouble(),
-                divisions: maxDays > 1 ? maxDays - 1 : null,
-                value: days.toDouble(),
-                activeColor: _brand,
-                onChanged: (value) => setLocal(() => days = value.round()),
-              ),
-              TextField(
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Jumlah hari'),
-                controller: TextEditingController(text: '$days'),
-                onSubmitted: (value) {
-                  final next = int.tryParse(value) ?? days;
-                  setLocal(() => days = next.clamp(1, maxDays));
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, days),
-              child: const Text('Lanjut'),
-            ),
-          ],
-        ),
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => _CustomDaysSheet(
+        productName: (product['name'] ?? '').toString(),
+        daily: daily,
+        maxDays: maxDays,
+        balance: _money(_data?['balance']),
+        moneyLabel: _moneyLabel,
       ),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     await _purchase(
       kind: (product['kind'] ?? '').toString(),
       id: _money(product['id']),
@@ -182,6 +219,7 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
       days: picked,
       label: '$picked hari',
       amount: daily * picked,
+      confirm: false,
     );
   }
 
@@ -193,36 +231,41 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
     required int amount,
     String? period,
     int? days,
+    bool confirm = true,
   }) async {
     final balance = _money(_data?['balance']);
     if (amount > balance) {
       _toast('Saldo Cavaa Points tidak cukup.');
       return;
     }
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Pakai Cavaa Points?'),
-        content: Text('$label membutuhkan ${_moneyLabel(amount)} poin.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bayar')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (confirm) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Pakai Cavaa Points?'),
+          content: Text('$label membutuhkan ${_moneyLabel(amount)} poin.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bayar')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final api = ownerApiOf(context);
+    final auth = context.read<AuthProvider>();
     setState(() => _busy = true);
     try {
-      final res = await ownerApiOf(context).purchaseWithPoints(
+      final res = await api.purchaseWithPoints(
         kind: kind,
         id: id,
         mode: mode,
         period: period,
         days: days,
       );
-      final user = ownerApiOf(context).parseUser(res);
+      final user = api.parseUser(res);
       if (user != null && mounted) {
-        context.read<AuthProvider>().applyOwner(user);
+        auth.applyOwner(user);
       }
       _toast((res['message'] ?? 'Berhasil').toString());
       await _load();
@@ -257,23 +300,8 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
     return text;
   }
 
-  List<String> _priceLines(Map<String, dynamic> product) {
-    if ((product['billing_type'] ?? '') == 'one_time') {
-      return ['Beli sekali · ${_moneyLabel(_money(product['price_once']))} poin'];
-    }
-    final lines = <String>[];
-    final price3d = _money(product['price_3d']);
-    final price7d = _money(product['price_7d']);
-    final price1m = _money(product['price_1m']);
-    final daily = _money(product['daily']);
-    if (price3d > 0) lines.add('3 hari · ${_moneyLabel(price3d)} poin');
-    if (price7d > 0) lines.add('7 hari · ${_moneyLabel(price7d)} poin');
-    if (price1m > 0) lines.add('1 bulan · ${_moneyLabel(price1m)} poin');
-    if (daily > 0) {
-      lines.add('Eceran · ${_moneyLabel(daily)} poin / hari');
-    }
-    if (lines.isEmpty) lines.add('Harga belum diatur');
-    return lines;
+  List<Map<String, dynamic>> _ofKind(List<Map<String, dynamic>> products, String kind) {
+    return products.where((product) => (product['kind'] ?? '') == kind).toList();
   }
 
   Future<void> _copyCode(String code) async {
@@ -300,6 +328,9 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
         [];
     final code = (data?['referral_code'] ?? '').toString();
     final referred = (data?['referred_code'] ?? '').toString();
+    final balance = _money(data?['balance']);
+    final plans = _ofKind(products, 'plan');
+    final addons = _ofKind(products, 'addon');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
@@ -324,20 +355,34 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
                           onCopy: code.isEmpty ? null : () => _copyCode(code),
                         ),
                         const SizedBox(height: 18),
-                        const Text(
-                          'Beli dengan poin',
-                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                        ),
-                        const SizedBox(height: 10),
                         if (products.isEmpty)
-                          const Text('Belum ada produk yang bisa dibeli dengan poin.'),
-                        for (final product in products)
-                          _ProductCard(
-                            name: (product['name'] ?? '').toString(),
-                            lines: _priceLines(product),
-                            busy: _busy,
-                            onBuy: () => _buy(product),
-                          ),
+                          const Text('Belum ada produk yang bisa dibeli dengan poin.')
+                        else ...[
+                          if (plans.isNotEmpty) ...[
+                            const _SectionLabel('Paket langganan'),
+                            const SizedBox(height: 10),
+                            for (final product in plans)
+                              _ProductCard(
+                                name: (product['name'] ?? '').toString(),
+                                summary: _summary(product),
+                                busy: _busy,
+                                shortBalance: _shortBalance(product, balance),
+                                onBuy: () => _openBuy(product, balance),
+                              ),
+                          ],
+                          if (addons.isNotEmpty) ...[
+                            const _SectionLabel('Add-on'),
+                            const SizedBox(height: 10),
+                            for (final product in addons)
+                              _ProductCard(
+                                name: (product['name'] ?? '').toString(),
+                                summary: _summary(product),
+                                busy: _busy,
+                                shortBalance: _shortBalance(product, balance),
+                                onBuy: () => _openBuy(product, balance),
+                              ),
+                          ],
+                        ],
                         const SizedBox(height: 8),
                         const Text(
                           'Riwayat',
@@ -440,21 +485,56 @@ class _BalanceCard extends StatelessWidget {
   }
 }
 
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+    );
+  }
+}
+
+class _DurationChoice {
+  const _DurationChoice({
+    required this.title,
+    required this.detail,
+    required this.amount,
+    this.period,
+    this.custom = false,
+    this.enabled = true,
+  });
+
+  final String title;
+  final String detail;
+  final int amount;
+  final String? period;
+  final bool custom;
+  final bool enabled;
+}
+
 class _ProductCard extends StatelessWidget {
   const _ProductCard({
     required this.name,
-    required this.lines,
+    required this.summary,
     required this.busy,
+    required this.shortBalance,
     required this.onBuy,
   });
 
   final String name;
-  final List<String> lines;
+  final String summary;
   final bool busy;
+  final bool shortBalance;
   final VoidCallback onBuy;
 
   @override
   Widget build(BuildContext context) {
+    final canBuy = !busy && !shortBalance;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -466,32 +546,243 @@ class _ProductCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 8),
-          for (final line in lines)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(line, style: const TextStyle(color: Color(0xFF5C6370))),
-            ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
+          Text(summary, style: const TextStyle(color: Color(0xFF5C6370), height: 1.35)),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             height: 48,
             child: FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFFAE1504),
+                disabledBackgroundColor: const Color(0xFFE5E7EB),
+                disabledForegroundColor: const Color(0xFF8A9099),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: busy ? null : onBuy,
+              onPressed: canBuy ? onBuy : null,
               child: busy
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('Beli', style: TextStyle(fontWeight: FontWeight.w700)),
+                  : Text(
+                      shortBalance ? 'Saldo tidak cukup' : 'Beli',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ChoiceRow extends StatelessWidget {
+  const _ChoiceRow({
+    required this.choice,
+    required this.busy,
+    required this.moneyLabel,
+    required this.onTap,
+  });
+
+  final _DurationChoice choice;
+  final bool busy;
+  final String Function(int value) moneyLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = choice.enabled && !busy;
+    final price = choice.custom
+        ? (choice.amount > 0 ? '${moneyLabel(choice.amount)} / hari' : 'Belum ada')
+        : '${moneyLabel(choice.amount)} poin';
+
+    return InkWell(
+      onTap: active ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active ? const Color(0xFFFFF1EF) : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                choice.custom ? Icons.tune_rounded : Icons.calendar_today_rounded,
+                size: 18,
+                color: active ? const Color(0xFFAE1504) : const Color(0xFFB0B6BF),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    choice.title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: active ? const Color(0xFF1F2430) : const Color(0xFFB0B6BF),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    choice.detail,
+                    style: const TextStyle(color: Color(0xFF8A9099), fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              price,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: active ? const Color(0xFFAE1504) : const Color(0xFFB0B6BF),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: active ? const Color(0xFFAE1504) : const Color(0xFFD0D4DA),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomDaysSheet extends StatefulWidget {
+  const _CustomDaysSheet({
+    required this.productName,
+    required this.daily,
+    required this.maxDays,
+    required this.balance,
+    required this.moneyLabel,
+  });
+
+  final String productName;
+  final int daily;
+  final int maxDays;
+  final int balance;
+  final String Function(int value) moneyLabel;
+
+  @override
+  State<_CustomDaysSheet> createState() => _CustomDaysSheetState();
+}
+
+class _CustomDaysSheetState extends State<_CustomDaysSheet> {
+  var _days = 1;
+
+  int get _amount => widget.daily * _days;
+
+  void _setDays(int value) {
+    setState(() => _days = value.clamp(1, widget.maxDays));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final short = _amount > widget.balance;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.productName,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Tentukan sendiri berapa hari',
+              style: TextStyle(color: Color(0xFF8A9099)),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _StepButton(
+                  icon: Icons.remove,
+                  onPressed: _days > 1 ? () => _setDays(_days - 1) : null,
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        '$_days',
+                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800),
+                      ),
+                      const Text('hari', style: TextStyle(color: Color(0xFF8A9099))),
+                    ],
+                  ),
+                ),
+                _StepButton(
+                  icon: Icons.add,
+                  onPressed: _days < widget.maxDays ? () => _setDays(_days + 1) : null,
+                ),
+              ],
+            ),
+            Slider(
+              min: 1,
+              max: widget.maxDays.toDouble(),
+              divisions: widget.maxDays > 1 ? widget.maxDays - 1 : null,
+              value: _days.toDouble(),
+              activeColor: const Color(0xFFAE1504),
+              onChanged: (value) => _setDays(value.round()),
+            ),
+            Text(
+              short
+                  ? 'Butuh ${widget.moneyLabel(_amount)} poin. Saldo tidak cukup.'
+                  : '${widget.moneyLabel(_amount)} poin · sisa ${widget.moneyLabel(widget.balance - _amount)} poin',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: short ? const Color(0xFFAE1504) : const Color(0xFF1F2430),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFAE1504),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: short ? null : () => Navigator.pop(context, _days),
+                child: Text(
+                  short ? 'Saldo tidak cukup' : 'Pakai ${widget.moneyLabel(_amount)} poin',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({required this.icon, required this.onPressed});
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: IconButton.filledTonal(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        style: IconButton.styleFrom(foregroundColor: const Color(0xFFAE1504)),
       ),
     );
   }

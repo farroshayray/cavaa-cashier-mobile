@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -623,12 +624,21 @@ class _BarcodeDialog extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: Text(
-                  'Bagikan QR Meja',
+                  'QR Meja',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
                   ),
                 ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.download_rounded, color: _brand),
+                title: const Text(
+                  'Unduh',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text('Simpan gambar barcode ke galeri'),
+                onTap: () => Navigator.pop(ctx, 'download'),
               ),
               ListTile(
                 leading: const Icon(Icons.image_rounded, color: _brand),
@@ -661,6 +671,11 @@ class _BarcodeDialog extends StatelessWidget {
     );
     if (choice == null || !context.mounted) return;
 
+    if (choice == 'download') {
+      await _saveToGallery(context);
+      return;
+    }
+
     if (choice == 'link') {
       final link = qrUrl!.trim();
       await Share.share(
@@ -679,6 +694,33 @@ class _BarcodeDialog extends StatelessWidget {
       [XFile(file.path)],
       text: 'QR Meja $tableNo · $storeName',
     );
+  }
+
+  Future<void> _saveToGallery(BuildContext context) async {
+    try {
+      final hasAccess = await Gal.hasAccess();
+      if (!hasAccess) {
+        final granted = await Gal.requestAccess();
+        if (!granted) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Izin galeri ditolak.')),
+          );
+          return;
+        }
+      }
+      final safeName = tableNo.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      await Gal.putImageBytes(bytes, name: 'qr-meja-$safeName');
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gambar QR tersimpan di galeri.')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal menyimpan gambar ke galeri.')),
+      );
+    }
   }
 
   @override

@@ -262,6 +262,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> updateOwnerProfile({
     required String name,
     String? phoneNumber,
+    String? imagePath,
   }) async {
     try {
       isLoading = true;
@@ -270,6 +271,7 @@ class AuthProvider extends ChangeNotifier {
       owner = await repo.ownerUpdateProfile(
         name: name,
         phoneNumber: phoneNumber,
+        imagePath: imagePath,
       );
       return true;
     } on DioException catch (e) {

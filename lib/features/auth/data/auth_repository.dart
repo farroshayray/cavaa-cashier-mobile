@@ -67,10 +67,12 @@ class AuthRepository {
   Future<OwnerModel> ownerUpdateProfile({
     required String name,
     String? phoneNumber,
+    String? imagePath,
   }) async {
     final data = await api.ownerUpdateProfile(
       name: name,
       phoneNumber: phoneNumber,
+      imagePath: imagePath,
     );
     return _ownerFromUserPayload(data);
   }

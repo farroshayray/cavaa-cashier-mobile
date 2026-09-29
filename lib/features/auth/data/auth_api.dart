@@ -85,7 +85,24 @@ class AuthApi {
   Future<Map<String, dynamic>> ownerUpdateProfile({
     required String name,
     String? phoneNumber,
+    String? imagePath,
   }) async {
+    if (imagePath != null && imagePath.isNotEmpty) {
+      final form = FormData.fromMap({
+        'name': name,
+        'phone_number': phoneNumber ?? '',
+        'image': await MultipartFile.fromFile(
+          imagePath,
+          filename: 'profile.jpg',
+        ),
+      });
+      final Response res = await client.dio.post(
+        '/api/v1/mobile/owner/profile',
+        data: form,
+      );
+      return Map<String, dynamic>.from(res.data as Map);
+    }
+
     final Response res = await client.dio.patch(
       '/api/v1/mobile/owner/profile',
       data: {
