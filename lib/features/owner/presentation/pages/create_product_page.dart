@@ -799,7 +799,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       setState(() => _error = 'Stok (pcs) wajib diisi');
       return;
     }
-    if (widget.canManageStock || (_isEdit && !_alwaysAvailable)) {
+    if (widget.canManageStock || !_alwaysAvailable || _groups.any((g) => g.options.any((o) => !o.alwaysAvailable))) {
       for (final g in _groups) {
         for (final o in g.options) {
           if (widget.canManageStock && o.stockType == 'linked') {
@@ -810,7 +810,6 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
             continue;
           }
           if (o.alwaysAvailable || !o.stockEditable) continue;
-          if (!widget.canManageStock && !_isEdit) continue;
           if (int.tryParse(o.stockQuantity.trim()) == null) {
             setState(() => _error = 'Stok opsi wajib diisi');
             return;
@@ -886,14 +885,28 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
         final newId = created is List && created.isNotEmpty
             ? int.tryParse('${created.first}')
             : null;
-        if (widget.canManageStock && newId != null) {
+        if (newId != null) {
           final detail = await api.getProduct(newId);
           final product = detail['product'];
           if (product is Map) {
             _copyOptionIds(Map<String, dynamic>.from(product));
           }
-          await _updateStockMode(api, newId, price, stockQty);
-          await _saveRecipes(api, newId);
+          if (widget.canManageStock) {
+            await _updateStockMode(api, newId, price, stockQty);
+            await _saveRecipes(api, newId);
+          } else {
+            await api.updateProduct(
+              id: newId,
+              price: price,
+              alwaysAvailable: _alwaysAvailable,
+              stockQuantity: !_alwaysAvailable ? stockQty : null,
+              isActive: _isActive,
+              isHotProduct: _isHot,
+              promotionId: _promotionId,
+              clearPromotion: _promotionId == null,
+              optionSettings: _optionSettings(),
+            );
+          }
         }
       } else {
         final created = await api.createProduct(
@@ -913,13 +926,25 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           menuOptions: _groups.map((e) => e.toJson()).toList(),
           imagePaths: _pickedImages.isEmpty ? null : _pickedImages,
         );
-        if (widget.canManageStock) {
-          final product = created['product'];
-          final newId = product is Map ? int.tryParse('${product['id']}') : null;
-          if (product is Map) _copyOptionIds(Map<String, dynamic>.from(product));
-          if (newId != null) {
+        final product = created['product'];
+        final newId = product is Map ? int.tryParse('${product['id']}') : null;
+        if (product is Map) _copyOptionIds(Map<String, dynamic>.from(product));
+        if (newId != null) {
+          if (widget.canManageStock) {
             await _updateStockMode(api, newId, price, stockQty);
             await _saveRecipes(api, newId);
+          } else {
+            await api.updateProduct(
+              id: newId,
+              price: price,
+              alwaysAvailable: _alwaysAvailable,
+              stockQuantity: !_alwaysAvailable ? stockQty : null,
+              isActive: _isActive,
+              isHotProduct: _isHot,
+              promotionId: _promotionId,
+              clearPromotion: _promotionId == null,
+              optionSettings: _optionSettings(),
+            );
           }
         }
       }
@@ -1228,8 +1253,10 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                       const SizedBox(height: 12),
                       ProductMenuOptionsEditor(
                         groups: _groups,
+                        // Struktur (nama/tambah/hapus) tetap terkunci saat edit toko.
+                        // Field stok di dalam editor opsi sengaja tetap bisa diubah.
                         readOnly: _identityLocked,
-                        showOptionStock: _isEdit || widget.canManageStock,
+                        showOptionStock: true,
                         canManageStock: widget.canManageStock,
                         ingredients: _ingredients,
                         onChanged: (next) => setState(() => _groups = next),

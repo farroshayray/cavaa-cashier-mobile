@@ -68,7 +68,7 @@ class MenuOptionItem {
     this.name = '',
     this.price = '0',
     this.description = '',
-    this.alwaysAvailable = false,
+    this.alwaysAvailable = true,
     this.stockType = 'direct',
     this.stockQuantity = '',
     this.stockEditable = true,
@@ -112,13 +112,17 @@ class MenuOptionItem {
     );
   }
 
-  Map<String, dynamic> toJson({bool includeAlwaysAvailable = false}) {
+  Map<String, dynamic> toJson() {
     return {
       if (optionId != null) 'option_id': optionId,
       'name': name,
       'price': int.tryParse(price.replaceAll('.', '').trim()) ?? 0,
       'description': description.isEmpty ? null : description,
-      if (includeAlwaysAvailable) 'always_available': alwaysAvailable,
+      // Stok opsi selalu dikirim agar opsi baru tidak otomatis Habis.
+      'always_available': alwaysAvailable,
+      'stock_type': stockType == 'linked' ? 'linked' : 'direct',
+      if (!alwaysAvailable && stockType != 'linked')
+        'stock_quantity': int.tryParse(stockQuantity.replaceAll('.', '').trim()) ?? 0,
     };
   }
 }
@@ -901,16 +905,13 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
                 ButtonSegment(value: 'linked', label: Text('Resep')),
               ],
               selected: {_mode},
-              onSelectionChanged: (value) {
-              if (widget.readOnly) return;
-              _setMode(value.first);
-            },
+              // Stok boleh diubah meski struktur opsi terkunci (edit toko).
+              onSelectionChanged: (value) => _setMode(value.first),
             ),
             if (_mode == 'direct') ...[
               const SizedBox(height: 12),
               TextField(
                 controller: _quantity,
-                enabled: !widget.readOnly,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Stok (pcs)',
@@ -934,15 +935,19 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
               activeThumbColor: productBrand,
               title: const Text('Opsi selalu tersedia'),
               value: option.alwaysAvailable,
-              onChanged: widget.readOnly
-                  ? null
-                  : (value) => setState(() => option.alwaysAvailable = value),
+              // Stok boleh diubah meski struktur opsi terkunci (edit toko).
+              onChanged: (value) => setState(() {
+                option.alwaysAvailable = value;
+                if (!value && option.stockType != 'linked') {
+                  option.stockType = 'direct';
+                  option.stockEditable = true;
+                }
+              }),
             ),
             if (!option.alwaysAvailable)
               option.stockEditable
                   ? TextField(
                       controller: _quantity,
-                      enabled: !widget.readOnly,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: 'Stok (pcs)',
