@@ -6,12 +6,15 @@ import 'package:provider/provider.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import 'employee_editor_page.dart';
 import 'owner_home_page.dart';
+import '../widgets/owner_setup_progress.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
 
 class EmployeesPage extends StatefulWidget {
-  const EmployeesPage({super.key});
+  const EmployeesPage({super.key, this.showSetupProgress = false});
+
+  final bool showSetupProgress;
 
   @override
   State<EmployeesPage> createState() => _EmployeesPageState();
@@ -309,6 +312,13 @@ class _EmployeesPageState extends State<EmployeesPage> {
                   parent: BouncingScrollPhysics(),
                 ),
                 slivers: [
+                  if (widget.showSetupProgress)
+                    const SliverPadding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: OwnerSetupStepHeader(stepKey: 'create_employee'),
+                      ),
+                    ),
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     sliver: SliverToBoxAdapter(

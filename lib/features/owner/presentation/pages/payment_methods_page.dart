@@ -9,12 +9,15 @@ import 'package:provider/provider.dart';
 import '/core/config/env.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import 'owner_home_page.dart';
+import '../widgets/owner_setup_progress.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
 
 class PaymentMethodsPage extends StatefulWidget {
-  const PaymentMethodsPage({super.key});
+  const PaymentMethodsPage({super.key, this.showSetupProgress = false});
+
+  final bool showSetupProgress;
 
   @override
   State<PaymentMethodsPage> createState() => _PaymentMethodsPageState();
@@ -217,6 +220,15 @@ class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
                   parent: BouncingScrollPhysics(),
                 ),
                 slivers: [
+                  if (widget.showSetupProgress)
+                    const SliverPadding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: OwnerSetupStepHeader(
+                          stepKey: 'create_payment_method',
+                        ),
+                      ),
+                    ),
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     sliver: SliverToBoxAdapter(

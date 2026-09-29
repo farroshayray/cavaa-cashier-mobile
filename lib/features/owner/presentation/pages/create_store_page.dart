@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 
 import '/features/auth/presentation/auth_provider.dart';
 import 'owner_home_page.dart';
+import '../widgets/owner_setup_progress.dart';
 
 const _brand = Color(0xFFAE1504);
 
 /// Create-only page — used by header "+" and onboarding.
 class CreateStorePage extends StatefulWidget {
-  const CreateStorePage({super.key});
+  const CreateStorePage({super.key, this.showSetupProgress = false});
+
+  final bool showSetupProgress;
 
   @override
   State<CreateStorePage> createState() => _CreateStorePageState();
@@ -138,6 +141,10 @@ class _CreateStorePageState extends State<CreateStorePage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
+          if (widget.showSetupProgress) ...[
+            const OwnerSetupStepHeader(stepKey: 'create_store'),
+            const SizedBox(height: 14),
+          ],
           if (firstStore)
             _WelcomeHero(name: ownerName)
           else

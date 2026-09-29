@@ -9,6 +9,7 @@ import 'owner_home_page.dart';
 import 'product_form_shared.dart';
 import 'categories_page.dart';
 import 'promotions_page.dart';
+import '../widgets/owner_setup_progress.dart';
 
 const _brand = productBrand;
 const _bg = Color(0xFFF6F7F9);
@@ -40,7 +41,9 @@ class _StoreStockChip extends StatelessWidget {
 }
 
 class CreateProductPage extends StatefulWidget {
-  const CreateProductPage({super.key});
+  const CreateProductPage({super.key, this.showSetupProgress = false});
+
+  final bool showSetupProgress;
 
   @override
   State<CreateProductPage> createState() => _CreateProductPageState();
@@ -218,6 +221,10 @@ class _CreateProductPageState extends State<CreateProductPage> {
                 ),
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                 children: [
+                  if (widget.showSetupProgress) ...[
+                    const OwnerSetupStepHeader(stepKey: 'create_product'),
+                    const SizedBox(height: 12),
+                  ],
                   Text(
                     'Toko: $storeName',
                     style: TextStyle(

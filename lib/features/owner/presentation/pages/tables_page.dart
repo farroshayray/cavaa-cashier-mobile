@@ -12,12 +12,15 @@ import 'package:share_plus/share_plus.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import 'owner_addons_page.dart';
 import 'owner_home_page.dart';
+import '../widgets/owner_setup_progress.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
 
 class TablesPage extends StatefulWidget {
-  const TablesPage({super.key});
+  const TablesPage({super.key, this.showSetupProgress = false});
+
+  final bool showSetupProgress;
 
   @override
   State<TablesPage> createState() => _TablesPageState();
@@ -285,6 +288,13 @@ class _TablesPageState extends State<TablesPage> {
                   parent: BouncingScrollPhysics(),
                 ),
                 slivers: [
+                  if (widget.showSetupProgress)
+                    const SliverPadding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: OwnerSetupStepHeader(stepKey: 'create_table'),
+                      ),
+                    ),
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     sliver: SliverToBoxAdapter(

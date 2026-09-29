@@ -17,6 +17,8 @@ import '/core/services/connectivity_status_provider.dart';
 import '../../data/owner_api.dart';
 import '../../data/welcome_gift_store.dart';
 import 'welcome_gift_dialog.dart';
+import 'setup_complete_dialog.dart';
+import '../widgets/owner_setup_progress.dart';
 import 'create_store_page.dart';
 import 'create_product_page.dart';
 import 'owner_stocks_page.dart';
@@ -56,6 +58,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     with WidgetsBindingObserver {
   bool _routingChecked = false;
   bool _giftShown = false;
+  bool _setupCompleteShown = false;
   bool _selectingStore = false;
   List<Map<String, dynamic>> _carousels = [];
   StreamSubscription<Map<String, dynamic>>? _billingNotifSub;
@@ -242,18 +245,18 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     final requested = widget.initialStep;
     if (requested != null && requested != 'ready' && !_routingChecked) {
       _routingChecked = true;
-      await _openStep(requested);
-      if (mounted && requested == 'create_store') await _maybeWelcomeGift();
+      await _openStep(requested, fromSetup: true);
+      if (mounted) await _maybeWelcomeGift();
       return;
     }
 
-    // Auto-push wizard only for brand-new owners without any store.
+    // Auto-open current setup step for brand-new owners without any store.
     final force = auth.owner?.forceOnboarding == true || storesEmpty;
     final step = auth.owner?.onboarding?.nextStep ?? 'ready';
     if (force && step != 'ready' && !_routingChecked) {
       _routingChecked = true;
-      await _openStep(step);
-      if (mounted && step == 'create_store') await _maybeWelcomeGift();
+      await _openStep(step, fromSetup: true);
+      if (mounted) await _maybeWelcomeGift();
     }
   }
 
@@ -282,26 +285,26 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     }
   }
 
-  Future<void> _openStep(String step) async {
+  Future<void> _openStep(String step, {bool fromSetup = false}) async {
     Widget? page;
     switch (step) {
       case 'create_store':
-        page = const CreateStorePage();
+        page = CreateStorePage(showSetupProgress: fromSetup);
         break;
       case 'create_product':
-        page = const CreateProductPage();
+        page = CreateProductPage(showSetupProgress: fromSetup);
         break;
       case 'create_master_product':
-        page = const CreateProductPage();
+        page = CreateProductPage(showSetupProgress: fromSetup);
         break;
       case 'create_payment_method':
-        page = const PaymentMethodsPage();
+        page = PaymentMethodsPage(showSetupProgress: fromSetup);
         break;
       case 'create_table':
-        page = const TablesPage();
+        page = TablesPage(showSetupProgress: fromSetup);
         break;
       case 'create_employee':
-        page = const EmployeesPage();
+        page = EmployeesPage(showSetupProgress: fromSetup);
         break;
       default:
         return;
@@ -320,9 +323,21 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       icon: icon,
       tooltip: _stepLabel(step),
       after: () async {
-        if (mounted) await context.read<AuthProvider>().refreshOwner();
+        if (!mounted) return;
+        await context.read<AuthProvider>().refreshOwner();
+        if (!mounted || !fromSetup) return;
+        final next =
+            context.read<AuthProvider>().owner?.onboarding?.nextStep ?? 'ready';
+        if (next == 'ready') await _maybeSetupComplete();
       },
     );
+  }
+
+  Future<void> _maybeSetupComplete() async {
+    if (_setupCompleteShown || !mounted) return;
+    _setupCompleteShown = true;
+    final openCashier = await showSetupCompleteDialog(context);
+    if (openCashier == true && mounted) await _enterCashier();
   }
 
   Future<void> _enterCashier() async {
@@ -547,7 +562,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     final selectedId =
         onboarding?.selectedStoreId ?? owner?.selectedPartnerId;
     final hasStore = stores.isNotEmpty;
-    final forceOnboarding = owner?.forceOnboarding == true || !hasStore;
 
     final canPromo = owner?.hasFeature('products_promotions') ?? false;
     final canScanTable = owner?.hasFeature('feature_scan_table') ?? false;
@@ -752,13 +766,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   ),
                 ),
               ),
-            if (!forceOnboarding && nextStep != 'ready')
+            if (nextStep != 'ready')
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 sliver: SliverToBoxAdapter(
-                  child: _SetupBanner(
-                    label: _stepLabel(nextStep),
-                    onTap: () => _openStep(nextStep),
+                  child: _SetupProgressBanner(
+                    nextStep: nextStep,
+                    onTap: () => _openStep(nextStep, fromSetup: true),
                   ),
                 ),
               ),
@@ -1171,14 +1185,20 @@ class _CashBookNotice extends StatelessWidget {
   }
 }
 
-class _SetupBanner extends StatelessWidget {
-  const _SetupBanner({required this.label, required this.onTap});
+class _SetupProgressBanner extends StatelessWidget {
+  const _SetupProgressBanner({
+    required this.nextStep,
+    required this.onTap,
+  });
 
-  final String label;
+  final String nextStep;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final activeIndex = ownerSetupActiveIndex(nextStep);
+    final total = ownerSetupSteps.length;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1186,60 +1206,136 @@ class _SetupBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           decoration: BoxDecoration(
-            color: _brand.withValues(alpha: 0.07),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _brand.withValues(alpha: 0.16)),
+            border: Border.all(color: _brand.withValues(alpha: 0.18)),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: _brand.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.flag_rounded,
-                    color: _brand,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
                         'Lanjutkan setup',
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 14,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: Colors.black.withValues(alpha: 0.55),
+                    ),
+                    Text(
+                      '${activeIndex + 1}/$total',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                        color: _brand.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: _brand.withValues(alpha: 0.8),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    for (var i = 0; i < total; i++) ...[
+                      if (i > 0)
+                        Expanded(
+                          child: Container(
+                            height: 2,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            color: i <= activeIndex
+                                ? const Color(0xFF047857)
+                                : const Color(0xFFE5E7EB),
+                          ),
                         ),
+                      _SetupDot(
+                        label: ownerSetupSteps[i].title,
+                        status: ownerSetupStatusFor(i, nextStep),
                       ),
                     ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: _brand.withValues(alpha: 0.8),
+                  ],
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SetupDot extends StatelessWidget {
+  const _SetupDot({
+    required this.label,
+    required this.status,
+  });
+
+  final String label;
+  final OwnerSetupStepStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDone = status == OwnerSetupStepStatus.done;
+    final isActive = status == OwnerSetupStepStatus.active;
+    final color = isDone
+        ? const Color(0xFF047857)
+        : isActive
+            ? _brand
+            : const Color(0xFFD1D5DB);
+
+    return SizedBox(
+      width: 52,
+      child: Column(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: isDone || isActive ? color : Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 2),
+            ),
+            child: isDone
+                ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                : isActive
+                    ? const Center(
+                        child: SizedBox(
+                          width: 8,
+                          height: 8,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      )
+                    : null,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+              color: isActive
+                  ? _brand
+                  : isDone
+                      ? const Color(0xFF047857)
+                      : const Color(0xFF9CA3AF),
+            ),
+          ),
+        ],
       ),
     );
   }
