@@ -8,6 +8,175 @@ import '/core/config/env.dart';
 import '../widgets/dock_inset.dart';
 
 const productBrand = Color(0xFFAE1504);
+const productCatalogAccent = Color(0xFF334155);
+
+class ProductCategoryTab extends StatelessWidget {
+  const ProductCategoryTab({
+    super.key,
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+    this.accent = productBrand,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = Color.lerp(accent, Colors.black, 0.12) ?? accent;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.fromLTRB(14, 9, 12, 9),
+          decoration: BoxDecoration(
+            gradient: selected
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [top, accent],
+                  )
+                : null,
+            color: selected ? null : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? Colors.transparent
+                  : Colors.black.withValues(alpha: 0.07),
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.28),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.1,
+                  color: selected ? Colors.white : const Color(0xFF1F2937),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.22)
+                      : const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: selected ? Colors.white : const Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+int? productCategoryIdOf(Map<String, dynamic> product) {
+  final cat = product['category'];
+  if (cat is Map) return int.tryParse('${cat['id'] ?? ''}');
+  return int.tryParse('${product['category_id'] ?? ''}');
+}
+
+/// Kategori yang punya minimal 1 item di [products] (+ jumlahnya).
+List<({int id, String name, int count})> populatedProductCategories({
+  required List<Map<String, dynamic>> products,
+  required List<Map<String, dynamic>> categories,
+}) {
+  final counts = <int, int>{};
+  for (final p in products) {
+    final id = productCategoryIdOf(p);
+    if (id == null) continue;
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  final rows = <({int id, String name, int count})>[];
+  for (final c in categories) {
+    final id = int.tryParse('${c['id'] ?? ''}');
+    if (id == null) continue;
+    final count = counts[id] ?? 0;
+    if (count <= 0) continue;
+    final name = c['name']?.toString() ??
+        c['category_name']?.toString() ??
+        '-';
+    rows.add((id: id, name: name, count: count));
+  }
+  for (final entry in counts.entries) {
+    if (rows.any((r) => r.id == entry.key)) continue;
+    String name = 'Kategori';
+    for (final p in products) {
+      if (productCategoryIdOf(p) != entry.key) continue;
+      final cat = p['category'];
+      if (cat is Map) name = cat['name']?.toString() ?? name;
+      break;
+    }
+    rows.add((id: entry.key, name: name, count: entry.value));
+  }
+  rows.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  return rows;
+}
+
+/// Toko yang memakai item katalog (dari field API `used_in_stores`).
+List<({int id, String name})> catalogUsedInStores(Map<String, dynamic> product) {
+  final raw = product['used_in_stores'];
+  if (raw is! List) return const [];
+  final seen = <int>{};
+  final out = <({int id, String name})>[];
+  for (final item in raw) {
+    if (item is! Map) continue;
+    final id = int.tryParse('${item['id'] ?? ''}');
+    final name = item['name']?.toString().trim() ?? '';
+    if (id == null || id <= 0 || name.isEmpty || seen.contains(id)) continue;
+    seen.add(id);
+    out.add((id: id, name: name));
+  }
+  return out;
+}
+
+/// Copy ringkas untuk subtitle card Katalog.
+String catalogUsedInStoresLabel(Map<String, dynamic> product) {
+  final stores = catalogUsedInStores(product);
+  final countFromApi = int.tryParse('${product['used_in_store_count'] ?? ''}');
+  final n = stores.isNotEmpty ? stores.length : (countFromApi ?? 0);
+  if (n <= 0 || stores.isEmpty) {
+    return 'Belum dipakai toko mana pun';
+  }
+  if (stores.length <= 2) {
+    return 'Dipakai: ${stores.map((s) => s.name).join(', ')}';
+  }
+  final shown = stores.take(2).map((s) => s.name).join(', ');
+  final more = stores.length - 2;
+  return 'Dipakai di $n toko · $shown +$more';
+}
 
 class RecipeLine {
   RecipeLine({

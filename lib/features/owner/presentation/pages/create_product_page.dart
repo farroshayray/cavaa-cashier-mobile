@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -41,86 +41,64 @@ class _StoreStockChip extends StatelessWidget {
   }
 }
 
-class _StoreCategoryTab extends StatelessWidget {
-  const _StoreCategoryTab({
+enum ProductHubTab { store, catalog }
+
+class _HubSegmentTab extends StatelessWidget {
+  const _HubSegmentTab({
     required this.label,
-    required this.count,
+    required this.icon,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
-  final int count;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.fromLTRB(14, 9, 12, 9),
-          decoration: BoxDecoration(
-            gradient: selected
-                ? const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFFB91C1C), _brand],
-                  )
-                : null,
-            color: selected ? null : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected
-                  ? Colors.transparent
-                  : Colors.black.withValues(alpha: 0.07),
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
             ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: _brand.withValues(alpha: 0.28),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.1,
-                  color: selected ? Colors.white : const Color(0xFF1F2937),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? _brand : const Color(0xFF6B7280),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Colors.white.withValues(alpha: 0.22)
-                      : const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '$count',
+                const SizedBox(width: 6),
+                Text(
+                  label,
                   style: TextStyle(
-                    fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: selected ? Colors.white : const Color(0xFF6B7280),
+                    fontSize: 13,
+                    color: selected ? _brand : const Color(0xFF6B7280),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -129,9 +107,31 @@ class _StoreCategoryTab extends StatelessWidget {
 }
 
 class CreateProductPage extends StatefulWidget {
-  const CreateProductPage({super.key, this.showSetupProgress = false});
+  const CreateProductPage({
+    super.key,
+    this.showSetupProgress = false,
+    this.initialTab = ProductHubTab.store,
+  });
 
   final bool showSetupProgress;
+  /// `store` = Menu toko, `catalog` = Katalog.
+  final ProductHubTab initialTab;
+
+  /// Convenience for callers outside this library file.
+  static const tabStore = 'store';
+  static const tabCatalog = 'catalog';
+
+  factory CreateProductPage.forSetup({
+    required bool showSetupProgress,
+    required String tab,
+  }) {
+    return CreateProductPage(
+      showSetupProgress: showSetupProgress,
+      initialTab: tab == tabCatalog
+          ? ProductHubTab.catalog
+          : ProductHubTab.store,
+    );
+  }
 
   @override
   State<CreateProductPage> createState() => _CreateProductPageState();
@@ -146,61 +146,22 @@ class _CreateProductPageState extends State<CreateProductPage> {
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _promotions = [];
   int? _selectedCategoryId;
+  late ProductHubTab _hubTab;
+  final _catalogKey = GlobalKey<MasterProductsPageState>();
 
   List<Map<String, dynamic>> get _filteredProducts {
     final selectedId = _selectedCategoryId;
     if (selectedId == null) return _products;
-    return _products.where((p) {
-      final cat = p['category'];
-      final id = cat is Map
-          ? int.tryParse('${cat['id'] ?? ''}')
-          : int.tryParse('${p['category_id'] ?? ''}');
-      return id == selectedId;
-    }).toList();
+    return _products
+        .where((p) => productCategoryIdOf(p) == selectedId)
+        .toList();
   }
 
-  int? _productCategoryId(Map<String, dynamic> p) {
-    final cat = p['category'];
-    if (cat is Map) return int.tryParse('${cat['id'] ?? ''}');
-    return int.tryParse('${p['category_id'] ?? ''}');
-  }
-
-  /// Kategori yang punya minimal 1 produk di toko (+ jumlahnya).
-  List<({int id, String name, int count})> get _populatedCategories {
-    final counts = <int, int>{};
-    for (final p in _products) {
-      final id = _productCategoryId(p);
-      if (id == null) continue;
-      counts[id] = (counts[id] ?? 0) + 1;
-    }
-    final rows = <({int id, String name, int count})>[];
-    for (final c in _categories) {
-      final id = int.tryParse('${c['id'] ?? ''}');
-      if (id == null) continue;
-      final count = counts[id] ?? 0;
-      if (count <= 0) continue;
-      final name = c['name']?.toString() ??
-          c['category_name']?.toString() ??
-          '-';
-      rows.add((id: id, name: name, count: count));
-    }
-    // Sertakan kategori yang ada di produk tapi tidak ada di daftar master categories.
-    for (final entry in counts.entries) {
-      if (rows.any((r) => r.id == entry.key)) continue;
-      String name = 'Kategori';
-      for (final p in _products) {
-        if (_productCategoryId(p) != entry.key) continue;
-        final cat = p['category'];
-        if (cat is Map) {
-          name = cat['name']?.toString() ?? name;
-        }
-        break;
-      }
-      rows.add((id: entry.key, name: name, count: entry.value));
-    }
-    rows.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return rows;
-  }
+  List<({int id, String name, int count})> get _populatedCategories =>
+      populatedProductCategories(
+        products: _products,
+        categories: _categories,
+      );
 
   void _ensureValidCategorySelection() {
     final selected = _selectedCategoryId;
@@ -212,6 +173,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
   @override
   void initState() {
     super.initState();
+    _hubTab = widget.initialTab;
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
@@ -310,11 +272,14 @@ class _CreateProductPageState extends State<CreateProductPage> {
     }
   }
 
-  Future<void> _openMasterManager() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const MasterProductsPage()),
-    );
-    if (mounted) await _load(silent: true);
+  Future<void> _openCatalogEditor() async {
+    await _catalogKey.currentState?.openCreate();
+  }
+
+  Future<void> _onCatalogChanged() async {
+    if (!mounted) return;
+    await context.read<AuthProvider>().refreshOwner();
+    await _load(silent: true);
   }
 
   @override
@@ -328,12 +293,13 @@ class _CreateProductPageState extends State<CreateProductPage> {
         const [];
     final storeName =
         matchedStores.isNotEmpty ? matchedStores.first.name : 'Toko terpilih';
+    final onStoreTab = _hubTab == ProductHubTab.store;
 
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
         title: const Text(
-          'Produk Toko',
+          'Produk',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         backgroundColor: _brand,
@@ -357,250 +323,300 @@ class _CreateProductPageState extends State<CreateProductPage> {
       ),
       floatingActionButton: DockAwareFab(
         child: FloatingActionButton.extended(
-          onPressed: _loading ? null : () => _openEditor(),
-          backgroundColor: _brand,
+          onPressed: _loading
+              ? null
+              : () => onStoreTab ? _openEditor() : _openCatalogEditor(),
+          backgroundColor: onStoreTab ? _brand : productCatalogAccent,
           foregroundColor: Colors.white,
           icon: const Icon(Icons.add_rounded),
-          label: const Text('Tambah produk'),
+          label: Text(onStoreTab ? 'Tambah ke toko' : 'Tambah katalog'),
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _brand))
-          : RefreshIndicator(
-              color: _brand,
-              onRefresh: () => _load(silent: true),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100).withBottomInset(context),
-                children: [
-                  if (widget.showSetupProgress) ...[
-                    const OwnerSetupStepHeader(stepKey: 'create_product'),
-                    const SizedBox(height: 12),
-                  ],
-                  Text(
-                    'Toko: $storeName',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black.withValues(alpha: 0.65),
-                    ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.showSetupProgress) ...[
+                  OwnerSetupStepHeader(
+                    stepKey: onStoreTab
+                        ? 'create_product'
+                        : 'create_master_product',
                   ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: _openMasterManager,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _brand,
-                      side: BorderSide(color: _brand.withValues(alpha: 0.35)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    icon: const Icon(Icons.inventory_2_outlined),
-                    label: const Text(
-                      'Kelola Master Produk',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Buat produk baru, ambil dari katalog, atau ketuk produk untuk edit.',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: Colors.black.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                  const SizedBox(height: 16),
-                  Text(
-                    'Produk di toko (${_filteredProducts.length})',
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  if (_populatedCategories.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 42,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: _StoreCategoryTab(
-                              label: 'Semua',
-                              count: _products.length,
-                              selected: _selectedCategoryId == null,
-                              onTap: () =>
-                                  setState(() => _selectedCategoryId = null),
-                            ),
-                          ),
-                          ..._populatedCategories.map((c) {
-                            final selected = c.id == _selectedCategoryId;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _StoreCategoryTab(
-                                label: c.name,
-                                count: c.count,
-                                selected: selected,
-                                onTap: () => setState(
-                                  () => _selectedCategoryId = c.id,
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 12),
-                  if (_products.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.black.withValues(alpha: 0.06),
-                        ),
+                ],
+                Text(
+                  'Toko: $storeName',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black.withValues(alpha: 0.65),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB).withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      _HubSegmentTab(
+                        label: 'Menu toko',
+                        icon: Icons.storefront_rounded,
+                        selected: onStoreTab,
+                        onTap: () =>
+                            setState(() => _hubTab = ProductHubTab.store),
                       ),
-                      child: Text(
-                        'Belum ada produk. Ketuk “Tambah produk” atau kelola master dulu.',
-                        style: TextStyle(
-                          color: Colors.black.withValues(alpha: 0.55),
-                        ),
+                      _HubSegmentTab(
+                        label: 'Katalog',
+                        icon: Icons.inventory_2_rounded,
+                        selected: !onStoreTab,
+                        onTap: () =>
+                            setState(() => _hubTab = ProductHubTab.catalog),
                       ),
-                    )
-                  else if (_filteredProducts.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.black.withValues(alpha: 0.06),
-                        ),
-                      ),
-                      child: Text(
-                        'Tidak ada produk di kategori ini.',
-                        style: TextStyle(
-                          color: Colors.black.withValues(alpha: 0.55),
-                        ),
-                      ),
-                    )
-                  else
-                    ..._filteredProducts.map((p) {
-                      final cat = p['category'];
-                      final catName =
-                          cat is Map ? cat['name']?.toString() : null;
-                      final thumb = resolveProductImageUrl(p['pictures']);
-                      final always = p['always_available'] == true ||
-                          p['always_available'] == 1;
-                      final linked = p['stock_type']?.toString() == 'linked';
-                      final rawQty = p['stock_quantity'];
-                      final qty = rawQty is num
-                          ? rawQty.toInt()
-                          : int.tryParse('${rawQty ?? ''}');
-                      final linkedQty = linked ? (qty ?? 0) : null;
-                      final showQty = !linked &&
-                          qty != null &&
-                          (!always || qty > 0);
-                      final showStockRow =
-                          linked || always || showQty;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: Colors.black.withValues(alpha: 0.06),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  onStoreTab
+                      ? 'Produk yang aktif di toko ini — atur stok & status jual.'
+                      : 'Template produk bersama — edit di sini ikut ke toko yang memakai.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.black.withValues(alpha: 0.5),
+                  ),
+                ),
+                if (_error != null && onStoreTab) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: onStoreTab
+                ? (_loading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: _brand),
+                      )
+                    : RefreshIndicator(
+                        color: _brand,
+                        onRefresh: () => _load(silent: true),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
                           ),
-                        ),
-                        child: ListTile(
-                          onTap: () => _openEditor(product: p),
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: thumb == null
-                                ? Container(
-                                    width: 48,
-                                    height: 48,
-                                    color: _brand.withValues(alpha: 0.08),
-                                    child: const Icon(
-                                      Icons.shopping_bag_outlined,
-                                      color: _brand,
-                                    ),
-                                  )
-                                : Image.network(
-                                    thumb,
-                                    width: 48,
-                                    height: 48,
-                                    fit: BoxFit.cover,
-                                  ),
-                          ),
-                          title: Text(
-                            p['name']?.toString() ?? '-',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                [
-                                  'Rp ${formatProductPrice(p['price'])}',
-                                  if (catName != null) catName,
-                                  if ((p['product_code']?.toString() ?? '')
-                                      .isNotEmpty)
-                                    p['product_code'].toString(),
-                                ].join(' · '),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100)
+                              .withBottomInset(context),
+                          children: [
+                            Text(
+                              'Menu toko (${_filteredProducts.length})',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
                               ),
-                              if (showStockRow) ...[
-                                const SizedBox(height: 6),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 4,
+                            ),
+                            if (_populatedCategories.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                height: 42,
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const BouncingScrollPhysics(),
                                   children: [
-                                    if (linked) ...[
-                                      _StoreStockChip(
-                                        label: 'Stok $linkedQty pcs',
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: ProductCategoryTab(
+                                        label: 'Semua',
+                                        count: _products.length,
+                                        selected: _selectedCategoryId == null,
+                                        onTap: () => setState(
+                                          () => _selectedCategoryId = null,
+                                        ),
                                       ),
-                                      const _StoreStockChip(
-                                        label: 'Resep',
-                                        filled: true,
-                                      ),
-                                    ] else if (showQty)
-                                      _StoreStockChip(
-                                        label: 'Stok $qty pcs',
-                                      ),
-                                    if (always && !linked)
-                                      const _StoreStockChip(
-                                        label: 'Selalu tersedia',
-                                        filled: true,
-                                      ),
+                                    ),
+                                    ..._populatedCategories.map((c) {
+                                      final selected =
+                                          c.id == _selectedCategoryId;
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 8),
+                                        child: ProductCategoryTab(
+                                          label: c.name,
+                                          count: c.count,
+                                          selected: selected,
+                                          onTap: () => setState(
+                                            () => _selectedCategoryId = c.id,
+                                          ),
+                                        ),
+                                      );
+                                    }),
                                   ],
                                 ),
-                              ],
+                              ),
                             ],
-                          ),
-                          isThreeLine: showStockRow,
-                          trailing: Icon(
-                            (p['is_active'] == true || p['is_active'] == 1)
-                                ? Icons.check_circle_rounded
-                                : Icons.pause_circle_filled_rounded,
-                            color: (p['is_active'] == true ||
-                                    p['is_active'] == 1)
-                                ? const Color(0xFF0B6E4F)
-                                : Colors.black38,
-                            size: 20,
-                          ),
+                            const SizedBox(height: 12),
+                            if (_products.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.06),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Belum ada produk di toko. Tambah ke toko atau ambil dari katalog.',
+                                  style: TextStyle(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.55),
+                                  ),
+                                ),
+                              )
+                            else if (_filteredProducts.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.06),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Tidak ada produk di kategori ini.',
+                                  style: TextStyle(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.55),
+                                  ),
+                                ),
+                              )
+                            else
+                              ..._filteredProducts.map(_buildStoreProductTile),
+                          ],
                         ),
-                      );
-                    }),
+                      ))
+                : MasterProductsPage(
+                    key: _catalogKey,
+                    embedded: true,
+                    onChanged: _onCatalogChanged,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoreProductTile(Map<String, dynamic> p) {
+    final cat = p['category'];
+    final catName = cat is Map ? cat['name']?.toString() : null;
+    final thumb = resolveProductImageUrl(p['pictures']);
+    final always =
+        p['always_available'] == true || p['always_available'] == 1;
+    final linked = p['stock_type']?.toString() == 'linked';
+    final rawQty = p['stock_quantity'];
+    final qty = rawQty is num
+        ? rawQty.toInt()
+        : int.tryParse('${rawQty ?? ''}');
+    final linkedQty = linked ? (qty ?? 0) : null;
+    final showQty = !linked && qty != null && (!always || qty > 0);
+    final showStockRow = linked || always || showQty;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.black.withValues(alpha: 0.06),
+        ),
+      ),
+      child: ListTile(
+        onTap: () => _openEditor(product: p),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: thumb == null
+              ? Container(
+                  width: 48,
+                  height: 48,
+                  color: _brand.withValues(alpha: 0.08),
+                  child: const Icon(
+                    Icons.shopping_bag_outlined,
+                    color: _brand,
+                  ),
+                )
+              : Image.network(
+                  thumb,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                ),
+        ),
+        title: Text(
+          p['name']?.toString() ?? '-',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              [
+                'Rp ${formatProductPrice(p['price'])}',
+                if (catName != null) catName,
+                if ((p['product_code']?.toString() ?? '').isNotEmpty)
+                  p['product_code'].toString(),
+              ].join(' · '),
+            ),
+            if (showStockRow) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (linked) ...[
+                    _StoreStockChip(
+                      label: 'Stok $linkedQty pcs',
+                    ),
+                    const _StoreStockChip(
+                      label: 'Resep',
+                      filled: true,
+                    ),
+                  ] else if (showQty)
+                    _StoreStockChip(
+                      label: 'Stok $qty pcs',
+                    ),
+                  if (always && !linked)
+                    const _StoreStockChip(
+                      label: 'Selalu tersedia',
+                      filled: true,
+                    ),
                 ],
               ),
-            ),
+            ],
+          ],
+        ),
+        isThreeLine: showStockRow,
+        trailing: Icon(
+          (p['is_active'] == true || p['is_active'] == 1)
+              ? Icons.check_circle_rounded
+              : Icons.pause_circle_filled_rounded,
+          color: (p['is_active'] == true || p['is_active'] == 1)
+              ? const Color(0xFF0B6E4F)
+              : Colors.black38,
+          size: 20,
+        ),
+      ),
     );
   }
 }
+
 
 class StoreProductEditorPage extends StatefulWidget {
   const StoreProductEditorPage({
@@ -870,7 +886,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                       ),
                       subtitle: Text(
                         'Rp ${formatProductPrice(m['price'])}'
-                        '${(m['product_code']?.toString() ?? '').isNotEmpty ? ' · ${m['product_code']}' : ''}',
+                        '${(m['product_code']?.toString() ?? '').isNotEmpty ? ' Â· ${m['product_code']}' : ''}',
                       ),
                       onTap: () => Navigator.pop(ctx, m),
                     );

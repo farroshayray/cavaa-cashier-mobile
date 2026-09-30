@@ -10,26 +10,65 @@ import 'promotions_page.dart';
 import '../widgets/dock_inset.dart';
 
 const _brand = productBrand;
+const _catalogAccent = productCatalogAccent;
 const _bg = Color(0xFFF6F7F9);
 
 class MasterProductsPage extends StatefulWidget {
-  const MasterProductsPage({super.key});
+  const MasterProductsPage({
+    super.key,
+    this.embedded = false,
+    this.onChanged,
+  });
+
+  /// Tanpa Scaffold/AppBar/FAB — untuk di-embed di hub Produk.
+  final bool embedded;
+
+  /// Dipanggil setelah create/edit/delete sukses (supaya hub reload assignable).
+  final VoidCallback? onChanged;
 
   @override
-  State<MasterProductsPage> createState() => _MasterProductsPageState();
+  State<MasterProductsPage> createState() => MasterProductsPageState();
 }
 
-class _MasterProductsPageState extends State<MasterProductsPage> {
+class MasterProductsPageState extends State<MasterProductsPage> {
   bool _loading = true;
   bool _refreshing = false;
   String? _error;
   List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _categories = [];
+  int? _selectedCategoryId;
+
+  List<Map<String, dynamic>> get _filteredProducts {
+    final selectedId = _selectedCategoryId;
+    if (selectedId == null) return _products;
+    return _products
+        .where((p) => productCategoryIdOf(p) == selectedId)
+        .toList();
+  }
+
+  List<({int id, String name, int count})> get _populatedCategories =>
+      populatedProductCategories(
+        products: _products,
+        categories: _categories,
+      );
+
+  void _ensureValidCategorySelection() {
+    final selected = _selectedCategoryId;
+    if (selected == null) return;
+    if (!_populatedCategories.any((c) => c.id == selected)) {
+      _selectedCategoryId = null;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
+
+  Future<void> reload({bool silent = true}) => _load(silent: silent);
+
+  Future<void> openCreate() => _openEditor();
 
   Future<void> _load({bool silent = false}) async {
     if (!silent) {
@@ -43,6 +82,7 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
     try {
       final data = await ownerApiOf(context).listMasterProducts();
       final list = data['products'];
+      final cats = data['categories'];
       setState(() {
         _products = list is List
             ? list
@@ -50,10 +90,17 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList()
             : [];
+        _categories = cats is List
+            ? cats
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : [];
+        _ensureValidCategorySelection();
         _error = null;
       });
     } catch (_) {
-      if (mounted) setState(() => _error = 'Gagal memuat master produk');
+      if (mounted) setState(() => _error = 'Gagal memuat katalog');
     } finally {
       if (mounted) {
         setState(() {
@@ -73,6 +120,7 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
     if (changed == true && mounted) {
       await context.read<AuthProvider>().refreshOwner();
       await _load(silent: true);
+      widget.onChanged?.call();
     }
   }
 
@@ -82,10 +130,10 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Hapus master produk?'),
+        title: const Text('Hapus dari katalog?'),
         content: Text(
-          'Hapus “${product['name'] ?? 'produk'}”? '
-          'Produk toko yang terhubung tidak ikut terhapus.',
+          'Hapus “${product['name'] ?? 'produk'}” dari katalog? '
+          'Produk di toko yang terhubung tidak ikut terhapus.',
         ),
         actions: [
           TextButton(
@@ -104,9 +152,10 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
     try {
       await ownerApiOf(context).deleteMasterProduct(id);
       await _load(silent: true);
+      widget.onChanged?.call();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Master produk dihapus')),
+        const SnackBar(content: Text('Item katalog dihapus')),
       );
     } on DioException catch (e) {
       final data = e.response?.data;
@@ -123,16 +172,251 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
     }
   }
 
+  Widget _buildListBody({required EdgeInsets padding}) {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: _catalogAccent),
+      );
+    }
+    return RefreshIndicator(
+      color: _catalogAccent,
+      onRefresh: () => _load(silent: true),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: padding,
+        children: [
+          if (!widget.embedded)
+            Text(
+              'Template produk bersama — edit di sini ikut ke toko yang memakai.',
+              style: TextStyle(
+                color: Colors.black.withValues(alpha: 0.55),
+                fontSize: 12.5,
+              ),
+            ),
+          if (_error != null) ...[
+            if (!widget.embedded) const SizedBox(height: 8),
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+          ],
+          Text(
+            'Katalog (${_filteredProducts.length})',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          if (_populatedCategories.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 42,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ProductCategoryTab(
+                      label: 'Semua',
+                      count: _products.length,
+                      selected: _selectedCategoryId == null,
+                      accent: _catalogAccent,
+                      onTap: () =>
+                          setState(() => _selectedCategoryId = null),
+                    ),
+                  ),
+                  ..._populatedCategories.map((c) {
+                    final selected = c.id == _selectedCategoryId;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ProductCategoryTab(
+                        label: c.name,
+                        count: c.count,
+                        selected: selected,
+                        accent: _catalogAccent,
+                        onTap: () =>
+                            setState(() => _selectedCategoryId = c.id),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (_products.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.06),
+                ),
+              ),
+              child: Text(
+                'Belum ada item di katalog. Buat dulu, lalu aktifkan di Menu toko.',
+                style: TextStyle(
+                  color: Colors.black.withValues(alpha: 0.55),
+                ),
+              ),
+            )
+          else if (_filteredProducts.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.06),
+                ),
+              ),
+              child: Text(
+                'Tidak ada item di kategori ini.',
+                style: TextStyle(
+                  color: Colors.black.withValues(alpha: 0.55),
+                ),
+              ),
+            )
+          else
+            ..._filteredProducts.map((p) {
+              final thumb = resolveProductImageUrl(p['pictures']);
+              final cat = p['category'];
+              final catName = cat is Map ? cat['name']?.toString() : null;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ListTile(
+                  onTap: () => _openEditor(product: p),
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: thumb == null
+                        ? Container(
+                            width: 48,
+                            height: 48,
+                            color: _catalogAccent.withValues(alpha: 0.1),
+                            child: const Icon(
+                              Icons.inventory_2_outlined,
+                              color: _catalogAccent,
+                            ),
+                          )
+                        : Image.network(
+                            thumb,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          p['name']?.toString() ?? '-',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _catalogAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Katalog',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            color: _catalogAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        [
+                          'Rp ${formatProductPrice(p['price'])}',
+                          if (catName != null) catName,
+                          if ((p['product_code']?.toString() ?? '').isNotEmpty)
+                            p['product_code'].toString(),
+                        ].join(' · '),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        catalogUsedInStoresLabel(p),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _catalogAccent.withValues(alpha: 0.85),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  isThreeLine: true,
+                  trailing: IconButton(
+                    onPressed: () => _confirmDelete(p),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: _catalogAccent,
+                    ),
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) {
+      return Stack(
+        children: [
+          _buildListBody(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 100)
+                .withBottomInset(context),
+          ),
+          if (_refreshing)
+            const Positioned(
+              top: 0,
+              right: 16,
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _catalogAccent,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
         title: const Text(
-          'Kelola Master Produk',
+          'Katalog',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
-        backgroundColor: _brand,
+        backgroundColor: _catalogAccent,
         foregroundColor: Colors.white,
         actions: [
           if (_refreshing)
@@ -154,101 +438,16 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
       floatingActionButton: DockAwareFab(
         child: FloatingActionButton.extended(
           onPressed: _loading ? null : () => _openEditor(),
-          backgroundColor: _brand,
+          backgroundColor: _catalogAccent,
           foregroundColor: Colors.white,
           icon: const Icon(Icons.add_rounded),
-          label: const Text('Tambah master'),
+          label: const Text('Tambah katalog'),
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _brand))
-          : RefreshIndicator(
-              color: _brand,
-              onRefresh: () => _load(silent: true),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100).withBottomInset(context),
-                children: [
-                  Text(
-                    'Edit di sini akan sync identitas ke semua toko yang memakai produk.',
-                    style: TextStyle(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      fontSize: 12.5,
-                    ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                  const SizedBox(height: 14),
-                  if (_products.isEmpty)
-                    Text(
-                      'Belum ada master produk.',
-                      style: TextStyle(
-                        color: Colors.black.withValues(alpha: 0.55),
-                      ),
-                    )
-                  else
-                    ..._products.map((p) {
-                      final thumb = resolveProductImageUrl(p['pictures']);
-                      final cat = p['category'];
-                      final catName =
-                          cat is Map ? cat['name']?.toString() : null;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: Colors.black.withValues(alpha: 0.06),
-                          ),
-                        ),
-                        child: ListTile(
-                          onTap: () => _openEditor(product: p),
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: thumb == null
-                                ? Container(
-                                    width: 48,
-                                    height: 48,
-                                    color: _brand.withValues(alpha: 0.08),
-                                    child: const Icon(
-                                      Icons.inventory_2_outlined,
-                                      color: _brand,
-                                    ),
-                                  )
-                                : Image.network(
-                                    thumb,
-                                    width: 48,
-                                    height: 48,
-                                    fit: BoxFit.cover,
-                                  ),
-                          ),
-                          title: Text(
-                            p['name']?.toString() ?? '-',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          subtitle: Text(
-                            [
-                              'Rp ${formatProductPrice(p['price'])}',
-                              if (catName != null) catName,
-                              if ((p['product_code']?.toString() ?? '')
-                                  .isNotEmpty)
-                                p['product_code'].toString(),
-                            ].join(' · '),
-                          ),
-                          trailing: IconButton(
-                            onPressed: () => _confirmDelete(p),
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: _brand,
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                ],
-              ),
-            ),
+      body: _buildListBody(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100)
+            .withBottomInset(context),
+      ),
     );
   }
 }
@@ -274,6 +473,7 @@ class _MasterProductEditorPageState extends State<MasterProductEditorPage> {
   List<MenuOptionGroup> _groups = [];
   List<Map<String, dynamic>> _existingImages = [];
   final List<String> _pickedImages = [];
+  List<({int id, String name})> _usedInStores = [];
   int? _categoryId;
   int? _promotionId;
   bool _applyPrice = false;
@@ -343,6 +543,7 @@ class _MasterProductEditorPageState extends State<MasterProductEditorPage> {
               ? product['promo_id'] as int
               : int.tryParse('${product['promo_id'] ?? ''}');
           _existingImages = pictureMaps(product['pictures']);
+          _usedInStores = catalogUsedInStores(product);
           final opts = product['menu_options'];
           _groups = opts is List
               ? opts
@@ -353,6 +554,8 @@ class _MasterProductEditorPageState extends State<MasterProductEditorPage> {
                   )
                   .toList()
               : [];
+        } else {
+          _usedInStores = [];
         }
         _loading = false;
       });
@@ -470,6 +673,72 @@ class _MasterProductEditorPageState extends State<MasterProductEditorPage> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
               children: [
+                if (_isEdit) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _catalogAccent.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _catalogAccent.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Dipakai di toko',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: _catalogAccent,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_usedInStores.isEmpty)
+                          Text(
+                            'Belum dipakai toko mana pun. Aktifkan dari Menu toko.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.black.withValues(alpha: 0.55),
+                            ),
+                          )
+                        else
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _usedInStores
+                                .map(
+                                  (s) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: _catalogAccent
+                                            .withValues(alpha: 0.2),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      s.name,
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: _catalogAccent,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(

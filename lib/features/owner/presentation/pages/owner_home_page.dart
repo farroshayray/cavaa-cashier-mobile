@@ -333,10 +333,16 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         page = CreateStorePage(showSetupProgress: fromSetup);
         break;
       case 'create_product':
-        page = CreateProductPage(showSetupProgress: fromSetup);
+        page = CreateProductPage.forSetup(
+          showSetupProgress: fromSetup,
+          tab: CreateProductPage.tabStore,
+        );
         break;
       case 'create_master_product':
-        page = CreateProductPage(showSetupProgress: fromSetup);
+        page = CreateProductPage.forSetup(
+          showSetupProgress: fromSetup,
+          tab: CreateProductPage.tabCatalog,
+        );
         break;
       case 'create_payment_method':
         page = PaymentMethodsPage(showSetupProgress: fromSetup);
@@ -639,9 +645,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       case 'create_store':
         return 'Buat toko Anda';
       case 'create_product':
-        return 'Tambahkan produk toko';
+        return 'Tambahkan menu toko';
       case 'create_master_product':
-        return 'Tambahkan produk toko';
+        return 'Buat item katalog';
       case 'create_payment_method':
         return 'Buat metode pembayaran';
       case 'create_table':
