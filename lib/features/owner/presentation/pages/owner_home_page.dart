@@ -1579,20 +1579,7 @@ class _OwnerDock extends StatelessWidget {
                     active: barPage == _BarPage.none && section == null,
                     onTap: onHome,
                   ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 320),
-                    curve: Curves.easeInOutCubic,
-                    alignment: Alignment.centerLeft,
-                    child: section == null
-                        ? const SizedBox(width: 0, height: 48)
-                        : _DockItem(
-                            key: ValueKey(section!.tooltip),
-                            icon: section!.icon,
-                            tooltip: section!.tooltip,
-                            active: true,
-                            onTap: () {},
-                          ),
-                  ),
+                  _DockSectionSlot(section: section),
                   _DockItem(
                     icon: Icons.bar_chart_rounded,
                     tooltip: 'Laporan',
@@ -1702,6 +1689,81 @@ class _DockItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Slot for the open section's icon. The slot width and the icon scale share
+/// one animation value, so the icon zooms in/out in step with the items
+/// sliding aside to make room for it.
+class _DockSectionSlot extends StatefulWidget {
+  const _DockSectionSlot({required this.section});
+
+  final _OpenSection? section;
+
+  @override
+  State<_DockSectionSlot> createState() => _DockSectionSlotState();
+}
+
+class _DockSectionSlotState extends State<_DockSectionSlot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: widget.section == null ? 0 : 1,
+  );
+  late final Animation<double> _t = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOutCubic,
+  );
+  late _OpenSection? _shown = widget.section;
+
+  @override
+  void didUpdateWidget(covariant _DockSectionSlot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final section = widget.section;
+    if (section != null) {
+      _shown = section;
+      _controller.forward();
+    } else if (oldWidget.section != null) {
+      _controller.reverse().whenComplete(() {
+        if (mounted && widget.section == null) setState(() => _shown = null);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (context, _) {
+        final shown = _shown;
+        final t = _t.value;
+        if (shown == null || t <= 0) {
+          return const SizedBox(width: 0, height: 48);
+        }
+        return ClipRect(
+          child: Align(
+            widthFactor: t,
+            child: Transform.scale(
+              scale: t,
+              child: _DockItem(
+                key: ValueKey(shown.tooltip),
+                icon: shown.icon,
+                tooltip: shown.tooltip,
+                active: true,
+                onTap: () {},
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
