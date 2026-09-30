@@ -12,6 +12,7 @@ import 'owner_addons_page.dart';
 import 'owner_home_page.dart';
 import 'payment_methods_page.dart';
 import 'store_image_crop_page.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -656,7 +657,7 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                   ),
                 )
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withBottomInset(context),
                   children: [
                     _SectionCard(
                       title: 'Informasi toko',

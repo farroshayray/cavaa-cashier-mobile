@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../auth_provider.dart';
 import '../../../owner/presentation/pages/owner_home_page.dart';
+import '/features/owner/presentation/widgets/dock_inset.dart';
 
 class OwnerSetPasswordPage extends StatefulWidget {
   const OwnerSetPasswordPage({super.key, this.continueToHome = true});
@@ -109,8 +110,9 @@ class _OwnerSetPasswordPageState extends State<OwnerSetPasswordPage> {
         automaticallyImplyLeading: !widget.continueToHome,
       ),
       body: SafeArea(
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
           children: [
             Container(
               width: double.infinity,

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '/features/owner/presentation/pages/owner_home_page.dart';
+import '../widgets/dock_inset.dart';
 
 class OwnerManualCheckoutPage extends StatefulWidget {
   const OwnerManualCheckoutPage({
@@ -158,7 +159,7 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24).withBottomInset(context),
               children: [
                 _card(
                   child: Column(

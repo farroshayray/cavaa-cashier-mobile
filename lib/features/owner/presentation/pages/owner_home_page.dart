@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -71,27 +72,41 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   var _barPage = _BarPage.none;
   _OpenSection? _section;
   Future<void>? _sectionTask;
+  var _sheetOpen = false;
+  late final _sheetObserver = _SheetObserver((open) {
+    final next = open > 0;
+    if (next == _sheetOpen) return;
+    void apply() {
+      if (mounted) setState(() => _sheetOpen = next);
+    }
+
+    // Routes can be pushed mid-build; defer the rebuild in that case.
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      apply();
+    } else {
+      SchedulerBinding.instance.addPostFrameCallback((_) => apply());
+    }
+  });
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _billingNotifSub = PushNotificationService.instance.onMessageReceived.listen(
-      (data) {
-        final type = (data['type'] ?? '').toString();
-        if (type == 'billing_approved' || type == 'billing_rejected') {
+    _billingNotifSub = PushNotificationService.instance.onMessageReceived
+        .listen((data) {
+          final type = (data['type'] ?? '').toString();
+          if (type == 'billing_approved' || type == 'billing_rejected') {
+            if (!mounted) return;
+            context.read<AuthProvider>().refreshOwner();
+            return;
+          }
+          if (type != 'new_order') return;
+          if ((data['order_by'] ?? '').toString().toUpperCase() == 'CASHIER') {
+            return;
+          }
           if (!mounted) return;
-          context.read<AuthProvider>().refreshOwner();
-          return;
-        }
-        if (type != 'new_order') return;
-        if ((data['order_by'] ?? '').toString().toUpperCase() == 'CASHIER') {
-          return;
-        }
-        if (!mounted) return;
-        context.read<NotificationsProvider>().pushFromFcm(data);
-      },
-    );
+          context.read<NotificationsProvider>().pushFromFcm(data);
+        });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<NotificationsProvider>().loadFromStorage();
@@ -122,9 +137,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         _cashBookStoreName = summary['store_name']?.toString() ?? '';
         _otherCashBookStores = others is List
             ? others
-                .whereType<Map>()
-                .map((e) => Map<String, dynamic>.from(e))
-                .toList()
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList()
             : [];
       });
     } catch (_) {}
@@ -147,9 +162,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       setState(() {
         _carousels = list is List
             ? list
-                .whereType<Map>()
-                .map((e) => Map<String, dynamic>.from(e))
-                .toList()
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList()
             : [];
       });
     } catch (_) {
@@ -342,7 +357,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
 
   Future<void> _enterCashier() async {
     final auth = context.read<AuthProvider>();
-    final storeId = auth.owner?.onboarding?.selectedStoreId ??
+    final storeId =
+        auth.owner?.onboarding?.selectedStoreId ??
         auth.owner?.selectedPartnerId;
     final ok = await auth.enterCashierAsOwner(storeId: storeId);
     if (!mounted) return;
@@ -399,7 +415,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     if (!mounted) return;
 
     final auth = context.read<AuthProvider>();
-    final storeId = auth.owner?.onboarding?.selectedStoreId ??
+    final storeId =
+        auth.owner?.onboarding?.selectedStoreId ??
         auth.owner?.selectedPartnerId;
     final ok = await auth.enterCashierAsOwner(storeId: storeId);
     if (!mounted) return;
@@ -530,24 +547,26 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         },
         child: Scaffold(
           backgroundColor: _bg,
-          bottomNavigationBar: _OwnerDock(
-            cashierEnabled: hasStore,
-            reportEnabled: hasStore,
-            orderBadge: unreadOrders,
-            barPage: _barPage,
-            section: _section,
-            onCashier: hasStore ? _enterCashier : null,
-            onHome: _goHome,
-            onReport: hasStore ? () => _openReports(canReport) : null,
-            onAccount: () => _pushSection(
-              const OwnerAccountPage(),
-              bar: _BarPage.account,
-            ),
-          ),
-          body: const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: _OwnerSectionNavigator(),
-          ),
+          // Content scrolls behind the floating dock so it shows through
+          // the transparent ring around the Kasir button.
+          extendBody: true,
+          bottomNavigationBar: _sheetOpen
+              ? null
+              : _OwnerDock(
+                  cashierEnabled: hasStore,
+                  reportEnabled: hasStore,
+                  orderBadge: unreadOrders,
+                  barPage: _barPage,
+                  section: _section,
+                  onCashier: hasStore ? _enterCashier : null,
+                  onHome: _goHome,
+                  onReport: hasStore ? () => _openReports(canReport) : null,
+                  onAccount: () => _pushSection(
+                    const OwnerAccountPage(),
+                    bar: _BarPage.account,
+                  ),
+                ),
+          body: const _OwnerSectionNavigator(),
         ),
       ),
     );
@@ -559,8 +578,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     final onboarding = owner?.onboarding;
     final nextStep = onboarding?.nextStep ?? 'ready';
     final stores = onboarding?.stores ?? const <OwnerStore>[];
-    final selectedId =
-        onboarding?.selectedStoreId ?? owner?.selectedPartnerId;
+    final selectedId = onboarding?.selectedStoreId ?? owner?.selectedPartnerId;
     final hasStore = stores.isNotEmpty;
 
     final canPromo = owner?.hasFeature('products_promotions') ?? false;
@@ -575,11 +593,11 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         badgeCount: _pendingCashBooks,
         onTap: hasStore
             ? () => _pushSection(
-                  const OwnerCashBookPage(),
-                  icon: Icons.account_balance_wallet_rounded,
-                  tooltip: 'Buku kasir',
-                  after: _loadPendingCashBooks,
-                )
+                const OwnerCashBookPage(),
+                icon: Icons.account_balance_wallet_rounded,
+                tooltip: 'Buku kasir',
+                after: _loadPendingCashBooks,
+              )
             : null,
       ),
       _MenuItemData(
@@ -590,12 +608,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         enabled: hasStore,
         onTap: hasStore
             ? () => _pushSection(
-                  const TablesPage(),
-                  icon: canScanTable
-                      ? Icons.qr_code_2_rounded
-                      : Icons.table_restaurant_rounded,
-                  tooltip: canScanTable ? 'QR Meja' : 'Meja',
-                )
+                const TablesPage(),
+                icon: canScanTable
+                    ? Icons.qr_code_2_rounded
+                    : Icons.table_restaurant_rounded,
+                tooltip: canScanTable ? 'QR Meja' : 'Meja',
+              )
             : null,
       ),
       _MenuItemData(
@@ -604,13 +622,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         enabled: hasStore,
         onTap: hasStore
             ? () => _pushSection(
-                  const EmployeesPage(),
-                  icon: Icons.badge_rounded,
-                  tooltip: 'Pegawai',
-                  after: () async {
-                    if (mounted) await auth.refreshOwner();
-                  },
-                )
+                const EmployeesPage(),
+                icon: Icons.badge_rounded,
+                tooltip: 'Pegawai',
+                after: () async {
+                  if (mounted) await auth.refreshOwner();
+                },
+              )
             : null,
       ),
     ];
@@ -621,13 +639,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         enabled: hasStore,
         onTap: hasStore
             ? () => _pushSection(
-                  const CreateProductPage(),
-                  icon: Icons.shopping_bag_rounded,
-                  tooltip: 'Produk',
-                  after: () async {
-                    if (mounted) await auth.refreshOwner();
-                  },
-                )
+                const CreateProductPage(),
+                icon: Icons.shopping_bag_rounded,
+                tooltip: 'Produk',
+                after: () async {
+                  if (mounted) await auth.refreshOwner();
+                },
+              )
             : null,
       ),
       _MenuItemData(
@@ -663,13 +681,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         enabled: hasStore,
         onTap: hasStore
             ? () => _pushSection(
-                  const StoreSettingsPage(),
-                  icon: Icons.store_mall_directory_rounded,
-                  tooltip: 'Toko',
-                  after: () async {
-                    if (mounted) await auth.refreshOwner();
-                  },
-                )
+                const StoreSettingsPage(),
+                icon: Icons.store_mall_directory_rounded,
+                tooltip: 'Toko',
+                after: () async {
+                  if (mounted) await auth.refreshOwner();
+                },
+              )
             : null,
       ),
       _MenuItemData(
@@ -741,7 +759,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   stores: stores,
                   selectedStoreId: selectedId,
                   selecting: _selectingStore || auth.isLoading,
-                  canCreateStore: owner?.canCreateStore ??
+                  canCreateStore:
+                      owner?.canCreateStore ??
                       onboarding?.canCreateStore ??
                       true,
                   onStoreSelected: _onStoreSelected,
@@ -784,7 +803,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 ),
               ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                0,
+                16,
+                16 + MediaQuery.paddingOf(context).bottom,
+              ),
               sliver: SliverToBoxAdapter(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -916,60 +940,60 @@ class _OwnerHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               child: Row(
                 children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: _brand.withValues(alpha: 0.10),
-                    shape: BoxShape.circle,
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: _ownerPhotoUrl(image).isEmpty
-                      ? const Icon(
-                          Icons.person_rounded,
-                          color: _brand,
-                          size: 28,
-                        )
-                      : Image.network(
-                          _ownerPhotoUrl(image),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: _brand.withValues(alpha: 0.10),
+                      shape: BoxShape.circle,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _ownerPhotoUrl(image).isEmpty
+                        ? const Icon(
                             Icons.person_rounded,
                             color: _brand,
                             size: 28,
+                          )
+                        : Image.network(
+                            _ownerPhotoUrl(image),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.person_rounded,
+                              color: _brand,
+                              size: 28,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                        const SizedBox(height: 2),
+                        Text(
+                          email,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.black.withValues(alpha: 0.55),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        email,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.black.withValues(alpha: 0.55),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const Icon(Icons.chevron_right_rounded, color: _brand),
-              ],
-            ),
+                  const Icon(Icons.chevron_right_rounded, color: _brand),
+                ],
+              ),
             ),
             if (showPoints) ...[
               const SizedBox(height: 8),
@@ -984,7 +1008,10 @@ class _OwnerHeader extends StatelessWidget {
                       const SizedBox(width: 6),
                       const Text(
                         'Cavaa Points',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -994,7 +1021,11 @@ class _OwnerHeader extends StatelessWidget {
                           color: Colors.black.withValues(alpha: 0.5),
                         ),
                       ),
-                      const Icon(Icons.chevron_right_rounded, size: 16, color: _brand),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: _brand,
+                      ),
                     ],
                   ),
                 ),
@@ -1098,10 +1129,7 @@ class _OwnerHeader extends StatelessWidget {
               ),
             if (selecting) ...[
               const SizedBox(height: 10),
-              const LinearProgressIndicator(
-                minHeight: 2,
-                color: _brand,
-              ),
+              const LinearProgressIndicator(minHeight: 2, color: _brand),
             ],
           ],
         ),
@@ -1124,11 +1152,13 @@ class _CashBookNotice extends StatelessWidget {
   final VoidCallback onTap;
 
   String get _othersLine {
-    final parts = otherStores.map((store) {
-      final name = store['name']?.toString() ?? 'Toko';
-      final count = int.tryParse('${store['pending_count']}') ?? 0;
-      return '$name ($count)';
-    }).join(', ');
+    final parts = otherStores
+        .map((store) {
+          final name = store['name']?.toString() ?? 'Toko';
+          final count = int.tryParse('${store['pending_count']}') ?? 0;
+          return '$name ($count)';
+        })
+        .join(', ');
     if (activeCount > 0) return 'Juga menunggu di: $parts';
     return 'Buku kasir menunggu di: $parts';
   }
@@ -1151,7 +1181,10 @@ class _CashBookNotice extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               children: [
-                const Icon(Icons.account_balance_wallet_outlined, color: _brand),
+                const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: _brand,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1175,7 +1208,10 @@ class _CashBookNotice extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: _brand.withValues(alpha: 0.8)),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: _brand.withValues(alpha: 0.8),
+                ),
               ],
             ),
           ),
@@ -1186,10 +1222,7 @@ class _CashBookNotice extends StatelessWidget {
 }
 
 class _SetupProgressBanner extends StatelessWidget {
-  const _SetupProgressBanner({
-    required this.nextStep,
-    required this.onTap,
-  });
+  const _SetupProgressBanner({required this.nextStep, required this.onTap});
 
   final String nextStep;
   final VoidCallback onTap;
@@ -1272,10 +1305,7 @@ class _SetupProgressBanner extends StatelessWidget {
 }
 
 class _SetupDot extends StatelessWidget {
-  const _SetupDot({
-    required this.label,
-    required this.status,
-  });
+  const _SetupDot({required this.label, required this.status});
 
   final String label;
   final OwnerSetupStepStatus status;
@@ -1287,8 +1317,8 @@ class _SetupDot extends StatelessWidget {
     final color = isDone
         ? const Color(0xFF047857)
         : isActive
-            ? _brand
-            : const Color(0xFFD1D5DB);
+        ? _brand
+        : const Color(0xFFD1D5DB);
 
     return SizedBox(
       width: 52,
@@ -1305,19 +1335,19 @@ class _SetupDot extends StatelessWidget {
             child: isDone
                 ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
                 : isActive
-                    ? const Center(
-                        child: SizedBox(
-                          width: 8,
-                          height: 8,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
+                ? const Center(
+                    child: SizedBox(
+                      width: 8,
+                      height: 8,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
                         ),
-                      )
-                    : null,
+                      ),
+                    ),
+                  )
+                : null,
           ),
           const SizedBox(height: 6),
           Text(
@@ -1331,8 +1361,8 @@ class _SetupDot extends StatelessWidget {
               color: isActive
                   ? _brand
                   : isDone
-                      ? const Color(0xFF047857)
-                      : const Color(0xFF9CA3AF),
+                  ? const Color(0xFF047857)
+                  : const Color(0xFF9CA3AF),
             ),
           ),
         ],
@@ -1348,20 +1378,13 @@ class _MenuDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 14),
-      child: Divider(
-        height: 1,
-        thickness: 1,
-        color: Color(0xFFE5E7EB),
-      ),
+      child: Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
     );
   }
 }
 
 class _MenuSection extends StatelessWidget {
-  const _MenuSection({
-    required this.title,
-    required this.items,
-  });
+  const _MenuSection({required this.title, required this.items});
 
   final String title;
   final List<_MenuItemData> items;
@@ -1389,7 +1412,10 @@ class _MenuSection extends StatelessWidget {
             builder: (context, constraints) {
               final count = items.isEmpty ? 1 : items.length;
               const maxTile = 110.0;
-              final tileWidth = (constraints.maxWidth / count).clamp(0.0, maxTile);
+              final tileWidth = (constraints.maxWidth / count).clamp(
+                0.0,
+                maxTile,
+              );
               final iconSize = tileWidth < 96 ? 46.0 : 50.0;
               return Align(
                 alignment: Alignment.centerLeft,
@@ -1441,12 +1467,40 @@ class _OwnerSectionNavigator extends StatelessWidget {
     final state = _OwnerHost.of(context);
     return Navigator(
       key: state._sectionNav,
+      observers: [state._sheetObserver],
       onGenerateRoute: (settings) => MaterialPageRoute(
         settings: settings,
         builder: (_) => const _OwnerDashboard(),
       ),
     );
   }
+}
+
+/// Tracks bottom sheets opened on the section navigator so the dock, which
+/// floats over the body, can step aside while one is showing.
+class _SheetObserver extends NavigatorObserver {
+  _SheetObserver(this.onChanged);
+
+  final ValueChanged<int> onChanged;
+  var _open = 0;
+
+  void _update(Route<dynamic> route, int delta) {
+    if (route is! ModalBottomSheetRoute) return;
+    _open = (_open + delta).clamp(0, 1 << 20);
+    onChanged(_open);
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _update(route, 1);
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _update(route, -1);
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _update(route, -1);
 }
 
 class _OwnerDashboard extends StatelessWidget {
@@ -1489,85 +1543,124 @@ class _OwnerDock extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: Container(
-            height: 64,
-            clipBehavior: Clip.antiAlias,
-            padding: const EdgeInsets.fromLTRB(5, 5, 4, 5),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(32),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFAE1504),
-                  Color(0xFF7A0E03),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _brand.withValues(alpha: 0.28),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 54,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(27),
-                      child: _DockCashier(
-                        enabled: cashierEnabled,
-                        badgeCount: orderBadge,
-                        onTap: onCashier,
+          child: LayoutBuilder(
+            builder: (context, constraints) => Container(
+              height: 64,
+              padding: const EdgeInsets.fromLTRB(7, 7, 4, 7),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      // Paints the whole dock background with a transparent
+                      // ring cut around the Kasir pill.
+                      child: CustomPaint(
+                        painter: _DockCutoutPainter(
+                          dockSize: Size(constraints.maxWidth, 64),
+                          cellOffset: const Offset(7, 7),
+                          gap: 3,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(25),
+                          child: _DockCashier(
+                            enabled: cashierEnabled,
+                            badgeCount: orderBadge,
+                            onTap: onCashier,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                _DockItem(
-                  icon: Icons.home_rounded,
-                  tooltip: 'Beranda',
-                  active: barPage == _BarPage.none && section == null,
-                  onTap: onHome,
-                ),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 320),
-                  curve: Curves.easeInOutCubic,
-                  alignment: Alignment.centerLeft,
-                  child: section == null
-                      ? const SizedBox(width: 0, height: 48)
-                      : _DockItem(
-                          key: ValueKey(section!.tooltip),
-                          icon: section!.icon,
-                          tooltip: section!.tooltip,
-                          active: true,
-                          onTap: () {},
-                        ),
-                ),
-                _DockItem(
-                  icon: Icons.bar_chart_rounded,
-                  tooltip: 'Laporan',
-                  enabled: reportEnabled,
-                  active: barPage == _BarPage.report,
-                  onTap: onReport,
-                ),
-                _DockItem(
-                  icon: Icons.person_rounded,
-                  tooltip: 'Akun',
-                  active: barPage == _BarPage.account,
-                  onTap: onAccount,
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  _DockItem(
+                    icon: Icons.home_rounded,
+                    tooltip: 'Beranda',
+                    active: barPage == _BarPage.none && section == null,
+                    onTap: onHome,
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeInOutCubic,
+                    alignment: Alignment.centerLeft,
+                    child: section == null
+                        ? const SizedBox(width: 0, height: 48)
+                        : _DockItem(
+                            key: ValueKey(section!.tooltip),
+                            icon: section!.icon,
+                            tooltip: section!.tooltip,
+                            active: true,
+                            onTap: () {},
+                          ),
+                  ),
+                  _DockItem(
+                    icon: Icons.bar_chart_rounded,
+                    tooltip: 'Laporan',
+                    enabled: reportEnabled,
+                    active: barPage == _BarPage.report,
+                    onTap: onReport,
+                  ),
+                  _DockItem(
+                    icon: Icons.person_rounded,
+                    tooltip: 'Akun',
+                    active: barPage == _BarPage.account,
+                    onTap: onAccount,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class _DockCutoutPainter extends CustomPainter {
+  const _DockCutoutPainter({
+    required this.dockSize,
+    required this.cellOffset,
+    required this.gap,
+  });
+
+  final Size dockSize;
+  final Offset cellOffset;
+  final double gap;
+
+  static const _gradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFAE1504), Color(0xFF7A0E03)],
+  );
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outerRect = (-cellOffset) & dockSize;
+    final outer = RRect.fromRectAndRadius(outerRect, const Radius.circular(32));
+    final hole = RRect.fromRectAndRadius(
+      (Offset.zero & size).inflate(gap),
+      Radius.circular(size.height / 2 + gap),
+    );
+    final path = Path.combine(
+      PathOperation.difference,
+      Path()..addRRect(outer),
+      Path()..addRRect(hole),
+    );
+
+    canvas.drawPath(
+      path.shift(const Offset(0, 6)),
+      Paint()
+        ..color = _brand.withValues(alpha: 0.28)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.drawPath(path, Paint()..shader = _gradient.createShader(outerRect));
+  }
+
+  @override
+  bool shouldRepaint(_DockCutoutPainter oldDelegate) =>
+      oldDelegate.dockSize != dockSize ||
+      oldDelegate.cellOffset != cellOffset ||
+      oldDelegate.gap != gap;
 }
 
 class _DockItem extends StatelessWidget {
@@ -1629,84 +1722,67 @@ class _DockCashier extends StatelessWidget {
     const label = Colors.white;
     return Opacity(
       opacity: enabled ? 1 : 0.55,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(27),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x803A0602),
-              blurRadius: 6,
-              offset: Offset(0, 2),
+      child: Material(
+        color: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(25)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFAE1504), Color(0xFF7A0E03)],
             ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(27),
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Ink(
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.all(Radius.circular(27)),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFAE1504),
-                  Color(0xFF7A0E03),
-                ],
-              ),
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            customBorder: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(25),
             ),
-            child: InkWell(
-              onTap: enabled ? onTap : null,
-              customBorder: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(27),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.point_of_sale_rounded,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.point_of_sale_rounded,
+                    color: label,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Kasir',
+                    style: TextStyle(
                       color: label,
-                      size: 22,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
                     ),
+                  ),
+                  if (badgeCount > 0) ...[
                     const SizedBox(width: 8),
-                    const Text(
-                      'Kasir',
-                      style: TextStyle(
-                        color: label,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      constraints: const BoxConstraints(minWidth: 18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        badgeCount > 99 ? '99+' : '$badgeCount',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: _brand,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
+                        ),
                       ),
                     ),
-                    if (badgeCount > 0) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        constraints: const BoxConstraints(minWidth: 18),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          badgeCount > 99 ? '99+' : '$badgeCount',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: _brand,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            height: 1.1,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
             ),
           ),

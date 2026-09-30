@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '/features/auth/presentation/auth_provider.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
+import '../widgets/dock_inset.dart';
 
 class OwnerCavaaPointsPage extends StatefulWidget {
   const OwnerCavaaPointsPage({super.key});
@@ -346,7 +347,7 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
               : !enabled
                   ? const Center(child: Text('Cavaa Points sedang tidak tersedia.'))
                   : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
                       children: [
                         _BalanceCard(
                           balance: _moneyLabel(_money(data?['balance'])),

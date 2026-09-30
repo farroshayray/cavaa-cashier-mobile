@@ -10,6 +10,7 @@ import 'product_form_shared.dart';
 import 'categories_page.dart';
 import 'promotions_page.dart';
 import '../widgets/owner_setup_progress.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = productBrand;
 const _bg = Color(0xFFF6F7F9);
@@ -219,7 +220,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                 physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics(),
                 ),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100).withBottomInset(context),
                 children: [
                   if (widget.showSetupProgress) ...[
                     const OwnerSetupStepHeader(stepKey: 'create_product'),
@@ -1059,7 +1060,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
               children: [
                 if (!_isEdit) ...[
                   OutlinedButton.icon(

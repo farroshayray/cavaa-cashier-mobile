@@ -7,6 +7,7 @@ import 'owner_home_page.dart';
 import 'product_form_shared.dart';
 import 'categories_page.dart';
 import 'promotions_page.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = productBrand;
 const _bg = Color(0xFFF6F7F9);
@@ -163,7 +164,7 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
               color: _brand,
               onRefresh: () => _load(silent: true),
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100).withBottomInset(context),
                 children: [
                   Text(
                     'Edit di sini akan sync identitas ke semua toko yang memakai produk.',
@@ -465,7 +466,7 @@ class _MasterProductEditorPageState extends State<MasterProductEditorPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
               children: [
                 Container(
                   padding: const EdgeInsets.all(16),

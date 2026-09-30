@@ -13,6 +13,7 @@ import '/features/auth/presentation/auth_provider.dart';
 import 'owner_addons_page.dart';
 import 'owner_home_page.dart';
 import '../widgets/owner_setup_progress.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -421,7 +422,7 @@ class _TablesPageState extends State<TablesPage> {
                       hasScrollBody: false,
                       child: Center(
                         child: Padding(
-                          padding: const EdgeInsets.all(32),
+                          padding: const EdgeInsets.all(32).withBottomInset(context),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -453,7 +454,7 @@ class _TablesPageState extends State<TablesPage> {
                     )
                   else
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100).withBottomInset(context),
                       sliver: SliverList.separated(
                         itemCount: _filtered.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 10),

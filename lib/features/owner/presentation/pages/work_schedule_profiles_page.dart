@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'owner_home_page.dart';
 import 'work_schedule_blocks_editor.dart';
 import 'work_schedule_utils.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -134,7 +135,7 @@ class _WorkScheduleProfilesPageState extends State<WorkScheduleProfilesPage> {
               color: _brand,
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100).withBottomInset(context),
                 children: [
                   if (_error != null)
                     Text(_error!, style: const TextStyle(color: Colors.red)),

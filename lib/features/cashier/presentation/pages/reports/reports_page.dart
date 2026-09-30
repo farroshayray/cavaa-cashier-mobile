@@ -13,6 +13,7 @@ import '/features/cashier/data/models/purchase_models.dart';
 import '/features/cashier/data/report_api.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/presentation/utils/report_xlsx_converter.dart';
+import '/features/owner/presentation/widgets/dock_inset.dart';
 
 part 'reports_filters.dart';
 part 'reports_sold_products_sheet.dart';
@@ -456,7 +457,7 @@ class _ReportsPageState extends State<ReportsPage> {
       body: RefreshIndicator(
         onRefresh: _loadSummary,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16).withBottomInset(context),
           children: [
             const _ReportsHeroCard(),
             const SizedBox(height: 16),

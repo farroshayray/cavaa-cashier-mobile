@@ -7,6 +7,7 @@ import '/features/auth/presentation/pages/login_page.dart';
 import '/features/auth/presentation/pages/owner_set_password_page.dart';
 import 'store_image_crop_page.dart';
 import 'store_settings_page.dart';
+import '../widgets/dock_inset.dart';
 
 class OwnerAccountPage extends StatefulWidget {
   const OwnerAccountPage({super.key});
@@ -178,7 +179,7 @@ class _OwnerAccountPageState extends State<OwnerAccountPage> {
         elevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
           _Card(
             child: Row(

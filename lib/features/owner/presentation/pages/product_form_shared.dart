@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '/core/config/env.dart';
+import '../widgets/dock_inset.dart';
 
 const productBrand = Color(0xFFAE1504);
 
@@ -536,7 +537,7 @@ class _ProductStockEditorPageState extends State<ProductStockEditorPage> {
         foregroundColor: Colors.white,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
           SegmentedButton<String>(
             segments: const [
@@ -657,7 +658,7 @@ class _OptionGroupEditorPageState extends State<OptionGroupEditorPage> {
         foregroundColor: Colors.white,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
           TextField(
             controller: _name,
@@ -865,7 +866,7 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
         foregroundColor: Colors.white,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
           TextField(
             controller: _name,

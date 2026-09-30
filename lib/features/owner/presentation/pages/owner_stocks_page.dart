@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import 'owner_home_page.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -336,7 +337,7 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
               onRefresh: () => _load(),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
                 children: [
                   if (_locations.isNotEmpty) _locationPicker(),
                   const SizedBox(height: 14),
@@ -786,7 +787,7 @@ class _StockMovementPageState extends State<_StockMovementPage> {
         foregroundColor: Colors.white,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
           Text(
             widget.locationName,

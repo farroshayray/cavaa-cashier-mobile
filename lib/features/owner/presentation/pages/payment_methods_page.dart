@@ -10,6 +10,7 @@ import '/core/config/env.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import 'owner_home_page.dart';
 import '../widgets/owner_setup_progress.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -249,7 +250,7 @@ class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
                       ),
                     ),
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100).withBottomInset(context),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {

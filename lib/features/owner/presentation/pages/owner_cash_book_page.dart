@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '/features/auth/presentation/auth_provider.dart';
 import 'owner_home_page.dart';
+import '../widgets/dock_inset.dart';
 
 class OwnerCashBookPage extends StatefulWidget {
   const OwnerCashBookPage({super.key});
@@ -229,7 +230,7 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
                 physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics(),
                 ),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
                 children: [
                   _HeroHeader(
                     storeName: storeName.isEmpty ? 'Toko aktif' : storeName,

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '/features/auth/presentation/auth_provider.dart';
 import 'owner_addons_page.dart';
 import 'owner_home_page.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -365,7 +366,7 @@ class _PromotionsPageState extends State<PromotionsPage> {
                 physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics(),
                 ),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100).withBottomInset(context),
                 children: [
                   Container(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -1086,7 +1087,7 @@ class _PromotionEditorPageState extends State<PromotionEditorPage> {
         foregroundColor: Colors.white,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
           Container(
             padding: const EdgeInsets.all(16),

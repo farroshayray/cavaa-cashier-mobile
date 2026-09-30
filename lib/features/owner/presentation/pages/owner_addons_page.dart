@@ -13,6 +13,7 @@ import '/features/auth/presentation/auth_provider.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
 import '/features/owner/presentation/pages/owner_manual_checkout_page.dart';
 import '/features/owner/presentation/pages/owner_cavaa_points_page.dart';
+import '../widgets/dock_inset.dart';
 
 const _monthShort = [
   'Jan',
@@ -1586,7 +1587,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                   onRefresh: _load,
                   child: ListView(
                     controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
                     children: [
                       const _HeroBanner(),
                       if (_pointsEnabled) ...[
