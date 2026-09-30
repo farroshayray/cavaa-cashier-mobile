@@ -72,6 +72,8 @@ class MenuOptionItem {
     this.alwaysAvailable = true,
     this.stockType = 'direct',
     this.stockQuantity = '',
+    this.modalPrice = '',
+    this.lastUnitCost = 0,
     this.stockEditable = true,
     List<RecipeLine>? recipes,
   }) : recipes = recipes ?? [];
@@ -83,10 +85,16 @@ class MenuOptionItem {
   bool alwaysAvailable;
   String stockType;
   String stockQuantity;
+  String modalPrice;
+  num lastUnitCost;
   bool stockEditable;
   List<RecipeLine> recipes;
 
   factory MenuOptionItem.fromJson(Map<String, dynamic> json) {
+    final costRaw = json['unit_cost'] ?? json['modal_price'];
+    final cost = costRaw is num
+        ? costRaw
+        : num.tryParse('${costRaw ?? ''}') ?? 0;
     return MenuOptionItem(
       optionId: json['option_id'] is int
           ? json['option_id'] as int
@@ -107,6 +115,12 @@ class MenuOptionItem {
         final text = q?.toString() ?? '';
         return text.isEmpty ? '' : text;
       }(),
+      modalPrice: cost > 0
+          ? (cost == cost.roundToDouble()
+              ? cost.toStringAsFixed(0)
+              : cost.toString())
+          : '',
+      lastUnitCost: cost > 0 ? cost : 0,
       stockEditable: json['stock_editable'] != false &&
           (json['stock_type']?.toString() ?? 'direct') != 'linked',
       recipes: recipeLinesFrom(json['recipes']),
@@ -114,6 +128,7 @@ class MenuOptionItem {
   }
 
   Map<String, dynamic> toJson() {
+    final modal = num.tryParse(modalPrice.trim().replaceAll(',', '.'));
     return {
       if (optionId != null) 'option_id': optionId,
       'name': name,
@@ -124,6 +139,8 @@ class MenuOptionItem {
       'stock_type': stockType == 'linked' ? 'linked' : 'direct',
       if (!alwaysAvailable && stockType != 'linked')
         'stock_quantity': int.tryParse(stockQuantity.replaceAll('.', '').trim()) ?? 0,
+      if (!alwaysAvailable && stockType != 'linked' && modal != null && modal > 0)
+        'modal_price': modal,
     };
   }
 }
@@ -488,6 +505,8 @@ class ProductStockEditorPage extends StatefulWidget {
     super.key,
     required this.mode,
     required this.quantity,
+    required this.modalPrice,
+    required this.lastUnitCost,
     required this.recipes,
     required this.ingredients,
     required this.sellPrice,
@@ -497,6 +516,8 @@ class ProductStockEditorPage extends StatefulWidget {
 
   final String mode;
   final TextEditingController quantity;
+  final TextEditingController modalPrice;
+  final num lastUnitCost;
   final List<RecipeLine> recipes;
   final List<Map<String, dynamic>> ingredients;
   final num? sellPrice;
@@ -525,6 +546,12 @@ class _ProductStockEditorPageState extends State<ProductStockEditorPage> {
     });
     widget.onModeChanged(mode);
     widget.onRecipesChanged(widget.recipes);
+  }
+
+  String get _lastCostLabel {
+    final v = widget.lastUnitCost;
+    if (v <= 0) return 'belum ada';
+    return 'Rp${v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString()}';
   }
 
   @override
@@ -558,6 +585,19 @@ class _ProductStockEditorPageState extends State<ProductStockEditorPage> {
                 border: OutlineInputBorder(),
                 filled: true,
                 fillColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: widget.modalPrice,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Harga modal / pcs',
+                helperText: 'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
+                border: const OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
+                prefixText: 'Rp ',
               ),
             ),
           ],
@@ -818,6 +858,7 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
   late final TextEditingController _name;
   late final TextEditingController _price;
   late final TextEditingController _quantity;
+  late final TextEditingController _modalPrice;
 
   @override
   void initState() {
@@ -825,6 +866,7 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
     _name = TextEditingController(text: widget.option.name);
     _price = TextEditingController(text: widget.option.price);
     _quantity = TextEditingController(text: widget.option.stockQuantity);
+    _modalPrice = TextEditingController(text: widget.option.modalPrice);
   }
 
   @override
@@ -832,6 +874,7 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
     _name.dispose();
     _price.dispose();
     _quantity.dispose();
+    _modalPrice.dispose();
     super.dispose();
   }
 
@@ -840,6 +883,12 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
     if (option.stockType == 'linked') return 'linked';
     if (option.alwaysAvailable) return 'always';
     return 'direct';
+  }
+
+  String get _lastCostLabel {
+    final v = widget.option.lastUnitCost;
+    if (v <= 0) return 'belum ada';
+    return 'Rp${v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString()}';
   }
 
   void _setMode(String mode) {
@@ -922,6 +971,20 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
                 ),
                 onChanged: (value) => option.stockQuantity = value,
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _modalPrice,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Harga modal / pcs',
+                  helperText: 'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Colors.white,
+                  prefixText: 'Rp ',
+                ),
+                onChanged: (value) => option.modalPrice = value,
+              ),
             ],
             if (_mode == 'linked')
               LinkedRecipeEditor(
@@ -947,16 +1010,35 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
             ),
             if (!option.alwaysAvailable)
               option.stockEditable
-                  ? TextField(
-                      controller: _quantity,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Stok (pcs)',
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      onChanged: (value) => option.stockQuantity = value,
+                  ? Column(
+                      children: [
+                        TextField(
+                          controller: _quantity,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Stok (pcs)',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          onChanged: (value) => option.stockQuantity = value,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _modalPrice,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: 'Harga modal / pcs',
+                            helperText:
+                                'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
+                            border: const OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
+                            prefixText: 'Rp ',
+                          ),
+                          onChanged: (value) => option.modalPrice = value,
+                        ),
+                      ],
                     )
                   : InputDecorator(
                       decoration: const InputDecoration(

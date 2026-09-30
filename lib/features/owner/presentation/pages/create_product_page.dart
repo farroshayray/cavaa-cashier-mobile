@@ -41,6 +41,93 @@ class _StoreStockChip extends StatelessWidget {
   }
 }
 
+class _StoreCategoryTab extends StatelessWidget {
+  const _StoreCategoryTab({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.fromLTRB(14, 9, 12, 9),
+          decoration: BoxDecoration(
+            gradient: selected
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFB91C1C), _brand],
+                  )
+                : null,
+            color: selected ? null : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? Colors.transparent
+                  : Colors.black.withValues(alpha: 0.07),
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: _brand.withValues(alpha: 0.28),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.1,
+                  color: selected ? Colors.white : const Color(0xFF1F2937),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.22)
+                      : const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: selected ? Colors.white : const Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class CreateProductPage extends StatefulWidget {
   const CreateProductPage({super.key, this.showSetupProgress = false});
 
@@ -58,6 +145,69 @@ class _CreateProductPageState extends State<CreateProductPage> {
   List<Map<String, dynamic>> _masters = [];
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _promotions = [];
+  int? _selectedCategoryId;
+
+  List<Map<String, dynamic>> get _filteredProducts {
+    final selectedId = _selectedCategoryId;
+    if (selectedId == null) return _products;
+    return _products.where((p) {
+      final cat = p['category'];
+      final id = cat is Map
+          ? int.tryParse('${cat['id'] ?? ''}')
+          : int.tryParse('${p['category_id'] ?? ''}');
+      return id == selectedId;
+    }).toList();
+  }
+
+  int? _productCategoryId(Map<String, dynamic> p) {
+    final cat = p['category'];
+    if (cat is Map) return int.tryParse('${cat['id'] ?? ''}');
+    return int.tryParse('${p['category_id'] ?? ''}');
+  }
+
+  /// Kategori yang punya minimal 1 produk di toko (+ jumlahnya).
+  List<({int id, String name, int count})> get _populatedCategories {
+    final counts = <int, int>{};
+    for (final p in _products) {
+      final id = _productCategoryId(p);
+      if (id == null) continue;
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    final rows = <({int id, String name, int count})>[];
+    for (final c in _categories) {
+      final id = int.tryParse('${c['id'] ?? ''}');
+      if (id == null) continue;
+      final count = counts[id] ?? 0;
+      if (count <= 0) continue;
+      final name = c['name']?.toString() ??
+          c['category_name']?.toString() ??
+          '-';
+      rows.add((id: id, name: name, count: count));
+    }
+    // Sertakan kategori yang ada di produk tapi tidak ada di daftar master categories.
+    for (final entry in counts.entries) {
+      if (rows.any((r) => r.id == entry.key)) continue;
+      String name = 'Kategori';
+      for (final p in _products) {
+        if (_productCategoryId(p) != entry.key) continue;
+        final cat = p['category'];
+        if (cat is Map) {
+          name = cat['name']?.toString() ?? name;
+        }
+        break;
+      }
+      rows.add((id: entry.key, name: name, count: entry.value));
+    }
+    rows.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return rows;
+  }
+
+  void _ensureValidCategorySelection() {
+    final selected = _selectedCategoryId;
+    if (selected == null) return;
+    final stillExists = _populatedCategories.any((c) => c.id == selected);
+    if (!stillExists) _selectedCategoryId = null;
+  }
 
   @override
   void initState() {
@@ -114,6 +264,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList()
             : [];
+        _ensureValidCategorySelection();
         _error = null;
       });
     } catch (_) {
@@ -263,10 +414,46 @@ class _CreateProductPageState extends State<CreateProductPage> {
                   ],
                   const SizedBox(height: 16),
                   Text(
-                    'Produk di toko (${_products.length})',
+                    'Produk di toko (${_filteredProducts.length})',
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
-                  const SizedBox(height: 10),
+                  if (_populatedCategories.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 42,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: _StoreCategoryTab(
+                              label: 'Semua',
+                              count: _products.length,
+                              selected: _selectedCategoryId == null,
+                              onTap: () =>
+                                  setState(() => _selectedCategoryId = null),
+                            ),
+                          ),
+                          ..._populatedCategories.map((c) {
+                            final selected = c.id == _selectedCategoryId;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _StoreCategoryTab(
+                                label: c.name,
+                                count: c.count,
+                                selected: selected,
+                                onTap: () => setState(
+                                  () => _selectedCategoryId = c.id,
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                   if (_products.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -284,8 +471,25 @@ class _CreateProductPageState extends State<CreateProductPage> {
                         ),
                       ),
                     )
+                  else if (_filteredProducts.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.black.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: Text(
+                        'Tidak ada produk di kategori ini.',
+                        style: TextStyle(
+                          color: Colors.black.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    )
                   else
-                    ..._products.map((p) {
+                    ..._filteredProducts.map((p) {
                       final cat = p['category'];
                       final catName =
                           cat is Map ? cat['name']?.toString() : null;
@@ -297,7 +501,12 @@ class _CreateProductPageState extends State<CreateProductPage> {
                       final qty = rawQty is num
                           ? rawQty.toInt()
                           : int.tryParse('${rawQty ?? ''}');
-                      final showQty = qty != null && (!always || qty > 0);
+                      final linkedQty = linked ? (qty ?? 0) : null;
+                      final showQty = !linked &&
+                          qty != null &&
+                          (!always || qty > 0);
+                      final showStockRow =
+                          linked || always || showQty;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         decoration: BoxDecoration(
@@ -344,18 +553,21 @@ class _CreateProductPageState extends State<CreateProductPage> {
                                     p['product_code'].toString(),
                                 ].join(' · '),
                               ),
-                              if (linked || always || showQty) ...[
+                              if (showStockRow) ...[
                                 const SizedBox(height: 6),
                                 Wrap(
                                   spacing: 6,
                                   runSpacing: 4,
                                   children: [
-                                    if (linked)
+                                    if (linked) ...[
+                                      _StoreStockChip(
+                                        label: 'Stok $linkedQty pcs',
+                                      ),
                                       const _StoreStockChip(
-                                        label: 'Stok terhubung',
+                                        label: 'Resep',
                                         filled: true,
-                                      )
-                                    else if (showQty)
+                                      ),
+                                    ] else if (showQty)
                                       _StoreStockChip(
                                         label: 'Stok $qty pcs',
                                       ),
@@ -369,7 +581,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                               ],
                             ],
                           ),
-                          isThreeLine: linked || always || showQty,
+                          isThreeLine: showStockRow,
                           trailing: Icon(
                             (p['is_active'] == true || p['is_active'] == 1)
                                 ? Icons.check_circle_rounded
@@ -417,6 +629,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
   final _desc = TextEditingController();
   final _code = TextEditingController();
   final _stock = TextEditingController();
+  final _modalPrice = TextEditingController();
 
   Map<String, dynamic>? _selectedMaster;
   List<MenuOptionGroup> _groups = [];
@@ -438,6 +651,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
   String _stockMode = 'always';
   List<RecipeLine> _recipes = [];
   List<Map<String, dynamic>> _ingredients = [];
+  num _lastUnitCost = 0;
 
   bool get _isEdit => widget.product != null;
   bool get _fromCatalog => _selectedMaster != null;
@@ -466,6 +680,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
     _desc.dispose();
     _code.dispose();
     _stock.dispose();
+    _modalPrice.dispose();
     super.dispose();
   }
 
@@ -538,6 +753,16 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
     _stock.text = stockQty is num
         ? stockQty.toStringAsFixed(0)
         : (stockQty?.toString() ?? '');
+    final costRaw = product['unit_cost'] ?? product['modal_price'];
+    final cost = costRaw is num
+        ? costRaw
+        : num.tryParse('${costRaw ?? ''}') ?? 0;
+    _lastUnitCost = cost > 0 ? cost : 0;
+    _modalPrice.text = _lastUnitCost > 0
+        ? (_lastUnitCost == _lastUnitCost.roundToDouble()
+            ? _lastUnitCost.toStringAsFixed(0)
+            : _lastUnitCost.toString())
+        : '';
     _isActive = product['is_active'] == true || product['is_active'] == 1;
     _isHot =
         product['is_hot_product'] == true || product['is_hot_product'] == 1;
@@ -724,16 +949,28 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
     for (final g in _groups) {
       for (final o in g.options) {
         if (o.optionId == null) continue;
+        final modal = num.tryParse(o.modalPrice.trim().replaceAll(',', '.'));
         optionSettings.add({
           'option_id': o.optionId,
           'always_available': o.alwaysAvailable,
           'stock_type': o.stockType == 'linked' ? 'linked' : 'direct',
           if (!o.alwaysAvailable && o.stockType != 'linked')
             'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
+          if (!o.alwaysAvailable &&
+              o.stockType != 'linked' &&
+              modal != null &&
+              modal > 0)
+            'modal_price': modal,
         });
       }
     }
     return optionSettings;
+  }
+
+  num? _parsedModalPrice() {
+    final modal = num.tryParse(_modalPrice.text.trim().replaceAll(',', '.'));
+    if (modal == null || modal <= 0) return null;
+    return modal;
   }
 
   Future<void> _updateStockMode(
@@ -747,6 +984,9 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       price: price,
       alwaysAvailable: _alwaysAvailable,
       stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+      modalPrice: (!_alwaysAvailable && _stockType != 'linked')
+          ? _parsedModalPrice()
+          : null,
       stockType: _stockType,
       isActive: _isActive,
       isHotProduct: _isHot,
@@ -841,6 +1081,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
         for (final g in _groups) {
           for (final o in g.options) {
             if (o.optionId == null) continue;
+            final modal = num.tryParse(o.modalPrice.trim().replaceAll(',', '.'));
             optionSettings.add({
               'option_id': o.optionId,
               'always_available': o.alwaysAvailable,
@@ -850,6 +1091,12 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                   o.stockType != 'linked' &&
                   (o.stockEditable || widget.canManageStock))
                 'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
+              if (!o.alwaysAvailable &&
+                  o.stockType != 'linked' &&
+                  (o.stockEditable || widget.canManageStock) &&
+                  modal != null &&
+                  modal > 0)
+                'modal_price': modal,
             });
           }
         }
@@ -858,6 +1105,9 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           price: price,
           alwaysAvailable: _alwaysAvailable,
           stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+          modalPrice: (!_alwaysAvailable && _stockType != 'linked')
+              ? _parsedModalPrice()
+              : null,
           stockType: widget.canManageStock ? _stockType : null,
           isActive: _isActive,
           isHotProduct: _isHot,
@@ -903,6 +1153,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
               price: price,
               alwaysAvailable: _alwaysAvailable,
               stockQuantity: !_alwaysAvailable ? stockQty : null,
+              modalPrice: !_alwaysAvailable ? _parsedModalPrice() : null,
               isActive: _isActive,
               isHotProduct: _isHot,
               promotionId: _promotionId,
@@ -924,6 +1175,9 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           promotionId: _promotionId,
           alwaysAvailable: _stockType == 'linked' ? true : _alwaysAvailable,
           stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+          modalPrice: (!_alwaysAvailable && _stockType != 'linked')
+              ? _parsedModalPrice()
+              : null,
           isActive: _isActive,
           isHotProduct: _isHot,
           menuOptions: _groups.map((e) => e.toJson()).toList(),
@@ -942,6 +1196,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
               price: price,
               alwaysAvailable: _alwaysAvailable,
               stockQuantity: !_alwaysAvailable ? stockQty : null,
+              modalPrice: !_alwaysAvailable ? _parsedModalPrice() : null,
               isActive: _isActive,
               isHotProduct: _isHot,
               promotionId: _promotionId,
@@ -1009,6 +1264,8 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                     builder: (_) => ProductStockEditorPage(
                       mode: _stockMode,
                       quantity: _stock,
+                      modalPrice: _modalPrice,
+                      lastUnitCost: _lastUnitCost,
                       recipes: _recipes,
                       ingredients: _ingredients,
                       sellPrice: num.tryParse(_price.text.replaceAll('.', '').trim()),

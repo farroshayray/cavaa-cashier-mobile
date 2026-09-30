@@ -152,6 +152,7 @@ class OwnerApi {
     int? promotionId,
     bool alwaysAvailable = true,
     int? stockQuantity,
+    num? modalPrice,
     bool isActive = true,
     bool isHotProduct = false,
     List<Map<String, dynamic>>? menuOptions,
@@ -167,6 +168,8 @@ class OwnerApi {
       'always_available': alwaysAvailable ? 1 : 0,
       if (!alwaysAvailable && stockQuantity != null)
         'stock_quantity': stockQuantity,
+      if (!alwaysAvailable && modalPrice != null && modalPrice > 0)
+        'modal_price': modalPrice,
       'is_active': isActive ? 1 : 0,
       'is_hot_product': isHotProduct ? 1 : 0,
       if (menuOptions != null) 'menu_options': jsonEncode(menuOptions),
@@ -188,6 +191,7 @@ class OwnerApi {
     required num price,
     bool? alwaysAvailable,
     int? stockQuantity,
+    num? modalPrice,
     String? stockType,
     bool? isActive,
     bool? isHotProduct,
@@ -203,6 +207,8 @@ class OwnerApi {
           'always_available': alwaysAvailable ? 1 : 0,
         if (alwaysAvailable == false && stockQuantity != null)
           'stock_quantity': stockQuantity,
+        if (alwaysAvailable == false && modalPrice != null && modalPrice > 0)
+          'modal_price': modalPrice,
         if (stockType != null) 'stock_type': stockType,
         if (isActive != null) 'is_active': isActive ? 1 : 0,
         if (isHotProduct != null) 'is_hot_product': isHotProduct ? 1 : 0,
