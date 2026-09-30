@@ -43,10 +43,15 @@ const _bg = Color(0xFFF6F7F9);
 enum _BarPage { none, report, account }
 
 class _OpenSection {
-  const _OpenSection({required this.icon, required this.tooltip});
+  const _OpenSection({
+    required this.icon,
+    required this.tooltip,
+    this.hideDock = false,
+  });
 
   final IconData icon;
   final String tooltip;
+  final bool hideDock;
 }
 
 class OwnerHomePage extends StatefulWidget {
@@ -191,6 +196,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     _BarPage bar = _BarPage.none,
     IconData? icon,
     String tooltip = '',
+    bool hideDock = false,
     Future<void> Function()? after,
   }) async {
     final nav = _sectionNav.currentState;
@@ -205,7 +211,11 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       _barPage = bar;
       _section = icon == null
           ? null
-          : _OpenSection(icon: icon, tooltip: tooltip);
+          : _OpenSection(
+              icon: icon,
+              tooltip: tooltip,
+              hideDock: hideDock,
+            );
     });
     final task = _showSection(current, page, gen, after);
     _sectionTask = task;
@@ -365,10 +375,14 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       'create_employee' => Icons.badge_rounded,
       _ => Icons.store_mall_directory_rounded,
     };
+    final storesEmpty =
+        context.read<AuthProvider>().owner?.onboarding?.stores.isEmpty ?? true;
     await _pushSection(
       routePage,
       icon: icon,
       tooltip: _stepLabel(step),
+      // First-store onboarding: hide dock so "Toko pertama" is uninterrupted.
+      hideDock: step == 'create_store' && storesEmpty,
       after: () async {
         if (!mounted) return;
         await context.read<AuthProvider>().refreshOwner();
@@ -725,7 +739,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           // Content scrolls behind the floating dock so it shows through
           // the transparent ring around the Kasir button.
           extendBody: true,
-          bottomNavigationBar: _sheetOpen
+          bottomNavigationBar:
+              (_sheetOpen || !hasStore || (_section?.hideDock ?? false))
               ? null
               : _OwnerDock(
                   cashierEnabled: hasStore,
