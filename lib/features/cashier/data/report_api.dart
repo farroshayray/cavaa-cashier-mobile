@@ -105,4 +105,94 @@ class ReportApi {
     if (data is Map<String, dynamic>) return data;
     throw Exception('Response JSON bukan object');
   }
+
+  Future<Map<String, dynamic>> getStockMovementReport({
+    required String from,
+    required String to,
+  }) async {
+    final resp = await dio.get(
+      '/api/v1/mobile/cashier/reports/stocks/movement',
+      queryParameters: {'from': from, 'to': to},
+    );
+    final data = resp.data;
+    if (data is Map<String, dynamic>) return data;
+    throw Exception('Response JSON bukan object');
+  }
+
+  Future<Uint8List> exportStockMovementReport({
+    required String from,
+    required String to,
+  }) async {
+    return _exportBytes(
+      '/api/v1/mobile/cashier/reports/stocks/movement/export',
+      from: from,
+      to: to,
+    );
+  }
+
+  Future<Map<String, dynamic>> getStockVarianceReport({
+    required String from,
+    required String to,
+  }) async {
+    final resp = await dio.get(
+      '/api/v1/mobile/cashier/reports/stocks/variance',
+      queryParameters: {'from': from, 'to': to},
+    );
+    final data = resp.data;
+    if (data is Map<String, dynamic>) return data;
+    throw Exception('Response JSON bukan object');
+  }
+
+  Future<Uint8List> exportStockVarianceReport({
+    required String from,
+    required String to,
+  }) async {
+    return _exportBytes(
+      '/api/v1/mobile/cashier/reports/stocks/variance/export',
+      from: from,
+      to: to,
+    );
+  }
+
+  Future<Map<String, dynamic>> getStockLedger({
+    required int stockId,
+    required String from,
+    required String to,
+  }) async {
+    final resp = await dio.get(
+      '/api/v1/mobile/cashier/reports/stocks/ledger/$stockId',
+      queryParameters: {'from': from, 'to': to},
+    );
+    final data = resp.data;
+    if (data is Map<String, dynamic>) return data;
+    throw Exception('Response JSON bukan object');
+  }
+
+  Future<Uint8List> exportStockLedger({
+    required int stockId,
+    required String from,
+    required String to,
+  }) async {
+    return _exportBytes(
+      '/api/v1/mobile/cashier/reports/stocks/ledger/$stockId/export',
+      from: from,
+      to: to,
+    );
+  }
+
+  Future<Uint8List> _exportBytes(
+    String path, {
+    required String from,
+    required String to,
+  }) async {
+    final resp = await dio.get(
+      path,
+      queryParameters: {'from': from, 'to': to},
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final data = resp.data;
+    if (data is Uint8List) return data;
+    if (data is List<int>) return Uint8List.fromList(data);
+    throw Exception('Response export bukan bytes');
+  }
 }

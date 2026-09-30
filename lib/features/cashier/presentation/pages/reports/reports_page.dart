@@ -15,6 +15,7 @@ import '/features/cashier/data/report_api.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/presentation/utils/report_xlsx_converter.dart';
 import '/features/owner/presentation/widgets/dock_inset.dart';
+import 'stock_reports_hub_page.dart';
 
 part 'reports_filters.dart';
 part 'reports_sold_products_sheet.dart';
@@ -457,11 +458,25 @@ class _ReportsPageState extends State<ReportsPage> {
     );
   }
 
+  Future<void> _openStockReports() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StockReportsHubPage(
+          from: _formatApiDate(_activeRange.start),
+          to: _formatApiDate(_activeRange.end),
+          rangeLabel: _activeRangeLabel,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
     final auth = context.watch<AuthProvider>();
     final canChooseCashierScope = auth.isOwner || auth.viaOwner;
+    final canViewStockReports = auth.viaOwner &&
+        (auth.owner?.hasFeature('products_stocks') ?? false);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -508,6 +523,8 @@ class _ReportsPageState extends State<ReportsPage> {
             _QuickReportSection(
               onTransactionTap: _openTransactionReportModal,
               onSoldProductsTap: _openSoldProductsModal,
+              onStockReportsTap:
+                  canViewStockReports ? _openStockReports : null,
             ),
             const SizedBox(height: 16),
             _RecentActivitySection(
@@ -704,10 +721,12 @@ class _QuickReportSection extends StatelessWidget {
   const _QuickReportSection({
     required this.onTransactionTap,
     required this.onSoldProductsTap,
+    this.onStockReportsTap,
   });
 
   final VoidCallback onTransactionTap;
   final VoidCallback onSoldProductsTap;
+  final VoidCallback? onStockReportsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -734,6 +753,16 @@ class _QuickReportSection extends StatelessWidget {
               'Ringkasan produk terlaris dan jumlah penjualan untuk periode terpilih.',
           onTap: onSoldProductsTap,
         ),
+        if (onStockReportsTap != null) ...[
+          const SizedBox(height: 10),
+          _MenuCard(
+            icon: Icons.warehouse_outlined,
+            title: 'Laporan Stok',
+            subtitle:
+                'Mutasi bahan baku, selisih opname, dan kartu stok detail per bahan.',
+            onTap: onStockReportsTap,
+          ),
+        ],
       ],
     );
   }
