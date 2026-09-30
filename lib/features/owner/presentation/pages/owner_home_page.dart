@@ -730,6 +730,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               : _OwnerDock(
                   cashierEnabled: hasStore,
                   reportEnabled: hasStore,
+                  reportPremiumLocked: hasStore && !canReport,
                   orderBadge: unreadOrders,
                   barPage: _barPage,
                   section: _section,
@@ -763,6 +764,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     final canPromo = owner?.hasFeature('products_promotions') ?? false;
     final canScanTable = owner?.hasFeature('feature_scan_table') ?? false;
     final canStock = owner?.hasFeature('products_stocks') ?? false;
+    final canReport = owner?.hasFeature('report_sales') ?? false;
 
     final operasional = <_MenuItemData>[
       _MenuItemData(
@@ -778,6 +780,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 after: _loadPendingCashBooks,
               )
             : null,
+      ),
+      _MenuItemData(
+        icon: Icons.bar_chart_rounded,
+        title: 'Laporan',
+        enabled: hasStore,
+        premiumLocked: hasStore && !canReport,
+        onTap: hasStore ? () => _openReports(canReport) : null,
       ),
       _MenuItemData(
         icon: canScanTable
@@ -1736,6 +1745,7 @@ class _OwnerDock extends StatelessWidget {
   const _OwnerDock({
     required this.cashierEnabled,
     required this.reportEnabled,
+    this.reportPremiumLocked = false,
     required this.orderBadge,
     required this.barPage,
     required this.section,
@@ -1757,6 +1767,7 @@ class _OwnerDock extends StatelessWidget {
 
   final bool cashierEnabled;
   final bool reportEnabled;
+  final bool reportPremiumLocked;
   final int orderBadge;
   final _BarPage barPage;
   final _OpenSection? section;
@@ -1817,6 +1828,7 @@ class _OwnerDock extends StatelessWidget {
                     icon: Icons.bar_chart_rounded,
                     tooltip: 'Laporan',
                     enabled: reportEnabled,
+                    premiumLocked: reportPremiumLocked,
                     active: barPage == _BarPage.report,
                     onTap: onReport,
                   ),
@@ -1891,6 +1903,7 @@ class _DockItem extends StatelessWidget {
     required this.tooltip,
     this.onTap,
     this.enabled = true,
+    this.premiumLocked = false,
     this.active = false,
   });
 
@@ -1898,11 +1911,17 @@ class _DockItem extends StatelessWidget {
   final String tooltip;
   final VoidCallback? onTap;
   final bool enabled;
+  final bool premiumLocked;
   final bool active;
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled ? Colors.white : Colors.white.withValues(alpha: 0.45);
+    final locked = premiumLocked && enabled;
+    final color = !enabled
+        ? Colors.white.withValues(alpha: 0.45)
+        : locked
+            ? const Color(0xFFD1D5DB)
+            : Colors.white;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
       child: Tooltip(
@@ -1918,7 +1937,45 @@ class _DockItem extends StatelessWidget {
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: enabled ? onTap : null,
-              child: Icon(icon, color: color, size: 24),
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Icon(icon, color: color, size: 24),
+                  if (locked)
+                    Positioned(
+                      right: 0,
+                      top: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1.5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B),
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFF59E0B)
+                                  .withValues(alpha: 0.35),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          'Coba',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
