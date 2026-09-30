@@ -1280,25 +1280,43 @@ class _SetupProgressBanner extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    for (var i = 0; i < total; i++) ...[
-                      if (i > 0)
-                        Expanded(
-                          child: Container(
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Dots are spread edge to edge, so circle i is centred at
+                    // x = half a slot + i equal steps. Lines run centre to
+                    // centre underneath, and the circles cover their ends.
+                    const slot = _SetupDot.width;
+                    final step = total > 1
+                        ? (constraints.maxWidth - slot) / (total - 1)
+                        : 0.0;
+                    double centre(int i) => slot / 2 + i * step;
+                    return Stack(
+                      children: [
+                        for (var i = 1; i < total; i++)
+                          Positioned(
+                            left: centre(i - 1),
+                            width: step,
+                            top: _SetupDot.circle / 2 - 1,
                             height: 2,
-                            margin: const EdgeInsets.only(bottom: 16),
-                            color: i <= activeIndex
-                                ? const Color(0xFF047857)
-                                : const Color(0xFFE5E7EB),
+                            child: ColoredBox(
+                              color: i <= activeIndex
+                                  ? _brand
+                                  : const Color(0xFFE5E7EB),
+                            ),
                           ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            for (var i = 0; i < total; i++)
+                              _SetupDot(
+                                label: ownerSetupSteps[i].title,
+                                status: ownerSetupStatusFor(i, nextStep),
+                              ),
+                          ],
                         ),
-                      _SetupDot(
-                        label: ownerSetupSteps[i].title,
-                        status: ownerSetupStatusFor(i, nextStep),
-                      ),
-                    ],
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -1315,23 +1333,22 @@ class _SetupDot extends StatelessWidget {
   final String label;
   final OwnerSetupStepStatus status;
 
+  static const width = 52.0;
+  static const circle = 22.0;
+
   @override
   Widget build(BuildContext context) {
     final isDone = status == OwnerSetupStepStatus.done;
     final isActive = status == OwnerSetupStepStatus.active;
-    final color = isDone
-        ? const Color(0xFF047857)
-        : isActive
-        ? _brand
-        : const Color(0xFFD1D5DB);
+    final color = isDone || isActive ? _brand : const Color(0xFFD1D5DB);
 
     return SizedBox(
-      width: 52,
+      width: width,
       child: Column(
         children: [
           Container(
-            width: 22,
-            height: 22,
+            width: circle,
+            height: circle,
             decoration: BoxDecoration(
               color: isDone || isActive ? color : Colors.white,
               shape: BoxShape.circle,
@@ -1363,11 +1380,7 @@ class _SetupDot extends StatelessWidget {
             style: TextStyle(
               fontSize: 9.5,
               fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-              color: isActive
-                  ? _brand
-                  : isDone
-                  ? const Color(0xFF047857)
-                  : const Color(0xFF9CA3AF),
+              color: isDone || isActive ? _brand : const Color(0xFF9CA3AF),
             ),
           ),
         ],

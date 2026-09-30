@@ -118,11 +118,9 @@ class OwnerSetupStepHeader extends StatelessWidget {
                     height: 6,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      color: i < index
-                          ? const Color(0xFF047857)
-                          : i == index
-                              ? ownerSetupBrand
-                              : const Color(0xFFE5E7EB),
+                      color: i <= index
+                          ? ownerSetupBrand
+                          : const Color(0xFFE5E7EB),
                     ),
                   ),
                 ),
