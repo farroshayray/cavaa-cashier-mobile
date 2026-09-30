@@ -122,12 +122,14 @@ class _WorkScheduleProfilesPageState extends State<WorkScheduleProfilesPage> {
         backgroundColor: _brand,
         foregroundColor: Colors.white,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(),
-        backgroundColor: _brand,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Tambah'),
+      floatingActionButton: DockAwareFab(
+        child: FloatingActionButton.extended(
+          onPressed: () => _openEditor(),
+          backgroundColor: _brand,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Tambah'),
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))

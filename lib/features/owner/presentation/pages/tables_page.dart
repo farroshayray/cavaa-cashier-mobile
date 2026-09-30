@@ -269,14 +269,16 @@ class _TablesPageState extends State<TablesPage> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(),
-        backgroundColor: _brand,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text(
-          'Tambah Meja',
-          style: TextStyle(fontWeight: FontWeight.w700),
+      floatingActionButton: DockAwareFab(
+        child: FloatingActionButton.extended(
+          onPressed: () => _openEditor(),
+          backgroundColor: _brand,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text(
+            'Tambah Meja',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
         ),
       ),
       body: _loading

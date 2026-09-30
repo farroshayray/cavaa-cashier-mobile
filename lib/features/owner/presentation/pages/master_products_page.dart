@@ -151,12 +151,14 @@ class _MasterProductsPageState extends State<MasterProductsPage> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _loading ? null : () => _openEditor(),
-        backgroundColor: _brand,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Tambah master'),
+      floatingActionButton: DockAwareFab(
+        child: FloatingActionButton.extended(
+          onPressed: _loading ? null : () => _openEditor(),
+          backgroundColor: _brand,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Tambah master'),
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))

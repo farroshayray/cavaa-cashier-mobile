@@ -33,6 +33,7 @@ import 'owner_account_page.dart';
 import 'owner_addons_page.dart';
 import 'owner_cavaa_points_page.dart';
 import '../widgets/owner_mobile_carousel.dart';
+import '../widgets/dock_inset.dart';
 
 const _brand = Color(0xFFAE1504);
 const _bg = Color(0xFFF6F7F9);
@@ -1469,12 +1470,14 @@ class _OwnerSectionNavigator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = _OwnerHost.of(context);
-    return Navigator(
-      key: state._sectionNav,
-      observers: [state._sheetObserver],
-      onGenerateRoute: (settings) => MaterialPageRoute(
-        settings: settings,
-        builder: (_) => const _OwnerDashboard(),
+    return DockOverlapScope(
+      child: Navigator(
+        key: state._sectionNav,
+        observers: [state._sheetObserver],
+        onGenerateRoute: (settings) => MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const _OwnerDashboard(),
+        ),
       ),
     );
   }

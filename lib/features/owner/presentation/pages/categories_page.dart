@@ -249,14 +249,16 @@ class _CategoriesPageState extends State<CategoriesPage> {
               ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _loading ? null : () => _openEditor(),
-          backgroundColor: _brand,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text(
-            'Tambah kategori',
-            style: TextStyle(fontWeight: FontWeight.w700),
+        floatingActionButton: DockAwareFab(
+          child: FloatingActionButton.extended(
+            onPressed: _loading ? null : () => _openEditor(),
+            backgroundColor: _brand,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text(
+              'Tambah kategori',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ),
         body: _loading

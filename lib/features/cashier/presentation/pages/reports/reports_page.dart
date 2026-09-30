@@ -521,21 +521,23 @@ class _ReportsPageState extends State<ReportsPage> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: brand,
-        foregroundColor: Colors.white,
-        onPressed: (_isLoading || _isExporting) ? null : _exportReport,
-        icon: _isExporting
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Icon(Icons.file_download_outlined),
-        label: Text(_isExporting ? 'Exporting...' : 'Export Excel'),
+      floatingActionButton: DockAwareFab(
+        child: FloatingActionButton.extended(
+          backgroundColor: brand,
+          foregroundColor: Colors.white,
+          onPressed: (_isLoading || _isExporting) ? null : _exportReport,
+          icon: _isExporting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Icon(Icons.file_download_outlined),
+          label: Text(_isExporting ? 'Exporting...' : 'Export Excel'),
+        ),
       ),
     );
   }
