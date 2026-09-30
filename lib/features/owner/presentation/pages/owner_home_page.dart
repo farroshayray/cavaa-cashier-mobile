@@ -17,6 +17,8 @@ import '/core/network/dio_client.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '../../data/owner_api.dart';
 import '../../data/welcome_gift_store.dart';
+import '../../data/owner_tour_store.dart';
+import '../widgets/owner_tour.dart';
 import 'welcome_gift_dialog.dart';
 import 'setup_complete_dialog.dart';
 import '../widgets/owner_setup_progress.dart';
@@ -73,6 +75,17 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   var _barPage = _BarPage.none;
   _OpenSection? _section;
   Future<void>? _sectionTask;
+  Future<void>? _giftTask;
+  var _tourShown = false;
+  final _tourProfileKey = GlobalKey();
+  final _tourPointsKey = GlobalKey();
+  final _tourStoreKey = GlobalKey();
+  final _tourMenuKey = GlobalKey();
+  final _tourSetupKey = GlobalKey();
+  final _tourKasirKey = GlobalKey();
+  final _tourHomeKey = GlobalKey();
+  final _tourReportKey = GlobalKey();
+  final _tourAccountKey = GlobalKey();
   var _sheetOpen = false;
   late final _sheetObserver = _SheetObserver((open) {
     final next = open > 0;
@@ -276,7 +289,19 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     }
   }
 
-  Future<void> _maybeWelcomeGift() async {
+  /// Callers that overlap (onboarding check and the first-store tour) share
+  /// one run, so the tour can wait for the gift popup to close.
+  Future<void> _maybeWelcomeGift() {
+    final running = _giftTask;
+    if (running != null) return running;
+    final task = _showWelcomeGiftOnce();
+    _giftTask = task;
+    return task.whenComplete(() {
+      if (identical(_giftTask, task)) _giftTask = null;
+    });
+  }
+
+  Future<void> _showWelcomeGiftOnce() async {
     if (_giftShown || !mounted) return;
     final auth = context.read<AuthProvider>();
     final owner = auth.owner;
@@ -341,12 +366,155 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       after: () async {
         if (!mounted) return;
         await context.read<AuthProvider>().refreshOwner();
-        if (!mounted || !fromSetup) return;
+        if (!mounted) return;
+        final hasStore =
+            context.read<AuthProvider>().owner?.onboarding?.stores.isNotEmpty ??
+            false;
+        // Not awaited: this runs inside the section's own task, which the
+        // tour (and the gift popup) may need to replace.
+        if (step == 'create_store' && hasStore) unawaited(_afterFirstStore());
+        if (!fromSetup) return;
         final next =
             context.read<AuthProvider>().owner?.onboarding?.nextStep ?? 'ready';
         if (next == 'ready') await _maybeSetupComplete();
       },
     );
+  }
+
+  Future<void> _afterFirstStore() async {
+    // Let the store page finish closing first.
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    await _maybeWelcomeGift();
+    await _maybeOwnerTour();
+  }
+
+  /// Short spotlight tour of the home screen, shown once per owner right
+  /// after the first store is created.
+  Future<void> _maybeOwnerTour() async {
+    if (_tourShown || !mounted) return;
+    final owner = context.read<AuthProvider>().owner;
+    if (owner == null || (owner.onboarding?.stores.isEmpty ?? true)) return;
+    if (await OwnerTourStore.isDone(owner.id)) return;
+    if (!mounted || _section != null || _barPage != _BarPage.none) return;
+    _tourShown = true;
+
+    Future<void> scrollTo(double Function(ScrollPosition p) offset) async {
+      if (!_menuScroll.hasClients) return;
+      final pos = _menuScroll.position;
+      final target = offset(
+        pos,
+      ).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+      if ((pos.pixels - target).abs() < 1) return;
+      await _menuScroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    await scrollTo((_) => 0);
+    if (!mounted) return;
+
+    final result = await showOwnerTour(context, [
+      OwnerTourStep(
+        beforeShow: () => scrollTo((_) => 0),
+        targets: [
+          OwnerTourTarget(
+            key: _tourProfileKey,
+            text: 'Profil & akunmu',
+            shape: OwnerTourShape.circle,
+            side: OwnerTourSide.above,
+            align: OwnerTourAlign.start,
+            padding: 4,
+          ),
+          OwnerTourTarget(
+            key: _tourPointsKey,
+            text: 'Poin hadiahmu',
+            shape: OwnerTourShape.pill,
+            side: OwnerTourSide.right,
+            padding: 4,
+            gap: 16,
+          ),
+          OwnerTourTarget(
+            key: _tourStoreKey,
+            text: 'Pilih toko yang sedang dikelola',
+            side: OwnerTourSide.below,
+            align: OwnerTourAlign.start,
+            anchor: 0.3,
+          ),
+        ],
+      ),
+      OwnerTourStep(
+        // The panel is the last item, so scrolling to the end puts all of it
+        // above the dock.
+        beforeShow: () => scrollTo((p) => p.maxScrollExtent),
+        targets: [
+          OwnerTourTarget(
+            key: _tourMenuKey,
+            text: 'Panel menu: semua pengelolaan toko ada di sini',
+            side: OwnerTourSide.above,
+            padding: 4,
+          ),
+        ],
+      ),
+      OwnerTourStep(
+        targets: [
+          OwnerTourTarget(
+            key: _tourKasirKey,
+            text: 'Buka mode kasir',
+            shape: OwnerTourShape.pill,
+            side: OwnerTourSide.above,
+            align: OwnerTourAlign.start,
+            anchor: 0.25,
+            padding: 3,
+          ),
+          OwnerTourTarget(
+            key: _tourHomeKey,
+            text: 'Kembali ke menu utama',
+            shape: OwnerTourShape.circle,
+            side: OwnerTourSide.above,
+            align: OwnerTourAlign.end,
+            padding: 0,
+          ),
+          OwnerTourTarget(
+            key: _tourReportKey,
+            text: 'Lihat laporan penjualan',
+            shape: OwnerTourShape.circle,
+            side: OwnerTourSide.above,
+            align: OwnerTourAlign.end,
+            padding: 0,
+          ),
+          OwnerTourTarget(
+            key: _tourAccountKey,
+            text: 'Pengaturan akun',
+            shape: OwnerTourShape.circle,
+            side: OwnerTourSide.above,
+            align: OwnerTourAlign.end,
+            padding: 0,
+          ),
+        ],
+      ),
+      OwnerTourStep(
+        beforeShow: () => scrollTo((_) => 0),
+        primaryLabel: 'Lanjutkan setup',
+        secondaryLabel: 'Nanti',
+        targets: [
+          OwnerTourTarget(
+            key: _tourSetupKey,
+            text: 'Lengkapi produk, pembayaran, meja & pegawai',
+            side: OwnerTourSide.below,
+            padding: 4,
+          ),
+        ],
+      ),
+    ]);
+
+    await OwnerTourStore.markDone(owner.id);
+    if (!mounted || result != OwnerTourResult.finished) return;
+    final next =
+        context.read<AuthProvider>().owner?.onboarding?.nextStep ?? 'ready';
+    if (next != 'ready') await _openStep(next, fromSetup: true);
   }
 
   Future<void> _maybeSetupComplete() async {
@@ -566,6 +734,10 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                     const OwnerAccountPage(),
                     bar: _BarPage.account,
                   ),
+                  kasirKey: _tourKasirKey,
+                  homeKey: _tourHomeKey,
+                  reportKey: _tourReportKey,
+                  accountKey: _tourAccountKey,
                 ),
           body: const _OwnerSectionNavigator(),
         ),
@@ -768,6 +940,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                       true,
                   onStoreSelected: _onStoreSelected,
                   onCreateStore: () => _openStep('create_store'),
+                  profileKey: _tourProfileKey,
+                  pointsKey: _tourPointsKey,
+                  storeKey: _tourStoreKey,
                 ),
               ),
             ),
@@ -793,6 +968,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 sliver: SliverToBoxAdapter(
                   child: _SetupProgressBanner(
+                    key: _tourSetupKey,
                     nextStep: nextStep,
                     onTap: () => _openStep(nextStep, fromSetup: true),
                   ),
@@ -814,6 +990,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               ),
               sliver: SliverToBoxAdapter(
                 child: DecoratedBox(
+                  key: _tourMenuKey,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
@@ -900,7 +1077,15 @@ class _OwnerHeader extends StatelessWidget {
     required this.canCreateStore,
     required this.onStoreSelected,
     required this.onCreateStore,
+    this.profileKey,
+    this.pointsKey,
+    this.storeKey,
   });
+
+  /// Anchors for the home tour.
+  final GlobalKey? profileKey;
+  final GlobalKey? pointsKey;
+  final GlobalKey? storeKey;
 
   final String name;
   final String email;
@@ -946,6 +1131,7 @@ class _OwnerHeader extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
+                    key: profileKey,
                     width: 54,
                     height: 54,
                     decoration: BoxDecoration(
@@ -1003,11 +1189,14 @@ class _OwnerHeader extends StatelessWidget {
             if (showPoints) ...[
               const SizedBox(height: 8),
               InkWell(
+                key: pointsKey,
                 onTap: onPoints,
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
+                    // Hug the content so the tour can point beside it.
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.stars_rounded, size: 15, color: _brand),
                       const SizedBox(width: 6),
@@ -1068,6 +1257,7 @@ class _OwnerHeader extends StatelessWidget {
               )
             else
               Row(
+                key: storeKey,
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<int>(
@@ -1227,7 +1417,11 @@ class _CashBookNotice extends StatelessWidget {
 }
 
 class _SetupProgressBanner extends StatelessWidget {
-  const _SetupProgressBanner({required this.nextStep, required this.onTap});
+  const _SetupProgressBanner({
+    super.key,
+    required this.nextStep,
+    required this.onTap,
+  });
 
   final String nextStep;
   final VoidCallback onTap;
@@ -1543,7 +1737,17 @@ class _OwnerDock extends StatelessWidget {
     required this.onHome,
     required this.onReport,
     required this.onAccount,
+    this.kasirKey,
+    this.homeKey,
+    this.reportKey,
+    this.accountKey,
   });
+
+  /// Anchors for the home tour.
+  final GlobalKey? kasirKey;
+  final GlobalKey? homeKey;
+  final GlobalKey? reportKey;
+  final GlobalKey? accountKey;
 
   final bool cashierEnabled;
   final bool reportEnabled;
@@ -1572,6 +1776,7 @@ class _OwnerDock extends StatelessWidget {
                 children: [
                   Expanded(
                     child: SizedBox(
+                      key: kasirKey,
                       height: 50,
                       // Paints the whole dock background with a transparent
                       // ring cut around the Kasir pill.
@@ -1594,6 +1799,7 @@ class _OwnerDock extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   _DockItem(
+                    key: homeKey,
                     icon: Icons.home_rounded,
                     tooltip: 'Beranda',
                     active: barPage == _BarPage.none && section == null,
@@ -1601,6 +1807,7 @@ class _OwnerDock extends StatelessWidget {
                   ),
                   _DockSectionSlot(section: section),
                   _DockItem(
+                    key: reportKey,
                     icon: Icons.bar_chart_rounded,
                     tooltip: 'Laporan',
                     enabled: reportEnabled,
@@ -1608,6 +1815,7 @@ class _OwnerDock extends StatelessWidget {
                     onTap: onReport,
                   ),
                   _DockItem(
+                    key: accountKey,
                     icon: Icons.person_rounded,
                     tooltip: 'Akun',
                     active: barPage == _BarPage.account,
