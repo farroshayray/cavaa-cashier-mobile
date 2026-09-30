@@ -1772,6 +1772,46 @@ class _DockSectionSlotState extends State<_DockSectionSlot>
   }
 }
 
+enum _KasirLayout { full, medium, compact }
+
+class _KasirBadge extends StatelessWidget {
+  const _KasirBadge({required this.count, this.compact = false});
+
+  final int count;
+
+  /// Smaller variant drawn over the icon, with a red ring so it stands out
+  /// against the pill.
+  final bool compact;
+
+  static const style = TextStyle(
+    color: _brand,
+    fontSize: 10,
+    fontWeight: FontWeight.w800,
+    height: 1.1,
+  );
+
+  static String text(int count) => count > 99 ? '99+' : '$count';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 4 : 6,
+        vertical: compact ? 1 : 2,
+      ),
+      constraints: BoxConstraints(minWidth: compact ? 16 : 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: compact
+            ? Border.all(color: const Color(0xFF8E1103), width: 1.5)
+            : null,
+      ),
+      child: Text(text(count), textAlign: TextAlign.center, style: style),
+    );
+  }
+}
+
 class _DockCashier extends StatelessWidget {
   const _DockCashier({
     required this.enabled,
@@ -1783,9 +1823,126 @@ class _DockCashier extends StatelessWidget {
   final int badgeCount;
   final VoidCallback? onTap;
 
+  static const _labelStyle = TextStyle(
+    color: Colors.white,
+    fontWeight: FontWeight.w800,
+    fontSize: 15,
+  );
+  static const _icon = Icon(
+    Icons.point_of_sale_rounded,
+    color: Colors.white,
+    size: 22,
+  );
+
+  /// Picks the richest layout that fits [width]: label + inline badge, then
+  /// label with the badge over the icon, then the icon alone.
+  _KasirLayout _layoutFor(BuildContext context, double width) {
+    final scaler = MediaQuery.textScalerOf(context);
+    double measure(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final w = painter.width;
+      painter.dispose();
+      return w;
+    }
+
+    final label = measure('Kasir', _labelStyle);
+    final badge = badgeCount > 0
+        ? (measure(_KasirBadge.text(badgeCount), _KasirBadge.style) + 12).clamp(
+            18.0,
+            double.infinity,
+          )
+        : 0.0;
+
+    final full = 32 + 22 + 8 + label + (badgeCount > 0 ? 8 + badge : 0);
+    if (full <= width) return _KasirLayout.full;
+    // The overlaid badge pokes ~10 past the icon; the row gap absorbs it.
+    final medium = 24 + 22 + (badgeCount > 0 ? 12 : 8) + label;
+    if (medium <= width) return _KasirLayout.medium;
+    return _KasirLayout.compact;
+  }
+
+  Widget _iconWithBadge() {
+    if (badgeCount <= 0) return _icon;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        _icon,
+        Positioned(
+          top: -7,
+          right: -11,
+          child: _KasirBadge(count: badgeCount, compact: true),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLayout(_KasirLayout layout) {
+    // FittedBox keeps the content from ever overflowing: while switching
+    // layouts, and on extreme widths/text scales.
+    switch (layout) {
+      case _KasirLayout.full:
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _icon,
+                const SizedBox(width: 8),
+                const Text('Kasir', style: _labelStyle, maxLines: 1),
+                if (badgeCount > 0) ...[
+                  const SizedBox(width: 8),
+                  _KasirBadge(count: badgeCount),
+                ],
+              ],
+            ),
+          ),
+        );
+      case _KasirLayout.medium:
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _iconWithBadge(),
+                SizedBox(width: badgeCount > 0 ? 12 : 8),
+                const Text('Kasir', style: _labelStyle, maxLines: 1),
+              ],
+            ),
+          ),
+        );
+      case _KasirLayout.compact:
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                // Room for the overlaid badge inside the fitted box.
+                padding: EdgeInsets.only(
+                  top: badgeCount > 0 ? 7 : 0,
+                  right: badgeCount > 0 ? 11 : 0,
+                ),
+                child: _iconWithBadge(),
+              ),
+            ),
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    const label = Colors.white;
     return Opacity(
       opacity: enabled ? 1 : 0.55,
       child: Material(
@@ -1806,49 +1963,23 @@ class _DockCashier extends StatelessWidget {
             customBorder: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(25),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.point_of_sale_rounded,
-                    color: label,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Kasir',
-                    style: TextStyle(
-                      color: label,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
+            child: Tooltip(
+              message: 'Kasir',
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final layout = _layoutFor(context, constraints.maxWidth);
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 150),
+                    layoutBuilder: (current, previous) => Stack(
+                      fit: StackFit.expand,
+                      children: [...previous, ?current],
                     ),
-                  ),
-                  if (badgeCount > 0) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      constraints: const BoxConstraints(minWidth: 18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        badgeCount > 99 ? '99+' : '$badgeCount',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: _brand,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          height: 1.1,
-                        ),
-                      ),
+                    child: KeyedSubtree(
+                      key: ValueKey(layout),
+                      child: _buildLayout(layout),
                     ),
-                  ],
-                ],
+                  );
+                },
               ),
             ),
           ),
@@ -1927,8 +2058,9 @@ class _MenuIconButton extends StatelessWidget {
                               borderRadius: BorderRadius.circular(999),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFF59E0B)
-                                      .withValues(alpha: 0.35),
+                                  color: const Color(
+                                    0xFFF59E0B,
+                                  ).withValues(alpha: 0.35),
                                   blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),
