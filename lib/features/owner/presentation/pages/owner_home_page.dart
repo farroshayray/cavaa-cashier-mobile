@@ -652,11 +652,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         icon: Icons.inventory_2_rounded,
         title: 'Stok',
         enabled: hasStore,
+        premiumLocked: hasStore && !canStock,
         onTap: hasStore ? () => _openStocks(canStock) : null,
       ),
       _MenuItemData(
         icon: Icons.local_offer_rounded,
         title: 'Promosi',
+        premiumLocked: !canPromo,
         onTap: () {
           if (!canPromo) {
             _openAddonsPaywall(
@@ -842,6 +844,7 @@ class _MenuItemData {
     this.onTap,
     this.enabled = true,
     this.badgeCount = 0,
+    this.premiumLocked = false,
   });
 
   final IconData icon;
@@ -849,6 +852,7 @@ class _MenuItemData {
   final VoidCallback? onTap;
   final bool enabled;
   final int badgeCount;
+  final bool premiumLocked;
 }
 
 String _ownerPhotoUrl(String? raw) {
@@ -1870,6 +1874,12 @@ class _MenuIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = item.enabled && item.onTap != null;
+    final locked = item.premiumLocked && enabled;
+    final iconBg = locked
+        ? const Color(0xFFF3F4F6)
+        : _brand.withValues(alpha: 0.10);
+    final iconColor = locked ? const Color(0xFF6B7280) : _brand;
+    final titleColor = locked ? const Color(0xFF4B5563) : Colors.black87;
 
     return Opacity(
       opacity: enabled ? 1 : 0.42,
@@ -1894,16 +1904,48 @@ class _MenuIconButton extends StatelessWidget {
                         width: iconSize,
                         height: iconSize,
                         decoration: BoxDecoration(
-                          color: _brand.withValues(alpha: 0.10),
+                          color: iconBg,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           item.icon,
                           size: iconGlyphSize,
-                          color: _brand,
+                          color: iconColor,
                         ),
                       ),
-                      if (item.badgeCount > 0)
+                      if (locked)
+                        Positioned(
+                          right: -6,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B),
+                              borderRadius: BorderRadius.circular(999),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFF59E0B)
+                                      .withValues(alpha: 0.35),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Text(
+                              'Coba',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                height: 1.1,
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (item.badgeCount > 0)
                         Positioned(
                           right: -2,
                           top: -2,
@@ -1945,7 +1987,7 @@ class _MenuIconButton extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     fontSize: labelSize,
                     height: 1.15,
-                    color: Colors.black87,
+                    color: titleColor,
                   ),
                 ),
               ],
