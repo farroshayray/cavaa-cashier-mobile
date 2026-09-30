@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '/core/config/env.dart';
 import '/core/network/dio_client.dart';
+import '/features/auth/presentation/auth_provider.dart';
 import '/features/cashier/data/models/purchase_models.dart';
 import '/features/cashier/data/report_api.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
@@ -135,6 +136,14 @@ class _ReportsPageState extends State<ReportsPage> {
     }
   }
 
+  bool get _canChooseCashierScope {
+    final auth = context.read<AuthProvider>();
+    return auth.isOwner || auth.viaOwner;
+  }
+
+  _CashierScope get _effectiveCashierScope =>
+      _canChooseCashierScope ? _cashierScope : _CashierScope.self;
+
   String _cashierScopeLabel(_CashierScope scope) {
     switch (scope) {
       case _CashierScope.self:
@@ -217,7 +226,8 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   String get _activeFilterSummary {
-    return '${_cashierScopeLabel(_cashierScope)} | $_paymentFilterLabel';
+    if (!_canChooseCashierScope) return _paymentFilterLabel;
+    return '${_cashierScopeLabel(_effectiveCashierScope)} | $_paymentFilterLabel';
   }
 
   String get _activeRangeLabel {
@@ -250,7 +260,7 @@ class _ReportsPageState extends State<ReportsPage> {
       final response = await api.getSummary(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
-        cashierScope: _cashierScopeValue(_cashierScope),
+        cashierScope: _cashierScopeValue(_effectiveCashierScope),
         paymentFilters: _activePaymentFilterKeys,
       );
 
@@ -287,7 +297,7 @@ class _ReportsPageState extends State<ReportsPage> {
       final csvBytes = await api.exportSummary(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
-        cashierScope: _cashierScopeValue(_cashierScope),
+        cashierScope: _cashierScopeValue(_effectiveCashierScope),
         paymentFilters: _activePaymentFilterKeys,
       );
       final bytes = csvBytesToXlsx(csvBytes);
@@ -299,7 +309,7 @@ class _ReportsPageState extends State<ReportsPage> {
       }
 
       final fileName =
-          'laporan_${_formatApiDate(_activeRange.start)}_${_formatApiDate(_activeRange.end)}_${_cashierScopeValue(_cashierScope)}${_activePaymentFilterKeys.isEmpty ? '' : '_filtered'}.xlsx';
+          'laporan_${_formatApiDate(_activeRange.start)}_${_formatApiDate(_activeRange.end)}_${_cashierScopeValue(_effectiveCashierScope)}${_activePaymentFilterKeys.isEmpty ? '' : '_filtered'}.xlsx';
       final file = File('${folder.path}/$fileName');
 
       if (await file.exists()) {
@@ -423,7 +433,7 @@ class _ReportsPageState extends State<ReportsPage> {
       builder: (context) => _TransactionReportSheet(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
-        cashierScope: _cashierScopeValue(_cashierScope),
+        cashierScope: _cashierScopeValue(_effectiveCashierScope),
         paymentFilters: _activePaymentFilterKeys,
         rangeLabel: _activeRangeLabel,
         filterLabel: _activeFilterSummary,
@@ -439,7 +449,7 @@ class _ReportsPageState extends State<ReportsPage> {
       builder: (context) => _SoldProductsReportSheet(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
-        cashierScope: _cashierScopeValue(_cashierScope),
+        cashierScope: _cashierScopeValue(_effectiveCashierScope),
         paymentFilters: _activePaymentFilterKeys,
         rangeLabel: _activeRangeLabel,
         filterLabel: _activeFilterSummary,
@@ -450,6 +460,8 @@ class _ReportsPageState extends State<ReportsPage> {
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
+    final auth = context.watch<AuthProvider>();
+    final canChooseCashierScope = auth.isOwner || auth.viaOwner;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -461,11 +473,13 @@ class _ReportsPageState extends State<ReportsPage> {
           children: [
             const _ReportsHeroCard(),
             const SizedBox(height: 16),
-            _CashierFilterSection(
-              selectedScope: _cashierScope,
-              onChanged: _updateCashierScope,
-            ),
-            const SizedBox(height: 16),
+            if (canChooseCashierScope) ...[
+              _CashierFilterSection(
+                selectedScope: _cashierScope,
+                onChanged: _updateCashierScope,
+              ),
+              const SizedBox(height: 16),
+            ],
             _DateFilterSection(
               selectedLabel: _periodTitle(_selectedPeriod),
               rangeLabel: _activeRangeLabel,

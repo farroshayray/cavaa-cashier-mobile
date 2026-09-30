@@ -497,6 +497,11 @@ class _CashBookPageState extends State<CashBookPage> {
         color: Colors.black54,
       ),
       hintText: hint,
+      hintStyle: TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.w300,
+        color: Colors.black.withValues(alpha: 0.28),
+      ),
       helperText: helper,
       filled: true,
       fillColor: const Color(0xFFF6F7F9),

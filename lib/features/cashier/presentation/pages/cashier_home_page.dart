@@ -450,6 +450,11 @@ class _CashierHomePageState extends State<CashierHomePage>
     }
   }
 
+  bool get _cashBookStillOpen {
+    final status = CashierShiftGate.shift?['status']?.toString();
+    return status == 'open' || status == 'recount';
+  }
+
   Widget _withShiftBanner(Widget child) {
     final status = CashierShiftGate.shift?['status']?.toString();
     if (status == null || status == 'open' || status == 'closed') return child;
@@ -609,18 +614,32 @@ class _CashierHomePageState extends State<CashierHomePage>
   }
 
   Future<void> _confirmLogout() async {
-    // 🔥 ambil status pending dulu
     final hasPending = await context.read<SyncService>().hasPendingData();
+    await CashierShiftGate.restore();
+    final shiftStatus = CashierShiftGate.shift?['status']?.toString();
+    final bookStillOpen =
+        shiftStatus == 'open' || shiftStatus == 'recount';
+
+    final parts = <String>[];
+    if (bookStillOpen) {
+      parts.add(
+        'Buku kasir masih terbuka. Anda tetap bisa logout, tetapi hitungan laci belum ditutup.',
+      );
+    }
+    if (hasPending) {
+      parts.add(
+        'Masih ada data yang belum tersinkronisasi.\n\nLogout akan menghapus data tersebut.',
+      );
+    }
+    final content = parts.isEmpty
+        ? 'Apakah Anda yakin ingin logout?'
+        : parts.join('\n\n');
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Konfirmasi Logout'),
-        content: Text(
-          hasPending
-              ? '⚠️ Masih ada data yang belum tersinkronisasi.\n\nLogout akan menghapus data tersebut.'
-              : 'Apakah Anda yakin ingin logout?',
-        ),
+        content: Text(content),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -629,7 +648,7 @@ class _CashierHomePageState extends State<CashierHomePage>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color.fromARGB(255, 114, 9, 2),
-              foregroundColor: Colors.white, // 🔥 ini kuncinya
+              foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Logout'),
@@ -732,6 +751,43 @@ class _CashierHomePageState extends State<CashierHomePage>
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
     );
+  }
+
+  Future<void> _confirmReturnToOwner() async {
+    await CashierShiftGate.restore();
+    final shiftStatus = CashierShiftGate.shift?['status']?.toString();
+    final bookStillOpen =
+        shiftStatus == 'open' || shiftStatus == 'recount';
+
+    if (bookStillOpen) {
+      if (!mounted) return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Kembali ke menu owner'),
+          content: const Text(
+            'Buku kasir masih terbuka. Anda tetap bisa kembali ke menu owner, tetapi hitungan laci belum ditutup.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(255, 114, 9, 2),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Kembali'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    await _returnToOwner();
   }
 
   Future<void> _returnToOwner() async {
@@ -1386,12 +1442,17 @@ class _CashierHomePageState extends State<CashierHomePage>
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        await _handleBack();
+        if (context.read<AuthProvider>().viaOwner) {
+          await _confirmReturnToOwner();
+        } else {
+          await _handleBack();
+        }
       },
       child: Scaffold(
         drawer: _AppDrawer(
           showReports: context.watch<PurchaseProvider>().partnerData?.canViewReports ==
               true,
+          showCashBookOpenBadge: _cashBookStillOpen,
           onOpenProfile: () {
             Navigator.of(context).push(
               MaterialPageRoute(
@@ -1421,19 +1482,20 @@ class _CashierHomePageState extends State<CashierHomePage>
           showUpdateBadge: hasAppUpdate,
           onLogout: _confirmLogout,
           onReturnToOwner: context.watch<AuthProvider>().viaOwner
-              ? _returnToOwner
+              ? _confirmReturnToOwner
               : null,
         ),
         appBar: AppBar(
           leading: Builder(
             builder: (context) {
+              final showMenuDot = hasAppUpdate || _cashBookStillOpen;
               return IconButton(
                 onPressed: () => Scaffold.of(context).openDrawer(),
                 icon: Stack(
                   clipBehavior: Clip.none,
                   children: [
                     const Icon(Icons.menu),
-                    if (hasAppUpdate)
+                    if (showMenuDot)
                       Positioned(
                         right: 2,
                         top: 2,
@@ -1551,7 +1613,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       onPopInvoked: (didPop) async {
         if (didPop) return;
         if (viaOwner) {
-          await _returnToOwner();
+          await _confirmReturnToOwner();
         } else {
           await _handleBack();
         }
@@ -1683,7 +1745,7 @@ class _CashierHomePageState extends State<CashierHomePage>
                     if (viaOwner) ...[
                       const SizedBox(height: 10),
                       TextButton(
-                        onPressed: _returnToOwner,
+                        onPressed: _confirmReturnToOwner,
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white,
                         ),
@@ -2076,6 +2138,7 @@ class _NavItem extends StatelessWidget {
 class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
     required this.showReports,
+    required this.showCashBookOpenBadge,
     required this.onOpenProfile,
     required this.onOpenReports,
     required this.onOpenCashBook,
@@ -2087,6 +2150,7 @@ class _AppDrawer extends StatelessWidget {
   });
 
   final bool showReports;
+  final bool showCashBookOpenBadge;
   final VoidCallback onOpenProfile;
   final VoidCallback onOpenReports;
   final VoidCallback onOpenCashBook;
@@ -2205,9 +2269,58 @@ class _AppDrawer extends StatelessWidget {
                       },
                     ),
                   ListTile(
-                    leading: const Icon(Icons.point_of_sale, color: brand),
+                    leading: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.point_of_sale, color: brand),
+                        if (showCashBookOpenBadge)
+                          Positioned(
+                            right: -2,
+                            top: -2,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                     title: const Text('Buku kasir'),
-                    subtitle: const Text('Kas masuk, kas keluar, tutup buku'),
+                    subtitle: Text(
+                      showCashBookOpenBadge
+                          ? 'Buku masih terbuka'
+                          : 'Kas masuk, kas keluar, tutup buku',
+                      style: TextStyle(
+                        color: showCashBookOpenBadge
+                            ? const Color(0xFFAE1504)
+                            : null,
+                        fontWeight:
+                            showCashBookOpenBadge ? FontWeight.w600 : null,
+                      ),
+                    ),
+                    trailing: showCashBookOpenBadge
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFAE1504).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Aktif',
+                              style: TextStyle(
+                                color: Color(0xFFAE1504),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          )
+                        : null,
                     onTap: () {
                       Navigator.of(context).pop();
                       onOpenCashBook();

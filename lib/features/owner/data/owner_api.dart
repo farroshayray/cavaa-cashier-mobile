@@ -947,6 +947,15 @@ class OwnerApi {
     return {};
   }
 
+  Future<Map<String, dynamic>> cashierShiftDetail(int id) async {
+    final res = await client.dio.get('/api/v1/mobile/owner/cashier-shifts/$id');
+    final data = res.data;
+    if (data is Map && data['shift'] is Map) {
+      return Map<String, dynamic>.from(data['shift'] as Map);
+    }
+    return {};
+  }
+
   Future<void> approveCashierShift(int id, {String? note}) async {
     await client.dio.post('/api/v1/mobile/owner/cashier-shifts/$id/approve', data: {
       if (note != null) 'note': note,

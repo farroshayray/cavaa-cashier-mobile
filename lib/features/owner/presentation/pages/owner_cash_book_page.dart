@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '/features/auth/presentation/auth_provider.dart';
+import 'owner_cash_book_detail_page.dart';
 import 'owner_home_page.dart';
 import '../widgets/dock_inset.dart';
 
@@ -92,6 +93,15 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
     if (picked == null || !mounted) return;
     setState(() => _date = picked);
     await _load();
+  }
+
+  Future<void> _openDetail(int id) async {
+    if (id <= 0) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OwnerCashBookDetailPage(shiftId: id),
+      ),
+    );
   }
 
   Future<void> _decide(int id, bool approve) async {
@@ -303,6 +313,7 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
                           money: _money,
                           asInt: _asInt,
                           busy: _deciding,
+                          onOpen: _openDetail,
                           onApprove: (id) => _decide(id, true),
                           onReject: (id) => _decide(id, false),
                         ),
@@ -330,6 +341,7 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
                           asInt: _asInt,
                           statusLabel: _statusLabel,
                           statusColor: _statusColor,
+                          onOpen: _openDetail,
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -724,6 +736,7 @@ class _PendingCard extends StatelessWidget {
     required this.money,
     required this.asInt,
     required this.busy,
+    required this.onOpen,
     required this.onApprove,
     required this.onReject,
   });
@@ -732,6 +745,7 @@ class _PendingCard extends StatelessWidget {
   final String Function(dynamic) money;
   final int Function(dynamic) asInt;
   final bool busy;
+  final ValueChanged<int> onOpen;
   final ValueChanged<int> onApprove;
   final ValueChanged<int> onReject;
 
@@ -747,7 +761,12 @@ class _PendingCard extends StatelessWidget {
     final initial =
         trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase();
 
-    return Container(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => onOpen(id),
+        child: Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       decoration: BoxDecoration(
@@ -818,6 +837,8 @@ class _PendingCard extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF)),
             ],
           ),
           const SizedBox(height: 12),
@@ -873,6 +894,8 @@ class _PendingCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
+      ),
     );
   }
 }
@@ -884,6 +907,7 @@ class _ShiftCard extends StatelessWidget {
     required this.asInt,
     required this.statusLabel,
     required this.statusColor,
+    required this.onOpen,
   });
 
   final Map<String, dynamic> row;
@@ -891,9 +915,11 @@ class _ShiftCard extends StatelessWidget {
   final int Function(dynamic) asInt;
   final String Function(String) statusLabel;
   final Color Function(String) statusColor;
+  final ValueChanged<int> onOpen;
 
   @override
   Widget build(BuildContext context) {
+    final id = int.tryParse('${row['id']}') ?? 0;
     final store = row['store_name']?.toString() ?? '';
     final employee = row['employee_name']?.toString() ?? '-';
     final status = row['status']?.toString() ?? '';
@@ -903,112 +929,121 @@ class _ShiftCard extends StatelessWidget {
     final initial =
         trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        onTap: () => onOpen(id),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: const Color(0xFFF3F4F6),
-                child: Text(
-                  initial,
-                  style: const TextStyle(
-                    color: Color(0xFF374151),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      employee,
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: const Color(0xFFF3F4F6),
+                    child: Text(
+                      initial,
                       style: const TextStyle(
+                        color: Color(0xFF374151),
                         fontWeight: FontWeight.w800,
-                        fontSize: 14.5,
-                        color: Color(0xFF111827),
                       ),
                     ),
-                    if (store.isNotEmpty)
-                      Text(
-                        store,
-                        style: const TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 12,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  statusLabel(status),
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11.5,
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          employee,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14.5,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        if (store.isNotEmpty)
+                          Text(
+                            store,
+                            style: const TextStyle(
+                              color: Color(0xFF6B7280),
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      statusLabel(status),
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MoneyMini(
+                      label: 'Modal',
+                      value: 'Rp ${money(row['opening_cash'])}',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MoneyMini(
+                      label: 'Tunai',
+                      value: 'Rp ${money(row['cash_net'])}',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MoneyMini(
+                      label: 'Non-tunai',
+                      value: 'Rp ${money(row['non_cash_total'])}',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MoneyMini(
+                      label: 'Selisih',
+                      value: 'Rp ${money(variance)}',
+                      valueColor: variance == 0
+                          ? const Color(0xFF047857)
+                          : const Color(0xFFAE1504),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _MoneyMini(
-                  label: 'Modal',
-                  value: 'Rp ${money(row['opening_cash'])}',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MoneyMini(
-                  label: 'Tunai',
-                  value: 'Rp ${money(row['cash_net'])}',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _MoneyMini(
-                  label: 'Non-tunai',
-                  value: 'Rp ${money(row['non_cash_total'])}',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MoneyMini(
-                  label: 'Selisih',
-                  value: 'Rp ${money(variance)}',
-                  valueColor: variance == 0
-                      ? const Color(0xFF047857)
-                      : const Color(0xFFAE1504),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
