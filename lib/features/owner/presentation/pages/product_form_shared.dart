@@ -10,6 +10,275 @@ import '../widgets/dock_inset.dart';
 const productBrand = Color(0xFFAE1504);
 const productCatalogAccent = Color(0xFF334155);
 
+InputDecoration productFieldDecoration({
+  required String label,
+  String? helper,
+  String? prefixText,
+}) {
+  final border = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.06)),
+  );
+  return InputDecoration(
+    labelText: label,
+    helperText: helper,
+    prefixText: prefixText,
+    filled: true,
+    fillColor: Colors.white,
+    border: border,
+    enabledBorder: border,
+    disabledBorder: border,
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: productBrand, width: 1.4),
+    ),
+  );
+}
+
+class ProductFormSectionCard extends StatelessWidget {
+  const ProductFormSectionCard({
+    super.key,
+    required this.title,
+    required this.child,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.black.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class ProductMetaChip extends StatelessWidget {
+  const ProductMetaChip({
+    super.key,
+    required this.label,
+    this.filled = false,
+    this.color = productBrand,
+  });
+
+  final String label;
+  final bool filled;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: filled
+            ? color.withValues(alpha: 0.12)
+            : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: filled ? color : const Color(0xFF475569),
+        ),
+      ),
+    );
+  }
+}
+
+class ProductFormSwitchTile extends StatelessWidget {
+  const ProductFormSwitchTile({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+    this.icon = Icons.toggle_on_rounded,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: productBrand.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: productBrand, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withValues(alpha: 0.45),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            activeThumbColor: productBrand,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ProductStockModeTabs extends StatelessWidget {
+  const ProductStockModeTabs({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tab(String key, String label, IconData icon) {
+      final selected = value == key;
+      return Expanded(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => onChanged(key),
+            borderRadius: BorderRadius.circular(12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: selected ? Colors.white : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: selected ? productBrand : const Color(0xFF6B7280),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      color: selected ? productBrand : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE5E7EB).withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          tab('always', 'Selalu', Icons.all_inclusive_rounded),
+          tab('direct', 'Pcs', Icons.inventory_2_rounded),
+          tab('linked', 'Resep', Icons.restaurant_menu_rounded),
+        ],
+      ),
+    );
+  }
+}
+
 class ProductCategoryTab extends StatelessWidget {
   const ProductCategoryTab({
     super.key,
@@ -482,6 +751,7 @@ class ProductMenuOptionsEditor extends StatelessWidget {
     this.showOptionStock = false,
     this.canManageStock = false,
     this.ingredients = const [],
+    this.showHeader = true,
   });
 
   final List<MenuOptionGroup> groups;
@@ -490,6 +760,7 @@ class ProductMenuOptionsEditor extends StatelessWidget {
   final bool showOptionStock;
   final bool canManageStock;
   final List<Map<String, dynamic>> ingredients;
+  final bool showHeader;
 
   void _emit() => onChanged([...groups]);
 
@@ -513,46 +784,125 @@ class ProductMenuOptionsEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Opsi / varian',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+        if (showHeader)
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Opsi / varian',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+              ),
+              if (!readOnly)
+                TextButton.icon(
+                  onPressed: () async {
+                    final group = MenuOptionGroup();
+                    groups.add(group);
+                    await _openGroup(context, group);
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: productBrand,
+                    backgroundColor: productBrand.withValues(alpha: 0.08),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text(
+                    'Tambah grup',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+            ],
+          ),
+        if (showHeader) const SizedBox(height: 8),
+        if (!showHeader && !readOnly)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () async {
+                final group = MenuOptionGroup();
+                groups.add(group);
+                await _openGroup(context, group);
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: productBrand,
+                backgroundColor: productBrand.withValues(alpha: 0.08),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text(
+                'Tambah grup',
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
-            if (!readOnly)
-              TextButton.icon(
-                onPressed: () async {
-                  final group = MenuOptionGroup();
-                  groups.add(group);
-                  await _openGroup(context, group);
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Grup'),
-              ),
-          ],
-        ),
+          ),
+        if (!showHeader && !readOnly) const SizedBox(height: 8),
         if (groups.isEmpty)
-          Text(
-            readOnly
-                ? 'Tidak ada opsi.'
-                : 'Belum ada grup opsi. Tambah jika produk punya pilihan.',
-            style: TextStyle(color: Colors.black.withValues(alpha: 0.5)),
-          ),
-        for (var gi = 0; gi < groups.length; gi++)
-          _OptionGroupSummary(
-            group: groups[gi],
-            showOptionStock: showOptionStock,
-            canManageStock: canManageStock,
-            onOpen: () => _openGroup(context, groups[gi]),
-            onDelete: readOnly
-                ? null
-                : () {
-                    groups.removeAt(gi);
-                    _emit();
-                  },
-          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 18, 14, 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: productBrand.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.tune_rounded,
+                    color: productBrand,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  readOnly
+                      ? 'Tidak ada opsi'
+                      : 'Belum ada grup opsi',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  readOnly
+                      ? 'Produk ini tidak punya pilihan varian.'
+                      : 'Tambah grup jika produk punya pilihan (level, topping, dll).',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.black.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          for (var gi = 0; gi < groups.length; gi++)
+            _OptionGroupSummary(
+              group: groups[gi],
+              showOptionStock: showOptionStock,
+              canManageStock: canManageStock,
+              onOpen: () => _openGroup(context, groups[gi]),
+              onDelete: readOnly
+                  ? null
+                  : () {
+                      groups.removeAt(gi);
+                      _emit();
+                    },
+            ),
       ],
     );
   }
@@ -575,92 +925,126 @@ class _OptionGroupSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = group.name.trim().isEmpty ? 'Grup tanpa nama' : group.name.trim();
+    final title =
+        group.name.trim().isEmpty ? 'Grup tanpa nama' : group.name.trim();
+    final rule = provisionChoices[group.provision] ?? group.provision;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 2),
-                          Text(
-                            groupRuleLabel(group),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.black.withValues(alpha: 0.5),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: const TextStyle(fontWeight: FontWeight.w800),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (onDelete != null)
-                      IconButton(
-                        onPressed: onDelete,
-                        icon: const Icon(Icons.delete_outline, color: productBrand),
-                      ),
-                    Icon(
-                      Icons.chevron_right,
-                      color: Colors.black.withValues(alpha: 0.35),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                ),
-                if (group.options.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  for (final option in group.options)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
                               children: [
-                                Text(
-                                  option.name.trim().isEmpty
-                                      ? 'Opsi tanpa nama'
-                                      : option.name.trim(),
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                                if (showOptionStock)
-                                  Text(
-                                    optionStockLabel(
-                                      option,
-                                      showOptionStock: showOptionStock,
-                                      canManageStock: canManageStock,
-                                    ),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.black.withValues(alpha: 0.45),
-                                    ),
+                                ProductMetaChip(label: rule, filled: true),
+                                if (group.provision != 'OPTIONAL')
+                                  ProductMetaChip(
+                                    label: 'Nilai ${group.provisionValue}',
                                   ),
+                                ProductMetaChip(
+                                  label: '${group.options.length} opsi',
+                                ),
                               ],
                             ),
-                          ),
-                          Text(
-                            'Rp ${formatProductPrice(option.price.replaceAll('.', ''))}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                      if (onDelete != null)
+                        IconButton(
+                          onPressed: onDelete,
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: productBrand,
+                          ),
+                        ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.black.withValues(alpha: 0.35),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
+                  if (group.options.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    for (final option in group.options)
+                      Container(
+                        margin: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    option.name.trim().isEmpty
+                                        ? 'Opsi tanpa nama'
+                                        : option.name.trim(),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  if (showOptionStock)
+                                    Text(
+                                      optionStockLabel(
+                                        option,
+                                        showOptionStock: showOptionStock,
+                                        canManageStock: canManageStock,
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black
+                                            .withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              'Rp ${formatProductPrice(option.price.replaceAll('.', ''))}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: productBrand,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -735,37 +1119,24 @@ class _ProductStockEditorPageState extends State<ProductStockEditorPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'always', label: Text('Selalu')),
-              ButtonSegment(value: 'direct', label: Text('Pcs')),
-              ButtonSegment(value: 'linked', label: Text('Resep')),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (value) => _setMode(value.first),
+          ProductStockModeTabs(
+            value: _mode,
+            onChanged: _setMode,
           ),
           if (_mode == 'direct') ...[
             const SizedBox(height: 16),
             TextField(
               controller: widget.quantity,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Stok (pcs)',
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
-              ),
+              decoration: productFieldDecoration(label: 'Stok (pcs)'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: widget.modalPrice,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Harga modal / pcs',
-                helperText: 'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
-                border: const OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
+              decoration: productFieldDecoration(
+                label: 'Harga modal / pcs',
+                helper: 'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
                 prefixText: 'Rp ',
               ),
             ),
@@ -869,135 +1240,243 @@ class _OptionGroupEditorPageState extends State<OptionGroupEditorPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
-          TextField(
-            controller: _name,
-            enabled: !widget.readOnly,
-            decoration: const InputDecoration(
-              labelText: 'Nama grup (mis. Level Pedas)',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            onChanged: (value) => group.name = value,
-          ),
-          const SizedBox(height: 12),
-          if (widget.readOnly)
-            Text(
-              groupRuleLabel(group),
-              style: TextStyle(color: Colors.black.withValues(alpha: 0.6)),
-            )
-          else ...[
-            DropdownButtonFormField<String>(
-              initialValue: provisionChoices.containsKey(group.provision)
-                  ? group.provision
-                  : 'OPTIONAL',
-              decoration: const InputDecoration(
-                labelText: 'Aturan pilihan',
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              items: [
-                for (final entry in provisionChoices.entries)
-                  DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+          ProductFormSectionCard(
+            title: 'Detail grup',
+            child: Column(
+              children: [
+                TextField(
+                  controller: _name,
+                  enabled: !widget.readOnly,
+                  decoration: productFieldDecoration(
+                    label: 'Nama grup (mis. Level Pedas)',
+                  ),
+                  onChanged: (value) => group.name = value,
+                ),
+                if (widget.readOnly) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ProductMetaChip(
+                      label: groupRuleLabel(group),
+                      filled: true,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 14),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Aturan pilihan',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final entry in provisionChoices.entries)
+                        _ProvisionChip(
+                          label: entry.value,
+                          selected: group.provision == entry.key,
+                          onTap: () => setState(() => group.provision = entry.key),
+                        ),
+                    ],
+                  ),
+                  if (group.provision != 'OPTIONAL') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _provisionValue,
+                      keyboardType: TextInputType.number,
+                      decoration: productFieldDecoration(label: 'Nilai aturan'),
+                      onChanged: (value) => group.provisionValue = value,
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _description,
+                    decoration: productFieldDecoration(
+                      label: 'Deskripsi grup (opsional)',
+                    ),
+                    onChanged: (value) => group.description = value,
+                  ),
+                ],
               ],
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() => group.provision = value);
-              },
             ),
-            if (group.provision != 'OPTIONAL') ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _provisionValue,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Nilai aturan',
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                onChanged: (value) => group.provisionValue = value,
-              ),
-            ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: _description,
-              decoration: const InputDecoration(
-                labelText: 'Deskripsi grup (opsional)',
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              onChanged: (value) => group.description = value,
-            ),
-          ],
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              const Expanded(
-                child: Text('Opsi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-              ),
-              if (!widget.readOnly)
-                TextButton.icon(
-                  onPressed: () {
-                    final option = MenuOptionItem();
-                    setState(() => group.options.add(option));
-                    _openOption(option);
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('Opsi'),
-                ),
-            ],
           ),
-          for (var i = 0; i < group.options.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Material(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                child: ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  title: Text(
-                    group.options[i].name.trim().isEmpty
-                        ? 'Opsi tanpa nama'
-                        : group.options[i].name.trim(),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+          ProductFormSectionCard(
+            title: 'Daftar opsi',
+            subtitle: '${group.options.length} item',
+            trailing: widget.readOnly
+                ? null
+                : TextButton.icon(
+                    onPressed: () {
+                      final option = MenuOptionItem();
+                      setState(() => group.options.add(option));
+                      _openOption(option);
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: productBrand,
+                      backgroundColor: productBrand.withValues(alpha: 0.08),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text(
+                      'Tambah',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
                   ),
-                  subtitle: Text(
-                    [
-                      'Rp ${formatProductPrice(group.options[i].price.replaceAll('.', ''))}',
-                      if (widget.showOptionStock)
-                        optionStockLabel(
-                          group.options[i],
-                          showOptionStock: true,
-                          canManageStock: widget.canManageStock,
+            child: Column(
+              children: [
+                if (group.options.isEmpty)
+                  Text(
+                    'Belum ada opsi di grup ini.',
+                    style: TextStyle(
+                      color: Colors.black.withValues(alpha: 0.5),
+                    ),
+                  )
+                else
+                  for (var i = 0; i < group.options.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Material(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => _openOption(group.options[i]),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        group.options[i].name.trim().isEmpty
+                                            ? 'Opsi tanpa nama'
+                                            : group.options[i].name.trim(),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        [
+                                          'Rp ${formatProductPrice(group.options[i].price.replaceAll('.', ''))}',
+                                          if (widget.showOptionStock)
+                                            optionStockLabel(
+                                              group.options[i],
+                                              showOptionStock: true,
+                                              canManageStock:
+                                                  widget.canManageStock,
+                                            ),
+                                        ].join(' · '),
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          color: Colors.black
+                                              .withValues(alpha: 0.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!widget.readOnly &&
+                                    group.options.length > 1)
+                                  IconButton(
+                                    onPressed: () => setState(
+                                      () => group.options.removeAt(i),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      color: productBrand,
+                                    ),
+                                  )
+                                else
+                                  Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: Colors.black.withValues(alpha: 0.35),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
-                    ].join(' · '),
-                  ),
-                  trailing: widget.readOnly || group.options.length <= 1
-                      ? const Icon(Icons.chevron_right)
-                      : IconButton(
-                          onPressed: () => setState(() => group.options.removeAt(i)),
-                          icon: const Icon(Icons.close),
-                        ),
-                  onTap: () => _openOption(group.options[i]),
-                ),
-              ),
+                      ),
+                    ),
+              ],
             ),
-          const SizedBox(height: 12),
+          ),
           SizedBox(
             height: 48,
             child: FilledButton(
               onPressed: () => Navigator.pop(context),
               style: FilledButton.styleFrom(
                 backgroundColor: productBrand,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-              child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.w800)),
+              child: const Text(
+                'Selesai',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ProvisionChip extends StatelessWidget {
+  const _ProvisionChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? productBrand.withValues(alpha: 0.12)
+                : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? productBrand.withValues(alpha: 0.35)
+                  : Colors.black.withValues(alpha: 0.06),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 12.5,
+              color: selected ? productBrand : const Color(0xFF475569),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1086,149 +1565,149 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
         children: [
-          TextField(
-            controller: _name,
-            enabled: !widget.readOnly,
-            decoration: const InputDecoration(
-              labelText: 'Nama opsi',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            onChanged: (value) => option.name = value,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _price,
-            enabled: !widget.readOnly,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Harga',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            onChanged: (value) {
-              option.price = value;
-              setState(() {});
-            },
-          ),
-          if (widget.showOptionStock && widget.canManageStock) ...[
-            const SizedBox(height: 16),
-            const Text('Stok opsi', style: TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'always', label: Text('Selalu')),
-                ButtonSegment(value: 'direct', label: Text('Pcs')),
-                ButtonSegment(value: 'linked', label: Text('Resep')),
+          ProductFormSectionCard(
+            title: 'Detail opsi',
+            child: Column(
+              children: [
+                TextField(
+                  controller: _name,
+                  enabled: !widget.readOnly,
+                  decoration: productFieldDecoration(label: 'Nama opsi'),
+                  onChanged: (value) => option.name = value,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _price,
+                  enabled: !widget.readOnly,
+                  keyboardType: TextInputType.number,
+                  decoration: productFieldDecoration(label: 'Harga'),
+                  onChanged: (value) {
+                    option.price = value;
+                    setState(() {});
+                  },
+                ),
               ],
-              selected: {_mode},
-              // Stok boleh diubah meski struktur opsi terkunci (edit toko).
-              onSelectionChanged: (value) => _setMode(value.first),
             ),
-            if (_mode == 'direct') ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _quantity,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Stok (pcs)',
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                onChanged: (value) => option.stockQuantity = value,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _modalPrice,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'Harga modal / pcs',
-                  helperText: 'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
-                  border: const OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Colors.white,
-                  prefixText: 'Rp ',
-                ),
-                onChanged: (value) => option.modalPrice = value,
-              ),
-            ],
-            if (_mode == 'linked')
-              LinkedRecipeEditor(
-                lines: option.recipes,
-                ingredients: widget.ingredients,
-                sellPrice: sellPrice,
-                onChanged: (next) => setState(() => option.recipes = next),
-              ),
-          ] else if (widget.showOptionStock) ...[
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              activeThumbColor: productBrand,
-              title: const Text('Opsi selalu tersedia'),
-              value: option.alwaysAvailable,
-              // Stok boleh diubah meski struktur opsi terkunci (edit toko).
-              onChanged: (value) => setState(() {
-                option.alwaysAvailable = value;
-                if (!value && option.stockType != 'linked') {
-                  option.stockType = 'direct';
-                  option.stockEditable = true;
-                }
-              }),
-            ),
-            if (!option.alwaysAvailable)
-              option.stockEditable
-                  ? Column(
-                      children: [
-                        TextField(
-                          controller: _quantity,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Stok (pcs)',
-                            border: OutlineInputBorder(),
-                            filled: true,
-                            fillColor: Colors.white,
-                          ),
-                          onChanged: (value) => option.stockQuantity = value,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _modalPrice,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(
-                            labelText: 'Harga modal / pcs',
-                            helperText:
-                                'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
-                            border: const OutlineInputBorder(),
-                            filled: true,
-                            fillColor: Colors.white,
-                            prefixText: 'Rp ',
-                          ),
-                          onChanged: (value) => option.modalPrice = value,
-                        ),
-                      ],
-                    )
-                  : InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Stok dari resep (pcs)',
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      child: Text(option.stockQuantity.isEmpty ? '0' : option.stockQuantity),
+          ),
+          if (widget.showOptionStock && widget.canManageStock)
+            ProductFormSectionCard(
+              title: 'Stok opsi',
+              child: Column(
+                children: [
+                  ProductStockModeTabs(
+                    value: _mode,
+                    onChanged: _setMode,
+                  ),
+                  if (_mode == 'direct') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _quantity,
+                      keyboardType: TextInputType.number,
+                      decoration: productFieldDecoration(label: 'Stok (pcs)'),
+                      onChanged: (value) => option.stockQuantity = value,
                     ),
-          ],
-          const SizedBox(height: 20),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _modalPrice,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: productFieldDecoration(
+                        label: 'Harga modal / pcs',
+                        helper:
+                            'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
+                        prefixText: 'Rp ',
+                      ),
+                      onChanged: (value) => option.modalPrice = value,
+                    ),
+                  ],
+                  if (_mode == 'linked') ...[
+                    const SizedBox(height: 8),
+                    LinkedRecipeEditor(
+                      lines: option.recipes,
+                      ingredients: widget.ingredients,
+                      sellPrice: sellPrice,
+                      onChanged: (next) =>
+                          setState(() => option.recipes = next),
+                    ),
+                  ],
+                ],
+              ),
+            )
+          else if (widget.showOptionStock)
+            ProductFormSectionCard(
+              title: 'Stok opsi',
+              child: Column(
+                children: [
+                  ProductFormSwitchTile(
+                    title: 'Opsi selalu tersedia',
+                    value: option.alwaysAvailable,
+                    icon: Icons.all_inclusive_rounded,
+                    onChanged: (value) => setState(() {
+                      option.alwaysAvailable = value;
+                      if (!value && option.stockType != 'linked') {
+                        option.stockType = 'direct';
+                        option.stockEditable = true;
+                      }
+                    }),
+                  ),
+                  if (!option.alwaysAvailable)
+                    option.stockEditable
+                        ? Column(
+                            children: [
+                              TextField(
+                                controller: _quantity,
+                                keyboardType: TextInputType.number,
+                                decoration: productFieldDecoration(
+                                  label: 'Stok (pcs)',
+                                ),
+                                onChanged: (value) =>
+                                    option.stockQuantity = value,
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _modalPrice,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration: productFieldDecoration(
+                                  label: 'Harga modal / pcs',
+                                  helper:
+                                      'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
+                                  prefixText: 'Rp ',
+                                ),
+                                onChanged: (value) =>
+                                    option.modalPrice = value,
+                              ),
+                            ],
+                          )
+                        : InputDecorator(
+                            decoration: productFieldDecoration(
+                              label: 'Stok dari resep (pcs)',
+                            ),
+                            child: Text(
+                              option.stockQuantity.isEmpty
+                                  ? '0'
+                                  : option.stockQuantity,
+                            ),
+                          ),
+                ],
+              ),
+            ),
           SizedBox(
             height: 48,
             child: FilledButton(
               onPressed: () => Navigator.pop(context),
               style: FilledButton.styleFrom(
                 backgroundColor: productBrand,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-              child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.w800)),
+              child: const Text(
+                'Selesai',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
           ),
         ],

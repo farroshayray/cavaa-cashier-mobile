@@ -1393,259 +1393,256 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                   ],
                   const SizedBox(height: 16),
                 ],
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.black.withValues(alpha: 0.06),
-                    ),
-                  ),
+                ProductFormSectionCard(
+                  title: 'Info produk',
+                  subtitle: _identityLocked
+                      ? 'Identitas terkunci dari katalog'
+                      : 'Nama, kategori, harga, dan gambar',
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        controller: _name,
-                        enabled: !_identityLocked && !_saving,
-                        decoration: InputDecoration(
-                          labelText: 'Nama produk',
-                          border: const OutlineInputBorder(),
-                          helperText: _identityLocked
-                              ? 'Terkunci (dari master)'
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_identityLocked)
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         TextField(
-                          controller: _category,
-                          enabled: false,
-                          decoration: const InputDecoration(
-                            labelText: 'Kategori',
-                            border: OutlineInputBorder(),
-                            helperText: 'Terkunci (dari master)',
+                          controller: _name,
+                          enabled: !_identityLocked && !_saving,
+                          decoration: productFieldDecoration(
+                            label: 'Nama produk',
+                            helper: _identityLocked
+                                ? 'Terkunci (dari master)'
+                                : null,
                           ),
-                        )
-                      else
-                        CategorySelectWithManage(
-                          categories: _categories,
-                          categoryId: _categoryId,
-                          categoryNameController: _category,
-                          enabled: !_saving,
-                          onChanged: (v) => setState(() => _categoryId = v),
-                          onCategoriesUpdated: (list) {
-                            setState(() {
-                              _categories = list;
-                              if (_categoryId != null &&
-                                  !_categories.any(
-                                    (c) =>
-                                        int.tryParse('${c['id']}') ==
-                                        _categoryId,
-                                  )) {
-                                _categoryId = null;
-                              }
-                            });
-                          },
                         ),
-                      if (_identityLocked) ...[
+                        const SizedBox(height: 12),
+                        if (_identityLocked)
+                          TextField(
+                            controller: _category,
+                            enabled: false,
+                            decoration: productFieldDecoration(
+                              label: 'Kategori',
+                              helper: 'Terkunci (dari master)',
+                            ),
+                          )
+                        else
+                          CategorySelectWithManage(
+                            categories: _categories,
+                            categoryId: _categoryId,
+                            categoryNameController: _category,
+                            enabled: !_saving,
+                            onChanged: (v) => setState(() => _categoryId = v),
+                            onCategoriesUpdated: (list) {
+                              setState(() {
+                                _categories = list;
+                                if (_categoryId != null &&
+                                    !_categories.any(
+                                      (c) =>
+                                          int.tryParse('${c['id']}') ==
+                                          _categoryId,
+                                    )) {
+                                  _categoryId = null;
+                                }
+                              });
+                            },
+                          ),
+                        if (_identityLocked) ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _code,
+                            enabled: false,
+                            decoration: productFieldDecoration(
+                              label: 'Kode produk',
+                              helper: 'Terkunci',
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         TextField(
-                          controller: _code,
-                          enabled: false,
-                          decoration: const InputDecoration(
-                            labelText: 'Kode produk',
-                            border: OutlineInputBorder(),
-                            helperText: 'Terkunci',
+                          controller: _price,
+                          enabled: !_saving,
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => setState(() {}),
+                          decoration: productFieldDecoration(
+                            label: 'Harga toko',
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _desc,
+                          enabled: !_identityLocked && !_saving,
+                          maxLines: 3,
+                          decoration: productFieldDecoration(
+                            label: 'Deskripsi',
+                            helper: _identityLocked
+                                ? 'Terkunci (dari master)'
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        if (!_identityLocked)
+                          ProductImagePickerRow(
+                            existing: _existingImages,
+                            pickedPaths: _pickedImages,
+                            enabled: !_saving,
+                            onPick: () async {
+                              final path = await pickProductImage();
+                              if (path == null) return;
+                              setState(() => _pickedImages.add(path));
+                            },
+                            onRemoveExisting: (i) =>
+                                setState(() => _existingImages.removeAt(i)),
+                            onRemovePicked: (i) =>
+                                setState(() => _pickedImages.removeAt(i)),
+                          )
+                        else if (_existingImages.isNotEmpty) ...[
+                          const Text(
+                            'Gambar (dari master)',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 8),
+                          ProductImagePickerRow(
+                            existing: _existingImages,
+                            pickedPaths: const [],
+                            enabled: false,
+                            onPick: () {},
+                            onRemoveExisting: (_) {},
+                            onRemovePicked: (_) {},
+                          ),
+                        ],
                       ],
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _price,
-                        enabled: !_saving,
-                        keyboardType: TextInputType.number,
-                        onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(
-                          labelText: 'Harga toko',
-                          border: OutlineInputBorder(),
+                    ),
+                  ),
+                ProductFormSectionCard(
+                  title: 'Promosi',
+                  subtitle: 'Opsional — diskon khusus produk ini',
+                  child: PromotionSelectWithManage(
+                    promotions: _promotions,
+                    promotionId: _promotionId,
+                    enabled: !_saving,
+                    onChanged: (v) => setState(() => _promotionId = v),
+                    onPromotionsUpdated: (list) {
+                      setState(() {
+                        _promotions = list;
+                        if (_promotionId != null &&
+                            !_promotions.any(
+                              (p) =>
+                                  int.tryParse('${p['id']}') == _promotionId,
+                            )) {
+                          _promotionId = null;
+                        }
+                      });
+                    },
+                  ),
+                ),
+                ProductFormSectionCard(
+                  title: 'Opsi / varian',
+                  subtitle: _identityLocked
+                      ? 'Struktur terkunci; stok opsi tetap bisa diubah'
+                      : 'Level, topping, dan pilihan lain',
+                  child: ProductMenuOptionsEditor(
+                    groups: _groups,
+                    showHeader: false,
+                    readOnly: _identityLocked,
+                    showOptionStock: true,
+                    canManageStock: widget.canManageStock,
+                    ingredients: _ingredients,
+                    onChanged: (next) => setState(() => _groups = next),
+                  ),
+                ),
+                ProductFormSectionCard(
+                  title: 'Stok',
+                  subtitle: widget.canManageStock
+                      ? 'Atur ketersediaan di toko ini'
+                      : 'Ketersediaan sederhana',
+                  child: widget.canManageStock
+                      ? _productStockCard()
+                      : Column(
+                          children: [
+                            ProductFormSwitchTile(
+                              title: 'Selalu tersedia',
+                              value: _alwaysAvailable,
+                              icon: Icons.all_inclusive_rounded,
+                              onChanged: _saving
+                                  ? null
+                                  : (v) =>
+                                      setState(() => _alwaysAvailable = v),
+                            ),
+                            if (!_alwaysAvailable)
+                              _stockEditable
+                                  ? TextField(
+                                      controller: _stock,
+                                      enabled: !_saving,
+                                      keyboardType: TextInputType.number,
+                                      decoration: productFieldDecoration(
+                                        label: 'Stok (pcs)',
+                                      ),
+                                    )
+                                  : InputDecorator(
+                                      decoration: productFieldDecoration(
+                                        label: 'Stok dari resep (pcs)',
+                                      ),
+                                      child: Text(
+                                        _stock.text.isEmpty
+                                            ? '0'
+                                            : _stock.text,
+                                      ),
+                                    ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      PromotionSelectWithManage(
-                        promotions: _promotions,
-                        promotionId: _promotionId,
-                        enabled: !_saving,
-                        onChanged: (v) => setState(() => _promotionId = v),
-                        onPromotionsUpdated: (list) {
-                          setState(() {
-                            _promotions = list;
-                            if (_promotionId != null &&
-                                !_promotions.any(
-                                  (p) =>
-                                      int.tryParse('${p['id']}') ==
-                                      _promotionId,
-                                )) {
-                              _promotionId = null;
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _desc,
-                        enabled: !_identityLocked && !_saving,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          labelText: 'Deskripsi',
-                          border: const OutlineInputBorder(),
-                          helperText: _identityLocked
-                              ? 'Terkunci (dari master)'
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      if (!_identityLocked)
-                        ProductImagePickerRow(
-                          existing: _existingImages,
-                          pickedPaths: _pickedImages,
-                          enabled: !_saving,
-                          onPick: () async {
-                            final path = await pickProductImage();
-                            if (path == null) return;
-                            setState(() => _pickedImages.add(path));
-                          },
-                          onRemoveExisting: (i) =>
-                              setState(() => _existingImages.removeAt(i)),
-                          onRemovePicked: (i) =>
-                              setState(() => _pickedImages.removeAt(i)),
-                        )
-                      else if (_existingImages.isNotEmpty) ...[
-                        const Text(
-                          'Gambar (dari master)',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 8),
-                        ProductImagePickerRow(
-                          existing: _existingImages,
-                          pickedPaths: const [],
-                          enabled: false,
-                          onPick: () {},
-                          onRemoveExisting: (_) {},
-                          onRemovePicked: (_) {},
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      ProductMenuOptionsEditor(
-                        groups: _groups,
-                        // Struktur (nama/tambah/hapus) tetap terkunci saat edit toko.
-                        // Field stok di dalam editor opsi sengaja tetap bisa diubah.
-                        readOnly: _identityLocked,
-                        showOptionStock: true,
-                        canManageStock: widget.canManageStock,
-                        ingredients: _ingredients,
-                        onChanged: (next) => setState(() => _groups = next),
-                      ),
-                      if (widget.canManageStock) ...[
-                        _productStockCard(),
-                      ] else ...[
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        activeThumbColor: _brand,
-                        title: const Text(
-                          'Selalu tersedia',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        value: _alwaysAvailable,
-                        onChanged: _saving
-                            ? null
-                            : (v) => setState(() => _alwaysAvailable = v),
-                      ),
-                      if (!_alwaysAvailable)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _stockEditable
-                              ? TextField(
-                                  controller: _stock,
-                                  enabled: !_saving,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Stok (pcs)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                )
-                              : InputDecorator(
-                                  decoration: const InputDecoration(
-                                    labelText: 'Stok dari resep (pcs)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  child: Text(
-                                    _stock.text.isEmpty ? '0' : _stock.text,
-                                  ),
-                                ),
-                        ),
-                      ],
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        activeThumbColor: _brand,
-                        title: const Text(
-                          'Aktif di toko ini',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                ),
+                ProductFormSectionCard(
+                  title: 'Status',
+                  child: Column(
+                    children: [
+                      ProductFormSwitchTile(
+                        title: 'Aktif di toko ini',
                         value: _isActive,
+                        icon: Icons.check_circle_outline_rounded,
                         onChanged: _saving
                             ? null
                             : (v) => setState(() => _isActive = v),
                       ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        activeThumbColor: _brand,
-                        title: const Text(
-                          'Produk unggulan',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                      ProductFormSwitchTile(
+                        title: 'Produk unggulan',
                         value: _isHot,
+                        icon: Icons.local_fire_department_rounded,
                         onChanged:
                             _saving ? null : (v) => setState(() => _isHot = v),
                       ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 8),
-                        Text(_error!, style: const TextStyle(color: Colors.red)),
-                      ],
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _saving ? null : _save,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _brand,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                    ],
+                  ),
+                ),
+                if (_error != null) ...[
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 8),
+                ],
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _brand,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            _isEdit
+                                ? 'Simpan Perubahan'
+                                : _fromCatalog
+                                    ? 'Tambahkan ke Toko'
+                                    : 'Simpan Produk',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  _isEdit
-                                      ? 'Simpan Perubahan'
-                                      : _fromCatalog
-                                          ? 'Tambahkan ke Toko'
-                                          : 'Simpan Produk',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],

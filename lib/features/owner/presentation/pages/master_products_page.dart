@@ -739,35 +739,23 @@ class _MasterProductEditorPageState extends State<MasterProductEditorPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.black.withValues(alpha: 0.06),
-                    ),
-                  ),
+                ProductFormSectionCard(
+                  title: 'Info produk',
+                  subtitle: 'Nama, harga, kategori, dan gambar katalog',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       TextField(
                         controller: _name,
                         enabled: !_saving,
-                        decoration: const InputDecoration(
-                          labelText: 'Nama produk',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: productFieldDecoration(label: 'Nama produk'),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _price,
                         enabled: !_saving,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Harga',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: productFieldDecoration(label: 'Harga'),
                       ),
                       const SizedBox(height: 12),
                       CategorySelectWithManage(
@@ -791,34 +779,11 @@ class _MasterProductEditorPageState extends State<MasterProductEditorPage> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      PromotionSelectWithManage(
-                        promotions: _promotions,
-                        promotionId: _promotionId,
-                        enabled: !_saving,
-                        onChanged: (v) => setState(() => _promotionId = v),
-                        onPromotionsUpdated: (list) {
-                          setState(() {
-                            _promotions = list;
-                            if (_promotionId != null &&
-                                !_promotions.any(
-                                  (p) =>
-                                      int.tryParse('${p['id']}') ==
-                                      _promotionId,
-                                )) {
-                              _promotionId = null;
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
                       TextField(
                         controller: _desc,
                         enabled: !_saving,
                         maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Deskripsi',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: productFieldDecoration(label: 'Deskripsi'),
                       ),
                       const SizedBox(height: 14),
                       ProductImagePickerRow(
@@ -835,72 +800,95 @@ class _MasterProductEditorPageState extends State<MasterProductEditorPage> {
                         onRemovePicked: (i) =>
                             setState(() => _pickedImages.removeAt(i)),
                       ),
-                      const SizedBox(height: 16),
-                      ProductMenuOptionsEditor(
-                        groups: _groups,
-                        onChanged: (next) => setState(() => _groups = next),
-                      ),
-                      if (_isEdit) ...[
-                        const SizedBox(height: 8),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          activeThumbColor: _brand,
-                          title: const Text(
-                            'Terapkan harga ke semua toko',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
+                    ],
+                  ),
+                ),
+                ProductFormSectionCard(
+                  title: 'Promosi',
+                  subtitle: 'Opsional — template promo produk katalog',
+                  child: PromotionSelectWithManage(
+                    promotions: _promotions,
+                    promotionId: _promotionId,
+                    enabled: !_saving,
+                    onChanged: (v) => setState(() => _promotionId = v),
+                    onPromotionsUpdated: (list) {
+                      setState(() {
+                        _promotions = list;
+                        if (_promotionId != null &&
+                            !_promotions.any(
+                              (p) =>
+                                  int.tryParse('${p['id']}') == _promotionId,
+                            )) {
+                          _promotionId = null;
+                        }
+                      });
+                    },
+                  ),
+                ),
+                ProductFormSectionCard(
+                  title: 'Opsi / varian',
+                  subtitle: 'Pilihan yang ikut ke toko yang memakai katalog',
+                  child: ProductMenuOptionsEditor(
+                    groups: _groups,
+                    showHeader: false,
+                    onChanged: (next) => setState(() => _groups = next),
+                  ),
+                ),
+                if (_isEdit)
+                  ProductFormSectionCard(
+                    title: 'Sinkron ke toko',
+                    subtitle: 'Terapkan perubahan ke semua toko yang memakai',
+                    child: Column(
+                      children: [
+                        ProductFormSwitchTile(
+                          title: 'Terapkan harga ke semua toko',
                           value: _applyPrice,
+                          icon: Icons.sell_outlined,
                           onChanged: _saving
                               ? null
                               : (v) => setState(() => _applyPrice = v),
                         ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          activeThumbColor: _brand,
-                          title: const Text(
-                            'Terapkan promo ke semua toko',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
+                        ProductFormSwitchTile(
+                          title: 'Terapkan promo ke semua toko',
                           value: _applyPromo,
+                          icon: Icons.local_offer_outlined,
                           onChanged: _saving
                               ? null
                               : (v) => setState(() => _applyPromo = v),
                         ),
                       ],
-                      if (_error != null) ...[
-                        const SizedBox(height: 8),
-                        Text(_error!, style: const TextStyle(color: Colors.red)),
-                      ],
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _saving ? null : _save,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _brand,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                if (_error != null) ...[
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 8),
+                ],
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _brand,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            _isEdit ? 'Simpan Perubahan' : 'Simpan Master',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  _isEdit ? 'Simpan Perubahan' : 'Simpan Master',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],
