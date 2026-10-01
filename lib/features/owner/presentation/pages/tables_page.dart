@@ -195,18 +195,28 @@ class _TablesPageState extends State<TablesPage> {
     final id = int.tryParse('${table['id']}') ?? 0;
     if (id <= 0) return;
 
+    final rootNav = Navigator.of(context, rootNavigator: true);
+    var loadingShown = false;
+    void dismissLoading() {
+      if (!loadingShown) return;
+      loadingShown = false;
+      rootNav.pop();
+    }
+
     showDialog<void>(
       context: context,
+      useRootNavigator: true,
       barrierDismissible: false,
       builder: (_) => const Center(
         child: CircularProgressIndicator(color: _brand),
       ),
     );
+    loadingShown = true;
 
     try {
       final data = await ownerApiOf(context).getTableBarcode(id);
+      dismissLoading();
       if (!mounted) return;
-      Navigator.of(context).pop(); // loading
 
       final b64 = data['barcode_png_base64']?.toString() ?? '';
       if (b64.isEmpty) {
@@ -219,6 +229,7 @@ class _TablesPageState extends State<TablesPage> {
       final bytes = base64Decode(b64);
       await showDialog<void>(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) => _BarcodeDialog(
           bytes: bytes,
           tableNo: table['table_no']?.toString() ?? '-',
@@ -228,11 +239,13 @@ class _TablesPageState extends State<TablesPage> {
         ),
       );
     } catch (_) {
+      dismissLoading();
       if (!mounted) return;
-      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Gagal generate QR meja')),
       );
+    } finally {
+      dismissLoading();
     }
   }
 
@@ -736,73 +749,189 @@ class _BarcodeDialog extends StatelessWidget {
     }
   }
 
+  Widget _qrImage() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth.isFinite ? constraints.maxWidth : null;
+        final h = constraints.maxHeight.isFinite ? constraints.maxHeight : null;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.contain,
+            width: w,
+            height: h,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _titleBlock({TextAlign align = TextAlign.center}) {
+    return Column(
+      crossAxisAlignment: align == TextAlign.center
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'QR Meja $tableNo',
+          textAlign: align,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$storeName · $tableClass',
+          textAlign: align,
+          style: TextStyle(
+            color: Colors.black.withValues(alpha: 0.55),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _urlText({TextAlign align = TextAlign.center}) {
+    final url = (qrUrl ?? '').trim();
+    if (url.isEmpty) return const SizedBox.shrink();
+    return Text(
+      url,
+      textAlign: align,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 11,
+        color: Colors.black.withValues(alpha: 0.45),
+      ),
+    );
+  }
+
+  Widget _actions(BuildContext context, {bool vertical = false}) {
+    final tutup = OutlinedButton(
+      onPressed: () => Navigator.pop(context),
+      child: const Text('Tutup'),
+    );
+    final bagikan = ElevatedButton.icon(
+      onPressed: () => _share(context),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _brand,
+        foregroundColor: Colors.white,
+      ),
+      icon: const Icon(Icons.share_rounded, size: 18),
+      label: const Text('Bagikan'),
+    );
+    if (vertical) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          bagikan,
+          const SizedBox(height: 8),
+          tutup,
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(child: tutup),
+        const SizedBox(width: 8),
+        Expanded(child: bagikan),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    // Hanya aspect landscape — jangan pakai width>=700 (tablet portrait ikut 2 kolom).
+    final landscape = size.width > size.height;
+    final maxW = landscape
+        ? (size.width * 0.88).clamp(420.0, 720.0)
+        : (size.width * 0.92).clamp(280.0, 560.0);
+    final maxH = size.height * 0.9;
+
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'QR Meja $tableNo',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 17,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '$storeName · $tableClass',
-              style: TextStyle(
-                color: Colors.black.withValues(alpha: 0.55),
-              ),
-            ),
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                bytes,
-                fit: BoxFit.contain,
-                width: double.infinity,
-              ),
-            ),
-            if ((qrUrl ?? '').isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                qrUrl!,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.black.withValues(alpha: 0.45),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Tutup'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _share(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _brand,
-                      foregroundColor: Colors.white,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (landscape) {
+                  return SizedBox(
+                    height: constraints.maxHeight.isFinite
+                        ? constraints.maxHeight
+                        : maxH * 0.85,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: ColoredBox(
+                            color: const Color(0xFFF8FAFC),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: _qrImage(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 4,
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _titleBlock(align: TextAlign.start),
+                                if ((qrUrl ?? '').trim().isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  _urlText(align: TextAlign.start),
+                                ],
+                                const SizedBox(height: 16),
+                                _actions(context, vertical: true),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    icon: const Icon(Icons.share_rounded, size: 18),
-                    label: const Text('Bagikan'),
+                  );
+                }
+                final portraitH = constraints.maxHeight.isFinite
+                    ? constraints.maxHeight
+                    : maxH * 0.9;
+                return SizedBox(
+                  height: portraitH,
+                  child: Column(
+                    children: [
+                      _titleBlock(),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: ColoredBox(
+                          color: const Color(0xFFF8FAFC),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: _qrImage(),
+                          ),
+                        ),
+                      ),
+                      if ((qrUrl ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _urlText(),
+                      ],
+                      const SizedBox(height: 12),
+                      _actions(context),
+                    ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
-          ],
+          ),
         ),
       ),
     );

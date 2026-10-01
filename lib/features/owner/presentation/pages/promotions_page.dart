@@ -465,34 +465,43 @@ class _PromotionsPageState extends State<PromotionsPage> {
                     },
                   ),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      _FilterChip(
-                        label: 'Semua',
-                        selected: _typeFilter == null,
-                        onTap: () {
-                          setState(() => _typeFilter = null);
-                          _load(silent: true);
-                        },
-                      ),
-                      _FilterChip(
-                        label: 'Persen',
-                        selected: _typeFilter == 'percentage',
-                        onTap: () {
-                          setState(() => _typeFilter = 'percentage');
-                          _load(silent: true);
-                        },
-                      ),
-                      _FilterChip(
-                        label: 'Nominal',
-                        selected: _typeFilter == 'amount',
-                        onTap: () {
-                          setState(() => _typeFilter = 'amount');
-                          _load(silent: true);
-                        },
-                      ),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB).withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        _PromoSegmentTab(
+                          label: 'Semua',
+                          icon: Icons.grid_view_rounded,
+                          selected: _typeFilter == null,
+                          onTap: () {
+                            setState(() => _typeFilter = null);
+                            _load(silent: true);
+                          },
+                        ),
+                        _PromoSegmentTab(
+                          label: 'Persen',
+                          icon: Icons.percent_rounded,
+                          selected: _typeFilter == 'percentage',
+                          onTap: () {
+                            setState(() => _typeFilter = 'percentage');
+                            _load(silent: true);
+                          },
+                        ),
+                        _PromoSegmentTab(
+                          label: 'Nominal',
+                          icon: Icons.payments_rounded,
+                          selected: _typeFilter == 'amount',
+                          onTap: () {
+                            setState(() => _typeFilter = 'amount');
+                            _load(silent: true);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 10),
@@ -550,10 +559,9 @@ class _PromotionsPageState extends State<PromotionsPage> {
                   else
                     ..._promotions.map((p) {
                       final status = p['status']?.toString() ?? 'active';
-                      final statusLabel =
-                          p['status_label']?.toString() ?? 'Aktif';
-                      final color = _statusColor(status);
+                      final statusColor = _statusColor(status);
                       final type = p['promotion_type']?.toString() ?? '';
+                      final isPercent = type == 'percentage';
                       final code = p['promotion_code']?.toString() ?? '';
                       final name = p['name']?.toString() ??
                           p['promotion_name']?.toString() ??
@@ -561,120 +569,123 @@ class _PromotionsPageState extends State<PromotionsPage> {
                       final usesExpiry = p['uses_expiry'] == true;
                       final start = p['start_date']?.toString();
                       final end = p['end_date']?.toString();
+                      final valueText = _valueLabel(p);
+                      final daysText = _daysLabel(p['active_days']);
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: Colors.black.withValues(alpha: 0.06),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                              color: Colors.black.withValues(alpha: 0.03),
-                            ),
-                          ],
                         ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () => _openEditor(promo: p),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(14),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => _openEditor(promo: p),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: _brand.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      isPercent
+                                          ? Icons.percent_rounded
+                                          : Icons.payments_rounded,
+                                      color: _brand,
+                                      size: 22,
+                                    ),
                                   ),
-                                  child: Icon(
-                                    type == 'percentage'
-                                        ? Icons.percent_rounded
-                                        : Icons.payments_outlined,
-                                    color: color,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              name,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 15,
-                                              ),
-                                            ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          name,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 15,
                                           ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  color.withValues(alpha: 0.12),
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                            ),
-                                            child: Text(
-                                              statusLabel,
-                                              style: TextStyle(
-                                                color: color,
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 11.5,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        [
-                                          _valueLabel(p),
-                                          if (code.isNotEmpty) code,
-                                          _daysLabel(p['active_days']),
-                                        ].join(' · '),
-                                        style: TextStyle(
-                                          color: Colors.black
-                                              .withValues(alpha: 0.55),
-                                          fontSize: 12.5,
                                         ),
-                                      ),
-                                      if (usesExpiry &&
-                                          (start != null || end != null)) ...[
                                         const SizedBox(height: 4),
                                         Text(
-                                          '${start ?? '…'} → ${end ?? '…'}',
+                                          [
+                                            valueText,
+                                            if (code.isNotEmpty) code,
+                                            daysText,
+                                          ].join(' · '),
                                           style: TextStyle(
                                             color: Colors.black
-                                                .withValues(alpha: 0.45),
-                                            fontSize: 11.5,
+                                                .withValues(alpha: 0.55),
+                                            fontSize: 12.5,
                                           ),
                                         ),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          children: [
+                                            _PromoMetaChip(
+                                              label: isPercent
+                                                  ? 'Persen'
+                                                  : 'Nominal',
+                                              filled: true,
+                                            ),
+                                            if (usesExpiry &&
+                                                (start != null || end != null))
+                                              _PromoMetaChip(
+                                                label:
+                                                    '${start ?? '…'} → ${end ?? '…'}',
+                                              ),
+                                          ],
+                                        ),
                                       ],
+                                    ),
+                                  ),
+                                  Column(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Icon(
+                                          status == 'active'
+                                              ? Icons.check_circle_rounded
+                                              : status == 'inactive'
+                                                  ? Icons
+                                                      .pause_circle_filled_rounded
+                                                  : Icons.schedule_rounded,
+                                          color: status == 'active'
+                                              ? const Color(0xFF0B6E4F)
+                                              : statusColor,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: () => _confirmDelete(p),
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: _brand,
+                                          size: 22,
+                                        ),
+                                      ),
                                     ],
                                   ),
-                                ),
-                                IconButton(
-                                  onPressed: () => _confirmDelete(p),
-                                  icon: const Icon(
-                                    Icons.delete_outline_rounded,
-                                    color: _brand,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -862,34 +873,100 @@ class PromotionSelectWithManage extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
+class _PromoSegmentTab extends StatelessWidget {
+  const _PromoSegmentTab({
     required this.label,
+    required this.icon,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-      selectedColor: _brand.withValues(alpha: 0.14),
-      labelStyle: TextStyle(
-        fontWeight: FontWeight.w700,
-        color: selected ? _brand : const Color(0xFF334155),
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: selected ? _brand : const Color(0xFF6B7280),
+                ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                      color: selected ? _brand : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      side: BorderSide(
-        color: selected
-            ? _brand.withValues(alpha: 0.35)
-            : Colors.black.withValues(alpha: 0.08),
+    );
+  }
+}
+
+class _PromoMetaChip extends StatelessWidget {
+  const _PromoMetaChip({
+    required this.label,
+    this.filled = false,
+  });
+
+  final String label;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: filled
+            ? _brand.withValues(alpha: 0.1)
+            : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
       ),
-      backgroundColor: Colors.white,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: filled ? _brand : const Color(0xFF475569),
+        ),
+      ),
     );
   }
 }

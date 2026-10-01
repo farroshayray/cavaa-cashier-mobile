@@ -325,142 +325,183 @@ class _EmployeesPageState extends State<EmployeesPage> {
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     sliver: SliverToBoxAdapter(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _StatChip(
-                              label: 'Aktif',
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFFAE1504), Color(0xFF7A0E03)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Tim toko',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.98),
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _storeName != null && _storeName!.isNotEmpty
+                                        ? 'Kelola kasir & peran di $_storeName'
+                                        : 'Kelola kasir, kitchen, manager, dan supervisor.',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.78),
+                                      fontSize: 12.5,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _HeroStat(
                               value: '$_activeCount',
-                              color: const Color(0xFF1B7F4E),
+                              label: 'Aktif',
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _StatChip(
-                              label: 'Nonaktif',
-                              value: '$_inactiveCount',
-                              color: Colors.blueGrey,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _StatChip(
-                              label: 'Total',
+                            const SizedBox(width: 8),
+                            _HeroStat(
                               value: '${_activeCount + _inactiveCount}',
-                              color: _brand,
+                              label: 'Total',
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                     sliver: SliverToBoxAdapter(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.black.withValues(alpha: 0.06),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _search,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _load(silent: true),
+                            decoration: InputDecoration(
+                              hintText: 'Cari nama, username, email…',
+                              filled: true,
+                              fillColor: Colors.white,
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon: _search.text.trim().isEmpty
+                                  ? IconButton(
+                                      onPressed: () => _load(silent: true),
+                                      icon: const Icon(
+                                        Icons.arrow_forward_rounded,
+                                      ),
+                                    )
+                                  : IconButton(
+                                      onPressed: () {
+                                        _search.clear();
+                                        setState(() {});
+                                        _load(silent: true);
+                                      },
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color: Colors.black.withValues(alpha: 0.06),
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color: Colors.black.withValues(alpha: 0.06),
+                                ),
+                              ),
+                              isDense: true,
+                            ),
+                            onChanged: (_) => setState(() {}),
                           ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                          child: Column(
-                            children: [
-                              TextField(
-                                controller: _search,
-                                textInputAction: TextInputAction.search,
-                                onSubmitted: (_) => _load(silent: true),
-                                decoration: InputDecoration(
-                                  hintText: 'Cari nama, username, email...',
-                                  prefixIcon: const Icon(Icons.search_rounded),
-                                  suffixIcon: IconButton(
-                                    onPressed: () => _load(silent: true),
-                                    icon: const Icon(Icons.arrow_forward_rounded),
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  isDense: true,
+                          const SizedBox(height: 10),
+                          DropdownButtonFormField<String?>(
+                            key: ValueKey('role-$_filterRole'),
+                            initialValue: _filterRole,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Role',
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color: Colors.black.withValues(alpha: 0.06),
                                 ),
                               ),
-                              const SizedBox(height: 10),
-                              DropdownButtonFormField<String?>(
-                                key: ValueKey('role-$_filterRole'),
-                                initialValue: _filterRole,
-                                isExpanded: true,
-                                decoration: InputDecoration(
-                                  labelText: 'Role',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  isDense: true,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color: Colors.black.withValues(alpha: 0.06),
                                 ),
-                                items: [
-                                  const DropdownMenuItem<String?>(
-                                    value: null,
-                                    child: Text('Semua role'),
-                                  ),
-                                  ..._allowedRoles.map(
-                                    (r) => DropdownMenuItem<String?>(
-                                      value: r,
-                                      child: Text(_roleLabel(r)),
-                                    ),
-                                  ),
-                                ],
-                                onChanged: (v) {
-                                  setState(() => _filterRole = v);
-                                  _load(silent: true);
-                                },
                               ),
-                              const SizedBox(height: 10),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Wrap(
-                                  spacing: 8,
-                                  children: [
-                                    ChoiceChip(
-                                      label: const Text('Semua'),
-                                      selected: _filterStatus == 'all',
-                                      selectedColor:
-                                          _brand.withValues(alpha: 0.15),
-                                      onSelected: (_) {
-                                        setState(() => _filterStatus = 'all');
-                                        _load(silent: true);
-                                      },
-                                    ),
-                                    ChoiceChip(
-                                      label: const Text('Aktif'),
-                                      selected: _filterStatus == 'active',
-                                      selectedColor:
-                                          _brand.withValues(alpha: 0.15),
-                                      onSelected: (_) {
-                                        setState(
-                                          () => _filterStatus = 'active',
-                                        );
-                                        _load(silent: true);
-                                      },
-                                    ),
-                                    ChoiceChip(
-                                      label: const Text('Nonaktif'),
-                                      selected: _filterStatus == 'inactive',
-                                      selectedColor:
-                                          _brand.withValues(alpha: 0.15),
-                                      onSelected: (_) {
-                                        setState(
-                                          () => _filterStatus = 'inactive',
-                                        );
-                                        _load(silent: true);
-                                      },
-                                    ),
-                                  ],
+                              isDense: true,
+                            ),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('Semua role'),
+                              ),
+                              ..._allowedRoles.map(
+                                (r) => DropdownMenuItem<String?>(
+                                  value: r,
+                                  child: Text(_roleLabel(r)),
                                 ),
                               ),
                             ],
+                            onChanged: (v) {
+                              setState(() => _filterRole = v);
+                              _load(silent: true);
+                            },
                           ),
-                        ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE5E7EB)
+                                  .withValues(alpha: 0.65),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                _StatusSegmentTab(
+                                  label: 'Semua',
+                                  selected: _filterStatus == 'all',
+                                  onTap: () {
+                                    setState(() => _filterStatus = 'all');
+                                    _load(silent: true);
+                                  },
+                                ),
+                                _StatusSegmentTab(
+                                  label: 'Aktif',
+                                  selected: _filterStatus == 'active',
+                                  onTap: () {
+                                    setState(() => _filterStatus = 'active');
+                                    _load(silent: true);
+                                  },
+                                ),
+                                _StatusSegmentTab(
+                                  label: 'Nonaktif',
+                                  selected: _filterStatus == 'inactive',
+                                  onTap: () {
+                                    setState(() => _filterStatus = 'inactive');
+                                    _load(silent: true);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -479,18 +520,27 @@ class _EmployeesPageState extends State<EmployeesPage> {
                       hasScrollBody: false,
                       child: Center(
                         child: Padding(
-                          padding: const EdgeInsets.all(32).withBottomInset(context),
+                          padding:
+                              const EdgeInsets.all(32).withBottomInset(context),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                Icons.badge_outlined,
-                                size: 48,
-                                color: _brand.withValues(alpha: 0.45),
+                              Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  color: _brand.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: const Icon(
+                                  Icons.badge_outlined,
+                                  color: _brand,
+                                  size: 30,
+                                ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               const Text(
-                                'Belum ada pegawai di toko ini',
+                                'Belum ada pegawai',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 16,
@@ -498,7 +548,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Tambah kasir, kitchen, manager, atau supervisor untuk toko terpilih. Pegawai bisa dipindah ke toko lain saat diedit.',
+                                'Tambah kasir, kitchen, manager, atau supervisor untuk toko ini.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.black.withValues(alpha: 0.55),
@@ -511,7 +561,8 @@ class _EmployeesPageState extends State<EmployeesPage> {
                     )
                   else
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100).withBottomInset(context),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100)
+                          .withBottomInset(context),
                       sliver: SliverList.separated(
                         itemCount: _employees.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -526,46 +577,48 @@ class _EmployeesPageState extends State<EmployeesPage> {
                               .characters
                               .first
                               .toUpperCase();
+                          final roleColor = _roleColor(role);
 
-                          return Material(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            child: InkWell(
-                              onTap: ownerCashier
-                                  ? null
-                                  : () => _openEditor(employee: e),
-                              borderRadius: BorderRadius.circular(16),
-                              child: Ink(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: Colors.black.withValues(alpha: 0.06),
-                                  ),
-                                ),
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.black.withValues(alpha: 0.06),
+                              ),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: ownerCashier
+                                    ? null
+                                    : () => _openEditor(employee: e),
+                                borderRadius: BorderRadius.circular(14),
                                 child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    14,
-                                    12,
-                                    4,
-                                    12,
-                                  ),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(12, 12, 4, 12),
                                   child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      ClipOval(
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
                                         child: SizedBox(
                                           width: 48,
                                           height: 48,
                                           child: imageUrl == null
                                               ? ColoredBox(
-                                                  color: _roleColor(role)
-                                                      .withValues(alpha: 0.12),
+                                                  color: roleColor.withValues(
+                                                    alpha: 0.12,
+                                                  ),
                                                   child: Center(
                                                     child: Text(
                                                       initial,
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.w800,
-                                                        color: _roleColor(role),
+                                                        fontSize: 16,
+                                                        color: roleColor,
                                                       ),
                                                     ),
                                                   ),
@@ -577,8 +630,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
                                                   height: 48,
                                                   placeholder: (_, __) =>
                                                       ColoredBox(
-                                                    color: _roleColor(role)
-                                                        .withValues(
+                                                    color: roleColor.withValues(
                                                       alpha: 0.12,
                                                     ),
                                                     child: Center(
@@ -587,16 +639,14 @@ class _EmployeesPageState extends State<EmployeesPage> {
                                                         style: TextStyle(
                                                           fontWeight:
                                                               FontWeight.w800,
-                                                          color:
-                                                              _roleColor(role),
+                                                          color: roleColor,
                                                         ),
                                                       ),
                                                     ),
                                                   ),
                                                   errorWidget: (_, __, ___) =>
                                                       ColoredBox(
-                                                    color: _roleColor(role)
-                                                        .withValues(
+                                                    color: roleColor.withValues(
                                                       alpha: 0.12,
                                                     ),
                                                     child: Center(
@@ -605,8 +655,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
                                                         style: TextStyle(
                                                           fontWeight:
                                                               FontWeight.w800,
-                                                          color:
-                                                              _roleColor(role),
+                                                          color: roleColor,
                                                         ),
                                                       ),
                                                     ),
@@ -622,40 +671,45 @@ class _EmployeesPageState extends State<EmployeesPage> {
                                           children: [
                                             Text(
                                               e['name']?.toString() ?? '-',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.w800,
                                                 fontSize: 15,
                                               ),
                                             ),
                                             if (!ownerCashier) ...[
-                                              const SizedBox(height: 2),
+                                              const SizedBox(height: 3),
                                               Text(
-                                                '@${e['user_name'] ?? '-'}'
-                                                '${e['email'] != null ? ' \u00B7 ${e['email']}' : ''}',
+                                                [
+                                                  if ((e['user_name']
+                                                              ?.toString() ??
+                                                          '')
+                                                      .isNotEmpty)
+                                                    '@${e['user_name']}',
+                                                  if ((e['email']?.toString() ??
+                                                          '')
+                                                      .isNotEmpty)
+                                                    e['email'].toString(),
+                                                ].join(' · '),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   fontSize: 12.5,
-                                                  color: Colors.black.withValues(
-                                                    alpha: 0.55,
-                                                  ),
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.5),
                                                 ),
                                               ),
                                             ],
                                             const SizedBox(height: 8),
                                             Wrap(
                                               spacing: 6,
-                                              runSpacing: 6,
+                                              runSpacing: 4,
                                               children: [
                                                 _MiniBadge(
                                                   label: _roleLabel(role),
-                                                  color: _roleColor(role),
-                                                ),
-                                                _MiniBadge(
-                                                  label: active
-                                                      ? 'Aktif'
-                                                      : 'Nonaktif',
-                                                  color: active
-                                                      ? const Color(0xFF1B7F4E)
-                                                      : Colors.blueGrey,
+                                                  color: roleColor,
+                                                  filled: true,
                                                 ),
                                                 if (ownerCashier)
                                                   const _MiniBadge(
@@ -667,32 +721,51 @@ class _EmployeesPageState extends State<EmployeesPage> {
                                           ],
                                         ),
                                       ),
-                                      if (!ownerCashier)
-                                        PopupMenuButton<String>(
-                                          onSelected: (v) {
-                                            if (v == 'edit') {
-                                              _openEditor(employee: e);
-                                            }
-                                            if (v == 'delete') {
-                                              _confirmDelete(e);
-                                            }
-                                          },
-                                          itemBuilder: (_) => const [
-                                            PopupMenuItem(
-                                              value: 'edit',
-                                              child: Text('Edit'),
+                                      Column(
+                                        children: [
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 4),
+                                            child: Icon(
+                                              active
+                                                  ? Icons.check_circle_rounded
+                                                  : Icons
+                                                      .pause_circle_filled_rounded,
+                                              size: 20,
+                                              color: active
+                                                  ? const Color(0xFF0B6E4F)
+                                                  : Colors.black38,
                                             ),
-                                            PopupMenuItem(
-                                              value: 'delete',
-                                              child: Text(
-                                                'Hapus',
-                                                style: TextStyle(
-                                                  color: Colors.red,
+                                          ),
+                                          if (!ownerCashier)
+                                            PopupMenuButton<String>(
+                                              padding: EdgeInsets.zero,
+                                              onSelected: (v) {
+                                                if (v == 'edit') {
+                                                  _openEditor(employee: e);
+                                                }
+                                                if (v == 'delete') {
+                                                  _confirmDelete(e);
+                                                }
+                                              },
+                                              itemBuilder: (_) => const [
+                                                PopupMenuItem(
+                                                  value: 'edit',
+                                                  child: Text('Edit'),
                                                 ),
-                                              ),
+                                                PopupMenuItem(
+                                                  value: 'delete',
+                                                  child: Text(
+                                                    'Hapus',
+                                                    style: TextStyle(
+                                                      color: Colors.red,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
+                                        ],
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -709,48 +782,91 @@ class _EmployeesPageState extends State<EmployeesPage> {
   }
 }
 
-class _StatChip extends StatelessWidget {
-  const _StatChip({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.value, required this.label});
 
-  final String label;
   final String value;
-  final Color color;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                color: color,
-              ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
             ),
-            const SizedBox(height: 2),
-            Text(
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusSegmentTab extends StatelessWidget {
+  const _StatusSegmentTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
               label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 12,
-                color: Colors.black.withValues(alpha: 0.55),
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+                color: selected ? _brand : const Color(0xFF6B7280),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -758,17 +874,24 @@ class _StatChip extends StatelessWidget {
 }
 
 class _MiniBadge extends StatelessWidget {
-  const _MiniBadge({required this.label, required this.color});
+  const _MiniBadge({
+    required this.label,
+    required this.color,
+    this.filled = false,
+  });
 
   final String label;
   final Color color;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: filled
+            ? color.withValues(alpha: 0.12)
+            : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -776,7 +899,7 @@ class _MiniBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: color,
+          color: filled ? color : const Color(0xFF475569),
         ),
       ),
     );

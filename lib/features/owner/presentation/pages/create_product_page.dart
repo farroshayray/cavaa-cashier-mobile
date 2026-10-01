@@ -49,16 +49,19 @@ class _HubSegmentTab extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.flex = 1,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final int flex;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
+      flex: flex,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -66,7 +69,7 @@ class _HubSegmentTab extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             decoration: BoxDecoration(
               color: selected ? Colors.white : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
@@ -89,12 +92,16 @@ class _HubSegmentTab extends StatelessWidget {
                   color: selected ? _brand : const Color(0xFF6B7280),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                    color: selected ? _brand : const Color(0xFF6B7280),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: selected ? _brand : const Color(0xFF6B7280),
+                    ),
                   ),
                 ),
               ],
@@ -365,9 +372,10 @@ class _CreateProductPageState extends State<CreateProductPage> {
                   child: Row(
                     children: [
                       _HubSegmentTab(
-                        label: 'Menu toko',
+                        label: 'Menu $storeName',
                         icon: Icons.storefront_rounded,
                         selected: onStoreTab,
+                        flex: 3,
                         onTap: () =>
                             setState(() => _hubTab = ProductHubTab.store),
                       ),
@@ -375,6 +383,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                         label: 'Katalog',
                         icon: Icons.inventory_2_rounded,
                         selected: !onStoreTab,
+                        flex: 2,
                         onTap: () =>
                             setState(() => _hubTab = ProductHubTab.catalog),
                       ),
@@ -416,7 +425,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                               .withBottomInset(context),
                           children: [
                             Text(
-                              'Menu toko (${_filteredProducts.length})',
+                              'Menu $storeName (${_filteredProducts.length})',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                               ),

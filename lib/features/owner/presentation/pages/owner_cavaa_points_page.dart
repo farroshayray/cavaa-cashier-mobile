@@ -1,9 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 
-import '/features/auth/presentation/auth_provider.dart';
+import '/features/owner/presentation/pages/owner_addons_page.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
 import '../widgets/dock_inset.dart';
 
@@ -19,7 +17,6 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
   Map<String, dynamic>? _data;
   String? _error;
   var _loading = true;
-  var _busy = false;
 
   @override
   void initState() {
@@ -36,7 +33,7 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
       final data = await ownerApiOf(context).cavaaPoints();
       if (!mounted) return;
       setState(() => _data = data);
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => _error = 'Gagal memuat Cavaa Points.');
     } finally {
@@ -47,240 +44,6 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
   int _money(dynamic raw) {
     if (raw is int) return raw;
     return int.tryParse('$raw') ?? 0;
-  }
-
-  List<_DurationChoice> _choices(Map<String, dynamic> product, int balance) {
-    final isOnce = (product['billing_type'] ?? '') == 'one_time';
-    if (isOnce) {
-      final amount = _money(product['price_once']);
-      return [
-        _DurationChoice(
-          title: 'Beli sekali',
-          detail: amount > balance ? 'Saldo tidak cukup' : 'Berlaku tanpa perpanjangan hari',
-          amount: amount,
-          enabled: amount > 0 && amount <= balance,
-        ),
-      ];
-    }
-
-    final options = <_DurationChoice>[];
-    void addPeriod(String period, String title, int amount) {
-      if (amount < 1) return;
-      options.add(
-        _DurationChoice(
-          title: title,
-          detail: amount > balance ? 'Saldo tidak cukup' : 'Harga paket tetap',
-          amount: amount,
-          period: period,
-          enabled: amount <= balance,
-        ),
-      );
-    }
-
-    addPeriod('3d', '3 hari', _money(product['price_3d']));
-    addPeriod('7d', '7 hari', _money(product['price_7d']));
-    addPeriod('1m', '1 bulan', _money(product['price_1m']));
-
-    final daily = _money(product['daily']);
-    final maxDays = _money(product['max_custom_days']);
-    final customReady = daily > 0 && maxDays > 0;
-    options.add(
-      _DurationChoice(
-        title: 'Eceran',
-        detail: customReady
-            ? '${_moneyLabel(daily)} poin / hari, sampai $maxDays hari'
-            : 'Harga 3 hari belum diatur',
-        amount: daily,
-        custom: true,
-        enabled: customReady,
-      ),
-    );
-    return options;
-  }
-
-  bool _shortBalance(Map<String, dynamic> product, int balance) {
-    if ((product['billing_type'] ?? '') != 'one_time') return false;
-    final amount = _money(product['price_once']);
-    return amount > balance;
-  }
-
-  String _summary(Map<String, dynamic> product) {
-    if ((product['billing_type'] ?? '') == 'one_time') {
-      return 'Beli sekali · ${_moneyLabel(_money(product['price_once']))} poin';
-    }
-    final parts = <String>[];
-    if (_money(product['price_3d']) > 0) {
-      parts.add('3 hari ${_moneyLabel(_money(product['price_3d']))}');
-    }
-    if (_money(product['price_7d']) > 0) {
-      parts.add('7 hari ${_moneyLabel(_money(product['price_7d']))}');
-    }
-    if (_money(product['price_1m']) > 0) {
-      parts.add('1 bulan ${_moneyLabel(_money(product['price_1m']))}');
-    }
-    if (_money(product['daily']) > 0) {
-      parts.add('Eceran ${_moneyLabel(_money(product['daily']))}/hari');
-    }
-    if (parts.isEmpty) return 'Harga belum diatur';
-    return parts.join(' · ');
-  }
-
-  Future<void> _openBuy(Map<String, dynamic> product, int balance) async {
-    if (_busy) return;
-    final choices = _choices(product, balance);
-    if ((product['billing_type'] ?? '') == 'one_time') {
-      if (choices.isEmpty) return;
-      await _pick(product, choices.first);
-      return;
-    }
-
-    final picked = await showModalBottomSheet<_DurationChoice>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    (product['name'] ?? '').toString(),
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Pilih masa aktif',
-                    style: TextStyle(color: Color(0xFF8A9099)),
-                  ),
-                ],
-              ),
-            ),
-            for (final choice in choices)
-              _ChoiceRow(
-                choice: choice,
-                busy: false,
-                moneyLabel: _moneyLabel,
-                onTap: () => Navigator.pop(ctx, choice),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (picked == null || !mounted) return;
-    await _pick(product, picked);
-  }
-
-  Future<void> _pick(Map<String, dynamic> product, _DurationChoice choice) async {
-    if (_busy || !choice.enabled) return;
-    final kind = (product['kind'] ?? '').toString();
-    final id = _money(product['id']);
-    if (choice.custom) {
-      await _buyCustom(product);
-      return;
-    }
-    await _purchase(
-      kind: kind,
-      id: id,
-      mode: 'period',
-      period: choice.period,
-      label: choice.title,
-      amount: choice.amount,
-    );
-  }
-
-  Future<void> _buyCustom(Map<String, dynamic> product) async {
-    final maxDays = _money(product['max_custom_days']);
-    final daily = _money(product['daily']);
-    if (maxDays < 1 || daily < 1) {
-      _toast('Harga eceran belum bisa dipakai.');
-      return;
-    }
-    final picked = await showModalBottomSheet<int>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (ctx) => _CustomDaysSheet(
-        productName: (product['name'] ?? '').toString(),
-        daily: daily,
-        maxDays: maxDays,
-        balance: _money(_data?['balance']),
-        moneyLabel: _moneyLabel,
-      ),
-    );
-    if (picked == null || !mounted) return;
-    await _purchase(
-      kind: (product['kind'] ?? '').toString(),
-      id: _money(product['id']),
-      mode: 'custom',
-      days: picked,
-      label: '$picked hari',
-      amount: daily * picked,
-      confirm: false,
-    );
-  }
-
-  Future<void> _purchase({
-    required String kind,
-    required int id,
-    required String mode,
-    required String label,
-    required int amount,
-    String? period,
-    int? days,
-    bool confirm = true,
-  }) async {
-    final balance = _money(_data?['balance']);
-    if (amount > balance) {
-      _toast('Saldo Cavaa Points tidak cukup.');
-      return;
-    }
-    if (confirm) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Pakai Cavaa Points?'),
-          content: Text('$label membutuhkan ${_moneyLabel(amount)} poin.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bayar')),
-          ],
-        ),
-      );
-      if (ok != true || !mounted) return;
-    }
-    final api = ownerApiOf(context);
-    final auth = context.read<AuthProvider>();
-    setState(() => _busy = true);
-    try {
-      final res = await api.purchaseWithPoints(
-        kind: kind,
-        id: id,
-        mode: mode,
-        period: period,
-        days: days,
-      );
-      final user = api.parseUser(res);
-      if (user != null && mounted) {
-        auth.applyOwner(user);
-      }
-      _toast((res['message'] ?? 'Berhasil').toString());
-      await _load();
-    } on DioException catch (e) {
-      final data = e.response?.data;
-      _toast(data is Map ? (data['message'] ?? 'Pembelian gagal').toString() : 'Pembelian gagal');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  void _toast(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _moneyLabel(int value) {
@@ -301,10 +64,6 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
     return text;
   }
 
-  List<Map<String, dynamic>> _ofKind(List<Map<String, dynamic>> products, String kind) {
-    return products.where((product) => (product['kind'] ?? '') == kind).toList();
-  }
-
   Future<void> _copyCode(String code) async {
     await Clipboard.setData(ClipboardData(text: code));
     if (!mounted) return;
@@ -313,15 +72,41 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
     );
   }
 
+  Future<void> _openPaket() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const OwnerAddonsPage()),
+    );
+    if (mounted) await _load();
+  }
+
+  List<_EarnHowToItem> _parseEarnHowTo(Map<String, dynamic>? data) {
+    if (data == null) return const [];
+    final raw = data['earn_howto'] ?? data['howto'] ?? data['earn_rules'];
+    if (raw is! List) return const [];
+    final items = <_EarnHowToItem>[];
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final map = Map<String, dynamic>.from(entry);
+      final title = (map['title'] ?? '').toString().trim();
+      final detail = (map['detail'] ?? map['description'] ?? '')
+          .toString()
+          .trim();
+      if (title.isEmpty || detail.isEmpty) continue;
+      items.add(
+        _EarnHowToItem(
+          title: title,
+          detail: detail,
+          iconKey: (map['icon'] ?? '').toString().trim().toLowerCase(),
+        ),
+      );
+    }
+    return items;
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = _data;
     final enabled = data?['enabled'] != false;
-    final products = (data?['products'] as List?)
-            ?.whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList() ??
-        [];
     final transactions = (data?['transactions'] as List?)
             ?.whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
@@ -329,14 +114,15 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
         [];
     final code = (data?['referral_code'] ?? '').toString();
     final referred = (data?['referred_code'] ?? '').toString();
-    final balance = _money(data?['balance']);
-    final plans = _ofKind(products, 'plan');
-    final addons = _ofKind(products, 'addon');
+    final earnHowTo = _parseEarnHowTo(data);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
       appBar: AppBar(
-        title: const Text('Cavaa Points', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text(
+          'Cavaa Points',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
         backgroundColor: _brand,
         foregroundColor: Colors.white,
       ),
@@ -345,57 +131,69 @@ class _OwnerCavaaPointsPageState extends State<OwnerCavaaPointsPage> {
           : _error != null
               ? Center(child: Text(_error!))
               : !enabled
-                  ? const Center(child: Text('Cavaa Points sedang tidak tersedia.'))
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
-                      children: [
-                        _BalanceCard(
-                          balance: _moneyLabel(_money(data?['balance'])),
-                          code: code,
-                          referred: referred,
-                          onCopy: code.isEmpty ? null : () => _copyCode(code),
+                  ? const Center(
+                      child: Text('Cavaa Points sedang tidak tersedia.'),
+                    )
+                  : RefreshIndicator(
+                      color: _brand,
+                      onRefresh: _load,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
                         ),
-                        const SizedBox(height: 18),
-                        if (products.isEmpty)
-                          const Text('Belum ada produk yang bisa dibeli dengan poin.')
-                        else ...[
-                          if (plans.isNotEmpty) ...[
-                            const _SectionLabel('Paket langganan'),
-                            const SizedBox(height: 10),
-                            for (final product in plans)
-                              _ProductCard(
-                                name: (product['name'] ?? '').toString(),
-                                summary: _summary(product),
-                                busy: _busy,
-                                shortBalance: _shortBalance(product, balance),
-                                onBuy: () => _openBuy(product, balance),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28)
+                            .withBottomInset(context),
+                        children: [
+                          _BalanceCard(
+                            balance: _moneyLabel(_money(data?['balance'])),
+                            code: code,
+                            referred: referred,
+                            onCopy: code.isEmpty ? null : () => _copyCode(code),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: _brand,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                          ],
-                          if (addons.isNotEmpty) ...[
-                            const _SectionLabel('Add-on'),
-                            const SizedBox(height: 10),
-                            for (final product in addons)
-                              _ProductCard(
-                                name: (product['name'] ?? '').toString(),
-                                summary: _summary(product),
-                                busy: _busy,
-                                shortBalance: _shortBalance(product, balance),
-                                onBuy: () => _openBuy(product, balance),
+                              onPressed: _openPaket,
+                              icon: const Icon(Icons.workspace_premium_rounded),
+                              label: const Text(
+                                'Pakai poin di Paket',
+                                style: TextStyle(fontWeight: FontWeight.w800),
                               ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Beli atau perpanjang paket & add-on di menu Paket, lalu pilih bayar dengan Cavaa Points.',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.35,
+                              color: Colors.black.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          if (earnHowTo.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            const _SectionLabel('Cara dapat poin'),
+                            const SizedBox(height: 10),
+                            _HowToEarnCard(items: earnHowTo),
                           ],
+                          const SizedBox(height: 18),
+                          const _SectionLabel('Riwayat'),
+                          const SizedBox(height: 10),
+                          _HistoryCard(
+                            rows: transactions,
+                            moneyLabel: (value) => _moneyLabel(_money(value)),
+                            when: _when,
+                          ),
                         ],
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Riwayat',
-                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                        ),
-                        const SizedBox(height: 10),
-                        _HistoryCard(
-                          rows: transactions,
-                          moneyLabel: (value) => _moneyLabel(_money(value)),
-                          when: _when,
-                        ),
-                      ],
+                      ),
                     ),
     );
   }
@@ -419,7 +217,11 @@ class _BalanceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFAE1504),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFAE1504), Color(0xFF7A0E03)],
+        ),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -500,290 +302,112 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _DurationChoice {
-  const _DurationChoice({
+class _EarnHowToItem {
+  const _EarnHowToItem({
     required this.title,
     required this.detail,
-    required this.amount,
-    this.period,
-    this.custom = false,
-    this.enabled = true,
+    required this.iconKey,
   });
 
   final String title;
   final String detail;
-  final int amount;
-  final String? period;
-  final bool custom;
-  final bool enabled;
+  final String iconKey;
+
+  IconData get icon {
+    switch (iconKey) {
+      case 'share':
+        return Icons.share_rounded;
+      case 'gift':
+        return Icons.card_giftcard_rounded;
+      case 'premium':
+      case 'paket':
+        return Icons.workspace_premium_rounded;
+      default:
+        return Icons.stars_rounded;
+    }
+  }
 }
 
-class _ProductCard extends StatelessWidget {
-  const _ProductCard({
-    required this.name,
-    required this.summary,
-    required this.busy,
-    required this.shortBalance,
-    required this.onBuy,
-  });
+class _HowToEarnCard extends StatelessWidget {
+  const _HowToEarnCard({required this.items});
 
-  final String name;
-  final String summary;
-  final bool busy;
-  final bool shortBalance;
-  final VoidCallback onBuy;
+  final List<_EarnHowToItem> items;
 
   @override
   Widget build(BuildContext context) {
-    final canBuy = !busy && !shortBalance;
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 6),
-          Text(summary, style: const TextStyle(color: Color(0xFF5C6370), height: 1.35)),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFAE1504),
-                disabledBackgroundColor: const Color(0xFFE5E7EB),
-                disabledForegroundColor: const Color(0xFF8A9099),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: canBuy ? onBuy : null,
-              child: busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text(
-                      shortBalance ? 'Saldo tidak cukup' : 'Beli',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
+          for (final item in items)
+            _HowToRow(
+              icon: item.icon,
+              title: item.title,
+              detail: item.detail,
             ),
-          ),
         ],
       ),
     );
   }
 }
 
-class _ChoiceRow extends StatelessWidget {
-  const _ChoiceRow({
-    required this.choice,
-    required this.busy,
-    required this.moneyLabel,
-    required this.onTap,
+class _HowToRow extends StatelessWidget {
+  const _HowToRow({
+    required this.icon,
+    required this.title,
+    required this.detail,
   });
 
-  final _DurationChoice choice;
-  final bool busy;
-  final String Function(int value) moneyLabel;
-  final VoidCallback onTap;
+  final IconData icon;
+  final String title;
+  final String detail;
 
   @override
   Widget build(BuildContext context) {
-    final active = choice.enabled && !busy;
-    final price = choice.custom
-        ? (choice.amount > 0 ? '${moneyLabel(choice.amount)} / hari' : 'Belum ada')
-        : '${moneyLabel(choice.amount)} poin';
-
-    return InkWell(
-      onTap: active ? onTap : null,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: active ? const Color(0xFFFFF1EF) : const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                choice.custom ? Icons.tune_rounded : Icons.calendar_today_rounded,
-                size: 18,
-                color: active ? const Color(0xFFAE1504) : const Color(0xFFB0B6BF),
-              ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFAE1504).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    choice.title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: active ? const Color(0xFF1F2430) : const Color(0xFFB0B6BF),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    choice.detail,
-                    style: const TextStyle(color: Color(0xFF8A9099), fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              price,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: active ? const Color(0xFFAE1504) : const Color(0xFFB0B6BF),
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: active ? const Color(0xFFAE1504) : const Color(0xFFD0D4DA),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CustomDaysSheet extends StatefulWidget {
-  const _CustomDaysSheet({
-    required this.productName,
-    required this.daily,
-    required this.maxDays,
-    required this.balance,
-    required this.moneyLabel,
-  });
-
-  final String productName;
-  final int daily;
-  final int maxDays;
-  final int balance;
-  final String Function(int value) moneyLabel;
-
-  @override
-  State<_CustomDaysSheet> createState() => _CustomDaysSheetState();
-}
-
-class _CustomDaysSheetState extends State<_CustomDaysSheet> {
-  var _days = 1;
-
-  int get _amount => widget.daily * _days;
-
-  void _setDays(int value) {
-    setState(() => _days = value.clamp(1, widget.maxDays));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final short = _amount > widget.balance;
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.productName,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Tentukan sendiri berapa hari',
-              style: TextStyle(color: Color(0xFF8A9099)),
-            ),
-            const SizedBox(height: 16),
-            Row(
+            child: Icon(icon, color: const Color(0xFFAE1504), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _StepButton(
-                  icon: Icons.remove,
-                  onPressed: _days > 1 ? () => _setDays(_days - 1) : null,
-                ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      Text(
-                        '$_days',
-                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800),
-                      ),
-                      const Text('hari', style: TextStyle(color: Color(0xFF8A9099))),
-                    ],
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
                   ),
                 ),
-                _StepButton(
-                  icon: Icons.add,
-                  onPressed: _days < widget.maxDays ? () => _setDays(_days + 1) : null,
+                const SizedBox(height: 2),
+                Text(
+                  detail,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: Colors.black.withValues(alpha: 0.5),
+                  ),
                 ),
               ],
             ),
-            Slider(
-              min: 1,
-              max: widget.maxDays.toDouble(),
-              divisions: widget.maxDays > 1 ? widget.maxDays - 1 : null,
-              value: _days.toDouble(),
-              activeColor: const Color(0xFFAE1504),
-              onChanged: (value) => _setDays(value.round()),
-            ),
-            Text(
-              short
-                  ? 'Butuh ${widget.moneyLabel(_amount)} poin. Saldo tidak cukup.'
-                  : '${widget.moneyLabel(_amount)} poin · sisa ${widget.moneyLabel(widget.balance - _amount)} poin',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: short ? const Color(0xFFAE1504) : const Color(0xFF1F2430),
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFAE1504),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: short ? null : () => Navigator.pop(context, _days),
-                child: Text(
-                  short ? 'Saldo tidak cukup' : 'Pakai ${widget.moneyLabel(_amount)} poin',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({required this.icon, required this.onPressed});
-
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 44,
-      height: 44,
-      child: IconButton.filledTonal(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        style: IconButton.styleFrom(foregroundColor: const Color(0xFFAE1504)),
+          ),
+        ],
       ),
     );
   }
@@ -803,12 +427,51 @@ class _HistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (rows.isEmpty) {
-      return const Text('Belum ada transaksi.');
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 28, 16, 28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFFAE1504).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.receipt_long_rounded,
+                color: Color(0xFFAE1504),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Belum ada transaksi',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Riwayat masuk & pemakaian poin akan muncul di sini.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: Colors.black.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+        ),
+      );
     }
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
       ),
       child: Column(
         children: [
@@ -823,12 +486,18 @@ class _HistoryCard extends StatelessWidget {
                       children: [
                         Text(
                           (rows[i]['note'] ?? rows[i]['type'] ?? '').toString(),
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           when(rows[i]['created_at']),
-                          style: const TextStyle(color: Color(0xFF8A9099), fontSize: 12),
+                          style: const TextStyle(
+                            color: Color(0xFF8A9099),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
