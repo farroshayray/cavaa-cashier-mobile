@@ -14,3 +14,4 @@ class Env {
   static const String pusherCluster = 'ap1';
 }
 // flutter build apk --release 
+//flutter build appbundle --release
