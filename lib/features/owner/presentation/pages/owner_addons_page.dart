@@ -338,6 +338,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   bool _allowPlay = true;
   bool _allowManual = false;
   bool _pointsEnabled = true;
+  final Set<String> _ownedPlayProductIds = {};
   final ScrollController _scrollController = ScrollController();
 
   final InAppPurchase _iap = InAppPurchase.instance;
@@ -450,6 +451,20 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
           for (final p in resp.productDetails) {
             _products[p.id] = p;
           }
+          try {
+            final addition = _iap
+                .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+            final past = await addition.queryPastPurchases();
+            _ownedPlayProductIds
+              ..clear()
+              ..addAll(
+                past.pastPurchases
+                    .map((p) => p.productID)
+                    .where(ids.contains),
+              );
+          } catch (e) {
+            debugPrint('queryPastPurchases (load) gagal: $e');
+          }
         }
       }
     } catch (e) {
@@ -557,9 +572,17 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     return _allowPlay && hasSku && plan['can_purchase'] == true;
   }
 
-  String _planCta({required bool isCurrent, required bool hasSku}) {
+  String _planCtaFor(Map<String, dynamic> plan, {required bool isCurrent, required bool hasSku}) {
     if (isCurrent) return 'Sedang dipakai';
     if (!_allowManual && _allowPlay && !hasSku) return 'Belum tersedia di Play';
+    final productId = (plan['play_product_id'] ?? '').toString();
+    if (_allowPlay &&
+        hasSku &&
+        productId.isNotEmpty &&
+        _ownedPlayProductIds.contains(productId) &&
+        plan['can_purchase'] == true) {
+      return 'Sinkronkan';
+    }
     return 'Langganan sekarang';
   }
 
@@ -1073,21 +1096,33 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
 
   bool _isAlreadyOwned(String message) {
     final text = message.toLowerCase();
-    return text.contains('already own') || text.contains('itemalreadyowned');
+    return text.contains('already own') ||
+        text.contains('itemalreadyowned') ||
+        text.contains('already subscribed') ||
+        text.contains('you\'re already subscribed') ||
+        text.contains('youre already subscribed') ||
+        text.contains('sudah berlangganan');
+  }
+
+  Set<String> _recoverablePlayProductIds() {
+    return {
+      for (final addon in _addons)
+        if ((addon['play_product_id'] ?? '').toString().isNotEmpty)
+          (addon['play_product_id'] ?? '').toString(),
+      for (final plan in _plans)
+        if ((plan['play_product_id'] ?? '').toString().isNotEmpty)
+          (plan['play_product_id'] ?? '').toString(),
+    };
   }
 
   Future<void> _recoverAlreadyOwned() async {
-    final oneTimeIds = _addons
-        .where((addon) => (addon['billing_type'] ?? '').toString() != 'subscription')
-        .map((addon) => (addon['play_product_id'] ?? '').toString())
-        .where((id) => id.isNotEmpty)
-        .toSet();
+    final recoverableIds = _recoverablePlayProductIds();
     try {
       final addition = _iap
           .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
       final response = await addition.queryPastPurchases();
       final owned = response.pastPurchases
-          .where((purchase) => oneTimeIds.contains(purchase.productID))
+          .where((purchase) => recoverableIds.contains(purchase.productID))
           .toList();
       if (owned.isNotEmpty) {
         await _confirmRestored(owned);
@@ -1096,11 +1131,17 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     } catch (e) {
       debugPrint('queryPastPurchases gagal: $e');
     }
+    try {
+      await _iap.restorePurchases();
+      return;
+    } catch (e) {
+      debugPrint('restorePurchases gagal: $e');
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Akun Google Play masih memegang item ini setelah refund. Pembelian baru bisa dilakukan setelah consume dari refund selesai.',
+          'Langganan Google Play masih aktif. Coba Pulihkan pembelian, atau buka ulang halaman Paket agar status tersinkron.',
         ),
       ),
     );
@@ -1435,11 +1476,20 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                 height: 44,
                 child: FilledButton(
                   onPressed: !isCurrent && _canPayPlan(plan, hasSku) && !_busy
-                      ? () => _startPurchase(
+                      ? () {
+                          final productId =
+                              (plan['play_product_id'] ?? '').toString();
+                          if (_ownedPlayProductIds.contains(productId) &&
+                              plan['can_purchase'] == true) {
+                            _recoverAlreadyOwned();
+                            return;
+                          }
+                          _startPurchase(
                             kind: 'plan',
                             item: plan,
                             hasPlaySku: hasSku,
-                          )
+                          );
+                        }
                       : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: _brand,
@@ -1451,7 +1501,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                     ),
                   ),
                   child: Text(
-                    _planCta(isCurrent: isCurrent, hasSku: hasSku),
+                    _planCtaFor(plan, isCurrent: isCurrent, hasSku: hasSku),
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
@@ -2014,11 +2064,40 @@ class _OverlapBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = messages
-        .map((e) => (e['message'] ?? '').toString())
-        .where((m) => m.isNotEmpty)
-        .join('\n');
-    if (text.isEmpty) return const SizedBox.shrink();
+    if (messages.isEmpty) return const SizedBox.shrink();
+
+    final names = <String>[];
+    final seen = <String>{};
+    for (final e in messages) {
+      var name = (e['addon_name'] ?? '').toString().trim();
+      if (name.isEmpty) {
+        name = (e['addon_code'] ?? '').toString().trim();
+      }
+      if (name.isEmpty) continue;
+      final key = name.toLowerCase();
+      if (seen.add(key)) names.add(name);
+    }
+
+    if (names.isEmpty) {
+      final uniqueMessages = <String>{};
+      for (final e in messages) {
+        final m = (e['message'] ?? '').toString().trim();
+        if (m.isNotEmpty) uniqueMessages.add(m);
+      }
+      if (uniqueMessages.isEmpty) return const SizedBox.shrink();
+      return _banner(uniqueMessages.join('\n'));
+    }
+
+    final body = StringBuffer(
+      'Add-on berikut sudah termasuk paket Anda. Batalkan langganan add-on itu di Google Play agar tidak ditagih lagi:',
+    );
+    for (final name in names) {
+      body.write('\n• $name');
+    }
+    return _banner(body.toString());
+  }
+
+  Widget _banner(String text) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
