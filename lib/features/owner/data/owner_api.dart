@@ -956,6 +956,23 @@ class OwnerApi {
     return {};
   }
 
+  Future<Map<String, dynamic>> updateCashierShiftSettings({
+    String? visibility,
+    int? varianceTolerance,
+    int? partnerId,
+  }) async {
+    final res = await client.dio.patch(
+      '/api/v1/mobile/owner/cashier-shifts/settings',
+      data: {
+        if (visibility != null) 'cashier_shift_visibility': visibility,
+        if (varianceTolerance != null)
+          'cash_variance_tolerance': varianceTolerance,
+        if (partnerId != null) 'partner_id': partnerId,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> cashierShiftDetail(int id) async {
     final res = await client.dio.get('/api/v1/mobile/owner/cashier-shifts/$id');
     final data = res.data;

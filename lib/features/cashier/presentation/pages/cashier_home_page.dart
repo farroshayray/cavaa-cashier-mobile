@@ -560,7 +560,7 @@ class _CashierHomePageState extends State<CashierHomePage>
     try {
       if (localOnly) {
         await CashierShiftGate.remember(
-          CashierShiftGate.localOpen(amount < 0 ? 0 : amount),
+          await CashierShiftGate.localOpen(amount < 0 ? 0 : amount),
         );
       } else {
         final shift = await CashierShiftApi(context.read<DioClient>().dio).open(

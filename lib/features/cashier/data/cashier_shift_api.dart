@@ -55,9 +55,13 @@ class CashierShiftApi {
 
 class CashierShiftGate {
   static const _key = 'cashier_shift_book';
+  static const _visibilityKey = 'cashier_shift_visibility_mode';
   static Map<String, dynamic>? shift;
 
   static bool get canTakePayment => shift?['status']?.toString() == 'open';
+
+  static bool get isTransparent =>
+      (shift?['visibility_mode']?.toString() ?? 'blind') == 'transparent';
 
   static Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
@@ -69,26 +73,61 @@ class CashierShiftGate {
     }
   }
 
-  static Future<void> remember(Map<String, dynamic>? value) async {
-    shift = value;
+  static Future<String> cachedVisibilityMode() async {
     final prefs = await SharedPreferences.getInstance();
-    if (value == null) {
+    final mode = prefs.getString(_visibilityKey);
+    return mode == 'transparent' ? 'transparent' : 'blind';
+  }
+
+  static Future<void> remember(Map<String, dynamic>? value) async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic>? sanitized = value;
+    if (sanitized != null) {
+      final mode = sanitized['visibility_mode']?.toString() ?? 'blind';
+      await prefs.setString(
+        _visibilityKey,
+        mode == 'transparent' ? 'transparent' : 'blind',
+      );
+      sanitized = Map<String, dynamic>.from(sanitized);
+      if (mode != 'transparent') {
+        final status = sanitized['status']?.toString();
+        if (status != 'closed') {
+          sanitized['cash_in'] = null;
+          sanitized['cash_out'] = null;
+          sanitized['cash_net'] = null;
+          sanitized['expected_cash'] = null;
+          sanitized['variance'] = null;
+          sanitized.remove('ledger');
+          sanitized.remove('order_cash');
+          if (status != 'pending_approval') {
+            sanitized['counted_cash'] = null;
+          }
+        }
+      }
+    }
+    shift = sanitized;
+    if (sanitized == null) {
       await prefs.remove(_key);
       return;
     }
-    await prefs.setString(_key, jsonEncode(value));
+    await prefs.setString(_key, jsonEncode(sanitized));
   }
 
-  static Map<String, dynamic> localOpen(num openingCash) {
+  static Future<Map<String, dynamic>> localOpen(num openingCash) async {
+    final mode = await cachedVisibilityMode();
     return {
       'status': 'open',
       'opening_cash': openingCash,
       'client_uuid': const Uuid().v4(),
       'local_only': true,
-      'cash_in': 0,
-      'cash_out': 0,
-      'cash_net': 0,
+      'visibility_mode': mode,
+      'variance_tolerance': 0,
+      'cash_in': mode == 'transparent' ? 0 : null,
+      'cash_out': mode == 'transparent' ? 0 : null,
+      'cash_net': mode == 'transparent' ? 0 : null,
       'non_cash_total': 0,
+      'movements': <Map<String, dynamic>>[],
+      if (mode == 'transparent') 'ledger': <Map<String, dynamic>>[],
     };
   }
 

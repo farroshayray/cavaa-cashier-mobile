@@ -20,13 +20,22 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
   Map<String, dynamic>? _summary;
   bool _loading = true;
   bool _deciding = false;
+  bool _savingSettings = false;
   String? _error;
   DateTime _date = DateTime.now();
+  String _visibility = 'blind';
+  final _toleranceCtrl = TextEditingController(text: '0');
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _toleranceCtrl.dispose();
+    super.dispose();
   }
 
   String get _dateParam {
@@ -57,8 +66,15 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
       final summary =
           await ownerApiOf(context).cashierShiftSummary(date: _dateParam);
       if (!mounted) return;
+      final visibility =
+          summary['cashier_shift_visibility']?.toString() ?? 'blind';
+      final tolerance =
+          int.tryParse('${summary['cash_variance_tolerance'] ?? 0}') ?? 0;
       setState(() {
         _summary = summary;
+        _visibility =
+            visibility == 'transparent' ? 'transparent' : 'blind';
+        _toleranceCtrl.text = '$tolerance';
         _loading = false;
       });
     } catch (_) {
@@ -67,6 +83,54 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
         _error = 'Rekap buku kasir gagal dimuat.';
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _saveSettings({String? visibility, int? tolerance}) async {
+    if (_savingSettings) return;
+    final previousVisibility = _visibility;
+    final previousTolerance = _toleranceCtrl.text;
+    setState(() {
+      _savingSettings = true;
+      if (visibility != null) _visibility = visibility;
+    });
+    try {
+      final res = await ownerApiOf(context).updateCashierShiftSettings(
+        visibility: visibility,
+        varianceTolerance: tolerance,
+      );
+      if (!mounted) return;
+      final nextVisibility =
+          res['cashier_shift_visibility']?.toString() ?? _visibility;
+      final nextTolerance =
+          int.tryParse('${res['cash_variance_tolerance'] ?? tolerance ?? 0}') ??
+              0;
+      setState(() {
+        _visibility =
+            nextVisibility == 'transparent' ? 'transparent' : 'blind';
+        _toleranceCtrl.text = '$nextTolerance';
+        if (_summary != null) {
+          _summary = {
+            ..._summary!,
+            'cashier_shift_visibility': _visibility,
+            'cash_variance_tolerance': nextTolerance,
+          };
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pengaturan buku kasir disimpan.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _visibility = previousVisibility;
+        _toleranceCtrl.text = previousTolerance;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal menyimpan pengaturan.')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingSettings = false);
     }
   }
 
@@ -249,6 +313,19 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
                     pendingCount: pending.length,
                     onPickDate: _pickDate,
                   ),
+                  const SizedBox(height: 12),
+                  _CashBookSettingsCard(
+                    visibility: _visibility,
+                    toleranceController: _toleranceCtrl,
+                    saving: _savingSettings,
+                    onVisibilityChanged: (mode) =>
+                        _saveSettings(visibility: mode),
+                    onSaveTolerance: () {
+                      final value =
+                          int.tryParse(_toleranceCtrl.text.trim()) ?? 0;
+                      _saveSettings(tolerance: value < 0 ? 0 : value);
+                    },
+                  ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     _ErrorBanner(message: _error!, onRetry: _load),
@@ -348,6 +425,184 @@ class _OwnerCashBookPageState extends State<OwnerCashBookPage> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _CashBookSettingsCard extends StatelessWidget {
+  const _CashBookSettingsCard({
+    required this.visibility,
+    required this.toleranceController,
+    required this.saving,
+    required this.onVisibilityChanged,
+    required this.onSaveTolerance,
+  });
+
+  final String visibility;
+  final TextEditingController toleranceController;
+  final bool saving;
+  final ValueChanged<String> onVisibilityChanged;
+  final VoidCallback onSaveTolerance;
+
+  static const _brand = Color(0xFFAE1504);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.tune_rounded, color: _brand, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Pengaturan buku kasir',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Berlaku untuk toko yang sedang dipilih.',
+            style: TextStyle(color: Color(0xFF6B7280), fontSize: 12.5),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Visibilitas kasir',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _VisibilityOption(
+                  selected: visibility == 'blind',
+                  title: 'Blind close',
+                  caption: 'Kasir hanya hitung fisik; nominal seharusnya disembunyikan.',
+                  onTap: saving ? null : () => onVisibilityChanged('blind'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _VisibilityOption(
+                  selected: visibility == 'transparent',
+                  title: 'Transparan',
+                  caption: 'Kasir melihat transaksi tunai dan nominal seharusnya.',
+                  onTap: saving
+                      ? null
+                      : () => onVisibilityChanged('transparent'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Toleransi selisih kas',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: toleranceController,
+            enabled: !saving,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Batas toleransi (Rp)',
+              helperText:
+                  '0 berarti selisih berapa pun, selain pas, perlu persetujuan.',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: saving ? null : onSaveTolerance,
+              style: FilledButton.styleFrom(backgroundColor: _brand),
+              child: saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Simpan toleransi'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VisibilityOption extends StatelessWidget {
+  const _VisibilityOption({
+    required this.selected,
+    required this.title,
+    required this.caption,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final String title;
+  final String caption;
+  final VoidCallback? onTap;
+
+  static const _brand = Color(0xFFAE1504);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? _brand.withValues(alpha: 0.08)
+          : const Color(0xFFF6F7F9),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? _brand : Colors.transparent,
+              width: 1.4,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: selected ? _brand : const Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                caption,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFF6B7280),
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
