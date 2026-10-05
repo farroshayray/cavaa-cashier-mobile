@@ -155,13 +155,24 @@ class _CreateProductPageState extends State<CreateProductPage> {
   int? _selectedCategoryId;
   late ProductHubTab _hubTab;
   final _catalogKey = GlobalKey<MasterProductsPageState>();
+  final _search = TextEditingController();
+  String _query = '';
 
   List<Map<String, dynamic>> get _filteredProducts {
     final selectedId = _selectedCategoryId;
-    if (selectedId == null) return _products;
     return _products
-        .where((p) => productCategoryIdOf(p) == selectedId)
+        .where(
+          (p) =>
+              (selectedId == null || productCategoryIdOf(p) == selectedId) &&
+              productMatchesQuery(p, _query),
+        )
         .toList();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
   List<({int id, String name, int count})> get _populatedCategories =>
@@ -430,6 +441,13 @@ class _CreateProductPageState extends State<CreateProductPage> {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
+                            if (_products.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              ProductSearchField(
+                                controller: _search,
+                                onChanged: (q) => setState(() => _query = q),
+                              ),
+                            ],
                             if (_populatedCategories.isNotEmpty) ...[
                               const SizedBox(height: 12),
                               SizedBox(
@@ -501,7 +519,9 @@ class _CreateProductPageState extends State<CreateProductPage> {
                                   ),
                                 ),
                                 child: Text(
-                                  'Tidak ada produk di kategori ini.',
+                                  _query.trim().isNotEmpty
+                                      ? 'Produk "${_query.trim()}" tidak ditemukan.'
+                                      : 'Tidak ada produk di kategori ini.',
                                   style: TextStyle(
                                     color:
                                         Colors.black.withValues(alpha: 0.55),
@@ -626,6 +646,99 @@ class _CreateProductPageState extends State<CreateProductPage> {
   }
 }
 
+
+/// "Ambil dari katalog": daftar katalog dengan kolom cari di atasnya.
+class _CatalogPickerSheet extends StatefulWidget {
+  const _CatalogPickerSheet({required this.masters});
+
+  final List<Map<String, dynamic>> masters;
+
+  @override
+  State<_CatalogPickerSheet> createState() => _CatalogPickerSheetState();
+}
+
+class _CatalogPickerSheetState extends State<_CatalogPickerSheet> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = widget.masters
+        .where((m) => productMatchesQuery(m, _query))
+        .toList();
+    return SafeArea(
+      child: Padding(
+        // Keep the search box above the keyboard.
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.65,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 10),
+                child: Text(
+                  'Ambil dari katalog',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ProductSearchField(
+                  controller: _search,
+                  autofocus: widget.masters.length > 8,
+                  onChanged: (q) => setState(() => _query = q),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Expanded(
+                child: matches.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Item "${_query.trim()}" tidak ditemukan di katalog.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.black.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: matches.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final m = matches[i];
+                          final code = m['product_code']?.toString() ?? '';
+                          return ListTile(
+                            title: Text(
+                              m['name']?.toString() ?? '-',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Rp ${formatProductPrice(m['price'])}'
+                              '${code.isNotEmpty ? ' · $code' : ''}',
+                            ),
+                            onTap: () => Navigator.pop(context, m),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class StoreProductEditorPage extends StatefulWidget {
   const StoreProductEditorPage({
@@ -870,42 +983,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(ctx).height * 0.65,
-          child: Column(
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Text(
-                  'Ambil dari katalog',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                ),
-              ),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: masters.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final m = masters[i];
-                    return ListTile(
-                      title: Text(
-                        m['name']?.toString() ?? '-',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        'Rp ${formatProductPrice(m['price'])}'
-                        '${(m['product_code']?.toString() ?? '').isNotEmpty ? ' Â· ${m['product_code']}' : ''}',
-                      ),
-                      onTap: () => Navigator.pop(ctx, m),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (_) => _CatalogPickerSheet(masters: masters),
     );
       if (selected != null) {
       // Prefer full detail if available from list; else fetch.

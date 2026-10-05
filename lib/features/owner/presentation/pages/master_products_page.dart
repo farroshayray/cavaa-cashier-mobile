@@ -37,13 +37,24 @@ class MasterProductsPageState extends State<MasterProductsPage> {
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _categories = [];
   int? _selectedCategoryId;
+  final _search = TextEditingController();
+  String _query = '';
 
   List<Map<String, dynamic>> get _filteredProducts {
     final selectedId = _selectedCategoryId;
-    if (selectedId == null) return _products;
     return _products
-        .where((p) => productCategoryIdOf(p) == selectedId)
+        .where(
+          (p) =>
+              (selectedId == null || productCategoryIdOf(p) == selectedId) &&
+              productMatchesQuery(p, _query),
+        )
         .toList();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
   List<({int id, String name, int count})> get _populatedCategories =>
@@ -203,6 +214,13 @@ class MasterProductsPageState extends State<MasterProductsPage> {
             'Katalog (${_filteredProducts.length})',
             style: const TextStyle(fontWeight: FontWeight.w800),
           ),
+          if (_products.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ProductSearchField(
+              controller: _search,
+              onChanged: (q) => setState(() => _query = q),
+            ),
+          ],
           if (_populatedCategories.isNotEmpty) ...[
             const SizedBox(height: 12),
             SizedBox(
@@ -269,7 +287,9 @@ class MasterProductsPageState extends State<MasterProductsPage> {
                 ),
               ),
               child: Text(
-                'Tidak ada item di kategori ini.',
+                _query.trim().isNotEmpty
+                    ? 'Item "${_query.trim()}" tidak ditemukan di katalog.'
+                    : 'Tidak ada item di kategori ini.',
                 style: TextStyle(
                   color: Colors.black.withValues(alpha: 0.55),
                 ),

@@ -371,6 +371,75 @@ class ProductCategoryTab extends StatelessWidget {
   }
 }
 
+/// Pencarian produk: cocok bila [query] ada di nama, kode, atau nama
+/// kategori (tidak peka huruf besar/kecil). Query kosong cocok semua.
+bool productMatchesQuery(Map<String, dynamic> product, String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return true;
+  final cat = product['category'];
+  final fields = [
+    product['name'],
+    product['product_code'],
+    if (cat is Map) cat['name'],
+  ];
+  return fields.any((f) => (f?.toString() ?? '').toLowerCase().contains(q));
+}
+
+/// Kolom cari untuk daftar produk (toko maupun katalog).
+class ProductSearchField extends StatelessWidget {
+  const ProductSearchField({
+    super.key,
+    required this.controller,
+    required this.onChanged,
+    this.hint = 'Cari nama, kode, atau kategori',
+    this.autofocus = false,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final String hint;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
+    );
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => TextField(
+        controller: controller,
+        autofocus: autofocus,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: hint,
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white,
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: value.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Hapus',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () {
+                    controller.clear();
+                    onChanged('');
+                  },
+                ),
+          border: border,
+          enabledBorder: border,
+          focusedBorder: border.copyWith(
+            borderSide: const BorderSide(color: productBrand, width: 1.3),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 int? productCategoryIdOf(Map<String, dynamic> product) {
   final cat = product['category'];
   if (cat is Map) return int.tryParse('${cat['id'] ?? ''}');

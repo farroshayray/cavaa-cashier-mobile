@@ -21,12 +21,23 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
   String _location = '';
   bool _loading = true;
   String? _error;
+  final _search = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _visibleStocks =>
+      _stocks.where((s) => _stockMatches(s, _query)).toList();
 
   Future<void> _load({String? location}) async {
     setState(() {
@@ -355,7 +366,9 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${_stocks.length}',
+                        _query.isEmpty
+                            ? '${_stocks.length}'
+                            : '${_visibleStocks.length} dari ${_stocks.length}',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           color: Colors.black.withValues(alpha: 0.4),
@@ -366,8 +379,17 @@ class _OwnerStocksPageState extends State<OwnerStocksPage> {
                   const SizedBox(height: 10),
                   if (_stocks.isEmpty)
                     _emptyState()
-                  else
-                    ..._stocks.map(_stockCard),
+                  else ...[
+                    _StockSearchField(
+                      controller: _search,
+                      onChanged: (q) => setState(() => _query = q),
+                    ),
+                    const SizedBox(height: 10),
+                    if (_visibleStocks.isEmpty)
+                      _NoStockMatch(query: _query)
+                    else
+                      ..._visibleStocks.map(_stockCard),
+                  ],
                 ],
               ),
             ),
@@ -968,25 +990,36 @@ class _MoveLineCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            key: ValueKey(line.stockId),
-            isExpanded: true,
-            initialValue: line.stockId,
-            decoration: _field('Bahan'),
-            items: [
-              for (final item in choices)
-                DropdownMenuItem(
-                  value: int.tryParse('${item['id']}'),
-                  child: Text(
-                    item['stock_name']?.toString() ?? '-',
-                    overflow: TextOverflow.ellipsis,
-                  ),
+          // A searchable sheet instead of a dropdown: stock lists get long.
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () async {
+              final id = await showModalBottomSheet<int>(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                backgroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-            ],
-            onChanged: (id) {
+                builder: (_) =>
+                    _StockPickerSheet(stocks: choices, selectedId: line.stockId),
+              );
+              if (id == null) return;
               line.stockId = id;
               onChanged();
             },
+            child: InputDecorator(
+              decoration: _field('Bahan').copyWith(
+                suffixIcon: const Icon(Icons.search_rounded),
+              ),
+              isEmpty: stock == null,
+              child: Text(
+                stock?['stock_name']?.toString() ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
           const SizedBox(height: 10),
           TextField(
@@ -1015,6 +1048,201 @@ class _MoveLineCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Case-insensitive match on the stock name; an empty query matches all.
+bool _stockMatches(Map<String, dynamic> stock, String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return true;
+  return (stock['stock_name']?.toString() ?? '').toLowerCase().contains(q);
+}
+
+class _StockSearchField extends StatelessWidget {
+  const _StockSearchField({
+    required this.controller,
+    required this.onChanged,
+    this.autofocus = false,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => TextField(
+        controller: controller,
+        autofocus: autofocus,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: _field('Cari bahan').copyWith(
+          labelText: null,
+          hintText: 'Cari bahan',
+          isDense: true,
+          fillColor: Colors.white,
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: value.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Hapus',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () {
+                    controller.clear();
+                    onChanged('');
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NoStockMatch extends StatelessWidget {
+  const _NoStockMatch({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 36,
+            color: Colors.black.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Bahan "${query.trim()}" tidak ditemukan',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Colors.black.withValues(alpha: 0.55),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bottom sheet for choosing a stock item, with a search box on top.
+class _StockPickerSheet extends StatefulWidget {
+  const _StockPickerSheet({required this.stocks, this.selectedId});
+
+  final List<Map<String, dynamic>> stocks;
+  final int? selectedId;
+
+  @override
+  State<_StockPickerSheet> createState() => _StockPickerSheetState();
+}
+
+class _StockPickerSheetState extends State<_StockPickerSheet> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = widget.stocks
+        .where((s) => _stockMatches(s, _query))
+        .toList();
+    return Padding(
+      // Keep the search box above the keyboard.
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.75,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Pilih bahan',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _StockSearchField(
+                controller: _search,
+                autofocus: widget.stocks.length > 8,
+                onChanged: (q) => setState(() => _query = q),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Expanded(
+              child: matches.isEmpty
+                  ? Align(
+                      alignment: Alignment.topCenter,
+                      child: widget.stocks.isEmpty
+                          ? const Padding(
+                              padding: EdgeInsets.all(28),
+                              child: Text('Semua bahan sudah dipilih'),
+                            )
+                          : _NoStockMatch(query: _query),
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.paddingOf(context).bottom + 12,
+                      ),
+                      itemCount: matches.length,
+                      itemBuilder: (context, i) {
+                        final stock = matches[i];
+                        final id = int.tryParse('${stock['id']}');
+                        final selected = id != null && id == widget.selectedId;
+                        final unit =
+                            stock['display_unit_name']?.toString() ?? '';
+                        return ListTile(
+                          title: Text(
+                            stock['stock_name']?.toString() ?? '-',
+                            style: TextStyle(
+                              fontWeight: selected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: unit.isEmpty ? null : Text(unit),
+                          trailing: selected
+                              ? const Icon(
+                                  Icons.check_rounded,
+                                  color: _brand,
+                                )
+                              : null,
+                          onTap: id == null
+                              ? null
+                              : () => Navigator.of(context).pop(id),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
