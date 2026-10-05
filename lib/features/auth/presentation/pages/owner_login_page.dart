@@ -6,6 +6,7 @@ import '/core/config/env.dart';
 import '../auth_provider.dart';
 import '../../../owner/presentation/pages/owner_home_page.dart';
 import '../../../owner/presentation/pages/referral_prompt_dialog.dart';
+import 'owner_forgot_password_page.dart';
 import 'owner_set_password_page.dart';
 
 class OwnerLoginPage extends StatefulWidget {
@@ -280,6 +281,40 @@ class _OwnerLoginPageState extends State<OwnerLoginPage> {
                                         ? Icons.visibility_off_rounded
                                         : Icons.visibility_rounded,
                                     color: Colors.black45,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: busy
+                                    ? null
+                                    : () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                OwnerForgotPasswordPage(
+                                              initialEmail: _email.text.trim(),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                style: TextButton.styleFrom(
+                                  foregroundColor: _brand,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 8,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text(
+                                  'Lupa password?',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ),

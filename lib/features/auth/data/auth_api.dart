@@ -68,6 +68,16 @@ class AuthApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  Future<Map<String, dynamic>> ownerForgotPassword({
+    required String email,
+  }) async {
+    final Response res = await client.dio.post(
+      '/api/v1/mobile/owner/auth/forgot-password',
+      data: {'email': email},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   Future<Map<String, dynamic>> ownerSetPassword({
     required String password,
     required String passwordConfirmation,

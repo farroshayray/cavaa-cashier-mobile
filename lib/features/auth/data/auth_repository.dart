@@ -47,6 +47,13 @@ class AuthRepository {
     return _persistOwnerSession(data);
   }
 
+  Future<String> ownerForgotPassword({required String email}) async {
+    final data = await api.ownerForgotPassword(email: email);
+    final message = data['message']?.toString().trim();
+    if (message != null && message.isNotEmpty) return message;
+    return 'Kami telah mengirim link reset password ke email Anda.';
+  }
+
   Future<OwnerModel> ownerSetPassword({
     required String password,
     required String passwordConfirmation,

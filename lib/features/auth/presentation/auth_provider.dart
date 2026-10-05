@@ -313,6 +313,25 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Returns success message on success, null on failure (see [errorMessage]).
+  Future<String?> ownerForgotPassword(String email) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+      return await repo.ownerForgotPassword(email: email);
+    } on DioException catch (e) {
+      errorMessage = _messageFromDio(e, 'Gagal mengirim link reset password');
+      return null;
+    } catch (_) {
+      errorMessage = 'Gagal mengirim link reset password';
+      return null;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   String _messageFromDio(DioException e, String fallback) {
     final data = e.response?.data;
     if (data is Map && data['message'] != null) {

@@ -315,7 +315,7 @@ class _LoginPageState extends State<LoginPage> {
                                         const Icon(Icons.g_mobiledata, size: 24),
                                   ),
                             label: const Text(
-                              'Daftar dengan Google',
+                              'Daftar / login dengan Google',
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
                             style: OutlinedButton.styleFrom(
