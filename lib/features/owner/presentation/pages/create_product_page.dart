@@ -981,10 +981,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           'stock_type': o.stockType == 'linked' ? 'linked' : 'direct',
           if (!o.alwaysAvailable && o.stockType != 'linked')
             'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
-          if (!o.alwaysAvailable &&
-              o.stockType != 'linked' &&
-              modal != null &&
-              modal > 0)
+          if (o.stockType != 'linked' && modal != null && modal > 0)
             'modal_price': modal,
         });
       }
@@ -1009,9 +1006,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       price: price,
       alwaysAvailable: _alwaysAvailable,
       stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
-      modalPrice: (!_alwaysAvailable && _stockType != 'linked')
-          ? _parsedModalPrice()
-          : null,
+      modalPrice: _stockType != 'linked' ? _parsedModalPrice() : null,
       stockType: _stockType,
       isActive: _isActive,
       isHotProduct: _isHot,
@@ -1116,9 +1111,10 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                   o.stockType != 'linked' &&
                   (o.stockEditable || widget.canManageStock))
                 'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
-              if (!o.alwaysAvailable &&
-                  o.stockType != 'linked' &&
-                  (o.stockEditable || widget.canManageStock) &&
+              if (o.stockType != 'linked' &&
+                  (o.stockEditable ||
+                      widget.canManageStock ||
+                      o.alwaysAvailable) &&
                   modal != null &&
                   modal > 0)
                 'modal_price': modal,
@@ -1130,9 +1126,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           price: price,
           alwaysAvailable: _alwaysAvailable,
           stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
-          modalPrice: (!_alwaysAvailable && _stockType != 'linked')
-              ? _parsedModalPrice()
-              : null,
+          modalPrice: _stockType != 'linked' ? _parsedModalPrice() : null,
           stockType: widget.canManageStock ? _stockType : null,
           isActive: _isActive,
           isHotProduct: _isHot,
@@ -1178,7 +1172,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
               price: price,
               alwaysAvailable: _alwaysAvailable,
               stockQuantity: !_alwaysAvailable ? stockQty : null,
-              modalPrice: !_alwaysAvailable ? _parsedModalPrice() : null,
+              modalPrice: _parsedModalPrice(),
               isActive: _isActive,
               isHotProduct: _isHot,
               promotionId: _promotionId,
@@ -1200,9 +1194,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
           promotionId: _promotionId,
           alwaysAvailable: _stockType == 'linked' ? true : _alwaysAvailable,
           stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
-          modalPrice: (!_alwaysAvailable && _stockType != 'linked')
-              ? _parsedModalPrice()
-              : null,
+          modalPrice: _stockType != 'linked' ? _parsedModalPrice() : null,
           isActive: _isActive,
           isHotProduct: _isHot,
           menuOptions: _groups.map((e) => e.toJson()).toList(),
@@ -1221,7 +1213,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
               price: price,
               alwaysAvailable: _alwaysAvailable,
               stockQuantity: !_alwaysAvailable ? stockQty : null,
-              modalPrice: !_alwaysAvailable ? _parsedModalPrice() : null,
+              modalPrice: _parsedModalPrice(),
               isActive: _isActive,
               isHotProduct: _isHot,
               promotionId: _promotionId,
@@ -1275,6 +1267,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       quantity: _stock.text,
       recipes: _recipes,
       ingredients: _ingredients,
+      modalPrice: _modalPrice.text,
     );
     return Material(
       color: const Color(0xFFF8FAFC),
@@ -1564,7 +1557,23 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                                   : (v) =>
                                       setState(() => _alwaysAvailable = v),
                             ),
-                            if (!_alwaysAvailable)
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _modalPrice,
+                              enabled: !_saving,
+                              keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              decoration: productFieldDecoration(
+                                label: 'Harga modal / pcs',
+                                helper: _alwaysAvailable
+                                    ? 'Masuk ke HPP penjualan. Stok tidak dikurangi.'
+                                    : 'Opsional. Kosong = pakai HPP terakhir.',
+                                prefixText: 'Rp ',
+                              ),
+                            ),
+                            if (!_alwaysAvailable) ...[
+                              const SizedBox(height: 12),
                               _stockEditable
                                   ? TextField(
                                       controller: _stock,
@@ -1584,6 +1593,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                                             : _stock.text,
                                       ),
                                     ),
+                            ],
                           ],
                         ),
                 ),

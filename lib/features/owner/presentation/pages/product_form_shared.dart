@@ -577,7 +577,7 @@ class MenuOptionItem {
       'stock_type': stockType == 'linked' ? 'linked' : 'direct',
       if (!alwaysAvailable && stockType != 'linked')
         'stock_quantity': int.tryParse(stockQuantity.replaceAll('.', '').trim()) ?? 0,
-      if (!alwaysAvailable && stockType != 'linked' && modal != null && modal > 0)
+      if (stockType != 'linked' && modal != null && modal > 0)
         'modal_price': modal,
     };
   }
@@ -710,8 +710,15 @@ String productStockSummary({
   required String quantity,
   required List<RecipeLine> recipes,
   required List<Map<String, dynamic>> ingredients,
+  String? modalPrice,
 }) {
-  if (mode == 'always') return 'Selalu tersedia';
+  if (mode == 'always') {
+    final modal = num.tryParse((modalPrice ?? '').trim().replaceAll(',', '.'));
+    if (modal != null && modal > 0) {
+      return 'Selalu tersedia · HPP ${formatRupiah(modal)}';
+    }
+    return 'Selalu tersedia';
+  }
   if (mode == 'direct') {
     return 'Pcs · ${quantity.trim().isEmpty ? '0' : quantity.trim()}';
   }
@@ -1123,6 +1130,19 @@ class _ProductStockEditorPageState extends State<ProductStockEditorPage> {
             value: _mode,
             onChanged: _setMode,
           ),
+          if (_mode == 'always') ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: widget.modalPrice,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: productFieldDecoration(
+                label: 'Harga modal / pcs',
+                helper:
+                    'Masuk ke HPP penjualan. Stok tidak dikurangi. Kosong = HPP 0.',
+                prefixText: 'Rp ',
+              ),
+            ),
+          ],
           if (_mode == 'direct') ...[
             const SizedBox(height: 16),
             TextField(
@@ -1598,6 +1618,21 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
                     value: _mode,
                     onChanged: _setMode,
                   ),
+                  if (_mode == 'always') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _modalPrice,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: productFieldDecoration(
+                        label: 'Harga modal / pcs',
+                        helper:
+                            'Masuk ke HPP penjualan. Stok tidak dikurangi. Kosong = HPP 0.',
+                        prefixText: 'Rp ',
+                      ),
+                      onChanged: (value) => option.modalPrice = value,
+                    ),
+                  ],
                   if (_mode == 'direct') ...[
                     const SizedBox(height: 12),
                     TextField(
@@ -1650,10 +1685,25 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
                       }
                     }),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _modalPrice,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: productFieldDecoration(
+                      label: 'Harga modal / pcs',
+                      helper: option.alwaysAvailable
+                          ? 'Masuk ke HPP penjualan. Stok tidak dikurangi.'
+                          : 'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
+                      prefixText: 'Rp ',
+                    ),
+                    onChanged: (value) => option.modalPrice = value,
+                  ),
                   if (!option.alwaysAvailable)
                     option.stockEditable
                         ? Column(
                             children: [
+                              const SizedBox(height: 12),
                               TextField(
                                 controller: _quantity,
                                 keyboardType: TextInputType.number,
@@ -1662,22 +1712,6 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
                                 ),
                                 onChanged: (value) =>
                                     option.stockQuantity = value,
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: _modalPrice,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
-                                decoration: productFieldDecoration(
-                                  label: 'Harga modal / pcs',
-                                  helper:
-                                      'Opsional. Kosong = pakai HPP terakhir ($_lastCostLabel)',
-                                  prefixText: 'Rp ',
-                                ),
-                                onChanged: (value) =>
-                                    option.modalPrice = value,
                               ),
                             ],
                           )
