@@ -68,6 +68,8 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
 
   bool _isActive = true;
   bool _isCashierActive = true;
+  bool _allowCustomerPayAtCashier = true;
+  bool _canScanTable = false;
   bool _isOpenbill = false;
   bool _isWifiShown = false;
   bool _showReceiptLogo = false;
@@ -182,6 +184,11 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         _isActive = s['is_active'] == true || s['is_active'] == 1;
         _isCashierActive =
             s['is_cashier_active'] == true || s['is_cashier_active'] == 1;
+        _canScanTable =
+            s['can_scan_table'] == true || s['can_scan_table'] == 1;
+        _allowCustomerPayAtCashier =
+            s['allow_customer_pay_at_cashier'] == true ||
+            s['allow_customer_pay_at_cashier'] == 1;
         _isOpenbill = s['is_openbill'] == true || s['is_openbill'] == 1;
         _isWifiShown =
             s['is_wifi_shown'] == true || s['is_wifi_shown'] == 1;
@@ -418,6 +425,8 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         province: _province.text.trim(),
         isActive: _isActive,
         isCashierActive: _isCashierActive,
+        allowCustomerPayAtCashier:
+            _canScanTable ? _allowCustomerPayAtCashier : null,
         isOpenbill: _isOpenbill,
         userWifi: _wifiUser.text.trim(),
         passWifi: _wifiPass.text.trim(),
@@ -497,6 +506,49 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
   List<Widget> _buildGroupedPaymentMethods() {
     const order = ['manual_tf', 'manual_ewallet', 'manual_qris'];
     final widgets = <Widget>[];
+
+    widgets.add(
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.payments_rounded, size: 18, color: Colors.green),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Cash / Tunai',
+                style: TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    widgets.add(const SizedBox(height: 4));
+    widgets.add(
+      SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        value: _isCashierActive,
+        activeTrackColor: _brand.withValues(alpha: 0.45),
+        activeThumbColor: _brand,
+        title: const Text(
+          'Cash / Tunai (kasir)',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: const Text('Metode tunai di aplikasi kasir (POS).'),
+        onChanged: (v) => setState(() => _isCashierActive = v),
+      ),
+    );
+    widgets.add(const SizedBox(height: 14));
+
 
     for (final type in order) {
       final items = _paymentMethods
@@ -890,18 +942,6 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                           ),
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
-                            value: _isCashierActive,
-                            activeTrackColor: _brand.withValues(alpha: 0.45),
-                            activeThumbColor: _brand,
-                            title: const Text(
-                              'Kasir aktif',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            onChanged: (v) =>
-                                setState(() => _isCashierActive = v),
-                          ),
-                          SwitchListTile.adaptive(
-                            contentPadding: EdgeInsets.zero,
                             value: _isOpenbill,
                             activeTrackColor: _brand.withValues(alpha: 0.45),
                             activeThumbColor: _brand,
@@ -918,6 +958,23 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                                   ),
                             onChanged: _onOpenBillChanged,
                           ),
+                          if (_canScanTable)
+                            SwitchListTile.adaptive(
+                              contentPadding: EdgeInsets.zero,
+                              value: _allowCustomerPayAtCashier,
+                              activeTrackColor: _brand.withValues(alpha: 0.45),
+                              activeThumbColor: _brand,
+                              title: const Text(
+                                'Bayar di kasir (menu QR)',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              subtitle: const Text(
+                                'Izinkan pelanggan memilih tunai saat pesan via QR meja.',
+                              ),
+                              onChanged: (v) => setState(
+                                () => _allowCustomerPayAtCashier = v,
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -1134,7 +1191,6 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
                           if (_paymentMethods.isEmpty)
                             Text(
                               'Belum ada metode bayar. Ketuk “Kelola Metode Bayar” untuk menambah.',

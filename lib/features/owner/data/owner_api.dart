@@ -50,6 +50,7 @@ class OwnerApi {
     String? village,
     bool isActive = true,
     bool isCashierActive = true,
+    bool? allowCustomerPayAtCashier,
     bool isOpenbill = false,
     String? userWifi,
     String? passWifi,
@@ -79,6 +80,8 @@ class OwnerApi {
       if (village != null) 'village': village,
       'is_active': isActive ? 1 : 0,
       'is_cashier_active': isCashierActive ? 1 : 0,
+      if (allowCustomerPayAtCashier != null)
+        'allow_customer_pay_at_cashier': allowCustomerPayAtCashier ? 1 : 0,
       'is_openbill': isOpenbill ? 1 : 0,
       if (userWifi != null) 'user_wifi': userWifi,
       if (passWifi != null) 'pass_wifi': passWifi,
