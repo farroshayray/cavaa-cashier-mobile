@@ -19,6 +19,7 @@ import '../../data/owner_api.dart';
 import '../../data/welcome_gift_store.dart';
 import '../../data/owner_tour_store.dart';
 import '../widgets/owner_tour.dart';
+import '../widgets/dock_route_observer.dart';
 import 'welcome_gift_dialog.dart';
 import 'setup_complete_dialog.dart';
 import '../widgets/owner_setup_progress.dart';
@@ -92,11 +93,15 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   final _tourReportKey = GlobalKey();
   final _tourAccountKey = GlobalKey();
   var _sheetOpen = false;
-  late final _sheetObserver = _SheetObserver((open) {
-    final next = open > 0;
-    if (next == _sheetOpen) return;
+  var _popupOpen = false;
+  late final _routeObserver = DockRouteObserver((sheetOpen, popupOpen) {
+    if (sheetOpen == _sheetOpen && popupOpen == _popupOpen) return;
     void apply() {
-      if (mounted) setState(() => _sheetOpen = next);
+      if (!mounted) return;
+      setState(() {
+        _sheetOpen = sheetOpen;
+        _popupOpen = popupOpen;
+      });
     }
 
     // Routes can be pushed mid-build; defer the rebuild in that case.
@@ -211,11 +216,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       _barPage = bar;
       _section = icon == null
           ? null
-          : _OpenSection(
-              icon: icon,
-              tooltip: tooltip,
-              hideDock: hideDock,
-            );
+          : _OpenSection(icon: icon, tooltip: tooltip, hideDock: hideDock);
     });
     final task = _showSection(current, page, gen, after);
     _sectionTask = task;
@@ -742,24 +743,29 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           bottomNavigationBar:
               (_sheetOpen || !hasStore || (_section?.hideDock ?? false))
               ? null
-              : _OwnerDock(
-                  cashierEnabled: hasStore,
-                  reportEnabled: hasStore,
-                  reportPremiumLocked: hasStore && !canReport,
-                  orderBadge: unreadOrders,
-                  barPage: _barPage,
-                  section: _section,
-                  onCashier: hasStore ? _enterCashier : null,
-                  onHome: _goHome,
-                  onReport: hasStore ? () => _openReports(canReport) : null,
-                  onAccount: () => _pushSection(
-                    const OwnerAccountPage(),
-                    bar: _BarPage.account,
+              // Dropdown and popup menus can reach the bottom of the screen,
+              // so the dock slides away while one is open.
+              : DockVisibility(
+                  hidden: _popupOpen,
+                  child: _OwnerDock(
+                    cashierEnabled: hasStore,
+                    reportEnabled: hasStore,
+                    reportPremiumLocked: hasStore && !canReport,
+                    orderBadge: unreadOrders,
+                    barPage: _barPage,
+                    section: _section,
+                    onCashier: hasStore ? _enterCashier : null,
+                    onHome: _goHome,
+                    onReport: hasStore ? () => _openReports(canReport) : null,
+                    onAccount: () => _pushSection(
+                      const OwnerAccountPage(),
+                      bar: _BarPage.account,
+                    ),
+                    kasirKey: _tourKasirKey,
+                    homeKey: _tourHomeKey,
+                    reportKey: _tourReportKey,
+                    accountKey: _tourAccountKey,
                   ),
-                  kasirKey: _tourKasirKey,
-                  homeKey: _tourHomeKey,
-                  reportKey: _tourReportKey,
-                  accountKey: _tourAccountKey,
                 ),
           body: const _OwnerSectionNavigator(),
         ),
@@ -1710,7 +1716,7 @@ class _OwnerSectionNavigator extends StatelessWidget {
     return DockOverlapScope(
       child: Navigator(
         key: state._sectionNav,
-        observers: [state._sheetObserver],
+        observers: [state._routeObserver],
         onGenerateRoute: (settings) => MaterialPageRoute(
           settings: settings,
           builder: (_) => const _OwnerDashboard(),
@@ -1718,33 +1724,6 @@ class _OwnerSectionNavigator extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Tracks bottom sheets opened on the section navigator so the dock, which
-/// floats over the body, can step aside while one is showing.
-class _SheetObserver extends NavigatorObserver {
-  _SheetObserver(this.onChanged);
-
-  final ValueChanged<int> onChanged;
-  var _open = 0;
-
-  void _update(Route<dynamic> route, int delta) {
-    if (route is! ModalBottomSheetRoute) return;
-    _open = (_open + delta).clamp(0, 1 << 20);
-    onChanged(_open);
-  }
-
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      _update(route, 1);
-
-  @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      _update(route, -1);
-
-  @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      _update(route, -1);
 }
 
 class _OwnerDashboard extends StatelessWidget {
@@ -1935,8 +1914,8 @@ class _DockItem extends StatelessWidget {
     final color = !enabled
         ? Colors.white.withValues(alpha: 0.45)
         : locked
-            ? const Color(0xFFD1D5DB)
-            : Colors.white;
+        ? const Color(0xFFD1D5DB)
+        : Colors.white;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
       child: Tooltip(
@@ -1971,8 +1950,9 @@ class _DockItem extends StatelessWidget {
                           borderRadius: BorderRadius.circular(999),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFF59E0B)
-                                  .withValues(alpha: 0.35),
+                              color: const Color(
+                                0xFFF59E0B,
+                              ).withValues(alpha: 0.35),
                               blurRadius: 4,
                               offset: const Offset(0, 1),
                             ),
