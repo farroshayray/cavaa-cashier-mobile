@@ -446,6 +446,10 @@ class SyncEngine {
   ) async {
     if (bundle == null) return [];
 
+    final partnerSettings = await (db.select(db.cachedPartnerSettings)..limit(1))
+        .getSingleOrNull();
+    final canOrderNotes = partnerSettings?.canOrderNotes == true;
+
     final items = <Map<String, dynamic>>[];
     for (final detail in bundle.details) {
       final options = bundle.optionsByDetailUuid[detail.clientDetailUuid] ?? [];
@@ -453,7 +457,7 @@ class SyncEngine {
         if (detail.serverId != null) 'detail_id': detail.serverId,
         'product_id': detail.partnerProductId,
         'qty': detail.quantity,
-        'note': detail.customerNote,
+        'note': canOrderNotes ? detail.customerNote : null,
         'promo_id': detail.promoId,
         'option_ids': options.map((o) => o.optionId).toList(),
       };

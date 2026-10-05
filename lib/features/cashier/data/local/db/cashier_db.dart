@@ -52,7 +52,7 @@ class CashierDb extends _$CashierDb {
   CashierDb.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -96,6 +96,11 @@ class CashierDb extends _$CashierDb {
             );
             await m.database.customStatement(
               'ALTER TABLE cached_partner_settings ADD COLUMN print_receipt_logo INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (from < 18) {
+            await m.database.customStatement(
+              'ALTER TABLE cached_partner_settings ADD COLUMN can_order_notes INTEGER NOT NULL DEFAULT 0',
             );
           }
         },

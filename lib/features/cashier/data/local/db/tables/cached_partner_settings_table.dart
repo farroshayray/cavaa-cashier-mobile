@@ -12,6 +12,8 @@ class CachedPartnerSettings extends Table {
   TextColumn get logo => text().nullable()();
   BoolColumn get printReceiptLogo =>
       boolean().withDefault(const Constant(false))();
+  BoolColumn get canOrderNotes =>
+      boolean().withDefault(const Constant(false))();
   DateTimeColumn get cachedAt => dateTime()();
 
   @override

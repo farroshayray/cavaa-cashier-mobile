@@ -156,6 +156,7 @@ class PartnerData {
   final String? logo;
   final bool printReceiptLogo;
   final bool canViewReports;
+  final bool canOrderNotes;
 
   PartnerData({
     required this.id,
@@ -173,6 +174,7 @@ class PartnerData {
     this.logo,
     this.printReceiptLogo = false,
     this.canViewReports = false,
+    this.canOrderNotes = false,
   });
 
   factory PartnerData.fromJson(Map<String, dynamic> json) {
@@ -192,6 +194,7 @@ class PartnerData {
       logo: json['logo']?.toString(),
       printReceiptLogo: parseBool(json['print_receipt_logo']),
       canViewReports: parseBool(json['can_view_reports']),
+      canOrderNotes: parseBool(json['can_order_notes']),
     );
   }
 

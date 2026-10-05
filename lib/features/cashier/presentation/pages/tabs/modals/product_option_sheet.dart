@@ -504,25 +504,37 @@ class _ProductOptionsSheetState extends State<ProductOptionsSheet> {
                       const SizedBox(height: 8),
                     ],
 
-                    // note
-                    TextField(
-                      controller: noteC,
-                      maxLines: 3,
-                      decoration: InputDecoration(
-                        hintText: 'Catatan (opsional)…',
-                        filled: true,
-                        fillColor: const Color(0xFFF7F8FA),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.10)),
+                    if (vm.partnerData?.canOrderNotes == true)
+                      TextField(
+                        controller: noteC,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText: 'Catatan (opsional)…',
+                          filled: true,
+                          fillColor: const Color(0xFFF7F8FA),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: Colors.black.withOpacity(0.10)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(color: brand, width: 1.3),
+                          ),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: brand, width: 1.3),
+                      )
+                    else if (noteC.text.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Catatan: ${noteC.text.trim()}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.black.withOpacity(0.62),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

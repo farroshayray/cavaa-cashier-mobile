@@ -715,15 +715,29 @@ class _EditableItemRowState extends State<_EditableItemRow> {
                   ),
                 ],
               ),
-              TextField(
-                controller: _noteC,
-                decoration: const InputDecoration(
-                  labelText: 'Keterangan',
-                  isDense: true,
-                  border: OutlineInputBorder(),
+              if (context.watch<PurchaseProvider>().partnerData?.canOrderNotes ==
+                  true)
+                TextField(
+                  controller: _noteC,
+                  decoration: const InputDecoration(
+                    labelText: 'Keterangan',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (v) => editVm.setNote(i, v),
+                )
+              else if (widget.item.note.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Catatan: ${widget.item.note.trim()}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.black.withOpacity(0.62),
+                    ),
+                  ),
                 ),
-                onChanged: (v) => editVm.setNote(i, v),
-              ),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(

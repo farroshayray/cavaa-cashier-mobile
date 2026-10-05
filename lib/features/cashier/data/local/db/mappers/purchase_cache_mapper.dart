@@ -266,6 +266,7 @@ class PurchaseCacheMapper {
       cashRoundingUnit: Value(p.cashRoundingUnit),
       logo: Value(p.logo),
       printReceiptLogo: Value(p.printReceiptLogo),
+      canOrderNotes: Value(p.canOrderNotes),
       cachedAt: DateTime.now(),
     );
   }
@@ -282,6 +283,7 @@ class PurchaseCacheMapper {
       cashRoundingUnit: row.cashRoundingUnit,
       logo: row.logo,
       printReceiptLogo: row.printReceiptLogo,
+      canOrderNotes: row.canOrderNotes,
     );
   }
 
