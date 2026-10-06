@@ -6,22 +6,37 @@ import '../../providers/payment_provider.dart';
 import '../../providers/process_provider.dart';
 import '../../providers/done_provider.dart';
 import '../../../../scanner/pages/barcode_scanner_page.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
 import '/features/cashier/presentation/pages/tabs/modals/payment_process_sheet.dart';
 import '/features/cashier/presentation/pages/tabs/modals/detail_order_sheet.dart';
+import '/features/cashier/presentation/pages/tabs/modals/edit_order_sheet.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
+import '/features/cashier/presentation/utils/order_delete_helper.dart';
+import '/features/cashier/presentation/utils/order_tab_grouping.dart';
+import '/features/cashier/presentation/widgets/order_tab_section_widgets.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
-
-
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/sync_error_classifier.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 class PaymentTab extends StatefulWidget {
   const PaymentTab({
     super.key,
     this.focusOrderId,
     this.focusRequestKey = 0,
+    this.payNowLocalId,
+    this.payNowRequestKey = 0,
   });
 
   final int? focusOrderId;
   final int focusRequestKey;
+
+  /// Local uuid of an order just checked out with "Bayar Sekarang": it is
+  /// highlighted and its payment sheet opened. Works for unsynced (offline)
+  /// orders too, which have no server id yet.
+  final String? payNowLocalId;
+  final int payNowRequestKey;
 
   @override
   State<PaymentTab> createState() => _PaymentTabState();
@@ -48,6 +63,8 @@ class _PaymentTabState extends State<PaymentTab> {
     return _PaymentView(
       focusOrderId: widget.focusOrderId,
       focusRequestKey: widget.focusRequestKey,
+      payNowLocalId: widget.payNowLocalId,
+      payNowRequestKey: widget.payNowRequestKey,
     );
   }
 }
@@ -56,10 +73,14 @@ class _PaymentView extends StatefulWidget {
   const _PaymentView({
     this.focusOrderId,
     this.focusRequestKey = 0,
+    this.payNowLocalId,
+    this.payNowRequestKey = 0,
   });
 
   final int? focusOrderId;
   final int focusRequestKey;
+  final String? payNowLocalId;
+  final int payNowRequestKey;
 
   @override
   State<_PaymentView> createState() => _PaymentViewState();
@@ -72,12 +93,14 @@ class _PaymentViewState extends State<_PaymentView> {
   final ScrollController _listCtrl = ScrollController();
 
   int? _blinkOrderId;
+  String? _blinkLocalId;
   Timer? _blinkTimer;
   Timer? _searchDebounce;
   int? _lastHandledFocus;
   bool? _lastOnline;
   ConnectivityStatusProvider? _connectivity;
-
+  PaymentSection? _sectionFilter;
+  final Set<PaymentSection> _collapsedPaymentSections = {};
 
   @override
   void initState() {
@@ -101,8 +124,16 @@ class _PaymentViewState extends State<_PaymentView> {
         _goToAndBlink(id);
       });
     }
-  }
 
+    final payNowId = widget.payNowLocalId;
+    if (widget.payNowRequestKey != oldWidget.payNowRequestKey &&
+        payNowId != null &&
+        payNowId.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_payNow(payNowId));
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -174,7 +205,6 @@ class _PaymentViewState extends State<_PaymentView> {
     });
   }
 
-
   Future<void> _scanAndSearch() async {
     final code = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
@@ -192,44 +222,283 @@ class _PaymentViewState extends State<_PaymentView> {
 
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
 
-  Future<void> _goToAndBlink(int orderId) async {
+  bool _isPaymentSectionExpanded(PaymentSection section) =>
+      !_collapsedPaymentSections.contains(section);
+
+  void _togglePaymentSection(PaymentSection section) {
+    setState(() {
+      if (_collapsedPaymentSections.contains(section)) {
+        _collapsedPaymentSections.remove(section);
+      } else {
+        _collapsedPaymentSections.add(section);
+      }
+    });
+  }
+
+  Future<void> _goToAndBlink(int orderId) => _goToAndBlinkWhere(
+    (item) => _toId(item['id']) == orderId,
+    blinkOrderId: orderId,
+  );
+
+  static String _localUuidOf(Map<String, dynamic> item) =>
+      (item['local_client_uuid'] ?? item['local_id'] ?? '').toString().trim();
+
+  /// Scrolls to the first item matching [match] and highlights it, by server
+  /// id ([blinkOrderId]) or, for unsynced orders, by local uuid
+  /// ([blinkLocalId]).
+  Future<void> _goToAndBlinkWhere(
+    bool Function(Map<String, dynamic> item) match, {
+    int? blinkOrderId,
+    String? blinkLocalId,
+  }) async {
     final vm = context.read<PaymentProvider>();
 
-    // 1) pastikan list sudah ada data terbaru
-    // (kalau dari Home sudah load(), ini tetap aman)
     if (vm.items.isEmpty) {
       await vm.load();
     }
 
     if (!mounted) return;
 
-    final idx = vm.items.indexWhere((e) => _toId(e['id']) == orderId);
-    if (idx < 0) {
-      // order tidak ketemu di tab ini (bisa karena statusnya sudah pindah tab)
+    // estimateGroupedScrollOffset looks cards up by id; map the match onto a
+    // sentinel id so the same helper works for local-only orders.
+    const matchId = -1;
+    int toMatchId(Map<String, dynamic> e) => match(e) ? matchId : 0;
+
+    PaymentSection? targetSection;
+    for (final item in vm.items) {
+      if (match(item)) {
+        targetSection = classifyPaymentSection(item);
+        break;
+      }
+    }
+
+    final needsExpand =
+        targetSection != null &&
+        _collapsedPaymentSections.contains(targetSection);
+
+    if (needsExpand) {
+      setState(() => _collapsedPaymentSections.remove(targetSection));
+    }
+
+    void scrollAndBlink() {
+      if (!mounted) return;
+
+      var grouped = groupPaymentItems(vm.items, filter: _sectionFilter);
+      var flatItems = flattenGroupedItems(
+        grouped,
+        isSectionExpanded: _isPaymentSectionExpanded,
+      );
+      var idx = flatItems.indexWhere(match);
+
+      if (idx < 0 && _sectionFilter != null) {
+        setState(() => _sectionFilter = null);
+        grouped = groupPaymentItems(vm.items);
+        flatItems = flattenGroupedItems(
+          grouped,
+          isSectionExpanded: _isPaymentSectionExpanded,
+        );
+        idx = flatItems.indexWhere(match);
+      }
+      if (idx < 0) return;
+
+      final targetOffset = estimateGroupedScrollOffset(
+        sections: grouped,
+        orderId: matchId,
+        toId: toMatchId,
+        isSectionExpanded: _isPaymentSectionExpanded,
+      );
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_listCtrl.hasClients) return;
+        final max = _listCtrl.position.maxScrollExtent;
+        _listCtrl.animateTo(
+          targetOffset.clamp(0.0, max),
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOut,
+        );
+      });
+
+      _blinkTimer?.cancel();
+      setState(() {
+        _blinkOrderId = blinkOrderId;
+        _blinkLocalId = blinkLocalId;
+      });
+      _blinkTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) {
+          setState(() {
+            _blinkOrderId = null;
+            _blinkLocalId = null;
+          });
+        }
+      });
+    }
+
+    if (needsExpand) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => scrollAndBlink());
+    } else {
+      scrollAndBlink();
+    }
+  }
+
+  /// "Bayar Sekarang" checkout: find the new order by its local uuid (present
+  /// online and offline, since checkout always saves locally first),
+  /// highlight it and open its payment sheet.
+  Future<void> _payNow(String localUuid) async {
+    final vm = context.read<PaymentProvider>();
+
+    // An active search could hide the new order.
+    if (vm.query.isNotEmpty || _searchCtrl.text.isNotEmpty) {
+      _searchDebounce?.cancel();
+      _searchCtrl.clear();
+      vm.setQuery('');
+    }
+
+    bool match(Map<String, dynamic> item) => _localUuidOf(item) == localUuid;
+
+    Map<String, dynamic>? findItem() {
+      for (final item in vm.items) {
+        if (match(item)) return item;
+      }
+      return null;
+    }
+
+    // A background sync may be reshuffling the list; retry briefly.
+    var item = findItem();
+    for (var attempt = 0; item == null && attempt < 4; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      if (!mounted) return;
+      await vm.load();
+      if (!mounted) return;
+      item = findItem();
+    }
+
+    if (item == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pesanan tersimpan. Buka dari tab Pembayaran.'),
+        ),
+      );
       return;
     }
 
-    // 2) scroll ke index (perkiraan tinggi item)
-    // kalau kamu butuh akurat banget, nanti kita bisa pakai package scrollable_positioned_list
-    const approxItemHeight = 160.0; // estimasi tinggi card + spacing
-    final targetOffset = (idx * (approxItemHeight + 10)).toDouble();
+    final serverId = _toId(item['id']);
+    await _goToAndBlinkWhere(
+      match,
+      blinkOrderId: serverId > 0 ? serverId : null,
+      blinkLocalId: localUuid,
+    );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_listCtrl.hasClients) return;
-      final max = _listCtrl.position.maxScrollExtent;
-      _listCtrl.animateTo(
-        targetOffset.clamp(0.0, max),
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOut,
+    // Let the scroll settle before the sheet slides up.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+
+    // Use the freshest row: a sync may have given it a server id meanwhile.
+    final latest = findItem() ?? item;
+    await _openPaymentProcess(latest);
+  }
+
+  /// Opens the payment sheet for [data], then syncs and reloads the tabs.
+  /// Used by the card's process button and by "Bayar Sekarang".
+  Future<void> _openPaymentProcess(Map<String, dynamic> data) async {
+    final id = _toId(data['id']);
+    if (!CashierShiftGate.canTakePayment) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(CashierShiftGate.blockedMessage)),
       );
-    });
+      return;
+    }
+    final syncStatus = (data['sync_status'] ?? '').toString();
+    if (syncStatus == 'PENDING_DELETE') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order ini sedang menunggu penghapusan.')),
+      );
+      return;
+    }
 
-    // 3) blink border
-    _blinkTimer?.cancel();
-    setState(() => _blinkOrderId = orderId);
-    _blinkTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted) setState(() => _blinkOrderId = null);
-    });
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.92,
+        child: PaymentProcessSheet(
+          orderId: id,
+          forceOffline: syncStatus == 'STOCK_CONFLICT',
+          loadDetail: (_) =>
+              context.read<PaymentProvider>().getOrderDetailFromListItem(data),
+          ordersRepo: context.read<PaymentProvider>().repo,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      debugPrint('payment_tab sheetClosed sync+reload');
+      try {
+        final connectivity = context.read<ConnectivityStatusProvider>();
+        if (connectivity.isOnline) {
+          await context.read<SyncService>().syncPendingOrders();
+        }
+      } catch (e) {
+        debugPrint('payment_tab sync after sheet failed: $e');
+      }
+
+      if (!mounted) return;
+
+      await context.read<OrderTabCoordinator>().reloadAllTabs(
+        payment: context.read<PaymentProvider>(),
+        process: context.read<ProcessProvider>(),
+        done: context.read<DoneProvider>(),
+      );
+    }
+  }
+
+  Widget _buildPaymentCard(
+    BuildContext context,
+    Map<String, dynamic> data,
+    int i,
+  ) {
+    final id = _toId(data['id']);
+    final blinking =
+        (_blinkOrderId != null && _blinkOrderId == id) ||
+        (_blinkLocalId != null && _blinkLocalId == _localUuidOf(data));
+    final syncStatus = (data['sync_status'] ?? '').toString();
+    final canDelete =
+        canDeleteUnpaidOrder(data) &&
+        syncStatus != 'PENDING_DELETE' &&
+        !isOpenBillOrder(data);
+
+    final actionKey = id > 0
+        ? id
+        : ((data['local_id'] ?? '').toString().isNotEmpty
+              ? data['local_id'].toString()
+              : 'idx-$i');
+
+    return KeyedSubtree(
+      key: ValueKey('payment-$actionKey'),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: blinking ? Colors.red : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: _PaymentOrderCard(
+          data: data,
+          canDelete: canDelete,
+          onDetail: () async {
+            await _openPaymentOrderDetail(context, data, id);
+          },
+          onDelete: () => confirmDeleteUnpaidOrder(context, data),
+          onProcess: () => _openPaymentProcess(data),
+        ),
+      ),
+    );
   }
 
   @override
@@ -239,6 +508,8 @@ class _PaymentViewState extends State<_PaymentView> {
     final isLandscape = media.orientation == Orientation.landscape;
     final shortestSide = media.size.shortestSide;
     final isMobileLandscape = isLandscape && shortestSide < 600;
+    final groupedSections = groupPaymentItems(vm.items, filter: _sectionFilter);
+    final hasSearchQuery = vm.query.trim().isNotEmpty;
 
     return Column(
       children: [
@@ -267,48 +538,26 @@ class _PaymentViewState extends State<_PaymentView> {
           ),
         ),
 
-        Container(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            isMobileLandscape ? 8 : 10,
-            16,
-            isMobileLandscape ? 8 : 10,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7F8FA),
-            border: Border(
-              top: BorderSide(color: Colors.black.withOpacity(0.06)),
-              bottom: BorderSide(color: Colors.black.withOpacity(0.06)),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Pembayaran',
-                  style: TextStyle(
-                    fontSize: isMobileLandscape ? 14 : 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              _Badge(
-                text: '${vm.items.length} order',
-                compact: isMobileLandscape,
-              ),
-            ],
-          ),
+        ...buildPaymentSectionFilterChips(
+          items: vm.items,
+          selected: _sectionFilter,
+          compact: isMobileLandscape,
+          onSelected: (value) => setState(() => _sectionFilter = value),
         ),
 
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
               await context.read<SyncService>().syncPendingOrders();
-              await context.read<PaymentProvider>().load();
+              await context.read<OrderTabCoordinator>().reloadAllTabs(
+                payment: context.read<PaymentProvider>(),
+                process: context.read<ProcessProvider>(),
+                done: context.read<DoneProvider>(),
+              );
             },
             child: Builder(
               builder: (_) {
-                if (vm.isLoading) {
+                if (vm.isLoading && vm.items.isEmpty) {
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
@@ -334,13 +583,20 @@ class _PaymentViewState extends State<_PaymentView> {
 
                 if (vm.items.isEmpty) {
                   return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(24),
                     children: [
                       const SizedBox(height: 80),
-                      Icon(Icons.inbox_outlined, size: 56, color: Colors.black.withOpacity(0.35)),
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 56,
+                        color: Colors.black.withOpacity(0.35),
+                      ),
                       const SizedBox(height: 10),
                       Text(
-                        'Tidak ada order yang menunggu pembayaran.',
+                        hasSearchQuery
+                            ? 'Tidak ditemukan untuk pencarian "${vm.query}".'
+                            : 'Tidak ada order yang menunggu pembayaran.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.black.withOpacity(0.60)),
                       ),
@@ -348,147 +604,39 @@ class _PaymentViewState extends State<_PaymentView> {
                   );
                 }
 
-                return ListView.separated(
+                if (groupedSections.isEmpty) {
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      const SizedBox(height: 80),
+                      Icon(
+                        Icons.filter_list_off_outlined,
+                        size: 56,
+                        color: Colors.black.withOpacity(0.35),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Tidak ada order di kelompok ini.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black.withOpacity(0.60)),
+                      ),
+                    ],
+                  );
+                }
+
+                return CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  controller: _listCtrl, // ✅ penting untuk scroll
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                  itemCount: vm.items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) {
-                    final data = vm.items[i];
-                    final id = _toId(data['id']);
-                    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
-
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: blinking ? Colors.red : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                      child: _PaymentOrderCard(
-                        data: data,
-                        onDetail: () async {
-                          await showModalBottomSheet(
-                            context: context,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.92,
-                              child: DetailOrderSheet(
-                                orderId: id,
-                                stockConflictMessage: data['last_error']?.toString(),
-                                loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
-                              ),
-                            ),
-                          );
-                        },
-                        onDelete: () async {
-                          final isLocalOnly = data['is_local_only'] == true;
-                          final serverId = (data['server_id'] ?? data['id']);
-                          final hasServerId = serverId != null && serverId.toString() != '-1';
-
-                          final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
-
-                          final ok = await showDialog<bool>(
-                            context: context,
-                            useRootNavigator: true,
-                            builder: (ctx) {
-                              String message;
-
-                              if (isLocalOnly && !hasServerId) {
-                                message = 'Order lokal yang belum sinkron akan dihapus permanen dari device.';
-                              } else if (!isOnline) {
-                                message = 'Order akan ditandai sebagai Pending Delete dan dihapus saat koneksi kembali online.';
-                              } else {
-                                message = 'Order akan dihapus.';
-                              }
-
-                              return AlertDialog(
-                                title: const Text('Hapus order?'),
-                                content: Text(message),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.of(ctx).pop(false),
-                                    child: const Text('Batal'),
-                                  ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color.fromARGB(255, 146, 10, 0),
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    onPressed: () => Navigator.of(ctx).pop(true),
-                                    child: const Text('Hapus'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-
-                          if (ok != true) return;
-
-                          try {
-                            await context.read<PaymentProvider>().deleteOrderItem(
-                              data,
-                              isOnline: isOnline,
-                            );
-
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Order berhasil diperbarui.')),
-                            );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal hapus order: $e')),
-                            );
-                          }
-                        },
-                        onProcess: () async {
-                          final syncStatus = (data['sync_status'] ?? '').toString();
-                          // 🚫 kalau order sedang pending delete
-                          if (syncStatus == 'PENDING_DELETE') {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Order ini sedang menunggu penghapusan.'),
-                              ),
-                            );
-                            return;
-                          }
-
-                          final result = await showModalBottomSheet<bool>(
-                            context: context,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.92,
-                              child: PaymentProcessSheet(
-                                orderId: id,
-                                forceOffline: syncStatus == 'STOCK_CONFLICT',
-                                // 🔑 ini yang membuat modal bisa offline
-                                loadDetail: (_) => context.read<PaymentProvider>().getOrderDetailFromListItem(data),
-                                ordersRepo: context.read<PaymentProvider>().repo,
-                              ),
-                            ),
-                          );
-
-                          if (result == true && context.mounted) {
-                            final paymentVM = context.read<PaymentProvider>();
-                            final processVM = context.read<ProcessProvider>();
-                            final doneVM = context.read<DoneProvider>();
-                            await paymentVM.load();
-                            unawaited(processVM.load());
-                            unawaited(doneVM.load());
-                          }
-                        },
-                      ),
-                    );
-                  },
+                  controller: _listCtrl,
+                  slivers: buildGroupedOrderSlivers<PaymentSection>(
+                    context: context,
+                    sections: groupedSections,
+                    compact: isMobileLandscape,
+                    isSectionExpanded: _isPaymentSectionExpanded,
+                    onToggleSection: _togglePaymentSection,
+                    itemBuilder: (context, data, i) =>
+                        _buildPaymentCard(context, data, i),
+                  ),
                 );
               },
             ),
@@ -542,7 +690,7 @@ class _SearchBar extends StatelessWidget {
             blurRadius: compact ? 10 : 16,
             offset: Offset(0, compact ? 6 : 10),
             color: Colors.black.withOpacity(0.04),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -566,7 +714,9 @@ class _SearchBar extends StatelessWidget {
           ),
           if (controller.text.isNotEmpty)
             IconButton(
-              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+              visualDensity: compact
+                  ? VisualDensity.compact
+                  : VisualDensity.standard,
               constraints: compact
                   ? const BoxConstraints(minWidth: 32, minHeight: 32)
                   : null,
@@ -575,7 +725,9 @@ class _SearchBar extends StatelessWidget {
               tooltip: 'Reset',
             ),
           IconButton(
-            visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+            visualDensity: compact
+                ? VisualDensity.compact
+                : VisualDensity.standard,
             constraints: compact
                 ? const BoxConstraints(minWidth: 32, minHeight: 32)
                 : null,
@@ -604,48 +756,17 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.text,
-    this.compact = false,
-  });
-
-  final String text;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 8 : 10,
-        vertical: compact ? 4 : 6,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFBFDBFE)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: compact ? 11 : 12,
-          fontWeight: FontWeight.w800,
-          color: const Color(0xFF1D4ED8),
-        ),
-      ),
-    );
-  }
-}
-
 class _PaymentOrderCard extends StatelessWidget {
   const _PaymentOrderCard({
     required this.data,
+    required this.canDelete,
     required this.onDetail,
     required this.onDelete,
     required this.onProcess,
   });
 
   final Map<String, dynamic> data;
+  final bool canDelete;
   final VoidCallback onDetail;
   final VoidCallback onDelete;
   final VoidCallback onProcess;
@@ -657,8 +778,12 @@ class _PaymentOrderCard extends StatelessWidget {
     final total = _calcDisplayGrandTotal(data);
     final roundingAmount = _calcCashRoundingAmount(data);
     final status = (data['order_status'] ?? '').toString();
-    final table = (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-').toString();
+    final table =
+        (data['table'] is Map ? (data['table']['table_no'] ?? '-') : '-')
+            .toString();
     final orderDateTime = _formatOrderDateTime(data);
+
+    final syncMessage = localSyncStatusMessage(data);
 
     final badge = _statusBadge(
       status,
@@ -690,7 +815,7 @@ class _PaymentOrderCard extends StatelessWidget {
                 blurRadius: 14,
                 offset: const Offset(0, 8),
                 color: Colors.black.withOpacity(0.04),
-              )
+              ),
             ],
           ),
           child: isMobileLandscape
@@ -702,6 +827,7 @@ class _PaymentOrderCard extends StatelessWidget {
                   roundingAmount: roundingAmount,
                   orderDateTime: orderDateTime,
                   badge: badge,
+                  syncMessage: syncMessage,
                 )
               : _buildDefaultLayout(
                   code: code,
@@ -711,6 +837,7 @@ class _PaymentOrderCard extends StatelessWidget {
                   roundingAmount: roundingAmount,
                   orderDateTime: orderDateTime,
                   badge: badge,
+                  syncMessage: syncMessage,
                 ),
         ),
       ),
@@ -725,6 +852,7 @@ class _PaymentOrderCard extends StatelessWidget {
     required num roundingAmount,
     required String? orderDateTime,
     required Widget badge,
+    required String? syncMessage,
   }) {
     const brand = Color(0xFFAE1504);
 
@@ -738,7 +866,10 @@ class _PaymentOrderCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF3F4F6),
                       borderRadius: BorderRadius.circular(999),
@@ -764,17 +895,22 @@ class _PaymentOrderCard extends StatelessWidget {
                     orderDateTime != null
                         ? 'Meja: $table  |  $orderDateTime'
                         : 'Meja: $table',
-                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
                   ),
-                  if ((data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT') ...[
+                  if (syncMessage != null) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}',
-                      maxLines: 2,
+                      syncMessage,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFFB91C1C),
+                        color: localSyncStatusMessageIsError(syncMessage, data)
+                            ? const Color(0xFFB91C1C)
+                            : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -795,11 +931,20 @@ class _PaymentOrderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Total', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+                  Text(
+                    'Total',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'Rp ${_rupiah(total)}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   if (roundingAmount > 0) ...[
                     const SizedBox(height: 2),
@@ -815,21 +960,31 @@ class _PaymentOrderCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline_rounded),
-              tooltip: 'Hapus',
-            ),
-            const SizedBox(width: 6),
+            if (canDelete) ...[
+              IconButton(
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded),
+                tooltip: 'Hapus',
+              ),
+              const SizedBox(width: 6),
+            ],
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
               ),
               onPressed: onProcess,
-              child: const Text('Process', style: TextStyle(fontWeight: FontWeight.w900)),
+              child: const Text(
+                'Process',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
             ),
           ],
         ),
@@ -845,6 +1000,7 @@ class _PaymentOrderCard extends StatelessWidget {
     required num roundingAmount,
     required String? orderDateTime,
     required Widget badge,
+    required String? syncMessage,
   }) {
     const brand = Color(0xFFAE1504);
 
@@ -861,7 +1017,10 @@ class _PaymentOrderCard extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF3F4F6),
                             borderRadius: BorderRadius.circular(999),
@@ -893,17 +1052,22 @@ class _PaymentOrderCard extends StatelessWidget {
                     orderDateTime != null
                         ? 'Meja: $table  |  $orderDateTime'
                         : 'Meja: $table',
-                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
                   ),
-                  if ((data['sync_status'] ?? '').toString() == 'STOCK_CONFLICT') ...[
+                  if (syncMessage != null) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'Konflik stok: ${((data['last_error'] ?? '').toString().trim().isNotEmpty) ? data['last_error'] : 'stok tidak cukup di server'}',
-                      maxLines: 2,
+                      syncMessage,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFFB91C1C),
+                        color: localSyncStatusMessageIsError(syncMessage, data)
+                            ? const Color(0xFFB91C1C)
+                            : Colors.orange.shade800,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -924,12 +1088,18 @@ class _PaymentOrderCard extends StatelessWidget {
                     children: [
                       Text(
                         'Total',
-                        style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Rp ${_rupiah(total)}',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                       if (roundingAmount > 0) ...[
                         const SizedBox(height: 2),
@@ -945,20 +1115,30 @@ class _PaymentOrderCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(width: 8),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    tooltip: 'Hapus',
-                  ),
-                  const SizedBox(width: 4),
+                  if (canDelete) ...[
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      tooltip: 'Hapus',
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       minimumSize: const Size(0, 40),
                     ),
                     onPressed: onProcess,
@@ -976,8 +1156,16 @@ class _PaymentOrderCard extends StatelessWidget {
     );
   }
 
-  Widget _statusBadge(String orderStatus, String paymentMethod, bool isLocalOnly, String? syncStatus) {
-    if (syncStatus == 'STOCK_CONFLICT') {
+  Widget _statusBadge(
+    String orderStatus,
+    String paymentMethod,
+    bool isLocalOnly,
+    String? syncStatus,
+  ) {
+    if (SyncErrorClassifier.isConflictStatus(syncStatus ?? '')) {
+      final issue = SyncErrorClassifier.classify(
+        data['last_error']?.toString(),
+      );
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -987,12 +1175,16 @@ class _PaymentOrderCard extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
-            SizedBox(width: 6),
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 14,
+              color: Color(0xFFDC2626),
+            ),
+            const SizedBox(width: 6),
             Text(
-              'Konflik Stok',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              issue.shortLabel,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
             ),
           ],
         ),
@@ -1010,7 +1202,11 @@ class _PaymentOrderCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Icon(Icons.delete_forever_rounded, size: 14, color: Color(0xFFDC2626)),
+            Icon(
+              Icons.delete_forever_rounded,
+              size: 14,
+              color: Color(0xFFDC2626),
+            ),
             SizedBox(width: 6),
             Text(
               'Pending Delete',
@@ -1021,7 +1217,13 @@ class _PaymentOrderCard extends StatelessWidget {
       );
     }
 
-    if (isLocalOnly || syncStatus == 'PENDING' || syncStatus == 'PENDING_FINISH') {
+    if (isLocalOnly ||
+        syncStatus == 'PENDING' ||
+        syncStatus == 'PENDING_UPDATE' ||
+        syncStatus == 'PENDING_PAYMENT' ||
+        syncStatus == 'PENDING_PROCESS' ||
+        syncStatus == 'PENDING_FINISH' ||
+        syncStatus == 'FAILED') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -1078,9 +1280,16 @@ class _PaymentOrderCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 6, height: 6, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -1138,14 +1347,19 @@ num _calcDisplayGrandTotal(Map<String, dynamic> data) {
 }
 
 num _calcCashRoundingAmount(Map<String, dynamic> data, {num? baseTotal}) {
-  final stored = _pickNum(data, ['cash_rounding_amount']) ??
+  final method =
+      (_toBool(data['openbill_flag']) &&
+          ((data['payment_method'] ?? '').toString().trim().isEmpty))
+      ? 'OPENBILL'
+      : (data['payment_method'] ?? '').toString().toUpperCase();
+  if (method != 'CASH') return 0;
+
+  final stored =
+      _pickNum(data, ['cash_rounding_amount']) ??
       _pickNum(data, ['rounding_amount']) ??
       _pickNum(data, ['payment', 'rounding_amount']) ??
       _pickNum(data, ['latest_payment', 'rounding_amount']);
   if (stored != null && stored > 0) return stored.ceil();
-
-  final method = (data['payment_method'] ?? '').toString().toUpperCase();
-  if (method != 'CASH') return 0;
 
   final effectiveBaseTotal = baseTotal ?? _baseGrandTotal(data);
   final snap = _toNum(data['grand_total_local'] ?? data['grand_total']);
@@ -1175,11 +1389,12 @@ num? _pickNum(Map<String, dynamic> root, List<String> path) {
 }
 
 String? _formatOrderDateTime(Map<String, dynamic> data) {
-  final raw = (data['created_at'] ??
-          data['sort_time'] ??
-          data['updated_at_local'] ??
-          data['cached_at'])
-      ?.toString();
+  final raw =
+      (data['created_at'] ??
+              data['sort_time'] ??
+              data['updated_at_local'] ??
+              data['cached_at'])
+          ?.toString();
   if (raw == null || raw.trim().isEmpty) return null;
 
   final dateTime = DateTime.tryParse(raw)?.toLocal();
@@ -1187,9 +1402,83 @@ String? _formatOrderDateTime(Map<String, dynamic> data) {
 
   final date =
       '${_twoDigits(dateTime.day)}/${_twoDigits(dateTime.month)}/${dateTime.year}';
-  final time =
-      '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+  final time = '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
   return '$date $time';
 }
 
 String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
+Future<void> _openPaymentOrderDetail(
+  BuildContext context,
+  Map<String, dynamic> data,
+  int id,
+) async {
+  final paymentProvider = context.read<PaymentProvider>();
+  final processProvider = context.read<ProcessProvider>();
+  final editable = canEditOrder(data);
+  final kitchenServed = canMarkKitchenServed(data);
+  final syncStatus = (data['sync_status'] ?? '').toString();
+  final deletable =
+      canDeleteUnpaidOrder(data) &&
+      syncStatus != 'PENDING_DELETE' &&
+      !isOpenBillOrder(data);
+
+  await showModalBottomSheet(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => SizedBox(
+      height: MediaQuery.of(sheetCtx).size.height * 0.92,
+      child: DetailOrderSheet(
+        orderId: id,
+        stockConflictMessage: data['last_error']?.toString(),
+        loadDetail: (_) => paymentProvider.getOrderDetailFromListItem(data),
+        canEdit: editable && syncStatus != 'PENDING_DELETE',
+        canDelete: deletable,
+        canMarkKitchenServed: kitchenServed && syncStatus != 'PENDING_DELETE',
+        onMarkKitchenServed: kitchenServed && syncStatus != 'PENDING_DELETE'
+            ? (detailId) async {
+                final res = await processProvider.actionMarkKitchenServed(
+                  data,
+                  detailId: detailId,
+                );
+                final status = (res['status'] ?? '').toString();
+                if (status == 'warning' || status == 'error') {
+                  throw Exception(
+                    (res['message'] ?? 'Gagal update status').toString(),
+                  );
+                }
+                await paymentProvider.load();
+                await processProvider.load();
+              }
+            : null,
+        onEdit: editable && syncStatus != 'PENDING_DELETE'
+            ? () async {
+                Navigator.of(sheetCtx).pop();
+                final detail = await paymentProvider.getOrderDetailFromListItem(
+                  data,
+                );
+                if (!context.mounted) return;
+                await showModalBottomSheet(
+                  context: context,
+                  useRootNavigator: true,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => EditOrderSheet(
+                    order: detail,
+                    onSaved: () async {
+                      await paymentProvider.load();
+                      await processProvider.load();
+                    },
+                  ),
+                );
+              }
+            : null,
+        onDelete: deletable
+            ? () => confirmDeleteUnpaidOrder(context, data)
+            : null,
+      ),
+    ),
+  );
+}

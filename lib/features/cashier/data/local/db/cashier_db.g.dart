@@ -3978,18 +3978,742 @@ class CachedPaymentMethodsCompanion
   }
 }
 
-class $LocalOrdersTable extends LocalOrders
-    with TableInfo<$LocalOrdersTable, LocalOrder> {
+class $CachedPartnerSettingsTable extends CachedPartnerSettings
+    with TableInfo<$CachedPartnerSettingsTable, CachedPartnerSetting> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $LocalOrdersTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _localIdMeta = const VerificationMeta(
-    'localId',
+  $CachedPartnerSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _partnerIdMeta = const VerificationMeta(
+    'partnerId',
   );
   @override
-  late final GeneratedColumn<String> localId = GeneratedColumn<String>(
-    'local_id',
+  late final GeneratedColumn<int> partnerId = GeneratedColumn<int>(
+    'partner_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isQrActiveMeta = const VerificationMeta(
+    'isQrActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isQrActive = GeneratedColumn<bool>(
+    'is_qr_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_qr_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isCashierActiveMeta = const VerificationMeta(
+    'isCashierActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isCashierActive = GeneratedColumn<bool>(
+    'is_cashier_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_cashier_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isOpenbillMeta = const VerificationMeta(
+    'isOpenbill',
+  );
+  @override
+  late final GeneratedColumn<bool> isOpenbill = GeneratedColumn<bool>(
+    'is_openbill',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_openbill" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _ppnMeta = const VerificationMeta('ppn');
+  @override
+  late final GeneratedColumn<double> ppn = GeneratedColumn<double>(
+    'ppn',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isPpnActiveMeta = const VerificationMeta(
+    'isPpnActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isPpnActive = GeneratedColumn<bool>(
+    'is_ppn_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_ppn_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _cashRoundingUnitMeta = const VerificationMeta(
+    'cashRoundingUnit',
+  );
+  @override
+  late final GeneratedColumn<int> cashRoundingUnit = GeneratedColumn<int>(
+    'cash_rounding_unit',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _logoMeta = const VerificationMeta('logo');
+  @override
+  late final GeneratedColumn<String> logo = GeneratedColumn<String>(
+    'logo',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _printReceiptLogoMeta = const VerificationMeta(
+    'printReceiptLogo',
+  );
+  @override
+  late final GeneratedColumn<bool> printReceiptLogo = GeneratedColumn<bool>(
+    'print_receipt_logo',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("print_receipt_logo" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _canOrderNotesMeta = const VerificationMeta(
+    'canOrderNotes',
+  );
+  @override
+  late final GeneratedColumn<bool> canOrderNotes = GeneratedColumn<bool>(
+    'can_order_notes',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("can_order_notes" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _cachedAtMeta = const VerificationMeta(
+    'cachedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+    'cached_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    partnerId,
+    name,
+    isQrActive,
+    isCashierActive,
+    isOpenbill,
+    ppn,
+    isPpnActive,
+    cashRoundingUnit,
+    logo,
+    printReceiptLogo,
+    canOrderNotes,
+    cachedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cached_partner_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedPartnerSetting> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('partner_id')) {
+      context.handle(
+        _partnerIdMeta,
+        partnerId.isAcceptableOrUnknown(data['partner_id']!, _partnerIdMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('is_qr_active')) {
+      context.handle(
+        _isQrActiveMeta,
+        isQrActive.isAcceptableOrUnknown(
+          data['is_qr_active']!,
+          _isQrActiveMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_cashier_active')) {
+      context.handle(
+        _isCashierActiveMeta,
+        isCashierActive.isAcceptableOrUnknown(
+          data['is_cashier_active']!,
+          _isCashierActiveMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_openbill')) {
+      context.handle(
+        _isOpenbillMeta,
+        isOpenbill.isAcceptableOrUnknown(data['is_openbill']!, _isOpenbillMeta),
+      );
+    }
+    if (data.containsKey('ppn')) {
+      context.handle(
+        _ppnMeta,
+        ppn.isAcceptableOrUnknown(data['ppn']!, _ppnMeta),
+      );
+    }
+    if (data.containsKey('is_ppn_active')) {
+      context.handle(
+        _isPpnActiveMeta,
+        isPpnActive.isAcceptableOrUnknown(
+          data['is_ppn_active']!,
+          _isPpnActiveMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cash_rounding_unit')) {
+      context.handle(
+        _cashRoundingUnitMeta,
+        cashRoundingUnit.isAcceptableOrUnknown(
+          data['cash_rounding_unit']!,
+          _cashRoundingUnitMeta,
+        ),
+      );
+    }
+    if (data.containsKey('logo')) {
+      context.handle(
+        _logoMeta,
+        logo.isAcceptableOrUnknown(data['logo']!, _logoMeta),
+      );
+    }
+    if (data.containsKey('print_receipt_logo')) {
+      context.handle(
+        _printReceiptLogoMeta,
+        printReceiptLogo.isAcceptableOrUnknown(
+          data['print_receipt_logo']!,
+          _printReceiptLogoMeta,
+        ),
+      );
+    }
+    if (data.containsKey('can_order_notes')) {
+      context.handle(
+        _canOrderNotesMeta,
+        canOrderNotes.isAcceptableOrUnknown(
+          data['can_order_notes']!,
+          _canOrderNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(
+        _cachedAtMeta,
+        cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cachedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {partnerId};
+  @override
+  CachedPartnerSetting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedPartnerSetting(
+      partnerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}partner_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      isQrActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_qr_active'],
+      )!,
+      isCashierActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_cashier_active'],
+      )!,
+      isOpenbill: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_openbill'],
+      )!,
+      ppn: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}ppn'],
+      )!,
+      isPpnActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_ppn_active'],
+      )!,
+      cashRoundingUnit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cash_rounding_unit'],
+      )!,
+      logo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}logo'],
+      ),
+      printReceiptLogo: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}print_receipt_logo'],
+      )!,
+      canOrderNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}can_order_notes'],
+      )!,
+      cachedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}cached_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CachedPartnerSettingsTable createAlias(String alias) {
+    return $CachedPartnerSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class CachedPartnerSetting extends DataClass
+    implements Insertable<CachedPartnerSetting> {
+  final int partnerId;
+  final String name;
+  final bool isQrActive;
+  final bool isCashierActive;
+  final bool isOpenbill;
+  final double ppn;
+  final bool isPpnActive;
+  final int cashRoundingUnit;
+  final String? logo;
+  final bool printReceiptLogo;
+  final bool canOrderNotes;
+  final DateTime cachedAt;
+  const CachedPartnerSetting({
+    required this.partnerId,
+    required this.name,
+    required this.isQrActive,
+    required this.isCashierActive,
+    required this.isOpenbill,
+    required this.ppn,
+    required this.isPpnActive,
+    required this.cashRoundingUnit,
+    this.logo,
+    required this.printReceiptLogo,
+    required this.canOrderNotes,
+    required this.cachedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['partner_id'] = Variable<int>(partnerId);
+    map['name'] = Variable<String>(name);
+    map['is_qr_active'] = Variable<bool>(isQrActive);
+    map['is_cashier_active'] = Variable<bool>(isCashierActive);
+    map['is_openbill'] = Variable<bool>(isOpenbill);
+    map['ppn'] = Variable<double>(ppn);
+    map['is_ppn_active'] = Variable<bool>(isPpnActive);
+    map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit);
+    if (!nullToAbsent || logo != null) {
+      map['logo'] = Variable<String>(logo);
+    }
+    map['print_receipt_logo'] = Variable<bool>(printReceiptLogo);
+    map['can_order_notes'] = Variable<bool>(canOrderNotes);
+    map['cached_at'] = Variable<DateTime>(cachedAt);
+    return map;
+  }
+
+  CachedPartnerSettingsCompanion toCompanion(bool nullToAbsent) {
+    return CachedPartnerSettingsCompanion(
+      partnerId: Value(partnerId),
+      name: Value(name),
+      isQrActive: Value(isQrActive),
+      isCashierActive: Value(isCashierActive),
+      isOpenbill: Value(isOpenbill),
+      ppn: Value(ppn),
+      isPpnActive: Value(isPpnActive),
+      cashRoundingUnit: Value(cashRoundingUnit),
+      logo: logo == null && nullToAbsent ? const Value.absent() : Value(logo),
+      printReceiptLogo: Value(printReceiptLogo),
+      canOrderNotes: Value(canOrderNotes),
+      cachedAt: Value(cachedAt),
+    );
+  }
+
+  factory CachedPartnerSetting.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedPartnerSetting(
+      partnerId: serializer.fromJson<int>(json['partnerId']),
+      name: serializer.fromJson<String>(json['name']),
+      isQrActive: serializer.fromJson<bool>(json['isQrActive']),
+      isCashierActive: serializer.fromJson<bool>(json['isCashierActive']),
+      isOpenbill: serializer.fromJson<bool>(json['isOpenbill']),
+      ppn: serializer.fromJson<double>(json['ppn']),
+      isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
+      cashRoundingUnit: serializer.fromJson<int>(json['cashRoundingUnit']),
+      logo: serializer.fromJson<String?>(json['logo']),
+      printReceiptLogo: serializer.fromJson<bool>(json['printReceiptLogo']),
+      canOrderNotes: serializer.fromJson<bool>(json['canOrderNotes']),
+      cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'partnerId': serializer.toJson<int>(partnerId),
+      'name': serializer.toJson<String>(name),
+      'isQrActive': serializer.toJson<bool>(isQrActive),
+      'isCashierActive': serializer.toJson<bool>(isCashierActive),
+      'isOpenbill': serializer.toJson<bool>(isOpenbill),
+      'ppn': serializer.toJson<double>(ppn),
+      'isPpnActive': serializer.toJson<bool>(isPpnActive),
+      'cashRoundingUnit': serializer.toJson<int>(cashRoundingUnit),
+      'logo': serializer.toJson<String?>(logo),
+      'printReceiptLogo': serializer.toJson<bool>(printReceiptLogo),
+      'canOrderNotes': serializer.toJson<bool>(canOrderNotes),
+      'cachedAt': serializer.toJson<DateTime>(cachedAt),
+    };
+  }
+
+  CachedPartnerSetting copyWith({
+    int? partnerId,
+    String? name,
+    bool? isQrActive,
+    bool? isCashierActive,
+    bool? isOpenbill,
+    double? ppn,
+    bool? isPpnActive,
+    int? cashRoundingUnit,
+    Value<String?> logo = const Value.absent(),
+    bool? printReceiptLogo,
+    bool? canOrderNotes,
+    DateTime? cachedAt,
+  }) => CachedPartnerSetting(
+    partnerId: partnerId ?? this.partnerId,
+    name: name ?? this.name,
+    isQrActive: isQrActive ?? this.isQrActive,
+    isCashierActive: isCashierActive ?? this.isCashierActive,
+    isOpenbill: isOpenbill ?? this.isOpenbill,
+    ppn: ppn ?? this.ppn,
+    isPpnActive: isPpnActive ?? this.isPpnActive,
+    cashRoundingUnit: cashRoundingUnit ?? this.cashRoundingUnit,
+    logo: logo.present ? logo.value : this.logo,
+    printReceiptLogo: printReceiptLogo ?? this.printReceiptLogo,
+    canOrderNotes: canOrderNotes ?? this.canOrderNotes,
+    cachedAt: cachedAt ?? this.cachedAt,
+  );
+  CachedPartnerSetting copyWithCompanion(CachedPartnerSettingsCompanion data) {
+    return CachedPartnerSetting(
+      partnerId: data.partnerId.present ? data.partnerId.value : this.partnerId,
+      name: data.name.present ? data.name.value : this.name,
+      isQrActive: data.isQrActive.present
+          ? data.isQrActive.value
+          : this.isQrActive,
+      isCashierActive: data.isCashierActive.present
+          ? data.isCashierActive.value
+          : this.isCashierActive,
+      isOpenbill: data.isOpenbill.present
+          ? data.isOpenbill.value
+          : this.isOpenbill,
+      ppn: data.ppn.present ? data.ppn.value : this.ppn,
+      isPpnActive: data.isPpnActive.present
+          ? data.isPpnActive.value
+          : this.isPpnActive,
+      cashRoundingUnit: data.cashRoundingUnit.present
+          ? data.cashRoundingUnit.value
+          : this.cashRoundingUnit,
+      logo: data.logo.present ? data.logo.value : this.logo,
+      printReceiptLogo: data.printReceiptLogo.present
+          ? data.printReceiptLogo.value
+          : this.printReceiptLogo,
+      canOrderNotes: data.canOrderNotes.present
+          ? data.canOrderNotes.value
+          : this.canOrderNotes,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedPartnerSetting(')
+          ..write('partnerId: $partnerId, ')
+          ..write('name: $name, ')
+          ..write('isQrActive: $isQrActive, ')
+          ..write('isCashierActive: $isCashierActive, ')
+          ..write('isOpenbill: $isOpenbill, ')
+          ..write('ppn: $ppn, ')
+          ..write('isPpnActive: $isPpnActive, ')
+          ..write('cashRoundingUnit: $cashRoundingUnit, ')
+          ..write('logo: $logo, ')
+          ..write('printReceiptLogo: $printReceiptLogo, ')
+          ..write('canOrderNotes: $canOrderNotes, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    partnerId,
+    name,
+    isQrActive,
+    isCashierActive,
+    isOpenbill,
+    ppn,
+    isPpnActive,
+    cashRoundingUnit,
+    logo,
+    printReceiptLogo,
+    canOrderNotes,
+    cachedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedPartnerSetting &&
+          other.partnerId == this.partnerId &&
+          other.name == this.name &&
+          other.isQrActive == this.isQrActive &&
+          other.isCashierActive == this.isCashierActive &&
+          other.isOpenbill == this.isOpenbill &&
+          other.ppn == this.ppn &&
+          other.isPpnActive == this.isPpnActive &&
+          other.cashRoundingUnit == this.cashRoundingUnit &&
+          other.logo == this.logo &&
+          other.printReceiptLogo == this.printReceiptLogo &&
+          other.canOrderNotes == this.canOrderNotes &&
+          other.cachedAt == this.cachedAt);
+}
+
+class CachedPartnerSettingsCompanion
+    extends UpdateCompanion<CachedPartnerSetting> {
+  final Value<int> partnerId;
+  final Value<String> name;
+  final Value<bool> isQrActive;
+  final Value<bool> isCashierActive;
+  final Value<bool> isOpenbill;
+  final Value<double> ppn;
+  final Value<bool> isPpnActive;
+  final Value<int> cashRoundingUnit;
+  final Value<String?> logo;
+  final Value<bool> printReceiptLogo;
+  final Value<bool> canOrderNotes;
+  final Value<DateTime> cachedAt;
+  const CachedPartnerSettingsCompanion({
+    this.partnerId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.isQrActive = const Value.absent(),
+    this.isCashierActive = const Value.absent(),
+    this.isOpenbill = const Value.absent(),
+    this.ppn = const Value.absent(),
+    this.isPpnActive = const Value.absent(),
+    this.cashRoundingUnit = const Value.absent(),
+    this.logo = const Value.absent(),
+    this.printReceiptLogo = const Value.absent(),
+    this.canOrderNotes = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+  });
+  CachedPartnerSettingsCompanion.insert({
+    this.partnerId = const Value.absent(),
+    required String name,
+    this.isQrActive = const Value.absent(),
+    this.isCashierActive = const Value.absent(),
+    this.isOpenbill = const Value.absent(),
+    this.ppn = const Value.absent(),
+    this.isPpnActive = const Value.absent(),
+    this.cashRoundingUnit = const Value.absent(),
+    this.logo = const Value.absent(),
+    this.printReceiptLogo = const Value.absent(),
+    this.canOrderNotes = const Value.absent(),
+    required DateTime cachedAt,
+  }) : name = Value(name),
+       cachedAt = Value(cachedAt);
+  static Insertable<CachedPartnerSetting> custom({
+    Expression<int>? partnerId,
+    Expression<String>? name,
+    Expression<bool>? isQrActive,
+    Expression<bool>? isCashierActive,
+    Expression<bool>? isOpenbill,
+    Expression<double>? ppn,
+    Expression<bool>? isPpnActive,
+    Expression<int>? cashRoundingUnit,
+    Expression<String>? logo,
+    Expression<bool>? printReceiptLogo,
+    Expression<bool>? canOrderNotes,
+    Expression<DateTime>? cachedAt,
+  }) {
+    return RawValuesInsertable({
+      if (partnerId != null) 'partner_id': partnerId,
+      if (name != null) 'name': name,
+      if (isQrActive != null) 'is_qr_active': isQrActive,
+      if (isCashierActive != null) 'is_cashier_active': isCashierActive,
+      if (isOpenbill != null) 'is_openbill': isOpenbill,
+      if (ppn != null) 'ppn': ppn,
+      if (isPpnActive != null) 'is_ppn_active': isPpnActive,
+      if (cashRoundingUnit != null) 'cash_rounding_unit': cashRoundingUnit,
+      if (logo != null) 'logo': logo,
+      if (printReceiptLogo != null) 'print_receipt_logo': printReceiptLogo,
+      if (canOrderNotes != null) 'can_order_notes': canOrderNotes,
+      if (cachedAt != null) 'cached_at': cachedAt,
+    });
+  }
+
+  CachedPartnerSettingsCompanion copyWith({
+    Value<int>? partnerId,
+    Value<String>? name,
+    Value<bool>? isQrActive,
+    Value<bool>? isCashierActive,
+    Value<bool>? isOpenbill,
+    Value<double>? ppn,
+    Value<bool>? isPpnActive,
+    Value<int>? cashRoundingUnit,
+    Value<String?>? logo,
+    Value<bool>? printReceiptLogo,
+    Value<bool>? canOrderNotes,
+    Value<DateTime>? cachedAt,
+  }) {
+    return CachedPartnerSettingsCompanion(
+      partnerId: partnerId ?? this.partnerId,
+      name: name ?? this.name,
+      isQrActive: isQrActive ?? this.isQrActive,
+      isCashierActive: isCashierActive ?? this.isCashierActive,
+      isOpenbill: isOpenbill ?? this.isOpenbill,
+      ppn: ppn ?? this.ppn,
+      isPpnActive: isPpnActive ?? this.isPpnActive,
+      cashRoundingUnit: cashRoundingUnit ?? this.cashRoundingUnit,
+      logo: logo ?? this.logo,
+      printReceiptLogo: printReceiptLogo ?? this.printReceiptLogo,
+      canOrderNotes: canOrderNotes ?? this.canOrderNotes,
+      cachedAt: cachedAt ?? this.cachedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (partnerId.present) {
+      map['partner_id'] = Variable<int>(partnerId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (isQrActive.present) {
+      map['is_qr_active'] = Variable<bool>(isQrActive.value);
+    }
+    if (isCashierActive.present) {
+      map['is_cashier_active'] = Variable<bool>(isCashierActive.value);
+    }
+    if (isOpenbill.present) {
+      map['is_openbill'] = Variable<bool>(isOpenbill.value);
+    }
+    if (ppn.present) {
+      map['ppn'] = Variable<double>(ppn.value);
+    }
+    if (isPpnActive.present) {
+      map['is_ppn_active'] = Variable<bool>(isPpnActive.value);
+    }
+    if (cashRoundingUnit.present) {
+      map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit.value);
+    }
+    if (logo.present) {
+      map['logo'] = Variable<String>(logo.value);
+    }
+    if (printReceiptLogo.present) {
+      map['print_receipt_logo'] = Variable<bool>(printReceiptLogo.value);
+    }
+    if (canOrderNotes.present) {
+      map['can_order_notes'] = Variable<bool>(canOrderNotes.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedPartnerSettingsCompanion(')
+          ..write('partnerId: $partnerId, ')
+          ..write('name: $name, ')
+          ..write('isQrActive: $isQrActive, ')
+          ..write('isCashierActive: $isCashierActive, ')
+          ..write('isOpenbill: $isOpenbill, ')
+          ..write('ppn: $ppn, ')
+          ..write('isPpnActive: $isPpnActive, ')
+          ..write('cashRoundingUnit: $cashRoundingUnit, ')
+          ..write('logo: $logo, ')
+          ..write('printReceiptLogo: $printReceiptLogo, ')
+          ..write('canOrderNotes: $canOrderNotes, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BookingOrdersTable extends BookingOrders
+    with TableInfo<$BookingOrdersTable, BookingOrder> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BookingOrdersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientUuidMeta = const VerificationMeta(
+    'clientUuid',
+  );
+  @override
+  late final GeneratedColumn<String> clientUuid = GeneratedColumn<String>(
+    'client_uuid',
     aliasedName,
     false,
     type: DriftSqlType.string,
@@ -4006,24 +4730,12 @@ class $LocalOrdersTable extends LocalOrders
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _clientOrderCodeMeta = const VerificationMeta(
-    'clientOrderCode',
+  static const VerificationMeta _bookingOrderCodeMeta = const VerificationMeta(
+    'bookingOrderCode',
   );
   @override
-  late final GeneratedColumn<String> clientOrderCode = GeneratedColumn<String>(
-    'client_order_code',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
-  static const VerificationMeta _serverOrderCodeMeta = const VerificationMeta(
-    'serverOrderCode',
-  );
-  @override
-  late final GeneratedColumn<String> serverOrderCode = GeneratedColumn<String>(
-    'server_order_code',
+  late final GeneratedColumn<String> bookingOrderCode = GeneratedColumn<String>(
+    'booking_order_code',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -4051,23 +4763,56 @@ class $LocalOrdersTable extends LocalOrders
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _tableServerIdMeta = const VerificationMeta(
-    'tableServerId',
+  static const VerificationMeta _tableIdMeta = const VerificationMeta(
+    'tableId',
   );
   @override
-  late final GeneratedColumn<int> tableServerId = GeneratedColumn<int>(
-    'table_server_id',
+  late final GeneratedColumn<int> tableId = GeneratedColumn<int>(
+    'table_id',
     aliasedName,
     true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _tableNoSnapshotMeta = const VerificationMeta(
-    'tableNoSnapshot',
+  static const VerificationMeta _tableNoMeta = const VerificationMeta(
+    'tableNo',
   );
   @override
-  late final GeneratedColumn<String> tableNoSnapshot = GeneratedColumn<String>(
-    'table_no_snapshot',
+  late final GeneratedColumn<String> tableNo = GeneratedColumn<String>(
+    'table_no',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _customerIdMeta = const VerificationMeta(
+    'customerId',
+  );
+  @override
+  late final GeneratedColumn<int> customerId = GeneratedColumn<int>(
+    'customer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _employeeOrderIdMeta = const VerificationMeta(
+    'employeeOrderId',
+  );
+  @override
+  late final GeneratedColumn<int> employeeOrderId = GeneratedColumn<int>(
+    'employee_order_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _orderByMeta = const VerificationMeta(
+    'orderBy',
+  );
+  @override
+  late final GeneratedColumn<String> orderBy = GeneratedColumn<String>(
+    'order_by',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -4084,39 +4829,54 @@ class $LocalOrdersTable extends LocalOrders
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _paymentMethodSelectedMeta =
-      const VerificationMeta('paymentMethodSelected');
-  @override
-  late final GeneratedColumn<String> paymentMethodSelected =
-      GeneratedColumn<String>(
-        'payment_method_selected',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _paymentMethodEffectiveMeta =
-      const VerificationMeta('paymentMethodEffective');
-  @override
-  late final GeneratedColumn<String> paymentMethodEffective =
-      GeneratedColumn<String>(
-        'payment_method_effective',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _subtotalMeta = const VerificationMeta(
-    'subtotal',
+  static const VerificationMeta _orderStatusMeta = const VerificationMeta(
+    'orderStatus',
   );
   @override
-  late final GeneratedColumn<double> subtotal = GeneratedColumn<double>(
-    'subtotal',
+  late final GeneratedColumn<String> orderStatus = GeneratedColumn<String>(
+    'order_status',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(0),
+    defaultValue: const Constant('DRAFT'),
+  );
+  static const VerificationMeta _paymentMethodMeta = const VerificationMeta(
+    'paymentMethod',
+  );
+  @override
+  late final GeneratedColumn<String> paymentMethod = GeneratedColumn<String>(
+    'payment_method',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _openbillFlagMeta = const VerificationMeta(
+    'openbillFlag',
+  );
+  @override
+  late final GeneratedColumn<bool> openbillFlag = GeneratedColumn<bool>(
+    'openbill_flag',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("openbill_flag" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _discountIdMeta = const VerificationMeta(
+    'discountId',
+  );
+  @override
+  late final GeneratedColumn<int> discountId = GeneratedColumn<int>(
+    'discount_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _discountValueMeta = const VerificationMeta(
     'discountValue',
@@ -4130,17 +4890,26 @@ class $LocalOrdersTable extends LocalOrders
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
-  static const VerificationMeta _ppnPercentMeta = const VerificationMeta(
-    'ppnPercent',
+  static const VerificationMeta _totalOrderValueMeta = const VerificationMeta(
+    'totalOrderValue',
   );
   @override
-  late final GeneratedColumn<double> ppnPercent = GeneratedColumn<double>(
-    'ppn_percent',
+  late final GeneratedColumn<double> totalOrderValue = GeneratedColumn<double>(
+    'total_order_value',
     aliasedName,
     false,
     type: DriftSqlType.double,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _ppnMeta = const VerificationMeta('ppn');
+  @override
+  late final GeneratedColumn<double> ppn = GeneratedColumn<double>(
+    'ppn',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _isPpnActiveMeta = const VerificationMeta(
     'isPpnActive',
@@ -4157,18 +4926,172 @@ class $LocalOrdersTable extends LocalOrders
     ),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _grandTotalMeta = const VerificationMeta(
-    'grandTotal',
+  static const VerificationMeta _customerOrderNoteMeta = const VerificationMeta(
+    'customerOrderNote',
   );
   @override
-  late final GeneratedColumn<double> grandTotal = GeneratedColumn<double>(
-    'grand_total',
+  late final GeneratedColumn<String> customerOrderNote =
+      GeneratedColumn<String>(
+        'customer_order_note',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _employeeOrderNoteMeta = const VerificationMeta(
+    'employeeOrderNote',
+  );
+  @override
+  late final GeneratedColumn<String> employeeOrderNote =
+      GeneratedColumn<String>(
+        'employee_order_note',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _cashierProcessIdMeta = const VerificationMeta(
+    'cashierProcessId',
+  );
+  @override
+  late final GeneratedColumn<int> cashierProcessId = GeneratedColumn<int>(
+    'cashier_process_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _kitchenProcessIdMeta = const VerificationMeta(
+    'kitchenProcessId',
+  );
+  @override
+  late final GeneratedColumn<int> kitchenProcessId = GeneratedColumn<int>(
+    'kitchen_process_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _paymentIdMeta = const VerificationMeta(
+    'paymentId',
+  );
+  @override
+  late final GeneratedColumn<int> paymentId = GeneratedColumn<int>(
+    'payment_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _paymentFlagMeta = const VerificationMeta(
+    'paymentFlag',
+  );
+  @override
+  late final GeneratedColumn<bool> paymentFlag = GeneratedColumn<bool>(
+    'payment_flag',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("payment_flag" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _wifiSnapshotJsonMeta = const VerificationMeta(
+    'wifiSnapshotJson',
+  );
+  @override
+  late final GeneratedColumn<String> wifiSnapshotJson = GeneratedColumn<String>(
+    'wifi_snapshot_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _paymentRequestJsonMeta =
+      const VerificationMeta('paymentRequestJson');
+  @override
+  late final GeneratedColumn<String> paymentRequestJson =
+      GeneratedColumn<String>(
+        'payment_request_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _latestPaymentJsonMeta = const VerificationMeta(
+    'latestPaymentJson',
+  );
+  @override
+  late final GeneratedColumn<String> latestPaymentJson =
+      GeneratedColumn<String>(
+        'latest_payment_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _syncVersionMeta = const VerificationMeta(
+    'syncVersion',
+  );
+  @override
+  late final GeneratedColumn<int> syncVersion = GeneratedColumn<int>(
+    'sync_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _syncDirtyMeta = const VerificationMeta(
+    'syncDirty',
+  );
+  @override
+  late final GeneratedColumn<bool> syncDirty = GeneratedColumn<bool>(
+    'sync_dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("sync_dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _syncIntentMeta = const VerificationMeta(
+    'syncIntent',
+  );
+  @override
+  late final GeneratedColumn<String> syncIntent = GeneratedColumn<String>(
+    'sync_intent',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncErrorMeta = const VerificationMeta(
+    'syncError',
+  );
+  @override
+  late final GeneratedColumn<String> syncError = GeneratedColumn<String>(
+    'sync_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _localFilePathsJsonMeta =
+      const VerificationMeta('localFilePathsJson');
+  @override
+  late final GeneratedColumn<String> localFilePathsJson =
+      GeneratedColumn<String>(
+        'local_file_paths_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _paidAmountLocalMeta = const VerificationMeta(
     'paidAmountLocal',
   );
@@ -4192,28 +5115,28 @@ class $LocalOrdersTable extends LocalOrders
         type: DriftSqlType.double,
         requiredDuringInsert: false,
       );
-  static const VerificationMeta _cashierProofImageLocalPathMeta =
-      const VerificationMeta('cashierProofImageLocalPath');
+  static const VerificationMeta _cashRoundingAmountMeta =
+      const VerificationMeta('cashRoundingAmount');
   @override
-  late final GeneratedColumn<String> cashierProofImageLocalPath =
-      GeneratedColumn<String>(
-        'cashier_proof_image_local_path',
+  late final GeneratedColumn<double> cashRoundingAmount =
+      GeneratedColumn<double>(
+        'cash_rounding_amount',
         aliasedName,
         true,
-        type: DriftSqlType.string,
+        type: DriftSqlType.double,
         requiredDuringInsert: false,
       );
-  static const VerificationMeta _paymentConfirmedAtLocalMeta =
-      const VerificationMeta('paymentConfirmedAtLocal');
+  static const VerificationMeta _cashRoundingUnitMeta = const VerificationMeta(
+    'cashRoundingUnit',
+  );
   @override
-  late final GeneratedColumn<DateTime> paymentConfirmedAtLocal =
-      GeneratedColumn<DateTime>(
-        'payment_confirmed_at_local',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<int> cashRoundingUnit = GeneratedColumn<int>(
+    'cash_rounding_unit',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _latestPaymentServerIdMeta =
       const VerificationMeta('latestPaymentServerId');
   @override
@@ -4224,188 +5147,39 @@ class $LocalOrdersTable extends LocalOrders
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _orderSnapshotJsonMeta = const VerificationMeta(
-    'orderSnapshotJson',
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
   );
   @override
-  late final GeneratedColumn<String> orderSnapshotJson =
-      GeneratedColumn<String>(
-        'order_snapshot_json',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _orderStatusLocalMeta = const VerificationMeta(
-    'orderStatusLocal',
-  );
-  @override
-  late final GeneratedColumn<String> orderStatusLocal = GeneratedColumn<String>(
-    'order_status_local',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('DRAFT'),
-  );
-  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
-    'syncStatus',
-  );
-  @override
-  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
-    'sync_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('PENDING'),
-  );
-  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
-    'lastError',
-  );
-  @override
-  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
-    'last_error',
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
     aliasedName,
     true,
-    type: DriftSqlType.string,
+    type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _manualPaymentServerIdMeta =
-      const VerificationMeta('manualPaymentServerId');
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
   @override
-  late final GeneratedColumn<int> manualPaymentServerId = GeneratedColumn<int>(
-    'manual_payment_server_id',
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _manualPaymentTypeMeta = const VerificationMeta(
-    'manualPaymentType',
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
   );
   @override
-  late final GeneratedColumn<String> manualPaymentType =
-      GeneratedColumn<String>(
-        'manual_payment_type',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _manualProviderNameMeta =
-      const VerificationMeta('manualProviderName');
-  @override
-  late final GeneratedColumn<String> manualProviderName =
-      GeneratedColumn<String>(
-        'manual_provider_name',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _manualProviderAccountNameMeta =
-      const VerificationMeta('manualProviderAccountName');
-  @override
-  late final GeneratedColumn<String> manualProviderAccountName =
-      GeneratedColumn<String>(
-        'manual_provider_account_name',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _manualProviderAccountNoMeta =
-      const VerificationMeta('manualProviderAccountNo');
-  @override
-  late final GeneratedColumn<String> manualProviderAccountNo =
-      GeneratedColumn<String>(
-        'manual_provider_account_no',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _manualQrisImageUrlMeta =
-      const VerificationMeta('manualQrisImageUrl');
-  @override
-  late final GeneratedColumn<String> manualQrisImageUrl =
-      GeneratedColumn<String>(
-        'manual_qris_image_url',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _manualQrisImageLocalPathMeta =
-      const VerificationMeta('manualQrisImageLocalPath');
-  @override
-  late final GeneratedColumn<String> manualQrisImageLocalPath =
-      GeneratedColumn<String>(
-        'manual_qris_image_local_path',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _manualPaymentLabelMeta =
-      const VerificationMeta('manualPaymentLabel');
-  @override
-  late final GeneratedColumn<String> manualPaymentLabel =
-      GeneratedColumn<String>(
-        'manual_payment_label',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _manualPaymentRawJsonMeta =
-      const VerificationMeta('manualPaymentRawJson');
-  @override
-  late final GeneratedColumn<String> manualPaymentRawJson =
-      GeneratedColumn<String>(
-        'manual_payment_raw_json',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _backendSyncStageMeta = const VerificationMeta(
-    'backendSyncStage',
-  );
-  @override
-  late final GeneratedColumn<String> backendSyncStage = GeneratedColumn<String>(
-    'backend_sync_stage',
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
     aliasedName,
-    false,
-    type: DriftSqlType.string,
+    true,
+    type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
-    defaultValue: const Constant('NONE'),
   );
-  static const VerificationMeta _createdAtLocalMeta = const VerificationMeta(
-    'createdAtLocal',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAtLocal =
-      GeneratedColumn<DateTime>(
-        'created_at_local',
-        aliasedName,
-        false,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: true,
-      );
-  static const VerificationMeta _updatedAtLocalMeta = const VerificationMeta(
-    'updatedAtLocal',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAtLocal =
-      GeneratedColumn<DateTime>(
-        'updated_at_local',
-        aliasedName,
-        false,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: true,
-      );
   static const VerificationMeta _syncedAtMeta = const VerificationMeta(
     'syncedAt',
   );
@@ -4419,64 +5193,68 @@ class $LocalOrdersTable extends LocalOrders
   );
   @override
   List<GeneratedColumn> get $columns => [
-    localId,
+    clientUuid,
     serverId,
-    clientOrderCode,
-    serverOrderCode,
+    bookingOrderCode,
     partnerId,
     partnerName,
-    tableServerId,
-    tableNoSnapshot,
+    tableId,
+    tableNo,
+    customerId,
+    employeeOrderId,
+    orderBy,
     customerName,
-    paymentMethodSelected,
-    paymentMethodEffective,
-    subtotal,
+    orderStatus,
+    paymentMethod,
+    openbillFlag,
+    discountId,
     discountValue,
-    ppnPercent,
+    totalOrderValue,
+    ppn,
     isPpnActive,
-    grandTotal,
+    customerOrderNote,
+    employeeOrderNote,
+    cashierProcessId,
+    kitchenProcessId,
+    paymentId,
+    paymentFlag,
+    wifiSnapshotJson,
+    paymentRequestJson,
+    latestPaymentJson,
+    syncVersion,
+    syncDirty,
+    syncIntent,
+    syncError,
+    localFilePathsJson,
     paidAmountLocal,
     changeAmountLocal,
-    cashierProofImageLocalPath,
-    paymentConfirmedAtLocal,
+    cashRoundingAmount,
+    cashRoundingUnit,
     latestPaymentServerId,
-    orderSnapshotJson,
-    orderStatusLocal,
-    syncStatus,
-    lastError,
-    manualPaymentServerId,
-    manualPaymentType,
-    manualProviderName,
-    manualProviderAccountName,
-    manualProviderAccountNo,
-    manualQrisImageUrl,
-    manualQrisImageLocalPath,
-    manualPaymentLabel,
-    manualPaymentRawJson,
-    backendSyncStage,
-    createdAtLocal,
-    updatedAtLocal,
+    createdAt,
+    updatedAt,
+    deletedAt,
     syncedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'local_orders';
+  static const String $name = 'booking_orders';
   @override
   VerificationContext validateIntegrity(
-    Insertable<LocalOrder> instance, {
+    Insertable<BookingOrder> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
-    if (data.containsKey('local_id')) {
+    if (data.containsKey('client_uuid')) {
       context.handle(
-        _localIdMeta,
-        localId.isAcceptableOrUnknown(data['local_id']!, _localIdMeta),
+        _clientUuidMeta,
+        clientUuid.isAcceptableOrUnknown(data['client_uuid']!, _clientUuidMeta),
       );
     } else if (isInserting) {
-      context.missing(_localIdMeta);
+      context.missing(_clientUuidMeta);
     }
     if (data.containsKey('server_id')) {
       context.handle(
@@ -4484,23 +5262,12 @@ class $LocalOrdersTable extends LocalOrders
         serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
       );
     }
-    if (data.containsKey('client_order_code')) {
+    if (data.containsKey('booking_order_code')) {
       context.handle(
-        _clientOrderCodeMeta,
-        clientOrderCode.isAcceptableOrUnknown(
-          data['client_order_code']!,
-          _clientOrderCodeMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_clientOrderCodeMeta);
-    }
-    if (data.containsKey('server_order_code')) {
-      context.handle(
-        _serverOrderCodeMeta,
-        serverOrderCode.isAcceptableOrUnknown(
-          data['server_order_code']!,
-          _serverOrderCodeMeta,
+        _bookingOrderCodeMeta,
+        bookingOrderCode.isAcceptableOrUnknown(
+          data['booking_order_code']!,
+          _bookingOrderCodeMeta,
         ),
       );
     }
@@ -4519,22 +5286,37 @@ class $LocalOrdersTable extends LocalOrders
         ),
       );
     }
-    if (data.containsKey('table_server_id')) {
+    if (data.containsKey('table_id')) {
       context.handle(
-        _tableServerIdMeta,
-        tableServerId.isAcceptableOrUnknown(
-          data['table_server_id']!,
-          _tableServerIdMeta,
+        _tableIdMeta,
+        tableId.isAcceptableOrUnknown(data['table_id']!, _tableIdMeta),
+      );
+    }
+    if (data.containsKey('table_no')) {
+      context.handle(
+        _tableNoMeta,
+        tableNo.isAcceptableOrUnknown(data['table_no']!, _tableNoMeta),
+      );
+    }
+    if (data.containsKey('customer_id')) {
+      context.handle(
+        _customerIdMeta,
+        customerId.isAcceptableOrUnknown(data['customer_id']!, _customerIdMeta),
+      );
+    }
+    if (data.containsKey('employee_order_id')) {
+      context.handle(
+        _employeeOrderIdMeta,
+        employeeOrderId.isAcceptableOrUnknown(
+          data['employee_order_id']!,
+          _employeeOrderIdMeta,
         ),
       );
     }
-    if (data.containsKey('table_no_snapshot')) {
+    if (data.containsKey('order_by')) {
       context.handle(
-        _tableNoSnapshotMeta,
-        tableNoSnapshot.isAcceptableOrUnknown(
-          data['table_no_snapshot']!,
-          _tableNoSnapshotMeta,
-        ),
+        _orderByMeta,
+        orderBy.isAcceptableOrUnknown(data['order_by']!, _orderByMeta),
       );
     }
     if (data.containsKey('customer_name')) {
@@ -4548,28 +5330,37 @@ class $LocalOrdersTable extends LocalOrders
     } else if (isInserting) {
       context.missing(_customerNameMeta);
     }
-    if (data.containsKey('payment_method_selected')) {
+    if (data.containsKey('order_status')) {
       context.handle(
-        _paymentMethodSelectedMeta,
-        paymentMethodSelected.isAcceptableOrUnknown(
-          data['payment_method_selected']!,
-          _paymentMethodSelectedMeta,
+        _orderStatusMeta,
+        orderStatus.isAcceptableOrUnknown(
+          data['order_status']!,
+          _orderStatusMeta,
         ),
       );
     }
-    if (data.containsKey('payment_method_effective')) {
+    if (data.containsKey('payment_method')) {
       context.handle(
-        _paymentMethodEffectiveMeta,
-        paymentMethodEffective.isAcceptableOrUnknown(
-          data['payment_method_effective']!,
-          _paymentMethodEffectiveMeta,
+        _paymentMethodMeta,
+        paymentMethod.isAcceptableOrUnknown(
+          data['payment_method']!,
+          _paymentMethodMeta,
         ),
       );
     }
-    if (data.containsKey('subtotal')) {
+    if (data.containsKey('openbill_flag')) {
       context.handle(
-        _subtotalMeta,
-        subtotal.isAcceptableOrUnknown(data['subtotal']!, _subtotalMeta),
+        _openbillFlagMeta,
+        openbillFlag.isAcceptableOrUnknown(
+          data['openbill_flag']!,
+          _openbillFlagMeta,
+        ),
+      );
+    }
+    if (data.containsKey('discount_id')) {
+      context.handle(
+        _discountIdMeta,
+        discountId.isAcceptableOrUnknown(data['discount_id']!, _discountIdMeta),
       );
     }
     if (data.containsKey('discount_value')) {
@@ -4581,10 +5372,19 @@ class $LocalOrdersTable extends LocalOrders
         ),
       );
     }
-    if (data.containsKey('ppn_percent')) {
+    if (data.containsKey('total_order_value')) {
       context.handle(
-        _ppnPercentMeta,
-        ppnPercent.isAcceptableOrUnknown(data['ppn_percent']!, _ppnPercentMeta),
+        _totalOrderValueMeta,
+        totalOrderValue.isAcceptableOrUnknown(
+          data['total_order_value']!,
+          _totalOrderValueMeta,
+        ),
+      );
+    }
+    if (data.containsKey('ppn')) {
+      context.handle(
+        _ppnMeta,
+        ppn.isAcceptableOrUnknown(data['ppn']!, _ppnMeta),
       );
     }
     if (data.containsKey('is_ppn_active')) {
@@ -4596,10 +5396,118 @@ class $LocalOrdersTable extends LocalOrders
         ),
       );
     }
-    if (data.containsKey('grand_total')) {
+    if (data.containsKey('customer_order_note')) {
       context.handle(
-        _grandTotalMeta,
-        grandTotal.isAcceptableOrUnknown(data['grand_total']!, _grandTotalMeta),
+        _customerOrderNoteMeta,
+        customerOrderNote.isAcceptableOrUnknown(
+          data['customer_order_note']!,
+          _customerOrderNoteMeta,
+        ),
+      );
+    }
+    if (data.containsKey('employee_order_note')) {
+      context.handle(
+        _employeeOrderNoteMeta,
+        employeeOrderNote.isAcceptableOrUnknown(
+          data['employee_order_note']!,
+          _employeeOrderNoteMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cashier_process_id')) {
+      context.handle(
+        _cashierProcessIdMeta,
+        cashierProcessId.isAcceptableOrUnknown(
+          data['cashier_process_id']!,
+          _cashierProcessIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('kitchen_process_id')) {
+      context.handle(
+        _kitchenProcessIdMeta,
+        kitchenProcessId.isAcceptableOrUnknown(
+          data['kitchen_process_id']!,
+          _kitchenProcessIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('payment_id')) {
+      context.handle(
+        _paymentIdMeta,
+        paymentId.isAcceptableOrUnknown(data['payment_id']!, _paymentIdMeta),
+      );
+    }
+    if (data.containsKey('payment_flag')) {
+      context.handle(
+        _paymentFlagMeta,
+        paymentFlag.isAcceptableOrUnknown(
+          data['payment_flag']!,
+          _paymentFlagMeta,
+        ),
+      );
+    }
+    if (data.containsKey('wifi_snapshot_json')) {
+      context.handle(
+        _wifiSnapshotJsonMeta,
+        wifiSnapshotJson.isAcceptableOrUnknown(
+          data['wifi_snapshot_json']!,
+          _wifiSnapshotJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('payment_request_json')) {
+      context.handle(
+        _paymentRequestJsonMeta,
+        paymentRequestJson.isAcceptableOrUnknown(
+          data['payment_request_json']!,
+          _paymentRequestJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('latest_payment_json')) {
+      context.handle(
+        _latestPaymentJsonMeta,
+        latestPaymentJson.isAcceptableOrUnknown(
+          data['latest_payment_json']!,
+          _latestPaymentJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sync_version')) {
+      context.handle(
+        _syncVersionMeta,
+        syncVersion.isAcceptableOrUnknown(
+          data['sync_version']!,
+          _syncVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sync_dirty')) {
+      context.handle(
+        _syncDirtyMeta,
+        syncDirty.isAcceptableOrUnknown(data['sync_dirty']!, _syncDirtyMeta),
+      );
+    }
+    if (data.containsKey('sync_intent')) {
+      context.handle(
+        _syncIntentMeta,
+        syncIntent.isAcceptableOrUnknown(data['sync_intent']!, _syncIntentMeta),
+      );
+    }
+    if (data.containsKey('sync_error')) {
+      context.handle(
+        _syncErrorMeta,
+        syncError.isAcceptableOrUnknown(data['sync_error']!, _syncErrorMeta),
+      );
+    }
+    if (data.containsKey('local_file_paths_json')) {
+      context.handle(
+        _localFilePathsJsonMeta,
+        localFilePathsJson.isAcceptableOrUnknown(
+          data['local_file_paths_json']!,
+          _localFilePathsJsonMeta,
+        ),
       );
     }
     if (data.containsKey('paid_amount_local')) {
@@ -4620,21 +5528,21 @@ class $LocalOrdersTable extends LocalOrders
         ),
       );
     }
-    if (data.containsKey('cashier_proof_image_local_path')) {
+    if (data.containsKey('cash_rounding_amount')) {
       context.handle(
-        _cashierProofImageLocalPathMeta,
-        cashierProofImageLocalPath.isAcceptableOrUnknown(
-          data['cashier_proof_image_local_path']!,
-          _cashierProofImageLocalPathMeta,
+        _cashRoundingAmountMeta,
+        cashRoundingAmount.isAcceptableOrUnknown(
+          data['cash_rounding_amount']!,
+          _cashRoundingAmountMeta,
         ),
       );
     }
-    if (data.containsKey('payment_confirmed_at_local')) {
+    if (data.containsKey('cash_rounding_unit')) {
       context.handle(
-        _paymentConfirmedAtLocalMeta,
-        paymentConfirmedAtLocal.isAcceptableOrUnknown(
-          data['payment_confirmed_at_local']!,
-          _paymentConfirmedAtLocalMeta,
+        _cashRoundingUnitMeta,
+        cashRoundingUnit.isAcceptableOrUnknown(
+          data['cash_rounding_unit']!,
+          _cashRoundingUnitMeta,
         ),
       );
     }
@@ -4647,147 +5555,23 @@ class $LocalOrdersTable extends LocalOrders
         ),
       );
     }
-    if (data.containsKey('order_snapshot_json')) {
+    if (data.containsKey('created_at')) {
       context.handle(
-        _orderSnapshotJsonMeta,
-        orderSnapshotJson.isAcceptableOrUnknown(
-          data['order_snapshot_json']!,
-          _orderSnapshotJsonMeta,
-        ),
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
-    if (data.containsKey('order_status_local')) {
+    if (data.containsKey('updated_at')) {
       context.handle(
-        _orderStatusLocalMeta,
-        orderStatusLocal.isAcceptableOrUnknown(
-          data['order_status_local']!,
-          _orderStatusLocalMeta,
-        ),
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
       );
     }
-    if (data.containsKey('sync_status')) {
+    if (data.containsKey('deleted_at')) {
       context.handle(
-        _syncStatusMeta,
-        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
       );
-    }
-    if (data.containsKey('last_error')) {
-      context.handle(
-        _lastErrorMeta,
-        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
-      );
-    }
-    if (data.containsKey('manual_payment_server_id')) {
-      context.handle(
-        _manualPaymentServerIdMeta,
-        manualPaymentServerId.isAcceptableOrUnknown(
-          data['manual_payment_server_id']!,
-          _manualPaymentServerIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('manual_payment_type')) {
-      context.handle(
-        _manualPaymentTypeMeta,
-        manualPaymentType.isAcceptableOrUnknown(
-          data['manual_payment_type']!,
-          _manualPaymentTypeMeta,
-        ),
-      );
-    }
-    if (data.containsKey('manual_provider_name')) {
-      context.handle(
-        _manualProviderNameMeta,
-        manualProviderName.isAcceptableOrUnknown(
-          data['manual_provider_name']!,
-          _manualProviderNameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('manual_provider_account_name')) {
-      context.handle(
-        _manualProviderAccountNameMeta,
-        manualProviderAccountName.isAcceptableOrUnknown(
-          data['manual_provider_account_name']!,
-          _manualProviderAccountNameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('manual_provider_account_no')) {
-      context.handle(
-        _manualProviderAccountNoMeta,
-        manualProviderAccountNo.isAcceptableOrUnknown(
-          data['manual_provider_account_no']!,
-          _manualProviderAccountNoMeta,
-        ),
-      );
-    }
-    if (data.containsKey('manual_qris_image_url')) {
-      context.handle(
-        _manualQrisImageUrlMeta,
-        manualQrisImageUrl.isAcceptableOrUnknown(
-          data['manual_qris_image_url']!,
-          _manualQrisImageUrlMeta,
-        ),
-      );
-    }
-    if (data.containsKey('manual_qris_image_local_path')) {
-      context.handle(
-        _manualQrisImageLocalPathMeta,
-        manualQrisImageLocalPath.isAcceptableOrUnknown(
-          data['manual_qris_image_local_path']!,
-          _manualQrisImageLocalPathMeta,
-        ),
-      );
-    }
-    if (data.containsKey('manual_payment_label')) {
-      context.handle(
-        _manualPaymentLabelMeta,
-        manualPaymentLabel.isAcceptableOrUnknown(
-          data['manual_payment_label']!,
-          _manualPaymentLabelMeta,
-        ),
-      );
-    }
-    if (data.containsKey('manual_payment_raw_json')) {
-      context.handle(
-        _manualPaymentRawJsonMeta,
-        manualPaymentRawJson.isAcceptableOrUnknown(
-          data['manual_payment_raw_json']!,
-          _manualPaymentRawJsonMeta,
-        ),
-      );
-    }
-    if (data.containsKey('backend_sync_stage')) {
-      context.handle(
-        _backendSyncStageMeta,
-        backendSyncStage.isAcceptableOrUnknown(
-          data['backend_sync_stage']!,
-          _backendSyncStageMeta,
-        ),
-      );
-    }
-    if (data.containsKey('created_at_local')) {
-      context.handle(
-        _createdAtLocalMeta,
-        createdAtLocal.isAcceptableOrUnknown(
-          data['created_at_local']!,
-          _createdAtLocalMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtLocalMeta);
-    }
-    if (data.containsKey('updated_at_local')) {
-      context.handle(
-        _updatedAtLocalMeta,
-        updatedAtLocal.isAcceptableOrUnknown(
-          data['updated_at_local']!,
-          _updatedAtLocalMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_updatedAtLocalMeta);
     }
     if (data.containsKey('synced_at')) {
       context.handle(
@@ -4799,26 +5583,22 @@ class $LocalOrdersTable extends LocalOrders
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {localId};
+  Set<GeneratedColumn> get $primaryKey => {clientUuid};
   @override
-  LocalOrder map(Map<String, dynamic> data, {String? tablePrefix}) {
+  BookingOrder map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return LocalOrder(
-      localId: attachedDatabase.typeMapping.read(
+    return BookingOrder(
+      clientUuid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}local_id'],
+        data['${effectivePrefix}client_uuid'],
       )!,
       serverId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}server_id'],
       ),
-      clientOrderCode: attachedDatabase.typeMapping.read(
+      bookingOrderCode: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}client_order_code'],
-      )!,
-      serverOrderCode: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}server_order_code'],
+        data['${effectivePrefix}booking_order_code'],
       ),
       partnerId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -4828,46 +5608,118 @@ class $LocalOrdersTable extends LocalOrders
         DriftSqlType.string,
         data['${effectivePrefix}partner_name'],
       ),
-      tableServerId: attachedDatabase.typeMapping.read(
+      tableId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}table_server_id'],
+        data['${effectivePrefix}table_id'],
       ),
-      tableNoSnapshot: attachedDatabase.typeMapping.read(
+      tableNo: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}table_no_snapshot'],
+        data['${effectivePrefix}table_no'],
+      ),
+      customerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}customer_id'],
+      ),
+      employeeOrderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}employee_order_id'],
+      ),
+      orderBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}order_by'],
       ),
       customerName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}customer_name'],
       )!,
-      paymentMethodSelected: attachedDatabase.typeMapping.read(
+      orderStatus: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}payment_method_selected'],
-      ),
-      paymentMethodEffective: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}payment_method_effective'],
-      ),
-      subtotal: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}subtotal'],
+        data['${effectivePrefix}order_status'],
       )!,
+      paymentMethod: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payment_method'],
+      ),
+      openbillFlag: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}openbill_flag'],
+      )!,
+      discountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}discount_id'],
+      ),
       discountValue: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}discount_value'],
       )!,
-      ppnPercent: attachedDatabase.typeMapping.read(
+      totalOrderValue: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
-        data['${effectivePrefix}ppn_percent'],
+        data['${effectivePrefix}total_order_value'],
       )!,
+      ppn: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}ppn'],
+      ),
       isPpnActive: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_ppn_active'],
       )!,
-      grandTotal: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}grand_total'],
+      customerOrderNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}customer_order_note'],
+      ),
+      employeeOrderNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}employee_order_note'],
+      ),
+      cashierProcessId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cashier_process_id'],
+      ),
+      kitchenProcessId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}kitchen_process_id'],
+      ),
+      paymentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}payment_id'],
+      ),
+      paymentFlag: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}payment_flag'],
       )!,
+      wifiSnapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}wifi_snapshot_json'],
+      ),
+      paymentRequestJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payment_request_json'],
+      ),
+      latestPaymentJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}latest_payment_json'],
+      ),
+      syncVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sync_version'],
+      )!,
+      syncDirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}sync_dirty'],
+      )!,
+      syncIntent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_intent'],
+      ),
+      syncError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_error'],
+      ),
+      localFilePathsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_file_paths_json'],
+      ),
       paidAmountLocal: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}paid_amount_local'],
@@ -4876,82 +5728,30 @@ class $LocalOrdersTable extends LocalOrders
         DriftSqlType.double,
         data['${effectivePrefix}change_amount_local'],
       ),
-      cashierProofImageLocalPath: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}cashier_proof_image_local_path'],
+      cashRoundingAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}cash_rounding_amount'],
       ),
-      paymentConfirmedAtLocal: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}payment_confirmed_at_local'],
+      cashRoundingUnit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cash_rounding_unit'],
       ),
       latestPaymentServerId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}latest_payment_server_id'],
       ),
-      orderSnapshotJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}order_snapshot_json'],
-      ),
-      orderStatusLocal: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}order_status_local'],
-      )!,
-      syncStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}sync_status'],
-      )!,
-      lastError: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}last_error'],
-      ),
-      manualPaymentServerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}manual_payment_server_id'],
-      ),
-      manualPaymentType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}manual_payment_type'],
-      ),
-      manualProviderName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}manual_provider_name'],
-      ),
-      manualProviderAccountName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}manual_provider_account_name'],
-      ),
-      manualProviderAccountNo: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}manual_provider_account_no'],
-      ),
-      manualQrisImageUrl: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}manual_qris_image_url'],
-      ),
-      manualQrisImageLocalPath: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}manual_qris_image_local_path'],
-      ),
-      manualPaymentLabel: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}manual_payment_label'],
-      ),
-      manualPaymentRawJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}manual_payment_raw_json'],
-      ),
-      backendSyncStage: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}backend_sync_stage'],
-      )!,
-      createdAtLocal: attachedDatabase.typeMapping.read(
+      createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at_local'],
-      )!,
-      updatedAtLocal: attachedDatabase.typeMapping.read(
+        data['${effectivePrefix}created_at'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at_local'],
-      )!,
+        data['${effectivePrefix}updated_at'],
+      ),
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
       syncedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}synced_at'],
@@ -4960,100 +5760,107 @@ class $LocalOrdersTable extends LocalOrders
   }
 
   @override
-  $LocalOrdersTable createAlias(String alias) {
-    return $LocalOrdersTable(attachedDatabase, alias);
+  $BookingOrdersTable createAlias(String alias) {
+    return $BookingOrdersTable(attachedDatabase, alias);
   }
 }
 
-class LocalOrder extends DataClass implements Insertable<LocalOrder> {
-  final String localId;
+class BookingOrder extends DataClass implements Insertable<BookingOrder> {
+  final String clientUuid;
   final int? serverId;
-  final String clientOrderCode;
-  final String? serverOrderCode;
+  final String? bookingOrderCode;
   final int? partnerId;
   final String? partnerName;
-  final int? tableServerId;
-  final String? tableNoSnapshot;
+  final int? tableId;
+  final String? tableNo;
+  final int? customerId;
+  final int? employeeOrderId;
+  final String? orderBy;
   final String customerName;
-  final String? paymentMethodSelected;
-  final String? paymentMethodEffective;
-  final double subtotal;
+  final String orderStatus;
+  final String? paymentMethod;
+  final bool openbillFlag;
+  final int? discountId;
   final double discountValue;
-  final double ppnPercent;
+  final double totalOrderValue;
+  final double? ppn;
   final bool isPpnActive;
-  final double grandTotal;
+  final String? customerOrderNote;
+  final String? employeeOrderNote;
+  final int? cashierProcessId;
+  final int? kitchenProcessId;
+  final int? paymentId;
+  final bool paymentFlag;
+  final String? wifiSnapshotJson;
+  final String? paymentRequestJson;
+  final String? latestPaymentJson;
+  final int syncVersion;
+  final bool syncDirty;
+  final String? syncIntent;
+  final String? syncError;
+  final String? localFilePathsJson;
   final double? paidAmountLocal;
   final double? changeAmountLocal;
-  final String? cashierProofImageLocalPath;
-  final DateTime? paymentConfirmedAtLocal;
+  final double? cashRoundingAmount;
+  final int? cashRoundingUnit;
   final int? latestPaymentServerId;
-  final String? orderSnapshotJson;
-  final String orderStatusLocal;
-  final String syncStatus;
-  final String? lastError;
-  final int? manualPaymentServerId;
-  final String? manualPaymentType;
-  final String? manualProviderName;
-  final String? manualProviderAccountName;
-  final String? manualProviderAccountNo;
-  final String? manualQrisImageUrl;
-  final String? manualQrisImageLocalPath;
-  final String? manualPaymentLabel;
-  final String? manualPaymentRawJson;
-  final String backendSyncStage;
-  final DateTime createdAtLocal;
-  final DateTime updatedAtLocal;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? deletedAt;
   final DateTime? syncedAt;
-  const LocalOrder({
-    required this.localId,
+  const BookingOrder({
+    required this.clientUuid,
     this.serverId,
-    required this.clientOrderCode,
-    this.serverOrderCode,
+    this.bookingOrderCode,
     this.partnerId,
     this.partnerName,
-    this.tableServerId,
-    this.tableNoSnapshot,
+    this.tableId,
+    this.tableNo,
+    this.customerId,
+    this.employeeOrderId,
+    this.orderBy,
     required this.customerName,
-    this.paymentMethodSelected,
-    this.paymentMethodEffective,
-    required this.subtotal,
+    required this.orderStatus,
+    this.paymentMethod,
+    required this.openbillFlag,
+    this.discountId,
     required this.discountValue,
-    required this.ppnPercent,
+    required this.totalOrderValue,
+    this.ppn,
     required this.isPpnActive,
-    required this.grandTotal,
+    this.customerOrderNote,
+    this.employeeOrderNote,
+    this.cashierProcessId,
+    this.kitchenProcessId,
+    this.paymentId,
+    required this.paymentFlag,
+    this.wifiSnapshotJson,
+    this.paymentRequestJson,
+    this.latestPaymentJson,
+    required this.syncVersion,
+    required this.syncDirty,
+    this.syncIntent,
+    this.syncError,
+    this.localFilePathsJson,
     this.paidAmountLocal,
     this.changeAmountLocal,
-    this.cashierProofImageLocalPath,
-    this.paymentConfirmedAtLocal,
+    this.cashRoundingAmount,
+    this.cashRoundingUnit,
     this.latestPaymentServerId,
-    this.orderSnapshotJson,
-    required this.orderStatusLocal,
-    required this.syncStatus,
-    this.lastError,
-    this.manualPaymentServerId,
-    this.manualPaymentType,
-    this.manualProviderName,
-    this.manualProviderAccountName,
-    this.manualProviderAccountNo,
-    this.manualQrisImageUrl,
-    this.manualQrisImageLocalPath,
-    this.manualPaymentLabel,
-    this.manualPaymentRawJson,
-    required this.backendSyncStage,
-    required this.createdAtLocal,
-    required this.updatedAtLocal,
+    this.createdAt,
+    this.updatedAt,
+    this.deletedAt,
     this.syncedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['local_id'] = Variable<String>(localId);
+    map['client_uuid'] = Variable<String>(clientUuid);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
     }
-    map['client_order_code'] = Variable<String>(clientOrderCode);
-    if (!nullToAbsent || serverOrderCode != null) {
-      map['server_order_code'] = Variable<String>(serverOrderCode);
+    if (!nullToAbsent || bookingOrderCode != null) {
+      map['booking_order_code'] = Variable<String>(bookingOrderCode);
     }
     if (!nullToAbsent || partnerId != null) {
       map['partner_id'] = Variable<int>(partnerId);
@@ -5061,265 +5868,274 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
     if (!nullToAbsent || partnerName != null) {
       map['partner_name'] = Variable<String>(partnerName);
     }
-    if (!nullToAbsent || tableServerId != null) {
-      map['table_server_id'] = Variable<int>(tableServerId);
+    if (!nullToAbsent || tableId != null) {
+      map['table_id'] = Variable<int>(tableId);
     }
-    if (!nullToAbsent || tableNoSnapshot != null) {
-      map['table_no_snapshot'] = Variable<String>(tableNoSnapshot);
+    if (!nullToAbsent || tableNo != null) {
+      map['table_no'] = Variable<String>(tableNo);
+    }
+    if (!nullToAbsent || customerId != null) {
+      map['customer_id'] = Variable<int>(customerId);
+    }
+    if (!nullToAbsent || employeeOrderId != null) {
+      map['employee_order_id'] = Variable<int>(employeeOrderId);
+    }
+    if (!nullToAbsent || orderBy != null) {
+      map['order_by'] = Variable<String>(orderBy);
     }
     map['customer_name'] = Variable<String>(customerName);
-    if (!nullToAbsent || paymentMethodSelected != null) {
-      map['payment_method_selected'] = Variable<String>(paymentMethodSelected);
+    map['order_status'] = Variable<String>(orderStatus);
+    if (!nullToAbsent || paymentMethod != null) {
+      map['payment_method'] = Variable<String>(paymentMethod);
     }
-    if (!nullToAbsent || paymentMethodEffective != null) {
-      map['payment_method_effective'] = Variable<String>(
-        paymentMethodEffective,
-      );
+    map['openbill_flag'] = Variable<bool>(openbillFlag);
+    if (!nullToAbsent || discountId != null) {
+      map['discount_id'] = Variable<int>(discountId);
     }
-    map['subtotal'] = Variable<double>(subtotal);
     map['discount_value'] = Variable<double>(discountValue);
-    map['ppn_percent'] = Variable<double>(ppnPercent);
+    map['total_order_value'] = Variable<double>(totalOrderValue);
+    if (!nullToAbsent || ppn != null) {
+      map['ppn'] = Variable<double>(ppn);
+    }
     map['is_ppn_active'] = Variable<bool>(isPpnActive);
-    map['grand_total'] = Variable<double>(grandTotal);
+    if (!nullToAbsent || customerOrderNote != null) {
+      map['customer_order_note'] = Variable<String>(customerOrderNote);
+    }
+    if (!nullToAbsent || employeeOrderNote != null) {
+      map['employee_order_note'] = Variable<String>(employeeOrderNote);
+    }
+    if (!nullToAbsent || cashierProcessId != null) {
+      map['cashier_process_id'] = Variable<int>(cashierProcessId);
+    }
+    if (!nullToAbsent || kitchenProcessId != null) {
+      map['kitchen_process_id'] = Variable<int>(kitchenProcessId);
+    }
+    if (!nullToAbsent || paymentId != null) {
+      map['payment_id'] = Variable<int>(paymentId);
+    }
+    map['payment_flag'] = Variable<bool>(paymentFlag);
+    if (!nullToAbsent || wifiSnapshotJson != null) {
+      map['wifi_snapshot_json'] = Variable<String>(wifiSnapshotJson);
+    }
+    if (!nullToAbsent || paymentRequestJson != null) {
+      map['payment_request_json'] = Variable<String>(paymentRequestJson);
+    }
+    if (!nullToAbsent || latestPaymentJson != null) {
+      map['latest_payment_json'] = Variable<String>(latestPaymentJson);
+    }
+    map['sync_version'] = Variable<int>(syncVersion);
+    map['sync_dirty'] = Variable<bool>(syncDirty);
+    if (!nullToAbsent || syncIntent != null) {
+      map['sync_intent'] = Variable<String>(syncIntent);
+    }
+    if (!nullToAbsent || syncError != null) {
+      map['sync_error'] = Variable<String>(syncError);
+    }
+    if (!nullToAbsent || localFilePathsJson != null) {
+      map['local_file_paths_json'] = Variable<String>(localFilePathsJson);
+    }
     if (!nullToAbsent || paidAmountLocal != null) {
       map['paid_amount_local'] = Variable<double>(paidAmountLocal);
     }
     if (!nullToAbsent || changeAmountLocal != null) {
       map['change_amount_local'] = Variable<double>(changeAmountLocal);
     }
-    if (!nullToAbsent || cashierProofImageLocalPath != null) {
-      map['cashier_proof_image_local_path'] = Variable<String>(
-        cashierProofImageLocalPath,
-      );
+    if (!nullToAbsent || cashRoundingAmount != null) {
+      map['cash_rounding_amount'] = Variable<double>(cashRoundingAmount);
     }
-    if (!nullToAbsent || paymentConfirmedAtLocal != null) {
-      map['payment_confirmed_at_local'] = Variable<DateTime>(
-        paymentConfirmedAtLocal,
-      );
+    if (!nullToAbsent || cashRoundingUnit != null) {
+      map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit);
     }
     if (!nullToAbsent || latestPaymentServerId != null) {
       map['latest_payment_server_id'] = Variable<int>(latestPaymentServerId);
     }
-    if (!nullToAbsent || orderSnapshotJson != null) {
-      map['order_snapshot_json'] = Variable<String>(orderSnapshotJson);
+    if (!nullToAbsent || createdAt != null) {
+      map['created_at'] = Variable<DateTime>(createdAt);
     }
-    map['order_status_local'] = Variable<String>(orderStatusLocal);
-    map['sync_status'] = Variable<String>(syncStatus);
-    if (!nullToAbsent || lastError != null) {
-      map['last_error'] = Variable<String>(lastError);
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
     }
-    if (!nullToAbsent || manualPaymentServerId != null) {
-      map['manual_payment_server_id'] = Variable<int>(manualPaymentServerId);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
     }
-    if (!nullToAbsent || manualPaymentType != null) {
-      map['manual_payment_type'] = Variable<String>(manualPaymentType);
-    }
-    if (!nullToAbsent || manualProviderName != null) {
-      map['manual_provider_name'] = Variable<String>(manualProviderName);
-    }
-    if (!nullToAbsent || manualProviderAccountName != null) {
-      map['manual_provider_account_name'] = Variable<String>(
-        manualProviderAccountName,
-      );
-    }
-    if (!nullToAbsent || manualProviderAccountNo != null) {
-      map['manual_provider_account_no'] = Variable<String>(
-        manualProviderAccountNo,
-      );
-    }
-    if (!nullToAbsent || manualQrisImageUrl != null) {
-      map['manual_qris_image_url'] = Variable<String>(manualQrisImageUrl);
-    }
-    if (!nullToAbsent || manualQrisImageLocalPath != null) {
-      map['manual_qris_image_local_path'] = Variable<String>(
-        manualQrisImageLocalPath,
-      );
-    }
-    if (!nullToAbsent || manualPaymentLabel != null) {
-      map['manual_payment_label'] = Variable<String>(manualPaymentLabel);
-    }
-    if (!nullToAbsent || manualPaymentRawJson != null) {
-      map['manual_payment_raw_json'] = Variable<String>(manualPaymentRawJson);
-    }
-    map['backend_sync_stage'] = Variable<String>(backendSyncStage);
-    map['created_at_local'] = Variable<DateTime>(createdAtLocal);
-    map['updated_at_local'] = Variable<DateTime>(updatedAtLocal);
     if (!nullToAbsent || syncedAt != null) {
       map['synced_at'] = Variable<DateTime>(syncedAt);
     }
     return map;
   }
 
-  LocalOrdersCompanion toCompanion(bool nullToAbsent) {
-    return LocalOrdersCompanion(
-      localId: Value(localId),
+  BookingOrdersCompanion toCompanion(bool nullToAbsent) {
+    return BookingOrdersCompanion(
+      clientUuid: Value(clientUuid),
       serverId: serverId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverId),
-      clientOrderCode: Value(clientOrderCode),
-      serverOrderCode: serverOrderCode == null && nullToAbsent
+      bookingOrderCode: bookingOrderCode == null && nullToAbsent
           ? const Value.absent()
-          : Value(serverOrderCode),
+          : Value(bookingOrderCode),
       partnerId: partnerId == null && nullToAbsent
           ? const Value.absent()
           : Value(partnerId),
       partnerName: partnerName == null && nullToAbsent
           ? const Value.absent()
           : Value(partnerName),
-      tableServerId: tableServerId == null && nullToAbsent
+      tableId: tableId == null && nullToAbsent
           ? const Value.absent()
-          : Value(tableServerId),
-      tableNoSnapshot: tableNoSnapshot == null && nullToAbsent
+          : Value(tableId),
+      tableNo: tableNo == null && nullToAbsent
           ? const Value.absent()
-          : Value(tableNoSnapshot),
+          : Value(tableNo),
+      customerId: customerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customerId),
+      employeeOrderId: employeeOrderId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(employeeOrderId),
+      orderBy: orderBy == null && nullToAbsent
+          ? const Value.absent()
+          : Value(orderBy),
       customerName: Value(customerName),
-      paymentMethodSelected: paymentMethodSelected == null && nullToAbsent
+      orderStatus: Value(orderStatus),
+      paymentMethod: paymentMethod == null && nullToAbsent
           ? const Value.absent()
-          : Value(paymentMethodSelected),
-      paymentMethodEffective: paymentMethodEffective == null && nullToAbsent
+          : Value(paymentMethod),
+      openbillFlag: Value(openbillFlag),
+      discountId: discountId == null && nullToAbsent
           ? const Value.absent()
-          : Value(paymentMethodEffective),
-      subtotal: Value(subtotal),
+          : Value(discountId),
       discountValue: Value(discountValue),
-      ppnPercent: Value(ppnPercent),
+      totalOrderValue: Value(totalOrderValue),
+      ppn: ppn == null && nullToAbsent ? const Value.absent() : Value(ppn),
       isPpnActive: Value(isPpnActive),
-      grandTotal: Value(grandTotal),
+      customerOrderNote: customerOrderNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customerOrderNote),
+      employeeOrderNote: employeeOrderNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(employeeOrderNote),
+      cashierProcessId: cashierProcessId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cashierProcessId),
+      kitchenProcessId: kitchenProcessId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(kitchenProcessId),
+      paymentId: paymentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(paymentId),
+      paymentFlag: Value(paymentFlag),
+      wifiSnapshotJson: wifiSnapshotJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(wifiSnapshotJson),
+      paymentRequestJson: paymentRequestJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(paymentRequestJson),
+      latestPaymentJson: latestPaymentJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(latestPaymentJson),
+      syncVersion: Value(syncVersion),
+      syncDirty: Value(syncDirty),
+      syncIntent: syncIntent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncIntent),
+      syncError: syncError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncError),
+      localFilePathsJson: localFilePathsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(localFilePathsJson),
       paidAmountLocal: paidAmountLocal == null && nullToAbsent
           ? const Value.absent()
           : Value(paidAmountLocal),
       changeAmountLocal: changeAmountLocal == null && nullToAbsent
           ? const Value.absent()
           : Value(changeAmountLocal),
-      cashierProofImageLocalPath:
-          cashierProofImageLocalPath == null && nullToAbsent
+      cashRoundingAmount: cashRoundingAmount == null && nullToAbsent
           ? const Value.absent()
-          : Value(cashierProofImageLocalPath),
-      paymentConfirmedAtLocal: paymentConfirmedAtLocal == null && nullToAbsent
+          : Value(cashRoundingAmount),
+      cashRoundingUnit: cashRoundingUnit == null && nullToAbsent
           ? const Value.absent()
-          : Value(paymentConfirmedAtLocal),
+          : Value(cashRoundingUnit),
       latestPaymentServerId: latestPaymentServerId == null && nullToAbsent
           ? const Value.absent()
           : Value(latestPaymentServerId),
-      orderSnapshotJson: orderSnapshotJson == null && nullToAbsent
+      createdAt: createdAt == null && nullToAbsent
           ? const Value.absent()
-          : Value(orderSnapshotJson),
-      orderStatusLocal: Value(orderStatusLocal),
-      syncStatus: Value(syncStatus),
-      lastError: lastError == null && nullToAbsent
+          : Value(createdAt),
+      updatedAt: updatedAt == null && nullToAbsent
           ? const Value.absent()
-          : Value(lastError),
-      manualPaymentServerId: manualPaymentServerId == null && nullToAbsent
+          : Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
           ? const Value.absent()
-          : Value(manualPaymentServerId),
-      manualPaymentType: manualPaymentType == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualPaymentType),
-      manualProviderName: manualProviderName == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualProviderName),
-      manualProviderAccountName:
-          manualProviderAccountName == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualProviderAccountName),
-      manualProviderAccountNo: manualProviderAccountNo == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualProviderAccountNo),
-      manualQrisImageUrl: manualQrisImageUrl == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualQrisImageUrl),
-      manualQrisImageLocalPath: manualQrisImageLocalPath == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualQrisImageLocalPath),
-      manualPaymentLabel: manualPaymentLabel == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualPaymentLabel),
-      manualPaymentRawJson: manualPaymentRawJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualPaymentRawJson),
-      backendSyncStage: Value(backendSyncStage),
-      createdAtLocal: Value(createdAtLocal),
-      updatedAtLocal: Value(updatedAtLocal),
+          : Value(deletedAt),
       syncedAt: syncedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(syncedAt),
     );
   }
 
-  factory LocalOrder.fromJson(
+  factory BookingOrder.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return LocalOrder(
-      localId: serializer.fromJson<String>(json['localId']),
+    return BookingOrder(
+      clientUuid: serializer.fromJson<String>(json['clientUuid']),
       serverId: serializer.fromJson<int?>(json['serverId']),
-      clientOrderCode: serializer.fromJson<String>(json['clientOrderCode']),
-      serverOrderCode: serializer.fromJson<String?>(json['serverOrderCode']),
+      bookingOrderCode: serializer.fromJson<String?>(json['bookingOrderCode']),
       partnerId: serializer.fromJson<int?>(json['partnerId']),
       partnerName: serializer.fromJson<String?>(json['partnerName']),
-      tableServerId: serializer.fromJson<int?>(json['tableServerId']),
-      tableNoSnapshot: serializer.fromJson<String?>(json['tableNoSnapshot']),
+      tableId: serializer.fromJson<int?>(json['tableId']),
+      tableNo: serializer.fromJson<String?>(json['tableNo']),
+      customerId: serializer.fromJson<int?>(json['customerId']),
+      employeeOrderId: serializer.fromJson<int?>(json['employeeOrderId']),
+      orderBy: serializer.fromJson<String?>(json['orderBy']),
       customerName: serializer.fromJson<String>(json['customerName']),
-      paymentMethodSelected: serializer.fromJson<String?>(
-        json['paymentMethodSelected'],
-      ),
-      paymentMethodEffective: serializer.fromJson<String?>(
-        json['paymentMethodEffective'],
-      ),
-      subtotal: serializer.fromJson<double>(json['subtotal']),
+      orderStatus: serializer.fromJson<String>(json['orderStatus']),
+      paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
+      openbillFlag: serializer.fromJson<bool>(json['openbillFlag']),
+      discountId: serializer.fromJson<int?>(json['discountId']),
       discountValue: serializer.fromJson<double>(json['discountValue']),
-      ppnPercent: serializer.fromJson<double>(json['ppnPercent']),
+      totalOrderValue: serializer.fromJson<double>(json['totalOrderValue']),
+      ppn: serializer.fromJson<double?>(json['ppn']),
       isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
-      grandTotal: serializer.fromJson<double>(json['grandTotal']),
+      customerOrderNote: serializer.fromJson<String?>(
+        json['customerOrderNote'],
+      ),
+      employeeOrderNote: serializer.fromJson<String?>(
+        json['employeeOrderNote'],
+      ),
+      cashierProcessId: serializer.fromJson<int?>(json['cashierProcessId']),
+      kitchenProcessId: serializer.fromJson<int?>(json['kitchenProcessId']),
+      paymentId: serializer.fromJson<int?>(json['paymentId']),
+      paymentFlag: serializer.fromJson<bool>(json['paymentFlag']),
+      wifiSnapshotJson: serializer.fromJson<String?>(json['wifiSnapshotJson']),
+      paymentRequestJson: serializer.fromJson<String?>(
+        json['paymentRequestJson'],
+      ),
+      latestPaymentJson: serializer.fromJson<String?>(
+        json['latestPaymentJson'],
+      ),
+      syncVersion: serializer.fromJson<int>(json['syncVersion']),
+      syncDirty: serializer.fromJson<bool>(json['syncDirty']),
+      syncIntent: serializer.fromJson<String?>(json['syncIntent']),
+      syncError: serializer.fromJson<String?>(json['syncError']),
+      localFilePathsJson: serializer.fromJson<String?>(
+        json['localFilePathsJson'],
+      ),
       paidAmountLocal: serializer.fromJson<double?>(json['paidAmountLocal']),
       changeAmountLocal: serializer.fromJson<double?>(
         json['changeAmountLocal'],
       ),
-      cashierProofImageLocalPath: serializer.fromJson<String?>(
-        json['cashierProofImageLocalPath'],
+      cashRoundingAmount: serializer.fromJson<double?>(
+        json['cashRoundingAmount'],
       ),
-      paymentConfirmedAtLocal: serializer.fromJson<DateTime?>(
-        json['paymentConfirmedAtLocal'],
-      ),
+      cashRoundingUnit: serializer.fromJson<int?>(json['cashRoundingUnit']),
       latestPaymentServerId: serializer.fromJson<int?>(
         json['latestPaymentServerId'],
       ),
-      orderSnapshotJson: serializer.fromJson<String?>(
-        json['orderSnapshotJson'],
-      ),
-      orderStatusLocal: serializer.fromJson<String>(json['orderStatusLocal']),
-      syncStatus: serializer.fromJson<String>(json['syncStatus']),
-      lastError: serializer.fromJson<String?>(json['lastError']),
-      manualPaymentServerId: serializer.fromJson<int?>(
-        json['manualPaymentServerId'],
-      ),
-      manualPaymentType: serializer.fromJson<String?>(
-        json['manualPaymentType'],
-      ),
-      manualProviderName: serializer.fromJson<String?>(
-        json['manualProviderName'],
-      ),
-      manualProviderAccountName: serializer.fromJson<String?>(
-        json['manualProviderAccountName'],
-      ),
-      manualProviderAccountNo: serializer.fromJson<String?>(
-        json['manualProviderAccountNo'],
-      ),
-      manualQrisImageUrl: serializer.fromJson<String?>(
-        json['manualQrisImageUrl'],
-      ),
-      manualQrisImageLocalPath: serializer.fromJson<String?>(
-        json['manualQrisImageLocalPath'],
-      ),
-      manualPaymentLabel: serializer.fromJson<String?>(
-        json['manualPaymentLabel'],
-      ),
-      manualPaymentRawJson: serializer.fromJson<String?>(
-        json['manualPaymentRawJson'],
-      ),
-      backendSyncStage: serializer.fromJson<String>(json['backendSyncStage']),
-      createdAtLocal: serializer.fromJson<DateTime>(json['createdAtLocal']),
-      updatedAtLocal: serializer.fromJson<DateTime>(json['updatedAtLocal']),
+      createdAt: serializer.fromJson<DateTime?>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
       syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
     );
   }
@@ -5327,327 +6143,319 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'localId': serializer.toJson<String>(localId),
+      'clientUuid': serializer.toJson<String>(clientUuid),
       'serverId': serializer.toJson<int?>(serverId),
-      'clientOrderCode': serializer.toJson<String>(clientOrderCode),
-      'serverOrderCode': serializer.toJson<String?>(serverOrderCode),
+      'bookingOrderCode': serializer.toJson<String?>(bookingOrderCode),
       'partnerId': serializer.toJson<int?>(partnerId),
       'partnerName': serializer.toJson<String?>(partnerName),
-      'tableServerId': serializer.toJson<int?>(tableServerId),
-      'tableNoSnapshot': serializer.toJson<String?>(tableNoSnapshot),
+      'tableId': serializer.toJson<int?>(tableId),
+      'tableNo': serializer.toJson<String?>(tableNo),
+      'customerId': serializer.toJson<int?>(customerId),
+      'employeeOrderId': serializer.toJson<int?>(employeeOrderId),
+      'orderBy': serializer.toJson<String?>(orderBy),
       'customerName': serializer.toJson<String>(customerName),
-      'paymentMethodSelected': serializer.toJson<String?>(
-        paymentMethodSelected,
-      ),
-      'paymentMethodEffective': serializer.toJson<String?>(
-        paymentMethodEffective,
-      ),
-      'subtotal': serializer.toJson<double>(subtotal),
+      'orderStatus': serializer.toJson<String>(orderStatus),
+      'paymentMethod': serializer.toJson<String?>(paymentMethod),
+      'openbillFlag': serializer.toJson<bool>(openbillFlag),
+      'discountId': serializer.toJson<int?>(discountId),
       'discountValue': serializer.toJson<double>(discountValue),
-      'ppnPercent': serializer.toJson<double>(ppnPercent),
+      'totalOrderValue': serializer.toJson<double>(totalOrderValue),
+      'ppn': serializer.toJson<double?>(ppn),
       'isPpnActive': serializer.toJson<bool>(isPpnActive),
-      'grandTotal': serializer.toJson<double>(grandTotal),
+      'customerOrderNote': serializer.toJson<String?>(customerOrderNote),
+      'employeeOrderNote': serializer.toJson<String?>(employeeOrderNote),
+      'cashierProcessId': serializer.toJson<int?>(cashierProcessId),
+      'kitchenProcessId': serializer.toJson<int?>(kitchenProcessId),
+      'paymentId': serializer.toJson<int?>(paymentId),
+      'paymentFlag': serializer.toJson<bool>(paymentFlag),
+      'wifiSnapshotJson': serializer.toJson<String?>(wifiSnapshotJson),
+      'paymentRequestJson': serializer.toJson<String?>(paymentRequestJson),
+      'latestPaymentJson': serializer.toJson<String?>(latestPaymentJson),
+      'syncVersion': serializer.toJson<int>(syncVersion),
+      'syncDirty': serializer.toJson<bool>(syncDirty),
+      'syncIntent': serializer.toJson<String?>(syncIntent),
+      'syncError': serializer.toJson<String?>(syncError),
+      'localFilePathsJson': serializer.toJson<String?>(localFilePathsJson),
       'paidAmountLocal': serializer.toJson<double?>(paidAmountLocal),
       'changeAmountLocal': serializer.toJson<double?>(changeAmountLocal),
-      'cashierProofImageLocalPath': serializer.toJson<String?>(
-        cashierProofImageLocalPath,
-      ),
-      'paymentConfirmedAtLocal': serializer.toJson<DateTime?>(
-        paymentConfirmedAtLocal,
-      ),
+      'cashRoundingAmount': serializer.toJson<double?>(cashRoundingAmount),
+      'cashRoundingUnit': serializer.toJson<int?>(cashRoundingUnit),
       'latestPaymentServerId': serializer.toJson<int?>(latestPaymentServerId),
-      'orderSnapshotJson': serializer.toJson<String?>(orderSnapshotJson),
-      'orderStatusLocal': serializer.toJson<String>(orderStatusLocal),
-      'syncStatus': serializer.toJson<String>(syncStatus),
-      'lastError': serializer.toJson<String?>(lastError),
-      'manualPaymentServerId': serializer.toJson<int?>(manualPaymentServerId),
-      'manualPaymentType': serializer.toJson<String?>(manualPaymentType),
-      'manualProviderName': serializer.toJson<String?>(manualProviderName),
-      'manualProviderAccountName': serializer.toJson<String?>(
-        manualProviderAccountName,
-      ),
-      'manualProviderAccountNo': serializer.toJson<String?>(
-        manualProviderAccountNo,
-      ),
-      'manualQrisImageUrl': serializer.toJson<String?>(manualQrisImageUrl),
-      'manualQrisImageLocalPath': serializer.toJson<String?>(
-        manualQrisImageLocalPath,
-      ),
-      'manualPaymentLabel': serializer.toJson<String?>(manualPaymentLabel),
-      'manualPaymentRawJson': serializer.toJson<String?>(manualPaymentRawJson),
-      'backendSyncStage': serializer.toJson<String>(backendSyncStage),
-      'createdAtLocal': serializer.toJson<DateTime>(createdAtLocal),
-      'updatedAtLocal': serializer.toJson<DateTime>(updatedAtLocal),
+      'createdAt': serializer.toJson<DateTime?>(createdAt),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
       'syncedAt': serializer.toJson<DateTime?>(syncedAt),
     };
   }
 
-  LocalOrder copyWith({
-    String? localId,
+  BookingOrder copyWith({
+    String? clientUuid,
     Value<int?> serverId = const Value.absent(),
-    String? clientOrderCode,
-    Value<String?> serverOrderCode = const Value.absent(),
+    Value<String?> bookingOrderCode = const Value.absent(),
     Value<int?> partnerId = const Value.absent(),
     Value<String?> partnerName = const Value.absent(),
-    Value<int?> tableServerId = const Value.absent(),
-    Value<String?> tableNoSnapshot = const Value.absent(),
+    Value<int?> tableId = const Value.absent(),
+    Value<String?> tableNo = const Value.absent(),
+    Value<int?> customerId = const Value.absent(),
+    Value<int?> employeeOrderId = const Value.absent(),
+    Value<String?> orderBy = const Value.absent(),
     String? customerName,
-    Value<String?> paymentMethodSelected = const Value.absent(),
-    Value<String?> paymentMethodEffective = const Value.absent(),
-    double? subtotal,
+    String? orderStatus,
+    Value<String?> paymentMethod = const Value.absent(),
+    bool? openbillFlag,
+    Value<int?> discountId = const Value.absent(),
     double? discountValue,
-    double? ppnPercent,
+    double? totalOrderValue,
+    Value<double?> ppn = const Value.absent(),
     bool? isPpnActive,
-    double? grandTotal,
+    Value<String?> customerOrderNote = const Value.absent(),
+    Value<String?> employeeOrderNote = const Value.absent(),
+    Value<int?> cashierProcessId = const Value.absent(),
+    Value<int?> kitchenProcessId = const Value.absent(),
+    Value<int?> paymentId = const Value.absent(),
+    bool? paymentFlag,
+    Value<String?> wifiSnapshotJson = const Value.absent(),
+    Value<String?> paymentRequestJson = const Value.absent(),
+    Value<String?> latestPaymentJson = const Value.absent(),
+    int? syncVersion,
+    bool? syncDirty,
+    Value<String?> syncIntent = const Value.absent(),
+    Value<String?> syncError = const Value.absent(),
+    Value<String?> localFilePathsJson = const Value.absent(),
     Value<double?> paidAmountLocal = const Value.absent(),
     Value<double?> changeAmountLocal = const Value.absent(),
-    Value<String?> cashierProofImageLocalPath = const Value.absent(),
-    Value<DateTime?> paymentConfirmedAtLocal = const Value.absent(),
+    Value<double?> cashRoundingAmount = const Value.absent(),
+    Value<int?> cashRoundingUnit = const Value.absent(),
     Value<int?> latestPaymentServerId = const Value.absent(),
-    Value<String?> orderSnapshotJson = const Value.absent(),
-    String? orderStatusLocal,
-    String? syncStatus,
-    Value<String?> lastError = const Value.absent(),
-    Value<int?> manualPaymentServerId = const Value.absent(),
-    Value<String?> manualPaymentType = const Value.absent(),
-    Value<String?> manualProviderName = const Value.absent(),
-    Value<String?> manualProviderAccountName = const Value.absent(),
-    Value<String?> manualProviderAccountNo = const Value.absent(),
-    Value<String?> manualQrisImageUrl = const Value.absent(),
-    Value<String?> manualQrisImageLocalPath = const Value.absent(),
-    Value<String?> manualPaymentLabel = const Value.absent(),
-    Value<String?> manualPaymentRawJson = const Value.absent(),
-    String? backendSyncStage,
-    DateTime? createdAtLocal,
-    DateTime? updatedAtLocal,
+    Value<DateTime?> createdAt = const Value.absent(),
+    Value<DateTime?> updatedAt = const Value.absent(),
+    Value<DateTime?> deletedAt = const Value.absent(),
     Value<DateTime?> syncedAt = const Value.absent(),
-  }) => LocalOrder(
-    localId: localId ?? this.localId,
+  }) => BookingOrder(
+    clientUuid: clientUuid ?? this.clientUuid,
     serverId: serverId.present ? serverId.value : this.serverId,
-    clientOrderCode: clientOrderCode ?? this.clientOrderCode,
-    serverOrderCode: serverOrderCode.present
-        ? serverOrderCode.value
-        : this.serverOrderCode,
+    bookingOrderCode: bookingOrderCode.present
+        ? bookingOrderCode.value
+        : this.bookingOrderCode,
     partnerId: partnerId.present ? partnerId.value : this.partnerId,
     partnerName: partnerName.present ? partnerName.value : this.partnerName,
-    tableServerId: tableServerId.present
-        ? tableServerId.value
-        : this.tableServerId,
-    tableNoSnapshot: tableNoSnapshot.present
-        ? tableNoSnapshot.value
-        : this.tableNoSnapshot,
+    tableId: tableId.present ? tableId.value : this.tableId,
+    tableNo: tableNo.present ? tableNo.value : this.tableNo,
+    customerId: customerId.present ? customerId.value : this.customerId,
+    employeeOrderId: employeeOrderId.present
+        ? employeeOrderId.value
+        : this.employeeOrderId,
+    orderBy: orderBy.present ? orderBy.value : this.orderBy,
     customerName: customerName ?? this.customerName,
-    paymentMethodSelected: paymentMethodSelected.present
-        ? paymentMethodSelected.value
-        : this.paymentMethodSelected,
-    paymentMethodEffective: paymentMethodEffective.present
-        ? paymentMethodEffective.value
-        : this.paymentMethodEffective,
-    subtotal: subtotal ?? this.subtotal,
+    orderStatus: orderStatus ?? this.orderStatus,
+    paymentMethod: paymentMethod.present
+        ? paymentMethod.value
+        : this.paymentMethod,
+    openbillFlag: openbillFlag ?? this.openbillFlag,
+    discountId: discountId.present ? discountId.value : this.discountId,
     discountValue: discountValue ?? this.discountValue,
-    ppnPercent: ppnPercent ?? this.ppnPercent,
+    totalOrderValue: totalOrderValue ?? this.totalOrderValue,
+    ppn: ppn.present ? ppn.value : this.ppn,
     isPpnActive: isPpnActive ?? this.isPpnActive,
-    grandTotal: grandTotal ?? this.grandTotal,
+    customerOrderNote: customerOrderNote.present
+        ? customerOrderNote.value
+        : this.customerOrderNote,
+    employeeOrderNote: employeeOrderNote.present
+        ? employeeOrderNote.value
+        : this.employeeOrderNote,
+    cashierProcessId: cashierProcessId.present
+        ? cashierProcessId.value
+        : this.cashierProcessId,
+    kitchenProcessId: kitchenProcessId.present
+        ? kitchenProcessId.value
+        : this.kitchenProcessId,
+    paymentId: paymentId.present ? paymentId.value : this.paymentId,
+    paymentFlag: paymentFlag ?? this.paymentFlag,
+    wifiSnapshotJson: wifiSnapshotJson.present
+        ? wifiSnapshotJson.value
+        : this.wifiSnapshotJson,
+    paymentRequestJson: paymentRequestJson.present
+        ? paymentRequestJson.value
+        : this.paymentRequestJson,
+    latestPaymentJson: latestPaymentJson.present
+        ? latestPaymentJson.value
+        : this.latestPaymentJson,
+    syncVersion: syncVersion ?? this.syncVersion,
+    syncDirty: syncDirty ?? this.syncDirty,
+    syncIntent: syncIntent.present ? syncIntent.value : this.syncIntent,
+    syncError: syncError.present ? syncError.value : this.syncError,
+    localFilePathsJson: localFilePathsJson.present
+        ? localFilePathsJson.value
+        : this.localFilePathsJson,
     paidAmountLocal: paidAmountLocal.present
         ? paidAmountLocal.value
         : this.paidAmountLocal,
     changeAmountLocal: changeAmountLocal.present
         ? changeAmountLocal.value
         : this.changeAmountLocal,
-    cashierProofImageLocalPath: cashierProofImageLocalPath.present
-        ? cashierProofImageLocalPath.value
-        : this.cashierProofImageLocalPath,
-    paymentConfirmedAtLocal: paymentConfirmedAtLocal.present
-        ? paymentConfirmedAtLocal.value
-        : this.paymentConfirmedAtLocal,
+    cashRoundingAmount: cashRoundingAmount.present
+        ? cashRoundingAmount.value
+        : this.cashRoundingAmount,
+    cashRoundingUnit: cashRoundingUnit.present
+        ? cashRoundingUnit.value
+        : this.cashRoundingUnit,
     latestPaymentServerId: latestPaymentServerId.present
         ? latestPaymentServerId.value
         : this.latestPaymentServerId,
-    orderSnapshotJson: orderSnapshotJson.present
-        ? orderSnapshotJson.value
-        : this.orderSnapshotJson,
-    orderStatusLocal: orderStatusLocal ?? this.orderStatusLocal,
-    syncStatus: syncStatus ?? this.syncStatus,
-    lastError: lastError.present ? lastError.value : this.lastError,
-    manualPaymentServerId: manualPaymentServerId.present
-        ? manualPaymentServerId.value
-        : this.manualPaymentServerId,
-    manualPaymentType: manualPaymentType.present
-        ? manualPaymentType.value
-        : this.manualPaymentType,
-    manualProviderName: manualProviderName.present
-        ? manualProviderName.value
-        : this.manualProviderName,
-    manualProviderAccountName: manualProviderAccountName.present
-        ? manualProviderAccountName.value
-        : this.manualProviderAccountName,
-    manualProviderAccountNo: manualProviderAccountNo.present
-        ? manualProviderAccountNo.value
-        : this.manualProviderAccountNo,
-    manualQrisImageUrl: manualQrisImageUrl.present
-        ? manualQrisImageUrl.value
-        : this.manualQrisImageUrl,
-    manualQrisImageLocalPath: manualQrisImageLocalPath.present
-        ? manualQrisImageLocalPath.value
-        : this.manualQrisImageLocalPath,
-    manualPaymentLabel: manualPaymentLabel.present
-        ? manualPaymentLabel.value
-        : this.manualPaymentLabel,
-    manualPaymentRawJson: manualPaymentRawJson.present
-        ? manualPaymentRawJson.value
-        : this.manualPaymentRawJson,
-    backendSyncStage: backendSyncStage ?? this.backendSyncStage,
-    createdAtLocal: createdAtLocal ?? this.createdAtLocal,
-    updatedAtLocal: updatedAtLocal ?? this.updatedAtLocal,
+    createdAt: createdAt.present ? createdAt.value : this.createdAt,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
     syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
   );
-  LocalOrder copyWithCompanion(LocalOrdersCompanion data) {
-    return LocalOrder(
-      localId: data.localId.present ? data.localId.value : this.localId,
+  BookingOrder copyWithCompanion(BookingOrdersCompanion data) {
+    return BookingOrder(
+      clientUuid: data.clientUuid.present
+          ? data.clientUuid.value
+          : this.clientUuid,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
-      clientOrderCode: data.clientOrderCode.present
-          ? data.clientOrderCode.value
-          : this.clientOrderCode,
-      serverOrderCode: data.serverOrderCode.present
-          ? data.serverOrderCode.value
-          : this.serverOrderCode,
+      bookingOrderCode: data.bookingOrderCode.present
+          ? data.bookingOrderCode.value
+          : this.bookingOrderCode,
       partnerId: data.partnerId.present ? data.partnerId.value : this.partnerId,
       partnerName: data.partnerName.present
           ? data.partnerName.value
           : this.partnerName,
-      tableServerId: data.tableServerId.present
-          ? data.tableServerId.value
-          : this.tableServerId,
-      tableNoSnapshot: data.tableNoSnapshot.present
-          ? data.tableNoSnapshot.value
-          : this.tableNoSnapshot,
+      tableId: data.tableId.present ? data.tableId.value : this.tableId,
+      tableNo: data.tableNo.present ? data.tableNo.value : this.tableNo,
+      customerId: data.customerId.present
+          ? data.customerId.value
+          : this.customerId,
+      employeeOrderId: data.employeeOrderId.present
+          ? data.employeeOrderId.value
+          : this.employeeOrderId,
+      orderBy: data.orderBy.present ? data.orderBy.value : this.orderBy,
       customerName: data.customerName.present
           ? data.customerName.value
           : this.customerName,
-      paymentMethodSelected: data.paymentMethodSelected.present
-          ? data.paymentMethodSelected.value
-          : this.paymentMethodSelected,
-      paymentMethodEffective: data.paymentMethodEffective.present
-          ? data.paymentMethodEffective.value
-          : this.paymentMethodEffective,
-      subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
+      orderStatus: data.orderStatus.present
+          ? data.orderStatus.value
+          : this.orderStatus,
+      paymentMethod: data.paymentMethod.present
+          ? data.paymentMethod.value
+          : this.paymentMethod,
+      openbillFlag: data.openbillFlag.present
+          ? data.openbillFlag.value
+          : this.openbillFlag,
+      discountId: data.discountId.present
+          ? data.discountId.value
+          : this.discountId,
       discountValue: data.discountValue.present
           ? data.discountValue.value
           : this.discountValue,
-      ppnPercent: data.ppnPercent.present
-          ? data.ppnPercent.value
-          : this.ppnPercent,
+      totalOrderValue: data.totalOrderValue.present
+          ? data.totalOrderValue.value
+          : this.totalOrderValue,
+      ppn: data.ppn.present ? data.ppn.value : this.ppn,
       isPpnActive: data.isPpnActive.present
           ? data.isPpnActive.value
           : this.isPpnActive,
-      grandTotal: data.grandTotal.present
-          ? data.grandTotal.value
-          : this.grandTotal,
+      customerOrderNote: data.customerOrderNote.present
+          ? data.customerOrderNote.value
+          : this.customerOrderNote,
+      employeeOrderNote: data.employeeOrderNote.present
+          ? data.employeeOrderNote.value
+          : this.employeeOrderNote,
+      cashierProcessId: data.cashierProcessId.present
+          ? data.cashierProcessId.value
+          : this.cashierProcessId,
+      kitchenProcessId: data.kitchenProcessId.present
+          ? data.kitchenProcessId.value
+          : this.kitchenProcessId,
+      paymentId: data.paymentId.present ? data.paymentId.value : this.paymentId,
+      paymentFlag: data.paymentFlag.present
+          ? data.paymentFlag.value
+          : this.paymentFlag,
+      wifiSnapshotJson: data.wifiSnapshotJson.present
+          ? data.wifiSnapshotJson.value
+          : this.wifiSnapshotJson,
+      paymentRequestJson: data.paymentRequestJson.present
+          ? data.paymentRequestJson.value
+          : this.paymentRequestJson,
+      latestPaymentJson: data.latestPaymentJson.present
+          ? data.latestPaymentJson.value
+          : this.latestPaymentJson,
+      syncVersion: data.syncVersion.present
+          ? data.syncVersion.value
+          : this.syncVersion,
+      syncDirty: data.syncDirty.present ? data.syncDirty.value : this.syncDirty,
+      syncIntent: data.syncIntent.present
+          ? data.syncIntent.value
+          : this.syncIntent,
+      syncError: data.syncError.present ? data.syncError.value : this.syncError,
+      localFilePathsJson: data.localFilePathsJson.present
+          ? data.localFilePathsJson.value
+          : this.localFilePathsJson,
       paidAmountLocal: data.paidAmountLocal.present
           ? data.paidAmountLocal.value
           : this.paidAmountLocal,
       changeAmountLocal: data.changeAmountLocal.present
           ? data.changeAmountLocal.value
           : this.changeAmountLocal,
-      cashierProofImageLocalPath: data.cashierProofImageLocalPath.present
-          ? data.cashierProofImageLocalPath.value
-          : this.cashierProofImageLocalPath,
-      paymentConfirmedAtLocal: data.paymentConfirmedAtLocal.present
-          ? data.paymentConfirmedAtLocal.value
-          : this.paymentConfirmedAtLocal,
+      cashRoundingAmount: data.cashRoundingAmount.present
+          ? data.cashRoundingAmount.value
+          : this.cashRoundingAmount,
+      cashRoundingUnit: data.cashRoundingUnit.present
+          ? data.cashRoundingUnit.value
+          : this.cashRoundingUnit,
       latestPaymentServerId: data.latestPaymentServerId.present
           ? data.latestPaymentServerId.value
           : this.latestPaymentServerId,
-      orderSnapshotJson: data.orderSnapshotJson.present
-          ? data.orderSnapshotJson.value
-          : this.orderSnapshotJson,
-      orderStatusLocal: data.orderStatusLocal.present
-          ? data.orderStatusLocal.value
-          : this.orderStatusLocal,
-      syncStatus: data.syncStatus.present
-          ? data.syncStatus.value
-          : this.syncStatus,
-      lastError: data.lastError.present ? data.lastError.value : this.lastError,
-      manualPaymentServerId: data.manualPaymentServerId.present
-          ? data.manualPaymentServerId.value
-          : this.manualPaymentServerId,
-      manualPaymentType: data.manualPaymentType.present
-          ? data.manualPaymentType.value
-          : this.manualPaymentType,
-      manualProviderName: data.manualProviderName.present
-          ? data.manualProviderName.value
-          : this.manualProviderName,
-      manualProviderAccountName: data.manualProviderAccountName.present
-          ? data.manualProviderAccountName.value
-          : this.manualProviderAccountName,
-      manualProviderAccountNo: data.manualProviderAccountNo.present
-          ? data.manualProviderAccountNo.value
-          : this.manualProviderAccountNo,
-      manualQrisImageUrl: data.manualQrisImageUrl.present
-          ? data.manualQrisImageUrl.value
-          : this.manualQrisImageUrl,
-      manualQrisImageLocalPath: data.manualQrisImageLocalPath.present
-          ? data.manualQrisImageLocalPath.value
-          : this.manualQrisImageLocalPath,
-      manualPaymentLabel: data.manualPaymentLabel.present
-          ? data.manualPaymentLabel.value
-          : this.manualPaymentLabel,
-      manualPaymentRawJson: data.manualPaymentRawJson.present
-          ? data.manualPaymentRawJson.value
-          : this.manualPaymentRawJson,
-      backendSyncStage: data.backendSyncStage.present
-          ? data.backendSyncStage.value
-          : this.backendSyncStage,
-      createdAtLocal: data.createdAtLocal.present
-          ? data.createdAtLocal.value
-          : this.createdAtLocal,
-      updatedAtLocal: data.updatedAtLocal.present
-          ? data.updatedAtLocal.value
-          : this.updatedAtLocal,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('LocalOrder(')
-          ..write('localId: $localId, ')
+    return (StringBuffer('BookingOrder(')
+          ..write('clientUuid: $clientUuid, ')
           ..write('serverId: $serverId, ')
-          ..write('clientOrderCode: $clientOrderCode, ')
-          ..write('serverOrderCode: $serverOrderCode, ')
+          ..write('bookingOrderCode: $bookingOrderCode, ')
           ..write('partnerId: $partnerId, ')
           ..write('partnerName: $partnerName, ')
-          ..write('tableServerId: $tableServerId, ')
-          ..write('tableNoSnapshot: $tableNoSnapshot, ')
+          ..write('tableId: $tableId, ')
+          ..write('tableNo: $tableNo, ')
+          ..write('customerId: $customerId, ')
+          ..write('employeeOrderId: $employeeOrderId, ')
+          ..write('orderBy: $orderBy, ')
           ..write('customerName: $customerName, ')
-          ..write('paymentMethodSelected: $paymentMethodSelected, ')
-          ..write('paymentMethodEffective: $paymentMethodEffective, ')
-          ..write('subtotal: $subtotal, ')
+          ..write('orderStatus: $orderStatus, ')
+          ..write('paymentMethod: $paymentMethod, ')
+          ..write('openbillFlag: $openbillFlag, ')
+          ..write('discountId: $discountId, ')
           ..write('discountValue: $discountValue, ')
-          ..write('ppnPercent: $ppnPercent, ')
+          ..write('totalOrderValue: $totalOrderValue, ')
+          ..write('ppn: $ppn, ')
           ..write('isPpnActive: $isPpnActive, ')
-          ..write('grandTotal: $grandTotal, ')
+          ..write('customerOrderNote: $customerOrderNote, ')
+          ..write('employeeOrderNote: $employeeOrderNote, ')
+          ..write('cashierProcessId: $cashierProcessId, ')
+          ..write('kitchenProcessId: $kitchenProcessId, ')
+          ..write('paymentId: $paymentId, ')
+          ..write('paymentFlag: $paymentFlag, ')
+          ..write('wifiSnapshotJson: $wifiSnapshotJson, ')
+          ..write('paymentRequestJson: $paymentRequestJson, ')
+          ..write('latestPaymentJson: $latestPaymentJson, ')
+          ..write('syncVersion: $syncVersion, ')
+          ..write('syncDirty: $syncDirty, ')
+          ..write('syncIntent: $syncIntent, ')
+          ..write('syncError: $syncError, ')
+          ..write('localFilePathsJson: $localFilePathsJson, ')
           ..write('paidAmountLocal: $paidAmountLocal, ')
           ..write('changeAmountLocal: $changeAmountLocal, ')
-          ..write('cashierProofImageLocalPath: $cashierProofImageLocalPath, ')
-          ..write('paymentConfirmedAtLocal: $paymentConfirmedAtLocal, ')
+          ..write('cashRoundingAmount: $cashRoundingAmount, ')
+          ..write('cashRoundingUnit: $cashRoundingUnit, ')
           ..write('latestPaymentServerId: $latestPaymentServerId, ')
-          ..write('orderSnapshotJson: $orderSnapshotJson, ')
-          ..write('orderStatusLocal: $orderStatusLocal, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('lastError: $lastError, ')
-          ..write('manualPaymentServerId: $manualPaymentServerId, ')
-          ..write('manualPaymentType: $manualPaymentType, ')
-          ..write('manualProviderName: $manualProviderName, ')
-          ..write('manualProviderAccountName: $manualProviderAccountName, ')
-          ..write('manualProviderAccountNo: $manualProviderAccountNo, ')
-          ..write('manualQrisImageUrl: $manualQrisImageUrl, ')
-          ..write('manualQrisImageLocalPath: $manualQrisImageLocalPath, ')
-          ..write('manualPaymentLabel: $manualPaymentLabel, ')
-          ..write('manualPaymentRawJson: $manualPaymentRawJson, ')
-          ..write('backendSyncStage: $backendSyncStage, ')
-          ..write('createdAtLocal: $createdAtLocal, ')
-          ..write('updatedAtLocal: $updatedAtLocal, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
           ..write('syncedAt: $syncedAt')
           ..write(')'))
         .toString();
@@ -5655,400 +6463,416 @@ class LocalOrder extends DataClass implements Insertable<LocalOrder> {
 
   @override
   int get hashCode => Object.hashAll([
-    localId,
+    clientUuid,
     serverId,
-    clientOrderCode,
-    serverOrderCode,
+    bookingOrderCode,
     partnerId,
     partnerName,
-    tableServerId,
-    tableNoSnapshot,
+    tableId,
+    tableNo,
+    customerId,
+    employeeOrderId,
+    orderBy,
     customerName,
-    paymentMethodSelected,
-    paymentMethodEffective,
-    subtotal,
+    orderStatus,
+    paymentMethod,
+    openbillFlag,
+    discountId,
     discountValue,
-    ppnPercent,
+    totalOrderValue,
+    ppn,
     isPpnActive,
-    grandTotal,
+    customerOrderNote,
+    employeeOrderNote,
+    cashierProcessId,
+    kitchenProcessId,
+    paymentId,
+    paymentFlag,
+    wifiSnapshotJson,
+    paymentRequestJson,
+    latestPaymentJson,
+    syncVersion,
+    syncDirty,
+    syncIntent,
+    syncError,
+    localFilePathsJson,
     paidAmountLocal,
     changeAmountLocal,
-    cashierProofImageLocalPath,
-    paymentConfirmedAtLocal,
+    cashRoundingAmount,
+    cashRoundingUnit,
     latestPaymentServerId,
-    orderSnapshotJson,
-    orderStatusLocal,
-    syncStatus,
-    lastError,
-    manualPaymentServerId,
-    manualPaymentType,
-    manualProviderName,
-    manualProviderAccountName,
-    manualProviderAccountNo,
-    manualQrisImageUrl,
-    manualQrisImageLocalPath,
-    manualPaymentLabel,
-    manualPaymentRawJson,
-    backendSyncStage,
-    createdAtLocal,
-    updatedAtLocal,
+    createdAt,
+    updatedAt,
+    deletedAt,
     syncedAt,
   ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is LocalOrder &&
-          other.localId == this.localId &&
+      (other is BookingOrder &&
+          other.clientUuid == this.clientUuid &&
           other.serverId == this.serverId &&
-          other.clientOrderCode == this.clientOrderCode &&
-          other.serverOrderCode == this.serverOrderCode &&
+          other.bookingOrderCode == this.bookingOrderCode &&
           other.partnerId == this.partnerId &&
           other.partnerName == this.partnerName &&
-          other.tableServerId == this.tableServerId &&
-          other.tableNoSnapshot == this.tableNoSnapshot &&
+          other.tableId == this.tableId &&
+          other.tableNo == this.tableNo &&
+          other.customerId == this.customerId &&
+          other.employeeOrderId == this.employeeOrderId &&
+          other.orderBy == this.orderBy &&
           other.customerName == this.customerName &&
-          other.paymentMethodSelected == this.paymentMethodSelected &&
-          other.paymentMethodEffective == this.paymentMethodEffective &&
-          other.subtotal == this.subtotal &&
+          other.orderStatus == this.orderStatus &&
+          other.paymentMethod == this.paymentMethod &&
+          other.openbillFlag == this.openbillFlag &&
+          other.discountId == this.discountId &&
           other.discountValue == this.discountValue &&
-          other.ppnPercent == this.ppnPercent &&
+          other.totalOrderValue == this.totalOrderValue &&
+          other.ppn == this.ppn &&
           other.isPpnActive == this.isPpnActive &&
-          other.grandTotal == this.grandTotal &&
+          other.customerOrderNote == this.customerOrderNote &&
+          other.employeeOrderNote == this.employeeOrderNote &&
+          other.cashierProcessId == this.cashierProcessId &&
+          other.kitchenProcessId == this.kitchenProcessId &&
+          other.paymentId == this.paymentId &&
+          other.paymentFlag == this.paymentFlag &&
+          other.wifiSnapshotJson == this.wifiSnapshotJson &&
+          other.paymentRequestJson == this.paymentRequestJson &&
+          other.latestPaymentJson == this.latestPaymentJson &&
+          other.syncVersion == this.syncVersion &&
+          other.syncDirty == this.syncDirty &&
+          other.syncIntent == this.syncIntent &&
+          other.syncError == this.syncError &&
+          other.localFilePathsJson == this.localFilePathsJson &&
           other.paidAmountLocal == this.paidAmountLocal &&
           other.changeAmountLocal == this.changeAmountLocal &&
-          other.cashierProofImageLocalPath == this.cashierProofImageLocalPath &&
-          other.paymentConfirmedAtLocal == this.paymentConfirmedAtLocal &&
+          other.cashRoundingAmount == this.cashRoundingAmount &&
+          other.cashRoundingUnit == this.cashRoundingUnit &&
           other.latestPaymentServerId == this.latestPaymentServerId &&
-          other.orderSnapshotJson == this.orderSnapshotJson &&
-          other.orderStatusLocal == this.orderStatusLocal &&
-          other.syncStatus == this.syncStatus &&
-          other.lastError == this.lastError &&
-          other.manualPaymentServerId == this.manualPaymentServerId &&
-          other.manualPaymentType == this.manualPaymentType &&
-          other.manualProviderName == this.manualProviderName &&
-          other.manualProviderAccountName == this.manualProviderAccountName &&
-          other.manualProviderAccountNo == this.manualProviderAccountNo &&
-          other.manualQrisImageUrl == this.manualQrisImageUrl &&
-          other.manualQrisImageLocalPath == this.manualQrisImageLocalPath &&
-          other.manualPaymentLabel == this.manualPaymentLabel &&
-          other.manualPaymentRawJson == this.manualPaymentRawJson &&
-          other.backendSyncStage == this.backendSyncStage &&
-          other.createdAtLocal == this.createdAtLocal &&
-          other.updatedAtLocal == this.updatedAtLocal &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
           other.syncedAt == this.syncedAt);
 }
 
-class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
-  final Value<String> localId;
+class BookingOrdersCompanion extends UpdateCompanion<BookingOrder> {
+  final Value<String> clientUuid;
   final Value<int?> serverId;
-  final Value<String> clientOrderCode;
-  final Value<String?> serverOrderCode;
+  final Value<String?> bookingOrderCode;
   final Value<int?> partnerId;
   final Value<String?> partnerName;
-  final Value<int?> tableServerId;
-  final Value<String?> tableNoSnapshot;
+  final Value<int?> tableId;
+  final Value<String?> tableNo;
+  final Value<int?> customerId;
+  final Value<int?> employeeOrderId;
+  final Value<String?> orderBy;
   final Value<String> customerName;
-  final Value<String?> paymentMethodSelected;
-  final Value<String?> paymentMethodEffective;
-  final Value<double> subtotal;
+  final Value<String> orderStatus;
+  final Value<String?> paymentMethod;
+  final Value<bool> openbillFlag;
+  final Value<int?> discountId;
   final Value<double> discountValue;
-  final Value<double> ppnPercent;
+  final Value<double> totalOrderValue;
+  final Value<double?> ppn;
   final Value<bool> isPpnActive;
-  final Value<double> grandTotal;
+  final Value<String?> customerOrderNote;
+  final Value<String?> employeeOrderNote;
+  final Value<int?> cashierProcessId;
+  final Value<int?> kitchenProcessId;
+  final Value<int?> paymentId;
+  final Value<bool> paymentFlag;
+  final Value<String?> wifiSnapshotJson;
+  final Value<String?> paymentRequestJson;
+  final Value<String?> latestPaymentJson;
+  final Value<int> syncVersion;
+  final Value<bool> syncDirty;
+  final Value<String?> syncIntent;
+  final Value<String?> syncError;
+  final Value<String?> localFilePathsJson;
   final Value<double?> paidAmountLocal;
   final Value<double?> changeAmountLocal;
-  final Value<String?> cashierProofImageLocalPath;
-  final Value<DateTime?> paymentConfirmedAtLocal;
+  final Value<double?> cashRoundingAmount;
+  final Value<int?> cashRoundingUnit;
   final Value<int?> latestPaymentServerId;
-  final Value<String?> orderSnapshotJson;
-  final Value<String> orderStatusLocal;
-  final Value<String> syncStatus;
-  final Value<String?> lastError;
-  final Value<int?> manualPaymentServerId;
-  final Value<String?> manualPaymentType;
-  final Value<String?> manualProviderName;
-  final Value<String?> manualProviderAccountName;
-  final Value<String?> manualProviderAccountNo;
-  final Value<String?> manualQrisImageUrl;
-  final Value<String?> manualQrisImageLocalPath;
-  final Value<String?> manualPaymentLabel;
-  final Value<String?> manualPaymentRawJson;
-  final Value<String> backendSyncStage;
-  final Value<DateTime> createdAtLocal;
-  final Value<DateTime> updatedAtLocal;
+  final Value<DateTime?> createdAt;
+  final Value<DateTime?> updatedAt;
+  final Value<DateTime?> deletedAt;
   final Value<DateTime?> syncedAt;
   final Value<int> rowid;
-  const LocalOrdersCompanion({
-    this.localId = const Value.absent(),
+  const BookingOrdersCompanion({
+    this.clientUuid = const Value.absent(),
     this.serverId = const Value.absent(),
-    this.clientOrderCode = const Value.absent(),
-    this.serverOrderCode = const Value.absent(),
+    this.bookingOrderCode = const Value.absent(),
     this.partnerId = const Value.absent(),
     this.partnerName = const Value.absent(),
-    this.tableServerId = const Value.absent(),
-    this.tableNoSnapshot = const Value.absent(),
+    this.tableId = const Value.absent(),
+    this.tableNo = const Value.absent(),
+    this.customerId = const Value.absent(),
+    this.employeeOrderId = const Value.absent(),
+    this.orderBy = const Value.absent(),
     this.customerName = const Value.absent(),
-    this.paymentMethodSelected = const Value.absent(),
-    this.paymentMethodEffective = const Value.absent(),
-    this.subtotal = const Value.absent(),
+    this.orderStatus = const Value.absent(),
+    this.paymentMethod = const Value.absent(),
+    this.openbillFlag = const Value.absent(),
+    this.discountId = const Value.absent(),
     this.discountValue = const Value.absent(),
-    this.ppnPercent = const Value.absent(),
+    this.totalOrderValue = const Value.absent(),
+    this.ppn = const Value.absent(),
     this.isPpnActive = const Value.absent(),
-    this.grandTotal = const Value.absent(),
+    this.customerOrderNote = const Value.absent(),
+    this.employeeOrderNote = const Value.absent(),
+    this.cashierProcessId = const Value.absent(),
+    this.kitchenProcessId = const Value.absent(),
+    this.paymentId = const Value.absent(),
+    this.paymentFlag = const Value.absent(),
+    this.wifiSnapshotJson = const Value.absent(),
+    this.paymentRequestJson = const Value.absent(),
+    this.latestPaymentJson = const Value.absent(),
+    this.syncVersion = const Value.absent(),
+    this.syncDirty = const Value.absent(),
+    this.syncIntent = const Value.absent(),
+    this.syncError = const Value.absent(),
+    this.localFilePathsJson = const Value.absent(),
     this.paidAmountLocal = const Value.absent(),
     this.changeAmountLocal = const Value.absent(),
-    this.cashierProofImageLocalPath = const Value.absent(),
-    this.paymentConfirmedAtLocal = const Value.absent(),
+    this.cashRoundingAmount = const Value.absent(),
+    this.cashRoundingUnit = const Value.absent(),
     this.latestPaymentServerId = const Value.absent(),
-    this.orderSnapshotJson = const Value.absent(),
-    this.orderStatusLocal = const Value.absent(),
-    this.syncStatus = const Value.absent(),
-    this.lastError = const Value.absent(),
-    this.manualPaymentServerId = const Value.absent(),
-    this.manualPaymentType = const Value.absent(),
-    this.manualProviderName = const Value.absent(),
-    this.manualProviderAccountName = const Value.absent(),
-    this.manualProviderAccountNo = const Value.absent(),
-    this.manualQrisImageUrl = const Value.absent(),
-    this.manualQrisImageLocalPath = const Value.absent(),
-    this.manualPaymentLabel = const Value.absent(),
-    this.manualPaymentRawJson = const Value.absent(),
-    this.backendSyncStage = const Value.absent(),
-    this.createdAtLocal = const Value.absent(),
-    this.updatedAtLocal = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
     this.syncedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  LocalOrdersCompanion.insert({
-    required String localId,
+  BookingOrdersCompanion.insert({
+    required String clientUuid,
     this.serverId = const Value.absent(),
-    required String clientOrderCode,
-    this.serverOrderCode = const Value.absent(),
+    this.bookingOrderCode = const Value.absent(),
     this.partnerId = const Value.absent(),
     this.partnerName = const Value.absent(),
-    this.tableServerId = const Value.absent(),
-    this.tableNoSnapshot = const Value.absent(),
+    this.tableId = const Value.absent(),
+    this.tableNo = const Value.absent(),
+    this.customerId = const Value.absent(),
+    this.employeeOrderId = const Value.absent(),
+    this.orderBy = const Value.absent(),
     required String customerName,
-    this.paymentMethodSelected = const Value.absent(),
-    this.paymentMethodEffective = const Value.absent(),
-    this.subtotal = const Value.absent(),
+    this.orderStatus = const Value.absent(),
+    this.paymentMethod = const Value.absent(),
+    this.openbillFlag = const Value.absent(),
+    this.discountId = const Value.absent(),
     this.discountValue = const Value.absent(),
-    this.ppnPercent = const Value.absent(),
+    this.totalOrderValue = const Value.absent(),
+    this.ppn = const Value.absent(),
     this.isPpnActive = const Value.absent(),
-    this.grandTotal = const Value.absent(),
+    this.customerOrderNote = const Value.absent(),
+    this.employeeOrderNote = const Value.absent(),
+    this.cashierProcessId = const Value.absent(),
+    this.kitchenProcessId = const Value.absent(),
+    this.paymentId = const Value.absent(),
+    this.paymentFlag = const Value.absent(),
+    this.wifiSnapshotJson = const Value.absent(),
+    this.paymentRequestJson = const Value.absent(),
+    this.latestPaymentJson = const Value.absent(),
+    this.syncVersion = const Value.absent(),
+    this.syncDirty = const Value.absent(),
+    this.syncIntent = const Value.absent(),
+    this.syncError = const Value.absent(),
+    this.localFilePathsJson = const Value.absent(),
     this.paidAmountLocal = const Value.absent(),
     this.changeAmountLocal = const Value.absent(),
-    this.cashierProofImageLocalPath = const Value.absent(),
-    this.paymentConfirmedAtLocal = const Value.absent(),
+    this.cashRoundingAmount = const Value.absent(),
+    this.cashRoundingUnit = const Value.absent(),
     this.latestPaymentServerId = const Value.absent(),
-    this.orderSnapshotJson = const Value.absent(),
-    this.orderStatusLocal = const Value.absent(),
-    this.syncStatus = const Value.absent(),
-    this.lastError = const Value.absent(),
-    this.manualPaymentServerId = const Value.absent(),
-    this.manualPaymentType = const Value.absent(),
-    this.manualProviderName = const Value.absent(),
-    this.manualProviderAccountName = const Value.absent(),
-    this.manualProviderAccountNo = const Value.absent(),
-    this.manualQrisImageUrl = const Value.absent(),
-    this.manualQrisImageLocalPath = const Value.absent(),
-    this.manualPaymentLabel = const Value.absent(),
-    this.manualPaymentRawJson = const Value.absent(),
-    this.backendSyncStage = const Value.absent(),
-    required DateTime createdAtLocal,
-    required DateTime updatedAtLocal,
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
     this.syncedAt = const Value.absent(),
     this.rowid = const Value.absent(),
-  }) : localId = Value(localId),
-       clientOrderCode = Value(clientOrderCode),
-       customerName = Value(customerName),
-       createdAtLocal = Value(createdAtLocal),
-       updatedAtLocal = Value(updatedAtLocal);
-  static Insertable<LocalOrder> custom({
-    Expression<String>? localId,
+  }) : clientUuid = Value(clientUuid),
+       customerName = Value(customerName);
+  static Insertable<BookingOrder> custom({
+    Expression<String>? clientUuid,
     Expression<int>? serverId,
-    Expression<String>? clientOrderCode,
-    Expression<String>? serverOrderCode,
+    Expression<String>? bookingOrderCode,
     Expression<int>? partnerId,
     Expression<String>? partnerName,
-    Expression<int>? tableServerId,
-    Expression<String>? tableNoSnapshot,
+    Expression<int>? tableId,
+    Expression<String>? tableNo,
+    Expression<int>? customerId,
+    Expression<int>? employeeOrderId,
+    Expression<String>? orderBy,
     Expression<String>? customerName,
-    Expression<String>? paymentMethodSelected,
-    Expression<String>? paymentMethodEffective,
-    Expression<double>? subtotal,
+    Expression<String>? orderStatus,
+    Expression<String>? paymentMethod,
+    Expression<bool>? openbillFlag,
+    Expression<int>? discountId,
     Expression<double>? discountValue,
-    Expression<double>? ppnPercent,
+    Expression<double>? totalOrderValue,
+    Expression<double>? ppn,
     Expression<bool>? isPpnActive,
-    Expression<double>? grandTotal,
+    Expression<String>? customerOrderNote,
+    Expression<String>? employeeOrderNote,
+    Expression<int>? cashierProcessId,
+    Expression<int>? kitchenProcessId,
+    Expression<int>? paymentId,
+    Expression<bool>? paymentFlag,
+    Expression<String>? wifiSnapshotJson,
+    Expression<String>? paymentRequestJson,
+    Expression<String>? latestPaymentJson,
+    Expression<int>? syncVersion,
+    Expression<bool>? syncDirty,
+    Expression<String>? syncIntent,
+    Expression<String>? syncError,
+    Expression<String>? localFilePathsJson,
     Expression<double>? paidAmountLocal,
     Expression<double>? changeAmountLocal,
-    Expression<String>? cashierProofImageLocalPath,
-    Expression<DateTime>? paymentConfirmedAtLocal,
+    Expression<double>? cashRoundingAmount,
+    Expression<int>? cashRoundingUnit,
     Expression<int>? latestPaymentServerId,
-    Expression<String>? orderSnapshotJson,
-    Expression<String>? orderStatusLocal,
-    Expression<String>? syncStatus,
-    Expression<String>? lastError,
-    Expression<int>? manualPaymentServerId,
-    Expression<String>? manualPaymentType,
-    Expression<String>? manualProviderName,
-    Expression<String>? manualProviderAccountName,
-    Expression<String>? manualProviderAccountNo,
-    Expression<String>? manualQrisImageUrl,
-    Expression<String>? manualQrisImageLocalPath,
-    Expression<String>? manualPaymentLabel,
-    Expression<String>? manualPaymentRawJson,
-    Expression<String>? backendSyncStage,
-    Expression<DateTime>? createdAtLocal,
-    Expression<DateTime>? updatedAtLocal,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
     Expression<DateTime>? syncedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (localId != null) 'local_id': localId,
+      if (clientUuid != null) 'client_uuid': clientUuid,
       if (serverId != null) 'server_id': serverId,
-      if (clientOrderCode != null) 'client_order_code': clientOrderCode,
-      if (serverOrderCode != null) 'server_order_code': serverOrderCode,
+      if (bookingOrderCode != null) 'booking_order_code': bookingOrderCode,
       if (partnerId != null) 'partner_id': partnerId,
       if (partnerName != null) 'partner_name': partnerName,
-      if (tableServerId != null) 'table_server_id': tableServerId,
-      if (tableNoSnapshot != null) 'table_no_snapshot': tableNoSnapshot,
+      if (tableId != null) 'table_id': tableId,
+      if (tableNo != null) 'table_no': tableNo,
+      if (customerId != null) 'customer_id': customerId,
+      if (employeeOrderId != null) 'employee_order_id': employeeOrderId,
+      if (orderBy != null) 'order_by': orderBy,
       if (customerName != null) 'customer_name': customerName,
-      if (paymentMethodSelected != null)
-        'payment_method_selected': paymentMethodSelected,
-      if (paymentMethodEffective != null)
-        'payment_method_effective': paymentMethodEffective,
-      if (subtotal != null) 'subtotal': subtotal,
+      if (orderStatus != null) 'order_status': orderStatus,
+      if (paymentMethod != null) 'payment_method': paymentMethod,
+      if (openbillFlag != null) 'openbill_flag': openbillFlag,
+      if (discountId != null) 'discount_id': discountId,
       if (discountValue != null) 'discount_value': discountValue,
-      if (ppnPercent != null) 'ppn_percent': ppnPercent,
+      if (totalOrderValue != null) 'total_order_value': totalOrderValue,
+      if (ppn != null) 'ppn': ppn,
       if (isPpnActive != null) 'is_ppn_active': isPpnActive,
-      if (grandTotal != null) 'grand_total': grandTotal,
+      if (customerOrderNote != null) 'customer_order_note': customerOrderNote,
+      if (employeeOrderNote != null) 'employee_order_note': employeeOrderNote,
+      if (cashierProcessId != null) 'cashier_process_id': cashierProcessId,
+      if (kitchenProcessId != null) 'kitchen_process_id': kitchenProcessId,
+      if (paymentId != null) 'payment_id': paymentId,
+      if (paymentFlag != null) 'payment_flag': paymentFlag,
+      if (wifiSnapshotJson != null) 'wifi_snapshot_json': wifiSnapshotJson,
+      if (paymentRequestJson != null)
+        'payment_request_json': paymentRequestJson,
+      if (latestPaymentJson != null) 'latest_payment_json': latestPaymentJson,
+      if (syncVersion != null) 'sync_version': syncVersion,
+      if (syncDirty != null) 'sync_dirty': syncDirty,
+      if (syncIntent != null) 'sync_intent': syncIntent,
+      if (syncError != null) 'sync_error': syncError,
+      if (localFilePathsJson != null)
+        'local_file_paths_json': localFilePathsJson,
       if (paidAmountLocal != null) 'paid_amount_local': paidAmountLocal,
       if (changeAmountLocal != null) 'change_amount_local': changeAmountLocal,
-      if (cashierProofImageLocalPath != null)
-        'cashier_proof_image_local_path': cashierProofImageLocalPath,
-      if (paymentConfirmedAtLocal != null)
-        'payment_confirmed_at_local': paymentConfirmedAtLocal,
+      if (cashRoundingAmount != null)
+        'cash_rounding_amount': cashRoundingAmount,
+      if (cashRoundingUnit != null) 'cash_rounding_unit': cashRoundingUnit,
       if (latestPaymentServerId != null)
         'latest_payment_server_id': latestPaymentServerId,
-      if (orderSnapshotJson != null) 'order_snapshot_json': orderSnapshotJson,
-      if (orderStatusLocal != null) 'order_status_local': orderStatusLocal,
-      if (syncStatus != null) 'sync_status': syncStatus,
-      if (lastError != null) 'last_error': lastError,
-      if (manualPaymentServerId != null)
-        'manual_payment_server_id': manualPaymentServerId,
-      if (manualPaymentType != null) 'manual_payment_type': manualPaymentType,
-      if (manualProviderName != null)
-        'manual_provider_name': manualProviderName,
-      if (manualProviderAccountName != null)
-        'manual_provider_account_name': manualProviderAccountName,
-      if (manualProviderAccountNo != null)
-        'manual_provider_account_no': manualProviderAccountNo,
-      if (manualQrisImageUrl != null)
-        'manual_qris_image_url': manualQrisImageUrl,
-      if (manualQrisImageLocalPath != null)
-        'manual_qris_image_local_path': manualQrisImageLocalPath,
-      if (manualPaymentLabel != null)
-        'manual_payment_label': manualPaymentLabel,
-      if (manualPaymentRawJson != null)
-        'manual_payment_raw_json': manualPaymentRawJson,
-      if (backendSyncStage != null) 'backend_sync_stage': backendSyncStage,
-      if (createdAtLocal != null) 'created_at_local': createdAtLocal,
-      if (updatedAtLocal != null) 'updated_at_local': updatedAtLocal,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
       if (syncedAt != null) 'synced_at': syncedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  LocalOrdersCompanion copyWith({
-    Value<String>? localId,
+  BookingOrdersCompanion copyWith({
+    Value<String>? clientUuid,
     Value<int?>? serverId,
-    Value<String>? clientOrderCode,
-    Value<String?>? serverOrderCode,
+    Value<String?>? bookingOrderCode,
     Value<int?>? partnerId,
     Value<String?>? partnerName,
-    Value<int?>? tableServerId,
-    Value<String?>? tableNoSnapshot,
+    Value<int?>? tableId,
+    Value<String?>? tableNo,
+    Value<int?>? customerId,
+    Value<int?>? employeeOrderId,
+    Value<String?>? orderBy,
     Value<String>? customerName,
-    Value<String?>? paymentMethodSelected,
-    Value<String?>? paymentMethodEffective,
-    Value<double>? subtotal,
+    Value<String>? orderStatus,
+    Value<String?>? paymentMethod,
+    Value<bool>? openbillFlag,
+    Value<int?>? discountId,
     Value<double>? discountValue,
-    Value<double>? ppnPercent,
+    Value<double>? totalOrderValue,
+    Value<double?>? ppn,
     Value<bool>? isPpnActive,
-    Value<double>? grandTotal,
+    Value<String?>? customerOrderNote,
+    Value<String?>? employeeOrderNote,
+    Value<int?>? cashierProcessId,
+    Value<int?>? kitchenProcessId,
+    Value<int?>? paymentId,
+    Value<bool>? paymentFlag,
+    Value<String?>? wifiSnapshotJson,
+    Value<String?>? paymentRequestJson,
+    Value<String?>? latestPaymentJson,
+    Value<int>? syncVersion,
+    Value<bool>? syncDirty,
+    Value<String?>? syncIntent,
+    Value<String?>? syncError,
+    Value<String?>? localFilePathsJson,
     Value<double?>? paidAmountLocal,
     Value<double?>? changeAmountLocal,
-    Value<String?>? cashierProofImageLocalPath,
-    Value<DateTime?>? paymentConfirmedAtLocal,
+    Value<double?>? cashRoundingAmount,
+    Value<int?>? cashRoundingUnit,
     Value<int?>? latestPaymentServerId,
-    Value<String?>? orderSnapshotJson,
-    Value<String>? orderStatusLocal,
-    Value<String>? syncStatus,
-    Value<String?>? lastError,
-    Value<int?>? manualPaymentServerId,
-    Value<String?>? manualPaymentType,
-    Value<String?>? manualProviderName,
-    Value<String?>? manualProviderAccountName,
-    Value<String?>? manualProviderAccountNo,
-    Value<String?>? manualQrisImageUrl,
-    Value<String?>? manualQrisImageLocalPath,
-    Value<String?>? manualPaymentLabel,
-    Value<String?>? manualPaymentRawJson,
-    Value<String>? backendSyncStage,
-    Value<DateTime>? createdAtLocal,
-    Value<DateTime>? updatedAtLocal,
+    Value<DateTime?>? createdAt,
+    Value<DateTime?>? updatedAt,
+    Value<DateTime?>? deletedAt,
     Value<DateTime?>? syncedAt,
     Value<int>? rowid,
   }) {
-    return LocalOrdersCompanion(
-      localId: localId ?? this.localId,
+    return BookingOrdersCompanion(
+      clientUuid: clientUuid ?? this.clientUuid,
       serverId: serverId ?? this.serverId,
-      clientOrderCode: clientOrderCode ?? this.clientOrderCode,
-      serverOrderCode: serverOrderCode ?? this.serverOrderCode,
+      bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
       partnerId: partnerId ?? this.partnerId,
       partnerName: partnerName ?? this.partnerName,
-      tableServerId: tableServerId ?? this.tableServerId,
-      tableNoSnapshot: tableNoSnapshot ?? this.tableNoSnapshot,
+      tableId: tableId ?? this.tableId,
+      tableNo: tableNo ?? this.tableNo,
+      customerId: customerId ?? this.customerId,
+      employeeOrderId: employeeOrderId ?? this.employeeOrderId,
+      orderBy: orderBy ?? this.orderBy,
       customerName: customerName ?? this.customerName,
-      paymentMethodSelected:
-          paymentMethodSelected ?? this.paymentMethodSelected,
-      paymentMethodEffective:
-          paymentMethodEffective ?? this.paymentMethodEffective,
-      subtotal: subtotal ?? this.subtotal,
+      orderStatus: orderStatus ?? this.orderStatus,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      openbillFlag: openbillFlag ?? this.openbillFlag,
+      discountId: discountId ?? this.discountId,
       discountValue: discountValue ?? this.discountValue,
-      ppnPercent: ppnPercent ?? this.ppnPercent,
+      totalOrderValue: totalOrderValue ?? this.totalOrderValue,
+      ppn: ppn ?? this.ppn,
       isPpnActive: isPpnActive ?? this.isPpnActive,
-      grandTotal: grandTotal ?? this.grandTotal,
+      customerOrderNote: customerOrderNote ?? this.customerOrderNote,
+      employeeOrderNote: employeeOrderNote ?? this.employeeOrderNote,
+      cashierProcessId: cashierProcessId ?? this.cashierProcessId,
+      kitchenProcessId: kitchenProcessId ?? this.kitchenProcessId,
+      paymentId: paymentId ?? this.paymentId,
+      paymentFlag: paymentFlag ?? this.paymentFlag,
+      wifiSnapshotJson: wifiSnapshotJson ?? this.wifiSnapshotJson,
+      paymentRequestJson: paymentRequestJson ?? this.paymentRequestJson,
+      latestPaymentJson: latestPaymentJson ?? this.latestPaymentJson,
+      syncVersion: syncVersion ?? this.syncVersion,
+      syncDirty: syncDirty ?? this.syncDirty,
+      syncIntent: syncIntent ?? this.syncIntent,
+      syncError: syncError ?? this.syncError,
+      localFilePathsJson: localFilePathsJson ?? this.localFilePathsJson,
       paidAmountLocal: paidAmountLocal ?? this.paidAmountLocal,
       changeAmountLocal: changeAmountLocal ?? this.changeAmountLocal,
-      cashierProofImageLocalPath:
-          cashierProofImageLocalPath ?? this.cashierProofImageLocalPath,
-      paymentConfirmedAtLocal:
-          paymentConfirmedAtLocal ?? this.paymentConfirmedAtLocal,
+      cashRoundingAmount: cashRoundingAmount ?? this.cashRoundingAmount,
+      cashRoundingUnit: cashRoundingUnit ?? this.cashRoundingUnit,
       latestPaymentServerId:
           latestPaymentServerId ?? this.latestPaymentServerId,
-      orderSnapshotJson: orderSnapshotJson ?? this.orderSnapshotJson,
-      orderStatusLocal: orderStatusLocal ?? this.orderStatusLocal,
-      syncStatus: syncStatus ?? this.syncStatus,
-      lastError: lastError ?? this.lastError,
-      manualPaymentServerId:
-          manualPaymentServerId ?? this.manualPaymentServerId,
-      manualPaymentType: manualPaymentType ?? this.manualPaymentType,
-      manualProviderName: manualProviderName ?? this.manualProviderName,
-      manualProviderAccountName:
-          manualProviderAccountName ?? this.manualProviderAccountName,
-      manualProviderAccountNo:
-          manualProviderAccountNo ?? this.manualProviderAccountNo,
-      manualQrisImageUrl: manualQrisImageUrl ?? this.manualQrisImageUrl,
-      manualQrisImageLocalPath:
-          manualQrisImageLocalPath ?? this.manualQrisImageLocalPath,
-      manualPaymentLabel: manualPaymentLabel ?? this.manualPaymentLabel,
-      manualPaymentRawJson: manualPaymentRawJson ?? this.manualPaymentRawJson,
-      backendSyncStage: backendSyncStage ?? this.backendSyncStage,
-      createdAtLocal: createdAtLocal ?? this.createdAtLocal,
-      updatedAtLocal: updatedAtLocal ?? this.updatedAtLocal,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
       syncedAt: syncedAt ?? this.syncedAt,
       rowid: rowid ?? this.rowid,
     );
@@ -6057,17 +6881,14 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (localId.present) {
-      map['local_id'] = Variable<String>(localId.value);
+    if (clientUuid.present) {
+      map['client_uuid'] = Variable<String>(clientUuid.value);
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
     }
-    if (clientOrderCode.present) {
-      map['client_order_code'] = Variable<String>(clientOrderCode.value);
-    }
-    if (serverOrderCode.present) {
-      map['server_order_code'] = Variable<String>(serverOrderCode.value);
+    if (bookingOrderCode.present) {
+      map['booking_order_code'] = Variable<String>(bookingOrderCode.value);
     }
     if (partnerId.present) {
       map['partner_id'] = Variable<int>(partnerId.value);
@@ -6075,39 +6896,89 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
     if (partnerName.present) {
       map['partner_name'] = Variable<String>(partnerName.value);
     }
-    if (tableServerId.present) {
-      map['table_server_id'] = Variable<int>(tableServerId.value);
+    if (tableId.present) {
+      map['table_id'] = Variable<int>(tableId.value);
     }
-    if (tableNoSnapshot.present) {
-      map['table_no_snapshot'] = Variable<String>(tableNoSnapshot.value);
+    if (tableNo.present) {
+      map['table_no'] = Variable<String>(tableNo.value);
+    }
+    if (customerId.present) {
+      map['customer_id'] = Variable<int>(customerId.value);
+    }
+    if (employeeOrderId.present) {
+      map['employee_order_id'] = Variable<int>(employeeOrderId.value);
+    }
+    if (orderBy.present) {
+      map['order_by'] = Variable<String>(orderBy.value);
     }
     if (customerName.present) {
       map['customer_name'] = Variable<String>(customerName.value);
     }
-    if (paymentMethodSelected.present) {
-      map['payment_method_selected'] = Variable<String>(
-        paymentMethodSelected.value,
-      );
+    if (orderStatus.present) {
+      map['order_status'] = Variable<String>(orderStatus.value);
     }
-    if (paymentMethodEffective.present) {
-      map['payment_method_effective'] = Variable<String>(
-        paymentMethodEffective.value,
-      );
+    if (paymentMethod.present) {
+      map['payment_method'] = Variable<String>(paymentMethod.value);
     }
-    if (subtotal.present) {
-      map['subtotal'] = Variable<double>(subtotal.value);
+    if (openbillFlag.present) {
+      map['openbill_flag'] = Variable<bool>(openbillFlag.value);
+    }
+    if (discountId.present) {
+      map['discount_id'] = Variable<int>(discountId.value);
     }
     if (discountValue.present) {
       map['discount_value'] = Variable<double>(discountValue.value);
     }
-    if (ppnPercent.present) {
-      map['ppn_percent'] = Variable<double>(ppnPercent.value);
+    if (totalOrderValue.present) {
+      map['total_order_value'] = Variable<double>(totalOrderValue.value);
+    }
+    if (ppn.present) {
+      map['ppn'] = Variable<double>(ppn.value);
     }
     if (isPpnActive.present) {
       map['is_ppn_active'] = Variable<bool>(isPpnActive.value);
     }
-    if (grandTotal.present) {
-      map['grand_total'] = Variable<double>(grandTotal.value);
+    if (customerOrderNote.present) {
+      map['customer_order_note'] = Variable<String>(customerOrderNote.value);
+    }
+    if (employeeOrderNote.present) {
+      map['employee_order_note'] = Variable<String>(employeeOrderNote.value);
+    }
+    if (cashierProcessId.present) {
+      map['cashier_process_id'] = Variable<int>(cashierProcessId.value);
+    }
+    if (kitchenProcessId.present) {
+      map['kitchen_process_id'] = Variable<int>(kitchenProcessId.value);
+    }
+    if (paymentId.present) {
+      map['payment_id'] = Variable<int>(paymentId.value);
+    }
+    if (paymentFlag.present) {
+      map['payment_flag'] = Variable<bool>(paymentFlag.value);
+    }
+    if (wifiSnapshotJson.present) {
+      map['wifi_snapshot_json'] = Variable<String>(wifiSnapshotJson.value);
+    }
+    if (paymentRequestJson.present) {
+      map['payment_request_json'] = Variable<String>(paymentRequestJson.value);
+    }
+    if (latestPaymentJson.present) {
+      map['latest_payment_json'] = Variable<String>(latestPaymentJson.value);
+    }
+    if (syncVersion.present) {
+      map['sync_version'] = Variable<int>(syncVersion.value);
+    }
+    if (syncDirty.present) {
+      map['sync_dirty'] = Variable<bool>(syncDirty.value);
+    }
+    if (syncIntent.present) {
+      map['sync_intent'] = Variable<String>(syncIntent.value);
+    }
+    if (syncError.present) {
+      map['sync_error'] = Variable<String>(syncError.value);
+    }
+    if (localFilePathsJson.present) {
+      map['local_file_paths_json'] = Variable<String>(localFilePathsJson.value);
     }
     if (paidAmountLocal.present) {
       map['paid_amount_local'] = Variable<double>(paidAmountLocal.value);
@@ -6115,78 +6986,25 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
     if (changeAmountLocal.present) {
       map['change_amount_local'] = Variable<double>(changeAmountLocal.value);
     }
-    if (cashierProofImageLocalPath.present) {
-      map['cashier_proof_image_local_path'] = Variable<String>(
-        cashierProofImageLocalPath.value,
-      );
+    if (cashRoundingAmount.present) {
+      map['cash_rounding_amount'] = Variable<double>(cashRoundingAmount.value);
     }
-    if (paymentConfirmedAtLocal.present) {
-      map['payment_confirmed_at_local'] = Variable<DateTime>(
-        paymentConfirmedAtLocal.value,
-      );
+    if (cashRoundingUnit.present) {
+      map['cash_rounding_unit'] = Variable<int>(cashRoundingUnit.value);
     }
     if (latestPaymentServerId.present) {
       map['latest_payment_server_id'] = Variable<int>(
         latestPaymentServerId.value,
       );
     }
-    if (orderSnapshotJson.present) {
-      map['order_snapshot_json'] = Variable<String>(orderSnapshotJson.value);
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
     }
-    if (orderStatusLocal.present) {
-      map['order_status_local'] = Variable<String>(orderStatusLocal.value);
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
-    if (syncStatus.present) {
-      map['sync_status'] = Variable<String>(syncStatus.value);
-    }
-    if (lastError.present) {
-      map['last_error'] = Variable<String>(lastError.value);
-    }
-    if (manualPaymentServerId.present) {
-      map['manual_payment_server_id'] = Variable<int>(
-        manualPaymentServerId.value,
-      );
-    }
-    if (manualPaymentType.present) {
-      map['manual_payment_type'] = Variable<String>(manualPaymentType.value);
-    }
-    if (manualProviderName.present) {
-      map['manual_provider_name'] = Variable<String>(manualProviderName.value);
-    }
-    if (manualProviderAccountName.present) {
-      map['manual_provider_account_name'] = Variable<String>(
-        manualProviderAccountName.value,
-      );
-    }
-    if (manualProviderAccountNo.present) {
-      map['manual_provider_account_no'] = Variable<String>(
-        manualProviderAccountNo.value,
-      );
-    }
-    if (manualQrisImageUrl.present) {
-      map['manual_qris_image_url'] = Variable<String>(manualQrisImageUrl.value);
-    }
-    if (manualQrisImageLocalPath.present) {
-      map['manual_qris_image_local_path'] = Variable<String>(
-        manualQrisImageLocalPath.value,
-      );
-    }
-    if (manualPaymentLabel.present) {
-      map['manual_payment_label'] = Variable<String>(manualPaymentLabel.value);
-    }
-    if (manualPaymentRawJson.present) {
-      map['manual_payment_raw_json'] = Variable<String>(
-        manualPaymentRawJson.value,
-      );
-    }
-    if (backendSyncStage.present) {
-      map['backend_sync_stage'] = Variable<String>(backendSyncStage.value);
-    }
-    if (createdAtLocal.present) {
-      map['created_at_local'] = Variable<DateTime>(createdAtLocal.value);
-    }
-    if (updatedAtLocal.present) {
-      map['updated_at_local'] = Variable<DateTime>(updatedAtLocal.value);
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
     if (syncedAt.present) {
       map['synced_at'] = Variable<DateTime>(syncedAt.value);
@@ -6199,44 +7017,48 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
 
   @override
   String toString() {
-    return (StringBuffer('LocalOrdersCompanion(')
-          ..write('localId: $localId, ')
+    return (StringBuffer('BookingOrdersCompanion(')
+          ..write('clientUuid: $clientUuid, ')
           ..write('serverId: $serverId, ')
-          ..write('clientOrderCode: $clientOrderCode, ')
-          ..write('serverOrderCode: $serverOrderCode, ')
+          ..write('bookingOrderCode: $bookingOrderCode, ')
           ..write('partnerId: $partnerId, ')
           ..write('partnerName: $partnerName, ')
-          ..write('tableServerId: $tableServerId, ')
-          ..write('tableNoSnapshot: $tableNoSnapshot, ')
+          ..write('tableId: $tableId, ')
+          ..write('tableNo: $tableNo, ')
+          ..write('customerId: $customerId, ')
+          ..write('employeeOrderId: $employeeOrderId, ')
+          ..write('orderBy: $orderBy, ')
           ..write('customerName: $customerName, ')
-          ..write('paymentMethodSelected: $paymentMethodSelected, ')
-          ..write('paymentMethodEffective: $paymentMethodEffective, ')
-          ..write('subtotal: $subtotal, ')
+          ..write('orderStatus: $orderStatus, ')
+          ..write('paymentMethod: $paymentMethod, ')
+          ..write('openbillFlag: $openbillFlag, ')
+          ..write('discountId: $discountId, ')
           ..write('discountValue: $discountValue, ')
-          ..write('ppnPercent: $ppnPercent, ')
+          ..write('totalOrderValue: $totalOrderValue, ')
+          ..write('ppn: $ppn, ')
           ..write('isPpnActive: $isPpnActive, ')
-          ..write('grandTotal: $grandTotal, ')
+          ..write('customerOrderNote: $customerOrderNote, ')
+          ..write('employeeOrderNote: $employeeOrderNote, ')
+          ..write('cashierProcessId: $cashierProcessId, ')
+          ..write('kitchenProcessId: $kitchenProcessId, ')
+          ..write('paymentId: $paymentId, ')
+          ..write('paymentFlag: $paymentFlag, ')
+          ..write('wifiSnapshotJson: $wifiSnapshotJson, ')
+          ..write('paymentRequestJson: $paymentRequestJson, ')
+          ..write('latestPaymentJson: $latestPaymentJson, ')
+          ..write('syncVersion: $syncVersion, ')
+          ..write('syncDirty: $syncDirty, ')
+          ..write('syncIntent: $syncIntent, ')
+          ..write('syncError: $syncError, ')
+          ..write('localFilePathsJson: $localFilePathsJson, ')
           ..write('paidAmountLocal: $paidAmountLocal, ')
           ..write('changeAmountLocal: $changeAmountLocal, ')
-          ..write('cashierProofImageLocalPath: $cashierProofImageLocalPath, ')
-          ..write('paymentConfirmedAtLocal: $paymentConfirmedAtLocal, ')
+          ..write('cashRoundingAmount: $cashRoundingAmount, ')
+          ..write('cashRoundingUnit: $cashRoundingUnit, ')
           ..write('latestPaymentServerId: $latestPaymentServerId, ')
-          ..write('orderSnapshotJson: $orderSnapshotJson, ')
-          ..write('orderStatusLocal: $orderStatusLocal, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('lastError: $lastError, ')
-          ..write('manualPaymentServerId: $manualPaymentServerId, ')
-          ..write('manualPaymentType: $manualPaymentType, ')
-          ..write('manualProviderName: $manualProviderName, ')
-          ..write('manualProviderAccountName: $manualProviderAccountName, ')
-          ..write('manualProviderAccountNo: $manualProviderAccountNo, ')
-          ..write('manualQrisImageUrl: $manualQrisImageUrl, ')
-          ..write('manualQrisImageLocalPath: $manualQrisImageLocalPath, ')
-          ..write('manualPaymentLabel: $manualPaymentLabel, ')
-          ..write('manualPaymentRawJson: $manualPaymentRawJson, ')
-          ..write('backendSyncStage: $backendSyncStage, ')
-          ..write('createdAtLocal: $createdAtLocal, ')
-          ..write('updatedAtLocal: $updatedAtLocal, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
           ..write('syncedAt: $syncedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -6244,66 +7066,100 @@ class LocalOrdersCompanion extends UpdateCompanion<LocalOrder> {
   }
 }
 
-class $LocalOrderItemsTable extends LocalOrderItems
-    with TableInfo<$LocalOrderItemsTable, LocalOrderItem> {
+class $OrderDetailsTable extends OrderDetails
+    with TableInfo<$OrderDetailsTable, OrderDetail> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $LocalOrderItemsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _localIdMeta = const VerificationMeta(
-    'localId',
+  $OrderDetailsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientDetailUuidMeta = const VerificationMeta(
+    'clientDetailUuid',
   );
   @override
-  late final GeneratedColumn<String> localId = GeneratedColumn<String>(
-    'local_id',
+  late final GeneratedColumn<String> clientDetailUuid = GeneratedColumn<String>(
+    'client_detail_uuid',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _orderLocalIdMeta = const VerificationMeta(
-    'orderLocalId',
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
   );
   @override
-  late final GeneratedColumn<String> orderLocalId = GeneratedColumn<String>(
-    'order_local_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _serverOrderDetailIdMeta =
-      const VerificationMeta('serverOrderDetailId');
-  @override
-  late final GeneratedColumn<int> serverOrderDetailId = GeneratedColumn<int>(
-    'server_order_detail_id',
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
     aliasedName,
     true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _productServerIdMeta = const VerificationMeta(
-    'productServerId',
-  );
+  static const VerificationMeta _bookingOrderClientUuidMeta =
+      const VerificationMeta('bookingOrderClientUuid');
   @override
-  late final GeneratedColumn<int> productServerId = GeneratedColumn<int>(
-    'product_server_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _productNameSnapshotMeta =
-      const VerificationMeta('productNameSnapshot');
-  @override
-  late final GeneratedColumn<String> productNameSnapshot =
+  late final GeneratedColumn<String> bookingOrderClientUuid =
       GeneratedColumn<String>(
-        'product_name_snapshot',
+        'booking_order_client_uuid',
         aliasedName,
         false,
         type: DriftSqlType.string,
         requiredDuringInsert: true,
       );
+  static const VerificationMeta _bookingOrderServerIdMeta =
+      const VerificationMeta('bookingOrderServerId');
+  @override
+  late final GeneratedColumn<int> bookingOrderServerId = GeneratedColumn<int>(
+    'booking_order_server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _productCodeMeta = const VerificationMeta(
+    'productCode',
+  );
+  @override
+  late final GeneratedColumn<String> productCode = GeneratedColumn<String>(
+    'product_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _productNameMeta = const VerificationMeta(
+    'productName',
+  );
+  @override
+  late final GeneratedColumn<String> productName = GeneratedColumn<String>(
+    'product_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _partnerProductIdMeta = const VerificationMeta(
+    'partnerProductId',
+  );
+  @override
+  late final GeneratedColumn<int> partnerProductId = GeneratedColumn<int>(
+    'partner_product_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _quantityMeta = const VerificationMeta(
+    'quantity',
+  );
+  @override
+  late final GeneratedColumn<int> quantity = GeneratedColumn<int>(
+    'quantity',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _basePriceMeta = const VerificationMeta(
     'basePrice',
   );
@@ -6316,6 +7172,38 @@ class $LocalOrderItemsTable extends LocalOrderItems
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _cogsMeta = const VerificationMeta('cogs');
+  @override
+  late final GeneratedColumn<double> cogs = GeneratedColumn<double>(
+    'cogs',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _optionsPriceMeta = const VerificationMeta(
+    'optionsPrice',
+  );
+  @override
+  late final GeneratedColumn<double> optionsPrice = GeneratedColumn<double>(
+    'options_price',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _customerNoteMeta = const VerificationMeta(
+    'customerNote',
+  );
+  @override
+  late final GeneratedColumn<String> customerNote = GeneratedColumn<String>(
+    'customer_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _promoIdMeta = const VerificationMeta(
     'promoId',
   );
@@ -6325,17 +7213,6 @@ class $LocalOrderItemsTable extends LocalOrderItems
     aliasedName,
     true,
     type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _promoTypeMeta = const VerificationMeta(
-    'promoType',
-  );
-  @override
-  late final GeneratedColumn<String> promoType = GeneratedColumn<String>(
-    'promo_type',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _promoAmountMeta = const VerificationMeta(
@@ -6349,164 +7226,205 @@ class $LocalOrderItemsTable extends LocalOrderItems
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _categoryServerIdMeta = const VerificationMeta(
-    'categoryServerId',
+  static const VerificationMeta _promoTypeMeta = const VerificationMeta(
+    'promoType',
   );
   @override
-  late final GeneratedColumn<int> categoryServerId = GeneratedColumn<int>(
-    'category_server_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _categoryNameSnapshotMeta =
-      const VerificationMeta('categoryNameSnapshot');
-  @override
-  late final GeneratedColumn<String> categoryNameSnapshot =
-      GeneratedColumn<String>(
-        'category_name_snapshot',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _optionsPriceMeta = const VerificationMeta(
-    'optionsPrice',
-  );
-  @override
-  late final GeneratedColumn<double> optionsPrice = GeneratedColumn<double>(
-    'options_price',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _qtyMeta = const VerificationMeta('qty');
-  @override
-  late final GeneratedColumn<int> qty = GeneratedColumn<int>(
-    'qty',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _customerNoteMeta = const VerificationMeta(
-    'customerNote',
-  );
-  @override
-  late final GeneratedColumn<String> customerNote = GeneratedColumn<String>(
-    'customer_note',
+  late final GeneratedColumn<String> promoType = GeneratedColumn<String>(
+    'promo_type',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _lineTotalMeta = const VerificationMeta(
-    'lineTotal',
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cashierProcessIdMeta = const VerificationMeta(
+    'cashierProcessId',
   );
   @override
-  late final GeneratedColumn<double> lineTotal = GeneratedColumn<double>(
-    'line_total',
+  late final GeneratedColumn<int> cashierProcessId = GeneratedColumn<int>(
+    'cashier_process_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _kitchenProcessIdMeta = const VerificationMeta(
+    'kitchenProcessId',
+  );
+  @override
+  late final GeneratedColumn<int> kitchenProcessId = GeneratedColumn<int>(
+    'kitchen_process_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncVersionMeta = const VerificationMeta(
+    'syncVersion',
+  );
+  @override
+  late final GeneratedColumn<int> syncVersion = GeneratedColumn<int>(
+    'sync_version',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
-  static const VerificationMeta _createdAtLocalMeta = const VerificationMeta(
-    'createdAtLocal',
+  static const VerificationMeta _syncDirtyMeta = const VerificationMeta(
+    'syncDirty',
   );
   @override
-  late final GeneratedColumn<DateTime> createdAtLocal =
-      GeneratedColumn<DateTime>(
-        'created_at_local',
-        aliasedName,
-        false,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: true,
-      );
+  late final GeneratedColumn<bool> syncDirty = GeneratedColumn<bool>(
+    'sync_dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("sync_dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
-    localId,
-    orderLocalId,
-    serverOrderDetailId,
-    productServerId,
-    productNameSnapshot,
+    clientDetailUuid,
+    serverId,
+    bookingOrderClientUuid,
+    bookingOrderServerId,
+    productCode,
+    productName,
+    partnerProductId,
+    quantity,
     basePrice,
-    promoId,
-    promoType,
-    promoAmount,
-    categoryServerId,
-    categoryNameSnapshot,
+    cogs,
     optionsPrice,
-    qty,
     customerNote,
-    lineTotal,
-    createdAtLocal,
+    promoId,
+    promoAmount,
+    promoType,
+    status,
+    cashierProcessId,
+    kitchenProcessId,
+    syncVersion,
+    syncDirty,
+    createdAt,
+    updatedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'local_order_items';
+  static const String $name = 'order_details';
   @override
   VerificationContext validateIntegrity(
-    Insertable<LocalOrderItem> instance, {
+    Insertable<OrderDetail> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
-    if (data.containsKey('local_id')) {
+    if (data.containsKey('client_detail_uuid')) {
       context.handle(
-        _localIdMeta,
-        localId.isAcceptableOrUnknown(data['local_id']!, _localIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_localIdMeta);
-    }
-    if (data.containsKey('order_local_id')) {
-      context.handle(
-        _orderLocalIdMeta,
-        orderLocalId.isAcceptableOrUnknown(
-          data['order_local_id']!,
-          _orderLocalIdMeta,
+        _clientDetailUuidMeta,
+        clientDetailUuid.isAcceptableOrUnknown(
+          data['client_detail_uuid']!,
+          _clientDetailUuidMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_orderLocalIdMeta);
+      context.missing(_clientDetailUuidMeta);
     }
-    if (data.containsKey('server_order_detail_id')) {
+    if (data.containsKey('server_id')) {
       context.handle(
-        _serverOrderDetailIdMeta,
-        serverOrderDetailId.isAcceptableOrUnknown(
-          data['server_order_detail_id']!,
-          _serverOrderDetailIdMeta,
-        ),
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
       );
     }
-    if (data.containsKey('product_server_id')) {
+    if (data.containsKey('booking_order_client_uuid')) {
       context.handle(
-        _productServerIdMeta,
-        productServerId.isAcceptableOrUnknown(
-          data['product_server_id']!,
-          _productServerIdMeta,
+        _bookingOrderClientUuidMeta,
+        bookingOrderClientUuid.isAcceptableOrUnknown(
+          data['booking_order_client_uuid']!,
+          _bookingOrderClientUuidMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_productServerIdMeta);
+      context.missing(_bookingOrderClientUuidMeta);
     }
-    if (data.containsKey('product_name_snapshot')) {
+    if (data.containsKey('booking_order_server_id')) {
       context.handle(
-        _productNameSnapshotMeta,
-        productNameSnapshot.isAcceptableOrUnknown(
-          data['product_name_snapshot']!,
-          _productNameSnapshotMeta,
+        _bookingOrderServerIdMeta,
+        bookingOrderServerId.isAcceptableOrUnknown(
+          data['booking_order_server_id']!,
+          _bookingOrderServerIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('product_code')) {
+      context.handle(
+        _productCodeMeta,
+        productCode.isAcceptableOrUnknown(
+          data['product_code']!,
+          _productCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('product_name')) {
+      context.handle(
+        _productNameMeta,
+        productName.isAcceptableOrUnknown(
+          data['product_name']!,
+          _productNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('partner_product_id')) {
+      context.handle(
+        _partnerProductIdMeta,
+        partnerProductId.isAcceptableOrUnknown(
+          data['partner_product_id']!,
+          _partnerProductIdMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_productNameSnapshotMeta);
+      context.missing(_partnerProductIdMeta);
+    }
+    if (data.containsKey('quantity')) {
+      context.handle(
+        _quantityMeta,
+        quantity.isAcceptableOrUnknown(data['quantity']!, _quantityMeta),
+      );
     }
     if (data.containsKey('base_price')) {
       context.handle(
@@ -6514,43 +7432,10 @@ class $LocalOrderItemsTable extends LocalOrderItems
         basePrice.isAcceptableOrUnknown(data['base_price']!, _basePriceMeta),
       );
     }
-    if (data.containsKey('promo_id')) {
+    if (data.containsKey('cogs')) {
       context.handle(
-        _promoIdMeta,
-        promoId.isAcceptableOrUnknown(data['promo_id']!, _promoIdMeta),
-      );
-    }
-    if (data.containsKey('promo_type')) {
-      context.handle(
-        _promoTypeMeta,
-        promoType.isAcceptableOrUnknown(data['promo_type']!, _promoTypeMeta),
-      );
-    }
-    if (data.containsKey('promo_amount')) {
-      context.handle(
-        _promoAmountMeta,
-        promoAmount.isAcceptableOrUnknown(
-          data['promo_amount']!,
-          _promoAmountMeta,
-        ),
-      );
-    }
-    if (data.containsKey('category_server_id')) {
-      context.handle(
-        _categoryServerIdMeta,
-        categoryServerId.isAcceptableOrUnknown(
-          data['category_server_id']!,
-          _categoryServerIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('category_name_snapshot')) {
-      context.handle(
-        _categoryNameSnapshotMeta,
-        categoryNameSnapshot.isAcceptableOrUnknown(
-          data['category_name_snapshot']!,
-          _categoryNameSnapshotMeta,
-        ),
+        _cogsMeta,
+        cogs.isAcceptableOrUnknown(data['cogs']!, _cogsMeta),
       );
     }
     if (data.containsKey('options_price')) {
@@ -6562,14 +7447,6 @@ class $LocalOrderItemsTable extends LocalOrderItems
         ),
       );
     }
-    if (data.containsKey('qty')) {
-      context.handle(
-        _qtyMeta,
-        qty.isAcceptableOrUnknown(data['qty']!, _qtyMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_qtyMeta);
-    }
     if (data.containsKey('customer_note')) {
       context.handle(
         _customerNoteMeta,
@@ -6579,550 +7456,771 @@ class $LocalOrderItemsTable extends LocalOrderItems
         ),
       );
     }
-    if (data.containsKey('line_total')) {
+    if (data.containsKey('promo_id')) {
       context.handle(
-        _lineTotalMeta,
-        lineTotal.isAcceptableOrUnknown(data['line_total']!, _lineTotalMeta),
+        _promoIdMeta,
+        promoId.isAcceptableOrUnknown(data['promo_id']!, _promoIdMeta),
       );
     }
-    if (data.containsKey('created_at_local')) {
+    if (data.containsKey('promo_amount')) {
       context.handle(
-        _createdAtLocalMeta,
-        createdAtLocal.isAcceptableOrUnknown(
-          data['created_at_local']!,
-          _createdAtLocalMeta,
+        _promoAmountMeta,
+        promoAmount.isAcceptableOrUnknown(
+          data['promo_amount']!,
+          _promoAmountMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_createdAtLocalMeta);
+    }
+    if (data.containsKey('promo_type')) {
+      context.handle(
+        _promoTypeMeta,
+        promoType.isAcceptableOrUnknown(data['promo_type']!, _promoTypeMeta),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('cashier_process_id')) {
+      context.handle(
+        _cashierProcessIdMeta,
+        cashierProcessId.isAcceptableOrUnknown(
+          data['cashier_process_id']!,
+          _cashierProcessIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('kitchen_process_id')) {
+      context.handle(
+        _kitchenProcessIdMeta,
+        kitchenProcessId.isAcceptableOrUnknown(
+          data['kitchen_process_id']!,
+          _kitchenProcessIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sync_version')) {
+      context.handle(
+        _syncVersionMeta,
+        syncVersion.isAcceptableOrUnknown(
+          data['sync_version']!,
+          _syncVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sync_dirty')) {
+      context.handle(
+        _syncDirtyMeta,
+        syncDirty.isAcceptableOrUnknown(data['sync_dirty']!, _syncDirtyMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
     }
     return context;
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {localId};
+  Set<GeneratedColumn> get $primaryKey => {clientDetailUuid};
   @override
-  LocalOrderItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+  OrderDetail map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return LocalOrderItem(
-      localId: attachedDatabase.typeMapping.read(
+    return OrderDetail(
+      clientDetailUuid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}local_id'],
+        data['${effectivePrefix}client_detail_uuid'],
       )!,
-      orderLocalId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}order_local_id'],
-      )!,
-      serverOrderDetailId: attachedDatabase.typeMapping.read(
+      serverId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}server_order_detail_id'],
+        data['${effectivePrefix}server_id'],
       ),
-      productServerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}product_server_id'],
-      )!,
-      productNameSnapshot: attachedDatabase.typeMapping.read(
+      bookingOrderClientUuid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}product_name_snapshot'],
+        data['${effectivePrefix}booking_order_client_uuid'],
+      )!,
+      bookingOrderServerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}booking_order_server_id'],
+      ),
+      productCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}product_code'],
+      ),
+      productName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}product_name'],
+      ),
+      partnerProductId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}partner_product_id'],
+      )!,
+      quantity: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quantity'],
       )!,
       basePrice: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}base_price'],
       )!,
-      promoId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}promo_id'],
-      ),
-      promoType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}promo_type'],
-      ),
-      promoAmount: attachedDatabase.typeMapping.read(
+      cogs: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
-        data['${effectivePrefix}promo_amount'],
-      ),
-      categoryServerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}category_server_id'],
-      ),
-      categoryNameSnapshot: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}category_name_snapshot'],
+        data['${effectivePrefix}cogs'],
       ),
       optionsPrice: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}options_price'],
       )!,
-      qty: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}qty'],
-      )!,
       customerNote: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}customer_note'],
       ),
-      lineTotal: attachedDatabase.typeMapping.read(
+      promoId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}promo_id'],
+      ),
+      promoAmount: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
-        data['${effectivePrefix}line_total'],
+        data['${effectivePrefix}promo_amount'],
+      ),
+      promoType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}promo_type'],
+      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      ),
+      cashierProcessId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cashier_process_id'],
+      ),
+      kitchenProcessId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}kitchen_process_id'],
+      ),
+      syncVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sync_version'],
       )!,
-      createdAtLocal: attachedDatabase.typeMapping.read(
+      syncDirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}sync_dirty'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at_local'],
-      )!,
+        data['${effectivePrefix}created_at'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      ),
     );
   }
 
   @override
-  $LocalOrderItemsTable createAlias(String alias) {
-    return $LocalOrderItemsTable(attachedDatabase, alias);
+  $OrderDetailsTable createAlias(String alias) {
+    return $OrderDetailsTable(attachedDatabase, alias);
   }
 }
 
-class LocalOrderItem extends DataClass implements Insertable<LocalOrderItem> {
-  final String localId;
-  final String orderLocalId;
-  final int? serverOrderDetailId;
-  final int productServerId;
-  final String productNameSnapshot;
+class OrderDetail extends DataClass implements Insertable<OrderDetail> {
+  final String clientDetailUuid;
+  final int? serverId;
+  final String bookingOrderClientUuid;
+  final int? bookingOrderServerId;
+  final String? productCode;
+  final String? productName;
+  final int partnerProductId;
+  final int quantity;
   final double basePrice;
-  final int? promoId;
-  final String? promoType;
-  final double? promoAmount;
-  final int? categoryServerId;
-  final String? categoryNameSnapshot;
+  final double? cogs;
   final double optionsPrice;
-  final int qty;
   final String? customerNote;
-  final double lineTotal;
-  final DateTime createdAtLocal;
-  const LocalOrderItem({
-    required this.localId,
-    required this.orderLocalId,
-    this.serverOrderDetailId,
-    required this.productServerId,
-    required this.productNameSnapshot,
+  final int? promoId;
+  final double? promoAmount;
+  final String? promoType;
+  final String? status;
+  final int? cashierProcessId;
+  final int? kitchenProcessId;
+  final int syncVersion;
+  final bool syncDirty;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  const OrderDetail({
+    required this.clientDetailUuid,
+    this.serverId,
+    required this.bookingOrderClientUuid,
+    this.bookingOrderServerId,
+    this.productCode,
+    this.productName,
+    required this.partnerProductId,
+    required this.quantity,
     required this.basePrice,
-    this.promoId,
-    this.promoType,
-    this.promoAmount,
-    this.categoryServerId,
-    this.categoryNameSnapshot,
+    this.cogs,
     required this.optionsPrice,
-    required this.qty,
     this.customerNote,
-    required this.lineTotal,
-    required this.createdAtLocal,
+    this.promoId,
+    this.promoAmount,
+    this.promoType,
+    this.status,
+    this.cashierProcessId,
+    this.kitchenProcessId,
+    required this.syncVersion,
+    required this.syncDirty,
+    this.createdAt,
+    this.updatedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['local_id'] = Variable<String>(localId);
-    map['order_local_id'] = Variable<String>(orderLocalId);
-    if (!nullToAbsent || serverOrderDetailId != null) {
-      map['server_order_detail_id'] = Variable<int>(serverOrderDetailId);
+    map['client_detail_uuid'] = Variable<String>(clientDetailUuid);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
     }
-    map['product_server_id'] = Variable<int>(productServerId);
-    map['product_name_snapshot'] = Variable<String>(productNameSnapshot);
+    map['booking_order_client_uuid'] = Variable<String>(bookingOrderClientUuid);
+    if (!nullToAbsent || bookingOrderServerId != null) {
+      map['booking_order_server_id'] = Variable<int>(bookingOrderServerId);
+    }
+    if (!nullToAbsent || productCode != null) {
+      map['product_code'] = Variable<String>(productCode);
+    }
+    if (!nullToAbsent || productName != null) {
+      map['product_name'] = Variable<String>(productName);
+    }
+    map['partner_product_id'] = Variable<int>(partnerProductId);
+    map['quantity'] = Variable<int>(quantity);
     map['base_price'] = Variable<double>(basePrice);
+    if (!nullToAbsent || cogs != null) {
+      map['cogs'] = Variable<double>(cogs);
+    }
+    map['options_price'] = Variable<double>(optionsPrice);
+    if (!nullToAbsent || customerNote != null) {
+      map['customer_note'] = Variable<String>(customerNote);
+    }
     if (!nullToAbsent || promoId != null) {
       map['promo_id'] = Variable<int>(promoId);
-    }
-    if (!nullToAbsent || promoType != null) {
-      map['promo_type'] = Variable<String>(promoType);
     }
     if (!nullToAbsent || promoAmount != null) {
       map['promo_amount'] = Variable<double>(promoAmount);
     }
-    if (!nullToAbsent || categoryServerId != null) {
-      map['category_server_id'] = Variable<int>(categoryServerId);
+    if (!nullToAbsent || promoType != null) {
+      map['promo_type'] = Variable<String>(promoType);
     }
-    if (!nullToAbsent || categoryNameSnapshot != null) {
-      map['category_name_snapshot'] = Variable<String>(categoryNameSnapshot);
+    if (!nullToAbsent || status != null) {
+      map['status'] = Variable<String>(status);
     }
-    map['options_price'] = Variable<double>(optionsPrice);
-    map['qty'] = Variable<int>(qty);
-    if (!nullToAbsent || customerNote != null) {
-      map['customer_note'] = Variable<String>(customerNote);
+    if (!nullToAbsent || cashierProcessId != null) {
+      map['cashier_process_id'] = Variable<int>(cashierProcessId);
     }
-    map['line_total'] = Variable<double>(lineTotal);
-    map['created_at_local'] = Variable<DateTime>(createdAtLocal);
+    if (!nullToAbsent || kitchenProcessId != null) {
+      map['kitchen_process_id'] = Variable<int>(kitchenProcessId);
+    }
+    map['sync_version'] = Variable<int>(syncVersion);
+    map['sync_dirty'] = Variable<bool>(syncDirty);
+    if (!nullToAbsent || createdAt != null) {
+      map['created_at'] = Variable<DateTime>(createdAt);
+    }
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
     return map;
   }
 
-  LocalOrderItemsCompanion toCompanion(bool nullToAbsent) {
-    return LocalOrderItemsCompanion(
-      localId: Value(localId),
-      orderLocalId: Value(orderLocalId),
-      serverOrderDetailId: serverOrderDetailId == null && nullToAbsent
+  OrderDetailsCompanion toCompanion(bool nullToAbsent) {
+    return OrderDetailsCompanion(
+      clientDetailUuid: Value(clientDetailUuid),
+      serverId: serverId == null && nullToAbsent
           ? const Value.absent()
-          : Value(serverOrderDetailId),
-      productServerId: Value(productServerId),
-      productNameSnapshot: Value(productNameSnapshot),
+          : Value(serverId),
+      bookingOrderClientUuid: Value(bookingOrderClientUuid),
+      bookingOrderServerId: bookingOrderServerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bookingOrderServerId),
+      productCode: productCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(productCode),
+      productName: productName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(productName),
+      partnerProductId: Value(partnerProductId),
+      quantity: Value(quantity),
       basePrice: Value(basePrice),
-      promoId: promoId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(promoId),
-      promoType: promoType == null && nullToAbsent
-          ? const Value.absent()
-          : Value(promoType),
-      promoAmount: promoAmount == null && nullToAbsent
-          ? const Value.absent()
-          : Value(promoAmount),
-      categoryServerId: categoryServerId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(categoryServerId),
-      categoryNameSnapshot: categoryNameSnapshot == null && nullToAbsent
-          ? const Value.absent()
-          : Value(categoryNameSnapshot),
+      cogs: cogs == null && nullToAbsent ? const Value.absent() : Value(cogs),
       optionsPrice: Value(optionsPrice),
-      qty: Value(qty),
       customerNote: customerNote == null && nullToAbsent
           ? const Value.absent()
           : Value(customerNote),
-      lineTotal: Value(lineTotal),
-      createdAtLocal: Value(createdAtLocal),
+      promoId: promoId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(promoId),
+      promoAmount: promoAmount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(promoAmount),
+      promoType: promoType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(promoType),
+      status: status == null && nullToAbsent
+          ? const Value.absent()
+          : Value(status),
+      cashierProcessId: cashierProcessId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cashierProcessId),
+      kitchenProcessId: kitchenProcessId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(kitchenProcessId),
+      syncVersion: Value(syncVersion),
+      syncDirty: Value(syncDirty),
+      createdAt: createdAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
     );
   }
 
-  factory LocalOrderItem.fromJson(
+  factory OrderDetail.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return LocalOrderItem(
-      localId: serializer.fromJson<String>(json['localId']),
-      orderLocalId: serializer.fromJson<String>(json['orderLocalId']),
-      serverOrderDetailId: serializer.fromJson<int?>(
-        json['serverOrderDetailId'],
+    return OrderDetail(
+      clientDetailUuid: serializer.fromJson<String>(json['clientDetailUuid']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      bookingOrderClientUuid: serializer.fromJson<String>(
+        json['bookingOrderClientUuid'],
       ),
-      productServerId: serializer.fromJson<int>(json['productServerId']),
-      productNameSnapshot: serializer.fromJson<String>(
-        json['productNameSnapshot'],
+      bookingOrderServerId: serializer.fromJson<int?>(
+        json['bookingOrderServerId'],
       ),
+      productCode: serializer.fromJson<String?>(json['productCode']),
+      productName: serializer.fromJson<String?>(json['productName']),
+      partnerProductId: serializer.fromJson<int>(json['partnerProductId']),
+      quantity: serializer.fromJson<int>(json['quantity']),
       basePrice: serializer.fromJson<double>(json['basePrice']),
-      promoId: serializer.fromJson<int?>(json['promoId']),
-      promoType: serializer.fromJson<String?>(json['promoType']),
-      promoAmount: serializer.fromJson<double?>(json['promoAmount']),
-      categoryServerId: serializer.fromJson<int?>(json['categoryServerId']),
-      categoryNameSnapshot: serializer.fromJson<String?>(
-        json['categoryNameSnapshot'],
-      ),
+      cogs: serializer.fromJson<double?>(json['cogs']),
       optionsPrice: serializer.fromJson<double>(json['optionsPrice']),
-      qty: serializer.fromJson<int>(json['qty']),
       customerNote: serializer.fromJson<String?>(json['customerNote']),
-      lineTotal: serializer.fromJson<double>(json['lineTotal']),
-      createdAtLocal: serializer.fromJson<DateTime>(json['createdAtLocal']),
+      promoId: serializer.fromJson<int?>(json['promoId']),
+      promoAmount: serializer.fromJson<double?>(json['promoAmount']),
+      promoType: serializer.fromJson<String?>(json['promoType']),
+      status: serializer.fromJson<String?>(json['status']),
+      cashierProcessId: serializer.fromJson<int?>(json['cashierProcessId']),
+      kitchenProcessId: serializer.fromJson<int?>(json['kitchenProcessId']),
+      syncVersion: serializer.fromJson<int>(json['syncVersion']),
+      syncDirty: serializer.fromJson<bool>(json['syncDirty']),
+      createdAt: serializer.fromJson<DateTime?>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'localId': serializer.toJson<String>(localId),
-      'orderLocalId': serializer.toJson<String>(orderLocalId),
-      'serverOrderDetailId': serializer.toJson<int?>(serverOrderDetailId),
-      'productServerId': serializer.toJson<int>(productServerId),
-      'productNameSnapshot': serializer.toJson<String>(productNameSnapshot),
+      'clientDetailUuid': serializer.toJson<String>(clientDetailUuid),
+      'serverId': serializer.toJson<int?>(serverId),
+      'bookingOrderClientUuid': serializer.toJson<String>(
+        bookingOrderClientUuid,
+      ),
+      'bookingOrderServerId': serializer.toJson<int?>(bookingOrderServerId),
+      'productCode': serializer.toJson<String?>(productCode),
+      'productName': serializer.toJson<String?>(productName),
+      'partnerProductId': serializer.toJson<int>(partnerProductId),
+      'quantity': serializer.toJson<int>(quantity),
       'basePrice': serializer.toJson<double>(basePrice),
-      'promoId': serializer.toJson<int?>(promoId),
-      'promoType': serializer.toJson<String?>(promoType),
-      'promoAmount': serializer.toJson<double?>(promoAmount),
-      'categoryServerId': serializer.toJson<int?>(categoryServerId),
-      'categoryNameSnapshot': serializer.toJson<String?>(categoryNameSnapshot),
+      'cogs': serializer.toJson<double?>(cogs),
       'optionsPrice': serializer.toJson<double>(optionsPrice),
-      'qty': serializer.toJson<int>(qty),
       'customerNote': serializer.toJson<String?>(customerNote),
-      'lineTotal': serializer.toJson<double>(lineTotal),
-      'createdAtLocal': serializer.toJson<DateTime>(createdAtLocal),
+      'promoId': serializer.toJson<int?>(promoId),
+      'promoAmount': serializer.toJson<double?>(promoAmount),
+      'promoType': serializer.toJson<String?>(promoType),
+      'status': serializer.toJson<String?>(status),
+      'cashierProcessId': serializer.toJson<int?>(cashierProcessId),
+      'kitchenProcessId': serializer.toJson<int?>(kitchenProcessId),
+      'syncVersion': serializer.toJson<int>(syncVersion),
+      'syncDirty': serializer.toJson<bool>(syncDirty),
+      'createdAt': serializer.toJson<DateTime?>(createdAt),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
     };
   }
 
-  LocalOrderItem copyWith({
-    String? localId,
-    String? orderLocalId,
-    Value<int?> serverOrderDetailId = const Value.absent(),
-    int? productServerId,
-    String? productNameSnapshot,
+  OrderDetail copyWith({
+    String? clientDetailUuid,
+    Value<int?> serverId = const Value.absent(),
+    String? bookingOrderClientUuid,
+    Value<int?> bookingOrderServerId = const Value.absent(),
+    Value<String?> productCode = const Value.absent(),
+    Value<String?> productName = const Value.absent(),
+    int? partnerProductId,
+    int? quantity,
     double? basePrice,
-    Value<int?> promoId = const Value.absent(),
-    Value<String?> promoType = const Value.absent(),
-    Value<double?> promoAmount = const Value.absent(),
-    Value<int?> categoryServerId = const Value.absent(),
-    Value<String?> categoryNameSnapshot = const Value.absent(),
+    Value<double?> cogs = const Value.absent(),
     double? optionsPrice,
-    int? qty,
     Value<String?> customerNote = const Value.absent(),
-    double? lineTotal,
-    DateTime? createdAtLocal,
-  }) => LocalOrderItem(
-    localId: localId ?? this.localId,
-    orderLocalId: orderLocalId ?? this.orderLocalId,
-    serverOrderDetailId: serverOrderDetailId.present
-        ? serverOrderDetailId.value
-        : this.serverOrderDetailId,
-    productServerId: productServerId ?? this.productServerId,
-    productNameSnapshot: productNameSnapshot ?? this.productNameSnapshot,
+    Value<int?> promoId = const Value.absent(),
+    Value<double?> promoAmount = const Value.absent(),
+    Value<String?> promoType = const Value.absent(),
+    Value<String?> status = const Value.absent(),
+    Value<int?> cashierProcessId = const Value.absent(),
+    Value<int?> kitchenProcessId = const Value.absent(),
+    int? syncVersion,
+    bool? syncDirty,
+    Value<DateTime?> createdAt = const Value.absent(),
+    Value<DateTime?> updatedAt = const Value.absent(),
+  }) => OrderDetail(
+    clientDetailUuid: clientDetailUuid ?? this.clientDetailUuid,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    bookingOrderClientUuid:
+        bookingOrderClientUuid ?? this.bookingOrderClientUuid,
+    bookingOrderServerId: bookingOrderServerId.present
+        ? bookingOrderServerId.value
+        : this.bookingOrderServerId,
+    productCode: productCode.present ? productCode.value : this.productCode,
+    productName: productName.present ? productName.value : this.productName,
+    partnerProductId: partnerProductId ?? this.partnerProductId,
+    quantity: quantity ?? this.quantity,
     basePrice: basePrice ?? this.basePrice,
-    promoId: promoId.present ? promoId.value : this.promoId,
-    promoType: promoType.present ? promoType.value : this.promoType,
-    promoAmount: promoAmount.present ? promoAmount.value : this.promoAmount,
-    categoryServerId: categoryServerId.present
-        ? categoryServerId.value
-        : this.categoryServerId,
-    categoryNameSnapshot: categoryNameSnapshot.present
-        ? categoryNameSnapshot.value
-        : this.categoryNameSnapshot,
+    cogs: cogs.present ? cogs.value : this.cogs,
     optionsPrice: optionsPrice ?? this.optionsPrice,
-    qty: qty ?? this.qty,
     customerNote: customerNote.present ? customerNote.value : this.customerNote,
-    lineTotal: lineTotal ?? this.lineTotal,
-    createdAtLocal: createdAtLocal ?? this.createdAtLocal,
+    promoId: promoId.present ? promoId.value : this.promoId,
+    promoAmount: promoAmount.present ? promoAmount.value : this.promoAmount,
+    promoType: promoType.present ? promoType.value : this.promoType,
+    status: status.present ? status.value : this.status,
+    cashierProcessId: cashierProcessId.present
+        ? cashierProcessId.value
+        : this.cashierProcessId,
+    kitchenProcessId: kitchenProcessId.present
+        ? kitchenProcessId.value
+        : this.kitchenProcessId,
+    syncVersion: syncVersion ?? this.syncVersion,
+    syncDirty: syncDirty ?? this.syncDirty,
+    createdAt: createdAt.present ? createdAt.value : this.createdAt,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
   );
-  LocalOrderItem copyWithCompanion(LocalOrderItemsCompanion data) {
-    return LocalOrderItem(
-      localId: data.localId.present ? data.localId.value : this.localId,
-      orderLocalId: data.orderLocalId.present
-          ? data.orderLocalId.value
-          : this.orderLocalId,
-      serverOrderDetailId: data.serverOrderDetailId.present
-          ? data.serverOrderDetailId.value
-          : this.serverOrderDetailId,
-      productServerId: data.productServerId.present
-          ? data.productServerId.value
-          : this.productServerId,
-      productNameSnapshot: data.productNameSnapshot.present
-          ? data.productNameSnapshot.value
-          : this.productNameSnapshot,
+  OrderDetail copyWithCompanion(OrderDetailsCompanion data) {
+    return OrderDetail(
+      clientDetailUuid: data.clientDetailUuid.present
+          ? data.clientDetailUuid.value
+          : this.clientDetailUuid,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      bookingOrderClientUuid: data.bookingOrderClientUuid.present
+          ? data.bookingOrderClientUuid.value
+          : this.bookingOrderClientUuid,
+      bookingOrderServerId: data.bookingOrderServerId.present
+          ? data.bookingOrderServerId.value
+          : this.bookingOrderServerId,
+      productCode: data.productCode.present
+          ? data.productCode.value
+          : this.productCode,
+      productName: data.productName.present
+          ? data.productName.value
+          : this.productName,
+      partnerProductId: data.partnerProductId.present
+          ? data.partnerProductId.value
+          : this.partnerProductId,
+      quantity: data.quantity.present ? data.quantity.value : this.quantity,
       basePrice: data.basePrice.present ? data.basePrice.value : this.basePrice,
-      promoId: data.promoId.present ? data.promoId.value : this.promoId,
-      promoType: data.promoType.present ? data.promoType.value : this.promoType,
-      promoAmount: data.promoAmount.present
-          ? data.promoAmount.value
-          : this.promoAmount,
-      categoryServerId: data.categoryServerId.present
-          ? data.categoryServerId.value
-          : this.categoryServerId,
-      categoryNameSnapshot: data.categoryNameSnapshot.present
-          ? data.categoryNameSnapshot.value
-          : this.categoryNameSnapshot,
+      cogs: data.cogs.present ? data.cogs.value : this.cogs,
       optionsPrice: data.optionsPrice.present
           ? data.optionsPrice.value
           : this.optionsPrice,
-      qty: data.qty.present ? data.qty.value : this.qty,
       customerNote: data.customerNote.present
           ? data.customerNote.value
           : this.customerNote,
-      lineTotal: data.lineTotal.present ? data.lineTotal.value : this.lineTotal,
-      createdAtLocal: data.createdAtLocal.present
-          ? data.createdAtLocal.value
-          : this.createdAtLocal,
+      promoId: data.promoId.present ? data.promoId.value : this.promoId,
+      promoAmount: data.promoAmount.present
+          ? data.promoAmount.value
+          : this.promoAmount,
+      promoType: data.promoType.present ? data.promoType.value : this.promoType,
+      status: data.status.present ? data.status.value : this.status,
+      cashierProcessId: data.cashierProcessId.present
+          ? data.cashierProcessId.value
+          : this.cashierProcessId,
+      kitchenProcessId: data.kitchenProcessId.present
+          ? data.kitchenProcessId.value
+          : this.kitchenProcessId,
+      syncVersion: data.syncVersion.present
+          ? data.syncVersion.value
+          : this.syncVersion,
+      syncDirty: data.syncDirty.present ? data.syncDirty.value : this.syncDirty,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('LocalOrderItem(')
-          ..write('localId: $localId, ')
-          ..write('orderLocalId: $orderLocalId, ')
-          ..write('serverOrderDetailId: $serverOrderDetailId, ')
-          ..write('productServerId: $productServerId, ')
-          ..write('productNameSnapshot: $productNameSnapshot, ')
+    return (StringBuffer('OrderDetail(')
+          ..write('clientDetailUuid: $clientDetailUuid, ')
+          ..write('serverId: $serverId, ')
+          ..write('bookingOrderClientUuid: $bookingOrderClientUuid, ')
+          ..write('bookingOrderServerId: $bookingOrderServerId, ')
+          ..write('productCode: $productCode, ')
+          ..write('productName: $productName, ')
+          ..write('partnerProductId: $partnerProductId, ')
+          ..write('quantity: $quantity, ')
           ..write('basePrice: $basePrice, ')
-          ..write('promoId: $promoId, ')
-          ..write('promoType: $promoType, ')
-          ..write('promoAmount: $promoAmount, ')
-          ..write('categoryServerId: $categoryServerId, ')
-          ..write('categoryNameSnapshot: $categoryNameSnapshot, ')
+          ..write('cogs: $cogs, ')
           ..write('optionsPrice: $optionsPrice, ')
-          ..write('qty: $qty, ')
           ..write('customerNote: $customerNote, ')
-          ..write('lineTotal: $lineTotal, ')
-          ..write('createdAtLocal: $createdAtLocal')
+          ..write('promoId: $promoId, ')
+          ..write('promoAmount: $promoAmount, ')
+          ..write('promoType: $promoType, ')
+          ..write('status: $status, ')
+          ..write('cashierProcessId: $cashierProcessId, ')
+          ..write('kitchenProcessId: $kitchenProcessId, ')
+          ..write('syncVersion: $syncVersion, ')
+          ..write('syncDirty: $syncDirty, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
-    localId,
-    orderLocalId,
-    serverOrderDetailId,
-    productServerId,
-    productNameSnapshot,
+  int get hashCode => Object.hashAll([
+    clientDetailUuid,
+    serverId,
+    bookingOrderClientUuid,
+    bookingOrderServerId,
+    productCode,
+    productName,
+    partnerProductId,
+    quantity,
     basePrice,
-    promoId,
-    promoType,
-    promoAmount,
-    categoryServerId,
-    categoryNameSnapshot,
+    cogs,
     optionsPrice,
-    qty,
     customerNote,
-    lineTotal,
-    createdAtLocal,
-  );
+    promoId,
+    promoAmount,
+    promoType,
+    status,
+    cashierProcessId,
+    kitchenProcessId,
+    syncVersion,
+    syncDirty,
+    createdAt,
+    updatedAt,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is LocalOrderItem &&
-          other.localId == this.localId &&
-          other.orderLocalId == this.orderLocalId &&
-          other.serverOrderDetailId == this.serverOrderDetailId &&
-          other.productServerId == this.productServerId &&
-          other.productNameSnapshot == this.productNameSnapshot &&
+      (other is OrderDetail &&
+          other.clientDetailUuid == this.clientDetailUuid &&
+          other.serverId == this.serverId &&
+          other.bookingOrderClientUuid == this.bookingOrderClientUuid &&
+          other.bookingOrderServerId == this.bookingOrderServerId &&
+          other.productCode == this.productCode &&
+          other.productName == this.productName &&
+          other.partnerProductId == this.partnerProductId &&
+          other.quantity == this.quantity &&
           other.basePrice == this.basePrice &&
-          other.promoId == this.promoId &&
-          other.promoType == this.promoType &&
-          other.promoAmount == this.promoAmount &&
-          other.categoryServerId == this.categoryServerId &&
-          other.categoryNameSnapshot == this.categoryNameSnapshot &&
+          other.cogs == this.cogs &&
           other.optionsPrice == this.optionsPrice &&
-          other.qty == this.qty &&
           other.customerNote == this.customerNote &&
-          other.lineTotal == this.lineTotal &&
-          other.createdAtLocal == this.createdAtLocal);
+          other.promoId == this.promoId &&
+          other.promoAmount == this.promoAmount &&
+          other.promoType == this.promoType &&
+          other.status == this.status &&
+          other.cashierProcessId == this.cashierProcessId &&
+          other.kitchenProcessId == this.kitchenProcessId &&
+          other.syncVersion == this.syncVersion &&
+          other.syncDirty == this.syncDirty &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
 }
 
-class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
-  final Value<String> localId;
-  final Value<String> orderLocalId;
-  final Value<int?> serverOrderDetailId;
-  final Value<int> productServerId;
-  final Value<String> productNameSnapshot;
+class OrderDetailsCompanion extends UpdateCompanion<OrderDetail> {
+  final Value<String> clientDetailUuid;
+  final Value<int?> serverId;
+  final Value<String> bookingOrderClientUuid;
+  final Value<int?> bookingOrderServerId;
+  final Value<String?> productCode;
+  final Value<String?> productName;
+  final Value<int> partnerProductId;
+  final Value<int> quantity;
   final Value<double> basePrice;
-  final Value<int?> promoId;
-  final Value<String?> promoType;
-  final Value<double?> promoAmount;
-  final Value<int?> categoryServerId;
-  final Value<String?> categoryNameSnapshot;
+  final Value<double?> cogs;
   final Value<double> optionsPrice;
-  final Value<int> qty;
   final Value<String?> customerNote;
-  final Value<double> lineTotal;
-  final Value<DateTime> createdAtLocal;
+  final Value<int?> promoId;
+  final Value<double?> promoAmount;
+  final Value<String?> promoType;
+  final Value<String?> status;
+  final Value<int?> cashierProcessId;
+  final Value<int?> kitchenProcessId;
+  final Value<int> syncVersion;
+  final Value<bool> syncDirty;
+  final Value<DateTime?> createdAt;
+  final Value<DateTime?> updatedAt;
   final Value<int> rowid;
-  const LocalOrderItemsCompanion({
-    this.localId = const Value.absent(),
-    this.orderLocalId = const Value.absent(),
-    this.serverOrderDetailId = const Value.absent(),
-    this.productServerId = const Value.absent(),
-    this.productNameSnapshot = const Value.absent(),
+  const OrderDetailsCompanion({
+    this.clientDetailUuid = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.bookingOrderClientUuid = const Value.absent(),
+    this.bookingOrderServerId = const Value.absent(),
+    this.productCode = const Value.absent(),
+    this.productName = const Value.absent(),
+    this.partnerProductId = const Value.absent(),
+    this.quantity = const Value.absent(),
     this.basePrice = const Value.absent(),
-    this.promoId = const Value.absent(),
-    this.promoType = const Value.absent(),
-    this.promoAmount = const Value.absent(),
-    this.categoryServerId = const Value.absent(),
-    this.categoryNameSnapshot = const Value.absent(),
+    this.cogs = const Value.absent(),
     this.optionsPrice = const Value.absent(),
-    this.qty = const Value.absent(),
     this.customerNote = const Value.absent(),
-    this.lineTotal = const Value.absent(),
-    this.createdAtLocal = const Value.absent(),
+    this.promoId = const Value.absent(),
+    this.promoAmount = const Value.absent(),
+    this.promoType = const Value.absent(),
+    this.status = const Value.absent(),
+    this.cashierProcessId = const Value.absent(),
+    this.kitchenProcessId = const Value.absent(),
+    this.syncVersion = const Value.absent(),
+    this.syncDirty = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  LocalOrderItemsCompanion.insert({
-    required String localId,
-    required String orderLocalId,
-    this.serverOrderDetailId = const Value.absent(),
-    required int productServerId,
-    required String productNameSnapshot,
+  OrderDetailsCompanion.insert({
+    required String clientDetailUuid,
+    this.serverId = const Value.absent(),
+    required String bookingOrderClientUuid,
+    this.bookingOrderServerId = const Value.absent(),
+    this.productCode = const Value.absent(),
+    this.productName = const Value.absent(),
+    required int partnerProductId,
+    this.quantity = const Value.absent(),
     this.basePrice = const Value.absent(),
-    this.promoId = const Value.absent(),
-    this.promoType = const Value.absent(),
-    this.promoAmount = const Value.absent(),
-    this.categoryServerId = const Value.absent(),
-    this.categoryNameSnapshot = const Value.absent(),
+    this.cogs = const Value.absent(),
     this.optionsPrice = const Value.absent(),
-    required int qty,
     this.customerNote = const Value.absent(),
-    this.lineTotal = const Value.absent(),
-    required DateTime createdAtLocal,
+    this.promoId = const Value.absent(),
+    this.promoAmount = const Value.absent(),
+    this.promoType = const Value.absent(),
+    this.status = const Value.absent(),
+    this.cashierProcessId = const Value.absent(),
+    this.kitchenProcessId = const Value.absent(),
+    this.syncVersion = const Value.absent(),
+    this.syncDirty = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
-  }) : localId = Value(localId),
-       orderLocalId = Value(orderLocalId),
-       productServerId = Value(productServerId),
-       productNameSnapshot = Value(productNameSnapshot),
-       qty = Value(qty),
-       createdAtLocal = Value(createdAtLocal);
-  static Insertable<LocalOrderItem> custom({
-    Expression<String>? localId,
-    Expression<String>? orderLocalId,
-    Expression<int>? serverOrderDetailId,
-    Expression<int>? productServerId,
-    Expression<String>? productNameSnapshot,
+  }) : clientDetailUuid = Value(clientDetailUuid),
+       bookingOrderClientUuid = Value(bookingOrderClientUuid),
+       partnerProductId = Value(partnerProductId);
+  static Insertable<OrderDetail> custom({
+    Expression<String>? clientDetailUuid,
+    Expression<int>? serverId,
+    Expression<String>? bookingOrderClientUuid,
+    Expression<int>? bookingOrderServerId,
+    Expression<String>? productCode,
+    Expression<String>? productName,
+    Expression<int>? partnerProductId,
+    Expression<int>? quantity,
     Expression<double>? basePrice,
-    Expression<int>? promoId,
-    Expression<String>? promoType,
-    Expression<double>? promoAmount,
-    Expression<int>? categoryServerId,
-    Expression<String>? categoryNameSnapshot,
+    Expression<double>? cogs,
     Expression<double>? optionsPrice,
-    Expression<int>? qty,
     Expression<String>? customerNote,
-    Expression<double>? lineTotal,
-    Expression<DateTime>? createdAtLocal,
+    Expression<int>? promoId,
+    Expression<double>? promoAmount,
+    Expression<String>? promoType,
+    Expression<String>? status,
+    Expression<int>? cashierProcessId,
+    Expression<int>? kitchenProcessId,
+    Expression<int>? syncVersion,
+    Expression<bool>? syncDirty,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (localId != null) 'local_id': localId,
-      if (orderLocalId != null) 'order_local_id': orderLocalId,
-      if (serverOrderDetailId != null)
-        'server_order_detail_id': serverOrderDetailId,
-      if (productServerId != null) 'product_server_id': productServerId,
-      if (productNameSnapshot != null)
-        'product_name_snapshot': productNameSnapshot,
+      if (clientDetailUuid != null) 'client_detail_uuid': clientDetailUuid,
+      if (serverId != null) 'server_id': serverId,
+      if (bookingOrderClientUuid != null)
+        'booking_order_client_uuid': bookingOrderClientUuid,
+      if (bookingOrderServerId != null)
+        'booking_order_server_id': bookingOrderServerId,
+      if (productCode != null) 'product_code': productCode,
+      if (productName != null) 'product_name': productName,
+      if (partnerProductId != null) 'partner_product_id': partnerProductId,
+      if (quantity != null) 'quantity': quantity,
       if (basePrice != null) 'base_price': basePrice,
-      if (promoId != null) 'promo_id': promoId,
-      if (promoType != null) 'promo_type': promoType,
-      if (promoAmount != null) 'promo_amount': promoAmount,
-      if (categoryServerId != null) 'category_server_id': categoryServerId,
-      if (categoryNameSnapshot != null)
-        'category_name_snapshot': categoryNameSnapshot,
+      if (cogs != null) 'cogs': cogs,
       if (optionsPrice != null) 'options_price': optionsPrice,
-      if (qty != null) 'qty': qty,
       if (customerNote != null) 'customer_note': customerNote,
-      if (lineTotal != null) 'line_total': lineTotal,
-      if (createdAtLocal != null) 'created_at_local': createdAtLocal,
+      if (promoId != null) 'promo_id': promoId,
+      if (promoAmount != null) 'promo_amount': promoAmount,
+      if (promoType != null) 'promo_type': promoType,
+      if (status != null) 'status': status,
+      if (cashierProcessId != null) 'cashier_process_id': cashierProcessId,
+      if (kitchenProcessId != null) 'kitchen_process_id': kitchenProcessId,
+      if (syncVersion != null) 'sync_version': syncVersion,
+      if (syncDirty != null) 'sync_dirty': syncDirty,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  LocalOrderItemsCompanion copyWith({
-    Value<String>? localId,
-    Value<String>? orderLocalId,
-    Value<int?>? serverOrderDetailId,
-    Value<int>? productServerId,
-    Value<String>? productNameSnapshot,
+  OrderDetailsCompanion copyWith({
+    Value<String>? clientDetailUuid,
+    Value<int?>? serverId,
+    Value<String>? bookingOrderClientUuid,
+    Value<int?>? bookingOrderServerId,
+    Value<String?>? productCode,
+    Value<String?>? productName,
+    Value<int>? partnerProductId,
+    Value<int>? quantity,
     Value<double>? basePrice,
-    Value<int?>? promoId,
-    Value<String?>? promoType,
-    Value<double?>? promoAmount,
-    Value<int?>? categoryServerId,
-    Value<String?>? categoryNameSnapshot,
+    Value<double?>? cogs,
     Value<double>? optionsPrice,
-    Value<int>? qty,
     Value<String?>? customerNote,
-    Value<double>? lineTotal,
-    Value<DateTime>? createdAtLocal,
+    Value<int?>? promoId,
+    Value<double?>? promoAmount,
+    Value<String?>? promoType,
+    Value<String?>? status,
+    Value<int?>? cashierProcessId,
+    Value<int?>? kitchenProcessId,
+    Value<int>? syncVersion,
+    Value<bool>? syncDirty,
+    Value<DateTime?>? createdAt,
+    Value<DateTime?>? updatedAt,
     Value<int>? rowid,
   }) {
-    return LocalOrderItemsCompanion(
-      localId: localId ?? this.localId,
-      orderLocalId: orderLocalId ?? this.orderLocalId,
-      serverOrderDetailId: serverOrderDetailId ?? this.serverOrderDetailId,
-      productServerId: productServerId ?? this.productServerId,
-      productNameSnapshot: productNameSnapshot ?? this.productNameSnapshot,
+    return OrderDetailsCompanion(
+      clientDetailUuid: clientDetailUuid ?? this.clientDetailUuid,
+      serverId: serverId ?? this.serverId,
+      bookingOrderClientUuid:
+          bookingOrderClientUuid ?? this.bookingOrderClientUuid,
+      bookingOrderServerId: bookingOrderServerId ?? this.bookingOrderServerId,
+      productCode: productCode ?? this.productCode,
+      productName: productName ?? this.productName,
+      partnerProductId: partnerProductId ?? this.partnerProductId,
+      quantity: quantity ?? this.quantity,
       basePrice: basePrice ?? this.basePrice,
-      promoId: promoId ?? this.promoId,
-      promoType: promoType ?? this.promoType,
-      promoAmount: promoAmount ?? this.promoAmount,
-      categoryServerId: categoryServerId ?? this.categoryServerId,
-      categoryNameSnapshot: categoryNameSnapshot ?? this.categoryNameSnapshot,
+      cogs: cogs ?? this.cogs,
       optionsPrice: optionsPrice ?? this.optionsPrice,
-      qty: qty ?? this.qty,
       customerNote: customerNote ?? this.customerNote,
-      lineTotal: lineTotal ?? this.lineTotal,
-      createdAtLocal: createdAtLocal ?? this.createdAtLocal,
+      promoId: promoId ?? this.promoId,
+      promoAmount: promoAmount ?? this.promoAmount,
+      promoType: promoType ?? this.promoType,
+      status: status ?? this.status,
+      cashierProcessId: cashierProcessId ?? this.cashierProcessId,
+      kitchenProcessId: kitchenProcessId ?? this.kitchenProcessId,
+      syncVersion: syncVersion ?? this.syncVersion,
+      syncDirty: syncDirty ?? this.syncDirty,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7130,57 +8228,75 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (localId.present) {
-      map['local_id'] = Variable<String>(localId.value);
+    if (clientDetailUuid.present) {
+      map['client_detail_uuid'] = Variable<String>(clientDetailUuid.value);
     }
-    if (orderLocalId.present) {
-      map['order_local_id'] = Variable<String>(orderLocalId.value);
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
     }
-    if (serverOrderDetailId.present) {
-      map['server_order_detail_id'] = Variable<int>(serverOrderDetailId.value);
-    }
-    if (productServerId.present) {
-      map['product_server_id'] = Variable<int>(productServerId.value);
-    }
-    if (productNameSnapshot.present) {
-      map['product_name_snapshot'] = Variable<String>(
-        productNameSnapshot.value,
+    if (bookingOrderClientUuid.present) {
+      map['booking_order_client_uuid'] = Variable<String>(
+        bookingOrderClientUuid.value,
       );
+    }
+    if (bookingOrderServerId.present) {
+      map['booking_order_server_id'] = Variable<int>(
+        bookingOrderServerId.value,
+      );
+    }
+    if (productCode.present) {
+      map['product_code'] = Variable<String>(productCode.value);
+    }
+    if (productName.present) {
+      map['product_name'] = Variable<String>(productName.value);
+    }
+    if (partnerProductId.present) {
+      map['partner_product_id'] = Variable<int>(partnerProductId.value);
+    }
+    if (quantity.present) {
+      map['quantity'] = Variable<int>(quantity.value);
     }
     if (basePrice.present) {
       map['base_price'] = Variable<double>(basePrice.value);
     }
-    if (promoId.present) {
-      map['promo_id'] = Variable<int>(promoId.value);
-    }
-    if (promoType.present) {
-      map['promo_type'] = Variable<String>(promoType.value);
-    }
-    if (promoAmount.present) {
-      map['promo_amount'] = Variable<double>(promoAmount.value);
-    }
-    if (categoryServerId.present) {
-      map['category_server_id'] = Variable<int>(categoryServerId.value);
-    }
-    if (categoryNameSnapshot.present) {
-      map['category_name_snapshot'] = Variable<String>(
-        categoryNameSnapshot.value,
-      );
+    if (cogs.present) {
+      map['cogs'] = Variable<double>(cogs.value);
     }
     if (optionsPrice.present) {
       map['options_price'] = Variable<double>(optionsPrice.value);
     }
-    if (qty.present) {
-      map['qty'] = Variable<int>(qty.value);
-    }
     if (customerNote.present) {
       map['customer_note'] = Variable<String>(customerNote.value);
     }
-    if (lineTotal.present) {
-      map['line_total'] = Variable<double>(lineTotal.value);
+    if (promoId.present) {
+      map['promo_id'] = Variable<int>(promoId.value);
     }
-    if (createdAtLocal.present) {
-      map['created_at_local'] = Variable<DateTime>(createdAtLocal.value);
+    if (promoAmount.present) {
+      map['promo_amount'] = Variable<double>(promoAmount.value);
+    }
+    if (promoType.present) {
+      map['promo_type'] = Variable<String>(promoType.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (cashierProcessId.present) {
+      map['cashier_process_id'] = Variable<int>(cashierProcessId.value);
+    }
+    if (kitchenProcessId.present) {
+      map['kitchen_process_id'] = Variable<int>(kitchenProcessId.value);
+    }
+    if (syncVersion.present) {
+      map['sync_version'] = Variable<int>(syncVersion.value);
+    }
+    if (syncDirty.present) {
+      map['sync_dirty'] = Variable<bool>(syncDirty.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -7190,100 +8306,116 @@ class LocalOrderItemsCompanion extends UpdateCompanion<LocalOrderItem> {
 
   @override
   String toString() {
-    return (StringBuffer('LocalOrderItemsCompanion(')
-          ..write('localId: $localId, ')
-          ..write('orderLocalId: $orderLocalId, ')
-          ..write('serverOrderDetailId: $serverOrderDetailId, ')
-          ..write('productServerId: $productServerId, ')
-          ..write('productNameSnapshot: $productNameSnapshot, ')
+    return (StringBuffer('OrderDetailsCompanion(')
+          ..write('clientDetailUuid: $clientDetailUuid, ')
+          ..write('serverId: $serverId, ')
+          ..write('bookingOrderClientUuid: $bookingOrderClientUuid, ')
+          ..write('bookingOrderServerId: $bookingOrderServerId, ')
+          ..write('productCode: $productCode, ')
+          ..write('productName: $productName, ')
+          ..write('partnerProductId: $partnerProductId, ')
+          ..write('quantity: $quantity, ')
           ..write('basePrice: $basePrice, ')
-          ..write('promoId: $promoId, ')
-          ..write('promoType: $promoType, ')
-          ..write('promoAmount: $promoAmount, ')
-          ..write('categoryServerId: $categoryServerId, ')
-          ..write('categoryNameSnapshot: $categoryNameSnapshot, ')
+          ..write('cogs: $cogs, ')
           ..write('optionsPrice: $optionsPrice, ')
-          ..write('qty: $qty, ')
           ..write('customerNote: $customerNote, ')
-          ..write('lineTotal: $lineTotal, ')
-          ..write('createdAtLocal: $createdAtLocal, ')
+          ..write('promoId: $promoId, ')
+          ..write('promoAmount: $promoAmount, ')
+          ..write('promoType: $promoType, ')
+          ..write('status: $status, ')
+          ..write('cashierProcessId: $cashierProcessId, ')
+          ..write('kitchenProcessId: $kitchenProcessId, ')
+          ..write('syncVersion: $syncVersion, ')
+          ..write('syncDirty: $syncDirty, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
 }
 
-class $LocalOrderItemOptionsTable extends LocalOrderItemOptions
-    with TableInfo<$LocalOrderItemOptionsTable, LocalOrderItemOption> {
+class $OrderDetailOptionsTable extends OrderDetailOptions
+    with TableInfo<$OrderDetailOptionsTable, OrderDetailOption> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $LocalOrderItemOptionsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _localIdMeta = const VerificationMeta(
-    'localId',
+  $OrderDetailOptionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientOptionUuidMeta = const VerificationMeta(
+    'clientOptionUuid',
   );
   @override
-  late final GeneratedColumn<String> localId = GeneratedColumn<String>(
-    'local_id',
+  late final GeneratedColumn<String> clientOptionUuid = GeneratedColumn<String>(
+    'client_option_uuid',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _orderItemLocalIdMeta = const VerificationMeta(
-    'orderItemLocalId',
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
   );
   @override
-  late final GeneratedColumn<String> orderItemLocalId = GeneratedColumn<String>(
-    'order_item_local_id',
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
     aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
   );
-  static const VerificationMeta _serverOrderDetailOptionIdMeta =
-      const VerificationMeta('serverOrderDetailOptionId');
+  static const VerificationMeta _orderDetailClientUuidMeta =
+      const VerificationMeta('orderDetailClientUuid');
   @override
-  late final GeneratedColumn<int> serverOrderDetailOptionId =
-      GeneratedColumn<int>(
-        'server_order_detail_option_id',
+  late final GeneratedColumn<String> orderDetailClientUuid =
+      GeneratedColumn<String>(
+        'order_detail_client_uuid',
         aliasedName,
-        true,
-        type: DriftSqlType.int,
-        requiredDuringInsert: false,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
       );
-  static const VerificationMeta _optionServerIdMeta = const VerificationMeta(
-    'optionServerId',
+  static const VerificationMeta _orderDetailServerIdMeta =
+      const VerificationMeta('orderDetailServerId');
+  @override
+  late final GeneratedColumn<int> orderDetailServerId = GeneratedColumn<int>(
+    'order_detail_server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _optionIdMeta = const VerificationMeta(
+    'optionId',
   );
   @override
-  late final GeneratedColumn<int> optionServerId = GeneratedColumn<int>(
-    'option_server_id',
+  late final GeneratedColumn<int> optionId = GeneratedColumn<int>(
+    'option_id',
     aliasedName,
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _parentNameSnapshotMeta =
-      const VerificationMeta('parentNameSnapshot');
+  static const VerificationMeta _parentNameMeta = const VerificationMeta(
+    'parentName',
+  );
   @override
-  late final GeneratedColumn<String> parentNameSnapshot =
+  late final GeneratedColumn<String> parentName = GeneratedColumn<String>(
+    'parent_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _partnerProductOptionNameMeta =
+      const VerificationMeta('partnerProductOptionName');
+  @override
+  late final GeneratedColumn<String> partnerProductOptionName =
       GeneratedColumn<String>(
-        'parent_name_snapshot',
+        'partner_product_option_name',
         aliasedName,
         true,
         type: DriftSqlType.string,
         requiredDuringInsert: false,
-      );
-  static const VerificationMeta _optionNameSnapshotMeta =
-      const VerificationMeta('optionNameSnapshot');
-  @override
-  late final GeneratedColumn<String> optionNameSnapshot =
-      GeneratedColumn<String>(
-        'option_name_snapshot',
-        aliasedName,
-        false,
-        type: DriftSqlType.string,
-        requiredDuringInsert: true,
       );
   static const VerificationMeta _priceMeta = const VerificationMeta('price');
   @override
@@ -7295,99 +8427,112 @@ class $LocalOrderItemOptionsTable extends LocalOrderItemOptions
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
-  static const VerificationMeta _createdAtLocalMeta = const VerificationMeta(
-    'createdAtLocal',
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
   );
   @override
-  late final GeneratedColumn<DateTime> createdAtLocal =
-      GeneratedColumn<DateTime>(
-        'created_at_local',
-        aliasedName,
-        false,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: true,
-      );
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
-    localId,
-    orderItemLocalId,
-    serverOrderDetailOptionId,
-    optionServerId,
-    parentNameSnapshot,
-    optionNameSnapshot,
+    clientOptionUuid,
+    serverId,
+    orderDetailClientUuid,
+    orderDetailServerId,
+    optionId,
+    parentName,
+    partnerProductOptionName,
     price,
-    createdAtLocal,
+    createdAt,
+    updatedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'local_order_item_options';
+  static const String $name = 'order_detail_options';
   @override
   VerificationContext validateIntegrity(
-    Insertable<LocalOrderItemOption> instance, {
+    Insertable<OrderDetailOption> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
-    if (data.containsKey('local_id')) {
+    if (data.containsKey('client_option_uuid')) {
       context.handle(
-        _localIdMeta,
-        localId.isAcceptableOrUnknown(data['local_id']!, _localIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_localIdMeta);
-    }
-    if (data.containsKey('order_item_local_id')) {
-      context.handle(
-        _orderItemLocalIdMeta,
-        orderItemLocalId.isAcceptableOrUnknown(
-          data['order_item_local_id']!,
-          _orderItemLocalIdMeta,
+        _clientOptionUuidMeta,
+        clientOptionUuid.isAcceptableOrUnknown(
+          data['client_option_uuid']!,
+          _clientOptionUuidMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_orderItemLocalIdMeta);
+      context.missing(_clientOptionUuidMeta);
     }
-    if (data.containsKey('server_order_detail_option_id')) {
+    if (data.containsKey('server_id')) {
       context.handle(
-        _serverOrderDetailOptionIdMeta,
-        serverOrderDetailOptionId.isAcceptableOrUnknown(
-          data['server_order_detail_option_id']!,
-          _serverOrderDetailOptionIdMeta,
-        ),
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
       );
     }
-    if (data.containsKey('option_server_id')) {
+    if (data.containsKey('order_detail_client_uuid')) {
       context.handle(
-        _optionServerIdMeta,
-        optionServerId.isAcceptableOrUnknown(
-          data['option_server_id']!,
-          _optionServerIdMeta,
+        _orderDetailClientUuidMeta,
+        orderDetailClientUuid.isAcceptableOrUnknown(
+          data['order_detail_client_uuid']!,
+          _orderDetailClientUuidMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_optionServerIdMeta);
+      context.missing(_orderDetailClientUuidMeta);
     }
-    if (data.containsKey('parent_name_snapshot')) {
+    if (data.containsKey('order_detail_server_id')) {
       context.handle(
-        _parentNameSnapshotMeta,
-        parentNameSnapshot.isAcceptableOrUnknown(
-          data['parent_name_snapshot']!,
-          _parentNameSnapshotMeta,
+        _orderDetailServerIdMeta,
+        orderDetailServerId.isAcceptableOrUnknown(
+          data['order_detail_server_id']!,
+          _orderDetailServerIdMeta,
         ),
       );
     }
-    if (data.containsKey('option_name_snapshot')) {
+    if (data.containsKey('option_id')) {
       context.handle(
-        _optionNameSnapshotMeta,
-        optionNameSnapshot.isAcceptableOrUnknown(
-          data['option_name_snapshot']!,
-          _optionNameSnapshotMeta,
-        ),
+        _optionIdMeta,
+        optionId.isAcceptableOrUnknown(data['option_id']!, _optionIdMeta),
       );
     } else if (isInserting) {
-      context.missing(_optionNameSnapshotMeta);
+      context.missing(_optionIdMeta);
+    }
+    if (data.containsKey('parent_name')) {
+      context.handle(
+        _parentNameMeta,
+        parentName.isAcceptableOrUnknown(data['parent_name']!, _parentNameMeta),
+      );
+    }
+    if (data.containsKey('partner_product_option_name')) {
+      context.handle(
+        _partnerProductOptionNameMeta,
+        partnerProductOptionName.isAcceptableOrUnknown(
+          data['partner_product_option_name']!,
+          _partnerProductOptionNameMeta,
+        ),
+      );
     }
     if (data.containsKey('price')) {
       context.handle(
@@ -7395,337 +8540,395 @@ class $LocalOrderItemOptionsTable extends LocalOrderItemOptions
         price.isAcceptableOrUnknown(data['price']!, _priceMeta),
       );
     }
-    if (data.containsKey('created_at_local')) {
+    if (data.containsKey('created_at')) {
       context.handle(
-        _createdAtLocalMeta,
-        createdAtLocal.isAcceptableOrUnknown(
-          data['created_at_local']!,
-          _createdAtLocalMeta,
-        ),
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
-    } else if (isInserting) {
-      context.missing(_createdAtLocalMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
     }
     return context;
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {localId};
+  Set<GeneratedColumn> get $primaryKey => {clientOptionUuid};
   @override
-  LocalOrderItemOption map(Map<String, dynamic> data, {String? tablePrefix}) {
+  OrderDetailOption map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return LocalOrderItemOption(
-      localId: attachedDatabase.typeMapping.read(
+    return OrderDetailOption(
+      clientOptionUuid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}local_id'],
+        data['${effectivePrefix}client_option_uuid'],
       )!,
-      orderItemLocalId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}order_item_local_id'],
-      )!,
-      serverOrderDetailOptionId: attachedDatabase.typeMapping.read(
+      serverId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}server_order_detail_option_id'],
+        data['${effectivePrefix}server_id'],
       ),
-      optionServerId: attachedDatabase.typeMapping.read(
+      orderDetailClientUuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}order_detail_client_uuid'],
+      )!,
+      orderDetailServerId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}option_server_id'],
-      )!,
-      parentNameSnapshot: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}parent_name_snapshot'],
+        data['${effectivePrefix}order_detail_server_id'],
       ),
-      optionNameSnapshot: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}option_name_snapshot'],
+      optionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}option_id'],
       )!,
+      parentName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_name'],
+      ),
+      partnerProductOptionName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}partner_product_option_name'],
+      ),
       price: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}price'],
       )!,
-      createdAtLocal: attachedDatabase.typeMapping.read(
+      createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at_local'],
-      )!,
+        data['${effectivePrefix}created_at'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      ),
     );
   }
 
   @override
-  $LocalOrderItemOptionsTable createAlias(String alias) {
-    return $LocalOrderItemOptionsTable(attachedDatabase, alias);
+  $OrderDetailOptionsTable createAlias(String alias) {
+    return $OrderDetailOptionsTable(attachedDatabase, alias);
   }
 }
 
-class LocalOrderItemOption extends DataClass
-    implements Insertable<LocalOrderItemOption> {
-  final String localId;
-  final String orderItemLocalId;
-  final int? serverOrderDetailOptionId;
-  final int optionServerId;
-  final String? parentNameSnapshot;
-  final String optionNameSnapshot;
+class OrderDetailOption extends DataClass
+    implements Insertable<OrderDetailOption> {
+  final String clientOptionUuid;
+  final int? serverId;
+  final String orderDetailClientUuid;
+  final int? orderDetailServerId;
+  final int optionId;
+  final String? parentName;
+  final String? partnerProductOptionName;
   final double price;
-  final DateTime createdAtLocal;
-  const LocalOrderItemOption({
-    required this.localId,
-    required this.orderItemLocalId,
-    this.serverOrderDetailOptionId,
-    required this.optionServerId,
-    this.parentNameSnapshot,
-    required this.optionNameSnapshot,
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  const OrderDetailOption({
+    required this.clientOptionUuid,
+    this.serverId,
+    required this.orderDetailClientUuid,
+    this.orderDetailServerId,
+    required this.optionId,
+    this.parentName,
+    this.partnerProductOptionName,
     required this.price,
-    required this.createdAtLocal,
+    this.createdAt,
+    this.updatedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['local_id'] = Variable<String>(localId);
-    map['order_item_local_id'] = Variable<String>(orderItemLocalId);
-    if (!nullToAbsent || serverOrderDetailOptionId != null) {
-      map['server_order_detail_option_id'] = Variable<int>(
-        serverOrderDetailOptionId,
+    map['client_option_uuid'] = Variable<String>(clientOptionUuid);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
+    map['order_detail_client_uuid'] = Variable<String>(orderDetailClientUuid);
+    if (!nullToAbsent || orderDetailServerId != null) {
+      map['order_detail_server_id'] = Variable<int>(orderDetailServerId);
+    }
+    map['option_id'] = Variable<int>(optionId);
+    if (!nullToAbsent || parentName != null) {
+      map['parent_name'] = Variable<String>(parentName);
+    }
+    if (!nullToAbsent || partnerProductOptionName != null) {
+      map['partner_product_option_name'] = Variable<String>(
+        partnerProductOptionName,
       );
     }
-    map['option_server_id'] = Variable<int>(optionServerId);
-    if (!nullToAbsent || parentNameSnapshot != null) {
-      map['parent_name_snapshot'] = Variable<String>(parentNameSnapshot);
-    }
-    map['option_name_snapshot'] = Variable<String>(optionNameSnapshot);
     map['price'] = Variable<double>(price);
-    map['created_at_local'] = Variable<DateTime>(createdAtLocal);
+    if (!nullToAbsent || createdAt != null) {
+      map['created_at'] = Variable<DateTime>(createdAt);
+    }
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
     return map;
   }
 
-  LocalOrderItemOptionsCompanion toCompanion(bool nullToAbsent) {
-    return LocalOrderItemOptionsCompanion(
-      localId: Value(localId),
-      orderItemLocalId: Value(orderItemLocalId),
-      serverOrderDetailOptionId:
-          serverOrderDetailOptionId == null && nullToAbsent
+  OrderDetailOptionsCompanion toCompanion(bool nullToAbsent) {
+    return OrderDetailOptionsCompanion(
+      clientOptionUuid: Value(clientOptionUuid),
+      serverId: serverId == null && nullToAbsent
           ? const Value.absent()
-          : Value(serverOrderDetailOptionId),
-      optionServerId: Value(optionServerId),
-      parentNameSnapshot: parentNameSnapshot == null && nullToAbsent
+          : Value(serverId),
+      orderDetailClientUuid: Value(orderDetailClientUuid),
+      orderDetailServerId: orderDetailServerId == null && nullToAbsent
           ? const Value.absent()
-          : Value(parentNameSnapshot),
-      optionNameSnapshot: Value(optionNameSnapshot),
+          : Value(orderDetailServerId),
+      optionId: Value(optionId),
+      parentName: parentName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentName),
+      partnerProductOptionName: partnerProductOptionName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(partnerProductOptionName),
       price: Value(price),
-      createdAtLocal: Value(createdAtLocal),
+      createdAt: createdAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
     );
   }
 
-  factory LocalOrderItemOption.fromJson(
+  factory OrderDetailOption.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return LocalOrderItemOption(
-      localId: serializer.fromJson<String>(json['localId']),
-      orderItemLocalId: serializer.fromJson<String>(json['orderItemLocalId']),
-      serverOrderDetailOptionId: serializer.fromJson<int?>(
-        json['serverOrderDetailOptionId'],
+    return OrderDetailOption(
+      clientOptionUuid: serializer.fromJson<String>(json['clientOptionUuid']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      orderDetailClientUuid: serializer.fromJson<String>(
+        json['orderDetailClientUuid'],
       ),
-      optionServerId: serializer.fromJson<int>(json['optionServerId']),
-      parentNameSnapshot: serializer.fromJson<String?>(
-        json['parentNameSnapshot'],
+      orderDetailServerId: serializer.fromJson<int?>(
+        json['orderDetailServerId'],
       ),
-      optionNameSnapshot: serializer.fromJson<String>(
-        json['optionNameSnapshot'],
+      optionId: serializer.fromJson<int>(json['optionId']),
+      parentName: serializer.fromJson<String?>(json['parentName']),
+      partnerProductOptionName: serializer.fromJson<String?>(
+        json['partnerProductOptionName'],
       ),
       price: serializer.fromJson<double>(json['price']),
-      createdAtLocal: serializer.fromJson<DateTime>(json['createdAtLocal']),
+      createdAt: serializer.fromJson<DateTime?>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'localId': serializer.toJson<String>(localId),
-      'orderItemLocalId': serializer.toJson<String>(orderItemLocalId),
-      'serverOrderDetailOptionId': serializer.toJson<int?>(
-        serverOrderDetailOptionId,
+      'clientOptionUuid': serializer.toJson<String>(clientOptionUuid),
+      'serverId': serializer.toJson<int?>(serverId),
+      'orderDetailClientUuid': serializer.toJson<String>(orderDetailClientUuid),
+      'orderDetailServerId': serializer.toJson<int?>(orderDetailServerId),
+      'optionId': serializer.toJson<int>(optionId),
+      'parentName': serializer.toJson<String?>(parentName),
+      'partnerProductOptionName': serializer.toJson<String?>(
+        partnerProductOptionName,
       ),
-      'optionServerId': serializer.toJson<int>(optionServerId),
-      'parentNameSnapshot': serializer.toJson<String?>(parentNameSnapshot),
-      'optionNameSnapshot': serializer.toJson<String>(optionNameSnapshot),
       'price': serializer.toJson<double>(price),
-      'createdAtLocal': serializer.toJson<DateTime>(createdAtLocal),
+      'createdAt': serializer.toJson<DateTime?>(createdAt),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
     };
   }
 
-  LocalOrderItemOption copyWith({
-    String? localId,
-    String? orderItemLocalId,
-    Value<int?> serverOrderDetailOptionId = const Value.absent(),
-    int? optionServerId,
-    Value<String?> parentNameSnapshot = const Value.absent(),
-    String? optionNameSnapshot,
+  OrderDetailOption copyWith({
+    String? clientOptionUuid,
+    Value<int?> serverId = const Value.absent(),
+    String? orderDetailClientUuid,
+    Value<int?> orderDetailServerId = const Value.absent(),
+    int? optionId,
+    Value<String?> parentName = const Value.absent(),
+    Value<String?> partnerProductOptionName = const Value.absent(),
     double? price,
-    DateTime? createdAtLocal,
-  }) => LocalOrderItemOption(
-    localId: localId ?? this.localId,
-    orderItemLocalId: orderItemLocalId ?? this.orderItemLocalId,
-    serverOrderDetailOptionId: serverOrderDetailOptionId.present
-        ? serverOrderDetailOptionId.value
-        : this.serverOrderDetailOptionId,
-    optionServerId: optionServerId ?? this.optionServerId,
-    parentNameSnapshot: parentNameSnapshot.present
-        ? parentNameSnapshot.value
-        : this.parentNameSnapshot,
-    optionNameSnapshot: optionNameSnapshot ?? this.optionNameSnapshot,
+    Value<DateTime?> createdAt = const Value.absent(),
+    Value<DateTime?> updatedAt = const Value.absent(),
+  }) => OrderDetailOption(
+    clientOptionUuid: clientOptionUuid ?? this.clientOptionUuid,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    orderDetailClientUuid: orderDetailClientUuid ?? this.orderDetailClientUuid,
+    orderDetailServerId: orderDetailServerId.present
+        ? orderDetailServerId.value
+        : this.orderDetailServerId,
+    optionId: optionId ?? this.optionId,
+    parentName: parentName.present ? parentName.value : this.parentName,
+    partnerProductOptionName: partnerProductOptionName.present
+        ? partnerProductOptionName.value
+        : this.partnerProductOptionName,
     price: price ?? this.price,
-    createdAtLocal: createdAtLocal ?? this.createdAtLocal,
+    createdAt: createdAt.present ? createdAt.value : this.createdAt,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
   );
-  LocalOrderItemOption copyWithCompanion(LocalOrderItemOptionsCompanion data) {
-    return LocalOrderItemOption(
-      localId: data.localId.present ? data.localId.value : this.localId,
-      orderItemLocalId: data.orderItemLocalId.present
-          ? data.orderItemLocalId.value
-          : this.orderItemLocalId,
-      serverOrderDetailOptionId: data.serverOrderDetailOptionId.present
-          ? data.serverOrderDetailOptionId.value
-          : this.serverOrderDetailOptionId,
-      optionServerId: data.optionServerId.present
-          ? data.optionServerId.value
-          : this.optionServerId,
-      parentNameSnapshot: data.parentNameSnapshot.present
-          ? data.parentNameSnapshot.value
-          : this.parentNameSnapshot,
-      optionNameSnapshot: data.optionNameSnapshot.present
-          ? data.optionNameSnapshot.value
-          : this.optionNameSnapshot,
+  OrderDetailOption copyWithCompanion(OrderDetailOptionsCompanion data) {
+    return OrderDetailOption(
+      clientOptionUuid: data.clientOptionUuid.present
+          ? data.clientOptionUuid.value
+          : this.clientOptionUuid,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      orderDetailClientUuid: data.orderDetailClientUuid.present
+          ? data.orderDetailClientUuid.value
+          : this.orderDetailClientUuid,
+      orderDetailServerId: data.orderDetailServerId.present
+          ? data.orderDetailServerId.value
+          : this.orderDetailServerId,
+      optionId: data.optionId.present ? data.optionId.value : this.optionId,
+      parentName: data.parentName.present
+          ? data.parentName.value
+          : this.parentName,
+      partnerProductOptionName: data.partnerProductOptionName.present
+          ? data.partnerProductOptionName.value
+          : this.partnerProductOptionName,
       price: data.price.present ? data.price.value : this.price,
-      createdAtLocal: data.createdAtLocal.present
-          ? data.createdAtLocal.value
-          : this.createdAtLocal,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('LocalOrderItemOption(')
-          ..write('localId: $localId, ')
-          ..write('orderItemLocalId: $orderItemLocalId, ')
-          ..write('serverOrderDetailOptionId: $serverOrderDetailOptionId, ')
-          ..write('optionServerId: $optionServerId, ')
-          ..write('parentNameSnapshot: $parentNameSnapshot, ')
-          ..write('optionNameSnapshot: $optionNameSnapshot, ')
+    return (StringBuffer('OrderDetailOption(')
+          ..write('clientOptionUuid: $clientOptionUuid, ')
+          ..write('serverId: $serverId, ')
+          ..write('orderDetailClientUuid: $orderDetailClientUuid, ')
+          ..write('orderDetailServerId: $orderDetailServerId, ')
+          ..write('optionId: $optionId, ')
+          ..write('parentName: $parentName, ')
+          ..write('partnerProductOptionName: $partnerProductOptionName, ')
           ..write('price: $price, ')
-          ..write('createdAtLocal: $createdAtLocal')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(
-    localId,
-    orderItemLocalId,
-    serverOrderDetailOptionId,
-    optionServerId,
-    parentNameSnapshot,
-    optionNameSnapshot,
+    clientOptionUuid,
+    serverId,
+    orderDetailClientUuid,
+    orderDetailServerId,
+    optionId,
+    parentName,
+    partnerProductOptionName,
     price,
-    createdAtLocal,
+    createdAt,
+    updatedAt,
   );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is LocalOrderItemOption &&
-          other.localId == this.localId &&
-          other.orderItemLocalId == this.orderItemLocalId &&
-          other.serverOrderDetailOptionId == this.serverOrderDetailOptionId &&
-          other.optionServerId == this.optionServerId &&
-          other.parentNameSnapshot == this.parentNameSnapshot &&
-          other.optionNameSnapshot == this.optionNameSnapshot &&
+      (other is OrderDetailOption &&
+          other.clientOptionUuid == this.clientOptionUuid &&
+          other.serverId == this.serverId &&
+          other.orderDetailClientUuid == this.orderDetailClientUuid &&
+          other.orderDetailServerId == this.orderDetailServerId &&
+          other.optionId == this.optionId &&
+          other.parentName == this.parentName &&
+          other.partnerProductOptionName == this.partnerProductOptionName &&
           other.price == this.price &&
-          other.createdAtLocal == this.createdAtLocal);
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
 }
 
-class LocalOrderItemOptionsCompanion
-    extends UpdateCompanion<LocalOrderItemOption> {
-  final Value<String> localId;
-  final Value<String> orderItemLocalId;
-  final Value<int?> serverOrderDetailOptionId;
-  final Value<int> optionServerId;
-  final Value<String?> parentNameSnapshot;
-  final Value<String> optionNameSnapshot;
+class OrderDetailOptionsCompanion extends UpdateCompanion<OrderDetailOption> {
+  final Value<String> clientOptionUuid;
+  final Value<int?> serverId;
+  final Value<String> orderDetailClientUuid;
+  final Value<int?> orderDetailServerId;
+  final Value<int> optionId;
+  final Value<String?> parentName;
+  final Value<String?> partnerProductOptionName;
   final Value<double> price;
-  final Value<DateTime> createdAtLocal;
+  final Value<DateTime?> createdAt;
+  final Value<DateTime?> updatedAt;
   final Value<int> rowid;
-  const LocalOrderItemOptionsCompanion({
-    this.localId = const Value.absent(),
-    this.orderItemLocalId = const Value.absent(),
-    this.serverOrderDetailOptionId = const Value.absent(),
-    this.optionServerId = const Value.absent(),
-    this.parentNameSnapshot = const Value.absent(),
-    this.optionNameSnapshot = const Value.absent(),
+  const OrderDetailOptionsCompanion({
+    this.clientOptionUuid = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.orderDetailClientUuid = const Value.absent(),
+    this.orderDetailServerId = const Value.absent(),
+    this.optionId = const Value.absent(),
+    this.parentName = const Value.absent(),
+    this.partnerProductOptionName = const Value.absent(),
     this.price = const Value.absent(),
-    this.createdAtLocal = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  LocalOrderItemOptionsCompanion.insert({
-    required String localId,
-    required String orderItemLocalId,
-    this.serverOrderDetailOptionId = const Value.absent(),
-    required int optionServerId,
-    this.parentNameSnapshot = const Value.absent(),
-    required String optionNameSnapshot,
+  OrderDetailOptionsCompanion.insert({
+    required String clientOptionUuid,
+    this.serverId = const Value.absent(),
+    required String orderDetailClientUuid,
+    this.orderDetailServerId = const Value.absent(),
+    required int optionId,
+    this.parentName = const Value.absent(),
+    this.partnerProductOptionName = const Value.absent(),
     this.price = const Value.absent(),
-    required DateTime createdAtLocal,
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
-  }) : localId = Value(localId),
-       orderItemLocalId = Value(orderItemLocalId),
-       optionServerId = Value(optionServerId),
-       optionNameSnapshot = Value(optionNameSnapshot),
-       createdAtLocal = Value(createdAtLocal);
-  static Insertable<LocalOrderItemOption> custom({
-    Expression<String>? localId,
-    Expression<String>? orderItemLocalId,
-    Expression<int>? serverOrderDetailOptionId,
-    Expression<int>? optionServerId,
-    Expression<String>? parentNameSnapshot,
-    Expression<String>? optionNameSnapshot,
+  }) : clientOptionUuid = Value(clientOptionUuid),
+       orderDetailClientUuid = Value(orderDetailClientUuid),
+       optionId = Value(optionId);
+  static Insertable<OrderDetailOption> custom({
+    Expression<String>? clientOptionUuid,
+    Expression<int>? serverId,
+    Expression<String>? orderDetailClientUuid,
+    Expression<int>? orderDetailServerId,
+    Expression<int>? optionId,
+    Expression<String>? parentName,
+    Expression<String>? partnerProductOptionName,
     Expression<double>? price,
-    Expression<DateTime>? createdAtLocal,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (localId != null) 'local_id': localId,
-      if (orderItemLocalId != null) 'order_item_local_id': orderItemLocalId,
-      if (serverOrderDetailOptionId != null)
-        'server_order_detail_option_id': serverOrderDetailOptionId,
-      if (optionServerId != null) 'option_server_id': optionServerId,
-      if (parentNameSnapshot != null)
-        'parent_name_snapshot': parentNameSnapshot,
-      if (optionNameSnapshot != null)
-        'option_name_snapshot': optionNameSnapshot,
+      if (clientOptionUuid != null) 'client_option_uuid': clientOptionUuid,
+      if (serverId != null) 'server_id': serverId,
+      if (orderDetailClientUuid != null)
+        'order_detail_client_uuid': orderDetailClientUuid,
+      if (orderDetailServerId != null)
+        'order_detail_server_id': orderDetailServerId,
+      if (optionId != null) 'option_id': optionId,
+      if (parentName != null) 'parent_name': parentName,
+      if (partnerProductOptionName != null)
+        'partner_product_option_name': partnerProductOptionName,
       if (price != null) 'price': price,
-      if (createdAtLocal != null) 'created_at_local': createdAtLocal,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  LocalOrderItemOptionsCompanion copyWith({
-    Value<String>? localId,
-    Value<String>? orderItemLocalId,
-    Value<int?>? serverOrderDetailOptionId,
-    Value<int>? optionServerId,
-    Value<String?>? parentNameSnapshot,
-    Value<String>? optionNameSnapshot,
+  OrderDetailOptionsCompanion copyWith({
+    Value<String>? clientOptionUuid,
+    Value<int?>? serverId,
+    Value<String>? orderDetailClientUuid,
+    Value<int?>? orderDetailServerId,
+    Value<int>? optionId,
+    Value<String?>? parentName,
+    Value<String?>? partnerProductOptionName,
     Value<double>? price,
-    Value<DateTime>? createdAtLocal,
+    Value<DateTime?>? createdAt,
+    Value<DateTime?>? updatedAt,
     Value<int>? rowid,
   }) {
-    return LocalOrderItemOptionsCompanion(
-      localId: localId ?? this.localId,
-      orderItemLocalId: orderItemLocalId ?? this.orderItemLocalId,
-      serverOrderDetailOptionId:
-          serverOrderDetailOptionId ?? this.serverOrderDetailOptionId,
-      optionServerId: optionServerId ?? this.optionServerId,
-      parentNameSnapshot: parentNameSnapshot ?? this.parentNameSnapshot,
-      optionNameSnapshot: optionNameSnapshot ?? this.optionNameSnapshot,
+    return OrderDetailOptionsCompanion(
+      clientOptionUuid: clientOptionUuid ?? this.clientOptionUuid,
+      serverId: serverId ?? this.serverId,
+      orderDetailClientUuid:
+          orderDetailClientUuid ?? this.orderDetailClientUuid,
+      orderDetailServerId: orderDetailServerId ?? this.orderDetailServerId,
+      optionId: optionId ?? this.optionId,
+      parentName: parentName ?? this.parentName,
+      partnerProductOptionName:
+          partnerProductOptionName ?? this.partnerProductOptionName,
       price: price ?? this.price,
-      createdAtLocal: createdAtLocal ?? this.createdAtLocal,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7733,31 +8936,39 @@ class LocalOrderItemOptionsCompanion
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (localId.present) {
-      map['local_id'] = Variable<String>(localId.value);
+    if (clientOptionUuid.present) {
+      map['client_option_uuid'] = Variable<String>(clientOptionUuid.value);
     }
-    if (orderItemLocalId.present) {
-      map['order_item_local_id'] = Variable<String>(orderItemLocalId.value);
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
     }
-    if (serverOrderDetailOptionId.present) {
-      map['server_order_detail_option_id'] = Variable<int>(
-        serverOrderDetailOptionId.value,
+    if (orderDetailClientUuid.present) {
+      map['order_detail_client_uuid'] = Variable<String>(
+        orderDetailClientUuid.value,
       );
     }
-    if (optionServerId.present) {
-      map['option_server_id'] = Variable<int>(optionServerId.value);
+    if (orderDetailServerId.present) {
+      map['order_detail_server_id'] = Variable<int>(orderDetailServerId.value);
     }
-    if (parentNameSnapshot.present) {
-      map['parent_name_snapshot'] = Variable<String>(parentNameSnapshot.value);
+    if (optionId.present) {
+      map['option_id'] = Variable<int>(optionId.value);
     }
-    if (optionNameSnapshot.present) {
-      map['option_name_snapshot'] = Variable<String>(optionNameSnapshot.value);
+    if (parentName.present) {
+      map['parent_name'] = Variable<String>(parentName.value);
+    }
+    if (partnerProductOptionName.present) {
+      map['partner_product_option_name'] = Variable<String>(
+        partnerProductOptionName.value,
+      );
     }
     if (price.present) {
       map['price'] = Variable<double>(price.value);
     }
-    if (createdAtLocal.present) {
-      map['created_at_local'] = Variable<DateTime>(createdAtLocal.value);
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -7767,58 +8978,104 @@ class LocalOrderItemOptionsCompanion
 
   @override
   String toString() {
-    return (StringBuffer('LocalOrderItemOptionsCompanion(')
-          ..write('localId: $localId, ')
-          ..write('orderItemLocalId: $orderItemLocalId, ')
-          ..write('serverOrderDetailOptionId: $serverOrderDetailOptionId, ')
-          ..write('optionServerId: $optionServerId, ')
-          ..write('parentNameSnapshot: $parentNameSnapshot, ')
-          ..write('optionNameSnapshot: $optionNameSnapshot, ')
+    return (StringBuffer('OrderDetailOptionsCompanion(')
+          ..write('clientOptionUuid: $clientOptionUuid, ')
+          ..write('serverId: $serverId, ')
+          ..write('orderDetailClientUuid: $orderDetailClientUuid, ')
+          ..write('orderDetailServerId: $orderDetailServerId, ')
+          ..write('optionId: $optionId, ')
+          ..write('parentName: $parentName, ')
+          ..write('partnerProductOptionName: $partnerProductOptionName, ')
           ..write('price: $price, ')
-          ..write('createdAtLocal: $createdAtLocal, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
 }
 
-class $LocalPaymentsTable extends LocalPayments
-    with TableInfo<$LocalPaymentsTable, LocalPayment> {
+class $OrderPaymentsTable extends OrderPayments
+    with TableInfo<$OrderPaymentsTable, OrderPayment> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $LocalPaymentsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _localIdMeta = const VerificationMeta(
-    'localId',
+  $OrderPaymentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientPaymentUuidMeta = const VerificationMeta(
+    'clientPaymentUuid',
   );
   @override
-  late final GeneratedColumn<String> localId = GeneratedColumn<String>(
-    'local_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _orderLocalIdMeta = const VerificationMeta(
-    'orderLocalId',
-  );
-  @override
-  late final GeneratedColumn<String> orderLocalId = GeneratedColumn<String>(
-    'order_local_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _serverPaymentIdMeta = const VerificationMeta(
-    'serverPaymentId',
+  late final GeneratedColumn<String> clientPaymentUuid =
+      GeneratedColumn<String>(
+        'client_payment_uuid',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
   );
   @override
-  late final GeneratedColumn<int> serverPaymentId = GeneratedColumn<int>(
-    'server_payment_id',
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
     aliasedName,
     true,
     type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bookingOrderClientUuidMeta =
+      const VerificationMeta('bookingOrderClientUuid');
+  @override
+  late final GeneratedColumn<String> bookingOrderClientUuid =
+      GeneratedColumn<String>(
+        'booking_order_client_uuid',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _bookingOrderServerIdMeta =
+      const VerificationMeta('bookingOrderServerId');
+  @override
+  late final GeneratedColumn<int> bookingOrderServerId = GeneratedColumn<int>(
+    'booking_order_server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _employeeIdMeta = const VerificationMeta(
+    'employeeId',
+  );
+  @override
+  late final GeneratedColumn<int> employeeId = GeneratedColumn<int>(
+    'employee_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _customerIdMeta = const VerificationMeta(
+    'customerId',
+  );
+  @override
+  late final GeneratedColumn<int> customerId = GeneratedColumn<int>(
+    'customer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _customerNameMeta = const VerificationMeta(
+    'customerName',
+  );
+  @override
+  late final GeneratedColumn<String> customerName = GeneratedColumn<String>(
+    'customer_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _paymentTypeMeta = const VerificationMeta(
@@ -7831,38 +9088,6 @@ class $LocalPaymentsTable extends LocalPayments
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-  );
-  static const VerificationMeta _manualPaymentServerIdMeta =
-      const VerificationMeta('manualPaymentServerId');
-  @override
-  late final GeneratedColumn<int> manualPaymentServerId = GeneratedColumn<int>(
-    'manual_payment_server_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _amountBeforePpnMeta = const VerificationMeta(
-    'amountBeforePpn',
-  );
-  @override
-  late final GeneratedColumn<double> amountBeforePpn = GeneratedColumn<double>(
-    'amount_before_ppn',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _ppnMeta = const VerificationMeta('ppn');
-  @override
-  late final GeneratedColumn<double> ppn = GeneratedColumn<double>(
-    'ppn',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
   );
   static const VerificationMeta _paidAmountMeta = const VerificationMeta(
     'paidAmount',
@@ -7909,49 +9134,123 @@ class $LocalPaymentsTable extends LocalPayments
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _proofImageLocalPathMeta =
-      const VerificationMeta('proofImageLocalPath');
+  static const VerificationMeta _ppnMeta = const VerificationMeta('ppn');
   @override
-  late final GeneratedColumn<String> proofImageLocalPath =
+  late final GeneratedColumn<double> ppn = GeneratedColumn<double>(
+    'ppn',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _amountBeforePpnMeta = const VerificationMeta(
+    'amountBeforePpn',
+  );
+  @override
+  late final GeneratedColumn<double> amountBeforePpn = GeneratedColumn<double>(
+    'amount_before_ppn',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _roundingAmountMeta = const VerificationMeta(
+    'roundingAmount',
+  );
+  @override
+  late final GeneratedColumn<double> roundingAmount = GeneratedColumn<double>(
+    'rounding_amount',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ownerManualPaymentIdMeta =
+      const VerificationMeta('ownerManualPaymentId');
+  @override
+  late final GeneratedColumn<int> ownerManualPaymentId = GeneratedColumn<int>(
+    'owner_manual_payment_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _manualProviderNameMeta =
+      const VerificationMeta('manualProviderName');
+  @override
+  late final GeneratedColumn<String> manualProviderName =
       GeneratedColumn<String>(
-        'proof_image_local_path',
+        'manual_provider_name',
         aliasedName,
         true,
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
-  static const VerificationMeta _proofImageUploadedMeta =
-      const VerificationMeta('proofImageUploaded');
+  static const VerificationMeta _manualProviderAccountNameMeta =
+      const VerificationMeta('manualProviderAccountName');
   @override
-  late final GeneratedColumn<bool> proofImageUploaded = GeneratedColumn<bool>(
-    'proof_image_uploaded',
+  late final GeneratedColumn<String> manualProviderAccountName =
+      GeneratedColumn<String>(
+        'manual_provider_account_name',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _manualProviderAccountNoMeta =
+      const VerificationMeta('manualProviderAccountNo');
+  @override
+  late final GeneratedColumn<String> manualProviderAccountNo =
+      GeneratedColumn<String>(
+        'manual_provider_account_no',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _syncDirtyMeta = const VerificationMeta(
+    'syncDirty',
+  );
+  @override
+  late final GeneratedColumn<bool> syncDirty = GeneratedColumn<bool>(
+    'sync_dirty',
     aliasedName,
     false,
     type: DriftSqlType.bool,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("proof_image_uploaded" IN (0, 1))',
+      'CHECK ("sync_dirty" IN (0, 1))',
     ),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _createdAtLocalMeta = const VerificationMeta(
-    'createdAtLocal',
-  );
+  static const VerificationMeta _localFilePathsJsonMeta =
+      const VerificationMeta('localFilePathsJson');
   @override
-  late final GeneratedColumn<DateTime> createdAtLocal =
-      GeneratedColumn<DateTime>(
-        'created_at_local',
+  late final GeneratedColumn<String> localFilePathsJson =
+      GeneratedColumn<String>(
+        'local_file_paths_json',
         aliasedName,
-        false,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: true,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
       );
-  static const VerificationMeta _syncedAtMeta = const VerificationMeta(
-    'syncedAt',
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
   );
   @override
-  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
-    'synced_at',
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
     aliasedName,
     true,
     type: DriftSqlType.dateTime,
@@ -7959,59 +9258,97 @@ class $LocalPaymentsTable extends LocalPayments
   );
   @override
   List<GeneratedColumn> get $columns => [
-    localId,
-    orderLocalId,
-    serverPaymentId,
+    clientPaymentUuid,
+    serverId,
+    bookingOrderClientUuid,
+    bookingOrderServerId,
+    employeeId,
+    customerId,
+    customerName,
     paymentType,
-    manualPaymentServerId,
-    amountBeforePpn,
-    ppn,
     paidAmount,
     changeAmount,
     paymentStatus,
     note,
-    proofImageLocalPath,
-    proofImageUploaded,
-    createdAtLocal,
-    syncedAt,
+    ppn,
+    amountBeforePpn,
+    roundingAmount,
+    ownerManualPaymentId,
+    manualProviderName,
+    manualProviderAccountName,
+    manualProviderAccountNo,
+    syncDirty,
+    localFilePathsJson,
+    createdAt,
+    updatedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'local_payments';
+  static const String $name = 'order_payments';
   @override
   VerificationContext validateIntegrity(
-    Insertable<LocalPayment> instance, {
+    Insertable<OrderPayment> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
-    if (data.containsKey('local_id')) {
+    if (data.containsKey('client_payment_uuid')) {
       context.handle(
-        _localIdMeta,
-        localId.isAcceptableOrUnknown(data['local_id']!, _localIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_localIdMeta);
-    }
-    if (data.containsKey('order_local_id')) {
-      context.handle(
-        _orderLocalIdMeta,
-        orderLocalId.isAcceptableOrUnknown(
-          data['order_local_id']!,
-          _orderLocalIdMeta,
+        _clientPaymentUuidMeta,
+        clientPaymentUuid.isAcceptableOrUnknown(
+          data['client_payment_uuid']!,
+          _clientPaymentUuidMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_orderLocalIdMeta);
+      context.missing(_clientPaymentUuidMeta);
     }
-    if (data.containsKey('server_payment_id')) {
+    if (data.containsKey('server_id')) {
       context.handle(
-        _serverPaymentIdMeta,
-        serverPaymentId.isAcceptableOrUnknown(
-          data['server_payment_id']!,
-          _serverPaymentIdMeta,
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('booking_order_client_uuid')) {
+      context.handle(
+        _bookingOrderClientUuidMeta,
+        bookingOrderClientUuid.isAcceptableOrUnknown(
+          data['booking_order_client_uuid']!,
+          _bookingOrderClientUuidMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_bookingOrderClientUuidMeta);
+    }
+    if (data.containsKey('booking_order_server_id')) {
+      context.handle(
+        _bookingOrderServerIdMeta,
+        bookingOrderServerId.isAcceptableOrUnknown(
+          data['booking_order_server_id']!,
+          _bookingOrderServerIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('employee_id')) {
+      context.handle(
+        _employeeIdMeta,
+        employeeId.isAcceptableOrUnknown(data['employee_id']!, _employeeIdMeta),
+      );
+    }
+    if (data.containsKey('customer_id')) {
+      context.handle(
+        _customerIdMeta,
+        customerId.isAcceptableOrUnknown(data['customer_id']!, _customerIdMeta),
+      );
+    }
+    if (data.containsKey('customer_name')) {
+      context.handle(
+        _customerNameMeta,
+        customerName.isAcceptableOrUnknown(
+          data['customer_name']!,
+          _customerNameMeta,
         ),
       );
     }
@@ -8025,30 +9362,6 @@ class $LocalPaymentsTable extends LocalPayments
       );
     } else if (isInserting) {
       context.missing(_paymentTypeMeta);
-    }
-    if (data.containsKey('manual_payment_server_id')) {
-      context.handle(
-        _manualPaymentServerIdMeta,
-        manualPaymentServerId.isAcceptableOrUnknown(
-          data['manual_payment_server_id']!,
-          _manualPaymentServerIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('amount_before_ppn')) {
-      context.handle(
-        _amountBeforePpnMeta,
-        amountBeforePpn.isAcceptableOrUnknown(
-          data['amount_before_ppn']!,
-          _amountBeforePpnMeta,
-        ),
-      );
-    }
-    if (data.containsKey('ppn')) {
-      context.handle(
-        _ppnMeta,
-        ppn.isAcceptableOrUnknown(data['ppn']!, _ppnMeta),
-      );
     }
     if (data.containsKey('paid_amount')) {
       context.handle(
@@ -8080,77 +9393,133 @@ class $LocalPaymentsTable extends LocalPayments
         note.isAcceptableOrUnknown(data['note']!, _noteMeta),
       );
     }
-    if (data.containsKey('proof_image_local_path')) {
+    if (data.containsKey('ppn')) {
       context.handle(
-        _proofImageLocalPathMeta,
-        proofImageLocalPath.isAcceptableOrUnknown(
-          data['proof_image_local_path']!,
-          _proofImageLocalPathMeta,
+        _ppnMeta,
+        ppn.isAcceptableOrUnknown(data['ppn']!, _ppnMeta),
+      );
+    }
+    if (data.containsKey('amount_before_ppn')) {
+      context.handle(
+        _amountBeforePpnMeta,
+        amountBeforePpn.isAcceptableOrUnknown(
+          data['amount_before_ppn']!,
+          _amountBeforePpnMeta,
         ),
       );
     }
-    if (data.containsKey('proof_image_uploaded')) {
+    if (data.containsKey('rounding_amount')) {
       context.handle(
-        _proofImageUploadedMeta,
-        proofImageUploaded.isAcceptableOrUnknown(
-          data['proof_image_uploaded']!,
-          _proofImageUploadedMeta,
+        _roundingAmountMeta,
+        roundingAmount.isAcceptableOrUnknown(
+          data['rounding_amount']!,
+          _roundingAmountMeta,
         ),
       );
     }
-    if (data.containsKey('created_at_local')) {
+    if (data.containsKey('owner_manual_payment_id')) {
       context.handle(
-        _createdAtLocalMeta,
-        createdAtLocal.isAcceptableOrUnknown(
-          data['created_at_local']!,
-          _createdAtLocalMeta,
+        _ownerManualPaymentIdMeta,
+        ownerManualPaymentId.isAcceptableOrUnknown(
+          data['owner_manual_payment_id']!,
+          _ownerManualPaymentIdMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_createdAtLocalMeta);
     }
-    if (data.containsKey('synced_at')) {
+    if (data.containsKey('manual_provider_name')) {
       context.handle(
-        _syncedAtMeta,
-        syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta),
+        _manualProviderNameMeta,
+        manualProviderName.isAcceptableOrUnknown(
+          data['manual_provider_name']!,
+          _manualProviderNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('manual_provider_account_name')) {
+      context.handle(
+        _manualProviderAccountNameMeta,
+        manualProviderAccountName.isAcceptableOrUnknown(
+          data['manual_provider_account_name']!,
+          _manualProviderAccountNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('manual_provider_account_no')) {
+      context.handle(
+        _manualProviderAccountNoMeta,
+        manualProviderAccountNo.isAcceptableOrUnknown(
+          data['manual_provider_account_no']!,
+          _manualProviderAccountNoMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sync_dirty')) {
+      context.handle(
+        _syncDirtyMeta,
+        syncDirty.isAcceptableOrUnknown(data['sync_dirty']!, _syncDirtyMeta),
+      );
+    }
+    if (data.containsKey('local_file_paths_json')) {
+      context.handle(
+        _localFilePathsJsonMeta,
+        localFilePathsJson.isAcceptableOrUnknown(
+          data['local_file_paths_json']!,
+          _localFilePathsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
       );
     }
     return context;
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {localId};
+  Set<GeneratedColumn> get $primaryKey => {clientPaymentUuid};
   @override
-  LocalPayment map(Map<String, dynamic> data, {String? tablePrefix}) {
+  OrderPayment map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return LocalPayment(
-      localId: attachedDatabase.typeMapping.read(
+    return OrderPayment(
+      clientPaymentUuid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}local_id'],
+        data['${effectivePrefix}client_payment_uuid'],
       )!,
-      orderLocalId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}order_local_id'],
-      )!,
-      serverPaymentId: attachedDatabase.typeMapping.read(
+      serverId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}server_payment_id'],
+        data['${effectivePrefix}server_id'],
+      ),
+      bookingOrderClientUuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}booking_order_client_uuid'],
+      )!,
+      bookingOrderServerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}booking_order_server_id'],
+      ),
+      employeeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}employee_id'],
+      ),
+      customerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}customer_id'],
+      ),
+      customerName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}customer_name'],
       ),
       paymentType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}payment_type'],
-      )!,
-      manualPaymentServerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}manual_payment_server_id'],
-      ),
-      amountBeforePpn: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}amount_before_ppn'],
-      )!,
-      ppn: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}ppn'],
       )!,
       paidAmount: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
@@ -8168,230 +9537,401 @@ class $LocalPaymentsTable extends LocalPayments
         DriftSqlType.string,
         data['${effectivePrefix}note'],
       ),
-      proofImageLocalPath: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}proof_image_local_path'],
+      ppn: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}ppn'],
       ),
-      proofImageUploaded: attachedDatabase.typeMapping.read(
+      amountBeforePpn: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}amount_before_ppn'],
+      ),
+      roundingAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rounding_amount'],
+      ),
+      ownerManualPaymentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}owner_manual_payment_id'],
+      ),
+      manualProviderName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}manual_provider_name'],
+      ),
+      manualProviderAccountName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}manual_provider_account_name'],
+      ),
+      manualProviderAccountNo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}manual_provider_account_no'],
+      ),
+      syncDirty: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
-        data['${effectivePrefix}proof_image_uploaded'],
+        data['${effectivePrefix}sync_dirty'],
       )!,
-      createdAtLocal: attachedDatabase.typeMapping.read(
+      localFilePathsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_file_paths_json'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at_local'],
-      )!,
-      syncedAt: attachedDatabase.typeMapping.read(
+        data['${effectivePrefix}created_at'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
-        data['${effectivePrefix}synced_at'],
+        data['${effectivePrefix}updated_at'],
       ),
     );
   }
 
   @override
-  $LocalPaymentsTable createAlias(String alias) {
-    return $LocalPaymentsTable(attachedDatabase, alias);
+  $OrderPaymentsTable createAlias(String alias) {
+    return $OrderPaymentsTable(attachedDatabase, alias);
   }
 }
 
-class LocalPayment extends DataClass implements Insertable<LocalPayment> {
-  final String localId;
-  final String orderLocalId;
-  final int? serverPaymentId;
+class OrderPayment extends DataClass implements Insertable<OrderPayment> {
+  final String clientPaymentUuid;
+  final int? serverId;
+  final String bookingOrderClientUuid;
+  final int? bookingOrderServerId;
+  final int? employeeId;
+  final int? customerId;
+  final String? customerName;
   final String paymentType;
-  final int? manualPaymentServerId;
-  final double amountBeforePpn;
-  final double ppn;
   final double paidAmount;
   final double changeAmount;
   final String paymentStatus;
   final String? note;
-  final String? proofImageLocalPath;
-  final bool proofImageUploaded;
-  final DateTime createdAtLocal;
-  final DateTime? syncedAt;
-  const LocalPayment({
-    required this.localId,
-    required this.orderLocalId,
-    this.serverPaymentId,
+  final double? ppn;
+  final double? amountBeforePpn;
+  final double? roundingAmount;
+  final int? ownerManualPaymentId;
+  final String? manualProviderName;
+  final String? manualProviderAccountName;
+  final String? manualProviderAccountNo;
+  final bool syncDirty;
+  final String? localFilePathsJson;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  const OrderPayment({
+    required this.clientPaymentUuid,
+    this.serverId,
+    required this.bookingOrderClientUuid,
+    this.bookingOrderServerId,
+    this.employeeId,
+    this.customerId,
+    this.customerName,
     required this.paymentType,
-    this.manualPaymentServerId,
-    required this.amountBeforePpn,
-    required this.ppn,
     required this.paidAmount,
     required this.changeAmount,
     required this.paymentStatus,
     this.note,
-    this.proofImageLocalPath,
-    required this.proofImageUploaded,
-    required this.createdAtLocal,
-    this.syncedAt,
+    this.ppn,
+    this.amountBeforePpn,
+    this.roundingAmount,
+    this.ownerManualPaymentId,
+    this.manualProviderName,
+    this.manualProviderAccountName,
+    this.manualProviderAccountNo,
+    required this.syncDirty,
+    this.localFilePathsJson,
+    this.createdAt,
+    this.updatedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['local_id'] = Variable<String>(localId);
-    map['order_local_id'] = Variable<String>(orderLocalId);
-    if (!nullToAbsent || serverPaymentId != null) {
-      map['server_payment_id'] = Variable<int>(serverPaymentId);
+    map['client_payment_uuid'] = Variable<String>(clientPaymentUuid);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
+    map['booking_order_client_uuid'] = Variable<String>(bookingOrderClientUuid);
+    if (!nullToAbsent || bookingOrderServerId != null) {
+      map['booking_order_server_id'] = Variable<int>(bookingOrderServerId);
+    }
+    if (!nullToAbsent || employeeId != null) {
+      map['employee_id'] = Variable<int>(employeeId);
+    }
+    if (!nullToAbsent || customerId != null) {
+      map['customer_id'] = Variable<int>(customerId);
+    }
+    if (!nullToAbsent || customerName != null) {
+      map['customer_name'] = Variable<String>(customerName);
     }
     map['payment_type'] = Variable<String>(paymentType);
-    if (!nullToAbsent || manualPaymentServerId != null) {
-      map['manual_payment_server_id'] = Variable<int>(manualPaymentServerId);
-    }
-    map['amount_before_ppn'] = Variable<double>(amountBeforePpn);
-    map['ppn'] = Variable<double>(ppn);
     map['paid_amount'] = Variable<double>(paidAmount);
     map['change_amount'] = Variable<double>(changeAmount);
     map['payment_status'] = Variable<String>(paymentStatus);
     if (!nullToAbsent || note != null) {
       map['note'] = Variable<String>(note);
     }
-    if (!nullToAbsent || proofImageLocalPath != null) {
-      map['proof_image_local_path'] = Variable<String>(proofImageLocalPath);
+    if (!nullToAbsent || ppn != null) {
+      map['ppn'] = Variable<double>(ppn);
     }
-    map['proof_image_uploaded'] = Variable<bool>(proofImageUploaded);
-    map['created_at_local'] = Variable<DateTime>(createdAtLocal);
-    if (!nullToAbsent || syncedAt != null) {
-      map['synced_at'] = Variable<DateTime>(syncedAt);
+    if (!nullToAbsent || amountBeforePpn != null) {
+      map['amount_before_ppn'] = Variable<double>(amountBeforePpn);
+    }
+    if (!nullToAbsent || roundingAmount != null) {
+      map['rounding_amount'] = Variable<double>(roundingAmount);
+    }
+    if (!nullToAbsent || ownerManualPaymentId != null) {
+      map['owner_manual_payment_id'] = Variable<int>(ownerManualPaymentId);
+    }
+    if (!nullToAbsent || manualProviderName != null) {
+      map['manual_provider_name'] = Variable<String>(manualProviderName);
+    }
+    if (!nullToAbsent || manualProviderAccountName != null) {
+      map['manual_provider_account_name'] = Variable<String>(
+        manualProviderAccountName,
+      );
+    }
+    if (!nullToAbsent || manualProviderAccountNo != null) {
+      map['manual_provider_account_no'] = Variable<String>(
+        manualProviderAccountNo,
+      );
+    }
+    map['sync_dirty'] = Variable<bool>(syncDirty);
+    if (!nullToAbsent || localFilePathsJson != null) {
+      map['local_file_paths_json'] = Variable<String>(localFilePathsJson);
+    }
+    if (!nullToAbsent || createdAt != null) {
+      map['created_at'] = Variable<DateTime>(createdAt);
+    }
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
     }
     return map;
   }
 
-  LocalPaymentsCompanion toCompanion(bool nullToAbsent) {
-    return LocalPaymentsCompanion(
-      localId: Value(localId),
-      orderLocalId: Value(orderLocalId),
-      serverPaymentId: serverPaymentId == null && nullToAbsent
+  OrderPaymentsCompanion toCompanion(bool nullToAbsent) {
+    return OrderPaymentsCompanion(
+      clientPaymentUuid: Value(clientPaymentUuid),
+      serverId: serverId == null && nullToAbsent
           ? const Value.absent()
-          : Value(serverPaymentId),
+          : Value(serverId),
+      bookingOrderClientUuid: Value(bookingOrderClientUuid),
+      bookingOrderServerId: bookingOrderServerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bookingOrderServerId),
+      employeeId: employeeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(employeeId),
+      customerId: customerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customerId),
+      customerName: customerName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customerName),
       paymentType: Value(paymentType),
-      manualPaymentServerId: manualPaymentServerId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(manualPaymentServerId),
-      amountBeforePpn: Value(amountBeforePpn),
-      ppn: Value(ppn),
       paidAmount: Value(paidAmount),
       changeAmount: Value(changeAmount),
       paymentStatus: Value(paymentStatus),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
-      proofImageLocalPath: proofImageLocalPath == null && nullToAbsent
+      ppn: ppn == null && nullToAbsent ? const Value.absent() : Value(ppn),
+      amountBeforePpn: amountBeforePpn == null && nullToAbsent
           ? const Value.absent()
-          : Value(proofImageLocalPath),
-      proofImageUploaded: Value(proofImageUploaded),
-      createdAtLocal: Value(createdAtLocal),
-      syncedAt: syncedAt == null && nullToAbsent
+          : Value(amountBeforePpn),
+      roundingAmount: roundingAmount == null && nullToAbsent
           ? const Value.absent()
-          : Value(syncedAt),
+          : Value(roundingAmount),
+      ownerManualPaymentId: ownerManualPaymentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ownerManualPaymentId),
+      manualProviderName: manualProviderName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(manualProviderName),
+      manualProviderAccountName:
+          manualProviderAccountName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(manualProviderAccountName),
+      manualProviderAccountNo: manualProviderAccountNo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(manualProviderAccountNo),
+      syncDirty: Value(syncDirty),
+      localFilePathsJson: localFilePathsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(localFilePathsJson),
+      createdAt: createdAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
     );
   }
 
-  factory LocalPayment.fromJson(
+  factory OrderPayment.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return LocalPayment(
-      localId: serializer.fromJson<String>(json['localId']),
-      orderLocalId: serializer.fromJson<String>(json['orderLocalId']),
-      serverPaymentId: serializer.fromJson<int?>(json['serverPaymentId']),
-      paymentType: serializer.fromJson<String>(json['paymentType']),
-      manualPaymentServerId: serializer.fromJson<int?>(
-        json['manualPaymentServerId'],
+    return OrderPayment(
+      clientPaymentUuid: serializer.fromJson<String>(json['clientPaymentUuid']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      bookingOrderClientUuid: serializer.fromJson<String>(
+        json['bookingOrderClientUuid'],
       ),
-      amountBeforePpn: serializer.fromJson<double>(json['amountBeforePpn']),
-      ppn: serializer.fromJson<double>(json['ppn']),
+      bookingOrderServerId: serializer.fromJson<int?>(
+        json['bookingOrderServerId'],
+      ),
+      employeeId: serializer.fromJson<int?>(json['employeeId']),
+      customerId: serializer.fromJson<int?>(json['customerId']),
+      customerName: serializer.fromJson<String?>(json['customerName']),
+      paymentType: serializer.fromJson<String>(json['paymentType']),
       paidAmount: serializer.fromJson<double>(json['paidAmount']),
       changeAmount: serializer.fromJson<double>(json['changeAmount']),
       paymentStatus: serializer.fromJson<String>(json['paymentStatus']),
       note: serializer.fromJson<String?>(json['note']),
-      proofImageLocalPath: serializer.fromJson<String?>(
-        json['proofImageLocalPath'],
+      ppn: serializer.fromJson<double?>(json['ppn']),
+      amountBeforePpn: serializer.fromJson<double?>(json['amountBeforePpn']),
+      roundingAmount: serializer.fromJson<double?>(json['roundingAmount']),
+      ownerManualPaymentId: serializer.fromJson<int?>(
+        json['ownerManualPaymentId'],
       ),
-      proofImageUploaded: serializer.fromJson<bool>(json['proofImageUploaded']),
-      createdAtLocal: serializer.fromJson<DateTime>(json['createdAtLocal']),
-      syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
+      manualProviderName: serializer.fromJson<String?>(
+        json['manualProviderName'],
+      ),
+      manualProviderAccountName: serializer.fromJson<String?>(
+        json['manualProviderAccountName'],
+      ),
+      manualProviderAccountNo: serializer.fromJson<String?>(
+        json['manualProviderAccountNo'],
+      ),
+      syncDirty: serializer.fromJson<bool>(json['syncDirty']),
+      localFilePathsJson: serializer.fromJson<String?>(
+        json['localFilePathsJson'],
+      ),
+      createdAt: serializer.fromJson<DateTime?>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'localId': serializer.toJson<String>(localId),
-      'orderLocalId': serializer.toJson<String>(orderLocalId),
-      'serverPaymentId': serializer.toJson<int?>(serverPaymentId),
+      'clientPaymentUuid': serializer.toJson<String>(clientPaymentUuid),
+      'serverId': serializer.toJson<int?>(serverId),
+      'bookingOrderClientUuid': serializer.toJson<String>(
+        bookingOrderClientUuid,
+      ),
+      'bookingOrderServerId': serializer.toJson<int?>(bookingOrderServerId),
+      'employeeId': serializer.toJson<int?>(employeeId),
+      'customerId': serializer.toJson<int?>(customerId),
+      'customerName': serializer.toJson<String?>(customerName),
       'paymentType': serializer.toJson<String>(paymentType),
-      'manualPaymentServerId': serializer.toJson<int?>(manualPaymentServerId),
-      'amountBeforePpn': serializer.toJson<double>(amountBeforePpn),
-      'ppn': serializer.toJson<double>(ppn),
       'paidAmount': serializer.toJson<double>(paidAmount),
       'changeAmount': serializer.toJson<double>(changeAmount),
       'paymentStatus': serializer.toJson<String>(paymentStatus),
       'note': serializer.toJson<String?>(note),
-      'proofImageLocalPath': serializer.toJson<String?>(proofImageLocalPath),
-      'proofImageUploaded': serializer.toJson<bool>(proofImageUploaded),
-      'createdAtLocal': serializer.toJson<DateTime>(createdAtLocal),
-      'syncedAt': serializer.toJson<DateTime?>(syncedAt),
+      'ppn': serializer.toJson<double?>(ppn),
+      'amountBeforePpn': serializer.toJson<double?>(amountBeforePpn),
+      'roundingAmount': serializer.toJson<double?>(roundingAmount),
+      'ownerManualPaymentId': serializer.toJson<int?>(ownerManualPaymentId),
+      'manualProviderName': serializer.toJson<String?>(manualProviderName),
+      'manualProviderAccountName': serializer.toJson<String?>(
+        manualProviderAccountName,
+      ),
+      'manualProviderAccountNo': serializer.toJson<String?>(
+        manualProviderAccountNo,
+      ),
+      'syncDirty': serializer.toJson<bool>(syncDirty),
+      'localFilePathsJson': serializer.toJson<String?>(localFilePathsJson),
+      'createdAt': serializer.toJson<DateTime?>(createdAt),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
     };
   }
 
-  LocalPayment copyWith({
-    String? localId,
-    String? orderLocalId,
-    Value<int?> serverPaymentId = const Value.absent(),
+  OrderPayment copyWith({
+    String? clientPaymentUuid,
+    Value<int?> serverId = const Value.absent(),
+    String? bookingOrderClientUuid,
+    Value<int?> bookingOrderServerId = const Value.absent(),
+    Value<int?> employeeId = const Value.absent(),
+    Value<int?> customerId = const Value.absent(),
+    Value<String?> customerName = const Value.absent(),
     String? paymentType,
-    Value<int?> manualPaymentServerId = const Value.absent(),
-    double? amountBeforePpn,
-    double? ppn,
     double? paidAmount,
     double? changeAmount,
     String? paymentStatus,
     Value<String?> note = const Value.absent(),
-    Value<String?> proofImageLocalPath = const Value.absent(),
-    bool? proofImageUploaded,
-    DateTime? createdAtLocal,
-    Value<DateTime?> syncedAt = const Value.absent(),
-  }) => LocalPayment(
-    localId: localId ?? this.localId,
-    orderLocalId: orderLocalId ?? this.orderLocalId,
-    serverPaymentId: serverPaymentId.present
-        ? serverPaymentId.value
-        : this.serverPaymentId,
+    Value<double?> ppn = const Value.absent(),
+    Value<double?> amountBeforePpn = const Value.absent(),
+    Value<double?> roundingAmount = const Value.absent(),
+    Value<int?> ownerManualPaymentId = const Value.absent(),
+    Value<String?> manualProviderName = const Value.absent(),
+    Value<String?> manualProviderAccountName = const Value.absent(),
+    Value<String?> manualProviderAccountNo = const Value.absent(),
+    bool? syncDirty,
+    Value<String?> localFilePathsJson = const Value.absent(),
+    Value<DateTime?> createdAt = const Value.absent(),
+    Value<DateTime?> updatedAt = const Value.absent(),
+  }) => OrderPayment(
+    clientPaymentUuid: clientPaymentUuid ?? this.clientPaymentUuid,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    bookingOrderClientUuid:
+        bookingOrderClientUuid ?? this.bookingOrderClientUuid,
+    bookingOrderServerId: bookingOrderServerId.present
+        ? bookingOrderServerId.value
+        : this.bookingOrderServerId,
+    employeeId: employeeId.present ? employeeId.value : this.employeeId,
+    customerId: customerId.present ? customerId.value : this.customerId,
+    customerName: customerName.present ? customerName.value : this.customerName,
     paymentType: paymentType ?? this.paymentType,
-    manualPaymentServerId: manualPaymentServerId.present
-        ? manualPaymentServerId.value
-        : this.manualPaymentServerId,
-    amountBeforePpn: amountBeforePpn ?? this.amountBeforePpn,
-    ppn: ppn ?? this.ppn,
     paidAmount: paidAmount ?? this.paidAmount,
     changeAmount: changeAmount ?? this.changeAmount,
     paymentStatus: paymentStatus ?? this.paymentStatus,
     note: note.present ? note.value : this.note,
-    proofImageLocalPath: proofImageLocalPath.present
-        ? proofImageLocalPath.value
-        : this.proofImageLocalPath,
-    proofImageUploaded: proofImageUploaded ?? this.proofImageUploaded,
-    createdAtLocal: createdAtLocal ?? this.createdAtLocal,
-    syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
+    ppn: ppn.present ? ppn.value : this.ppn,
+    amountBeforePpn: amountBeforePpn.present
+        ? amountBeforePpn.value
+        : this.amountBeforePpn,
+    roundingAmount: roundingAmount.present
+        ? roundingAmount.value
+        : this.roundingAmount,
+    ownerManualPaymentId: ownerManualPaymentId.present
+        ? ownerManualPaymentId.value
+        : this.ownerManualPaymentId,
+    manualProviderName: manualProviderName.present
+        ? manualProviderName.value
+        : this.manualProviderName,
+    manualProviderAccountName: manualProviderAccountName.present
+        ? manualProviderAccountName.value
+        : this.manualProviderAccountName,
+    manualProviderAccountNo: manualProviderAccountNo.present
+        ? manualProviderAccountNo.value
+        : this.manualProviderAccountNo,
+    syncDirty: syncDirty ?? this.syncDirty,
+    localFilePathsJson: localFilePathsJson.present
+        ? localFilePathsJson.value
+        : this.localFilePathsJson,
+    createdAt: createdAt.present ? createdAt.value : this.createdAt,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
   );
-  LocalPayment copyWithCompanion(LocalPaymentsCompanion data) {
-    return LocalPayment(
-      localId: data.localId.present ? data.localId.value : this.localId,
-      orderLocalId: data.orderLocalId.present
-          ? data.orderLocalId.value
-          : this.orderLocalId,
-      serverPaymentId: data.serverPaymentId.present
-          ? data.serverPaymentId.value
-          : this.serverPaymentId,
+  OrderPayment copyWithCompanion(OrderPaymentsCompanion data) {
+    return OrderPayment(
+      clientPaymentUuid: data.clientPaymentUuid.present
+          ? data.clientPaymentUuid.value
+          : this.clientPaymentUuid,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      bookingOrderClientUuid: data.bookingOrderClientUuid.present
+          ? data.bookingOrderClientUuid.value
+          : this.bookingOrderClientUuid,
+      bookingOrderServerId: data.bookingOrderServerId.present
+          ? data.bookingOrderServerId.value
+          : this.bookingOrderServerId,
+      employeeId: data.employeeId.present
+          ? data.employeeId.value
+          : this.employeeId,
+      customerId: data.customerId.present
+          ? data.customerId.value
+          : this.customerId,
+      customerName: data.customerName.present
+          ? data.customerName.value
+          : this.customerName,
       paymentType: data.paymentType.present
           ? data.paymentType.value
           : this.paymentType,
-      manualPaymentServerId: data.manualPaymentServerId.present
-          ? data.manualPaymentServerId.value
-          : this.manualPaymentServerId,
-      amountBeforePpn: data.amountBeforePpn.present
-          ? data.amountBeforePpn.value
-          : this.amountBeforePpn,
-      ppn: data.ppn.present ? data.ppn.value : this.ppn,
       paidAmount: data.paidAmount.present
           ? data.paidAmount.value
           : this.paidAmount,
@@ -8402,212 +9942,312 @@ class LocalPayment extends DataClass implements Insertable<LocalPayment> {
           ? data.paymentStatus.value
           : this.paymentStatus,
       note: data.note.present ? data.note.value : this.note,
-      proofImageLocalPath: data.proofImageLocalPath.present
-          ? data.proofImageLocalPath.value
-          : this.proofImageLocalPath,
-      proofImageUploaded: data.proofImageUploaded.present
-          ? data.proofImageUploaded.value
-          : this.proofImageUploaded,
-      createdAtLocal: data.createdAtLocal.present
-          ? data.createdAtLocal.value
-          : this.createdAtLocal,
-      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+      ppn: data.ppn.present ? data.ppn.value : this.ppn,
+      amountBeforePpn: data.amountBeforePpn.present
+          ? data.amountBeforePpn.value
+          : this.amountBeforePpn,
+      roundingAmount: data.roundingAmount.present
+          ? data.roundingAmount.value
+          : this.roundingAmount,
+      ownerManualPaymentId: data.ownerManualPaymentId.present
+          ? data.ownerManualPaymentId.value
+          : this.ownerManualPaymentId,
+      manualProviderName: data.manualProviderName.present
+          ? data.manualProviderName.value
+          : this.manualProviderName,
+      manualProviderAccountName: data.manualProviderAccountName.present
+          ? data.manualProviderAccountName.value
+          : this.manualProviderAccountName,
+      manualProviderAccountNo: data.manualProviderAccountNo.present
+          ? data.manualProviderAccountNo.value
+          : this.manualProviderAccountNo,
+      syncDirty: data.syncDirty.present ? data.syncDirty.value : this.syncDirty,
+      localFilePathsJson: data.localFilePathsJson.present
+          ? data.localFilePathsJson.value
+          : this.localFilePathsJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('LocalPayment(')
-          ..write('localId: $localId, ')
-          ..write('orderLocalId: $orderLocalId, ')
-          ..write('serverPaymentId: $serverPaymentId, ')
+    return (StringBuffer('OrderPayment(')
+          ..write('clientPaymentUuid: $clientPaymentUuid, ')
+          ..write('serverId: $serverId, ')
+          ..write('bookingOrderClientUuid: $bookingOrderClientUuid, ')
+          ..write('bookingOrderServerId: $bookingOrderServerId, ')
+          ..write('employeeId: $employeeId, ')
+          ..write('customerId: $customerId, ')
+          ..write('customerName: $customerName, ')
           ..write('paymentType: $paymentType, ')
-          ..write('manualPaymentServerId: $manualPaymentServerId, ')
-          ..write('amountBeforePpn: $amountBeforePpn, ')
-          ..write('ppn: $ppn, ')
           ..write('paidAmount: $paidAmount, ')
           ..write('changeAmount: $changeAmount, ')
           ..write('paymentStatus: $paymentStatus, ')
           ..write('note: $note, ')
-          ..write('proofImageLocalPath: $proofImageLocalPath, ')
-          ..write('proofImageUploaded: $proofImageUploaded, ')
-          ..write('createdAtLocal: $createdAtLocal, ')
-          ..write('syncedAt: $syncedAt')
+          ..write('ppn: $ppn, ')
+          ..write('amountBeforePpn: $amountBeforePpn, ')
+          ..write('roundingAmount: $roundingAmount, ')
+          ..write('ownerManualPaymentId: $ownerManualPaymentId, ')
+          ..write('manualProviderName: $manualProviderName, ')
+          ..write('manualProviderAccountName: $manualProviderAccountName, ')
+          ..write('manualProviderAccountNo: $manualProviderAccountNo, ')
+          ..write('syncDirty: $syncDirty, ')
+          ..write('localFilePathsJson: $localFilePathsJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
-    localId,
-    orderLocalId,
-    serverPaymentId,
+  int get hashCode => Object.hashAll([
+    clientPaymentUuid,
+    serverId,
+    bookingOrderClientUuid,
+    bookingOrderServerId,
+    employeeId,
+    customerId,
+    customerName,
     paymentType,
-    manualPaymentServerId,
-    amountBeforePpn,
-    ppn,
     paidAmount,
     changeAmount,
     paymentStatus,
     note,
-    proofImageLocalPath,
-    proofImageUploaded,
-    createdAtLocal,
-    syncedAt,
-  );
+    ppn,
+    amountBeforePpn,
+    roundingAmount,
+    ownerManualPaymentId,
+    manualProviderName,
+    manualProviderAccountName,
+    manualProviderAccountNo,
+    syncDirty,
+    localFilePathsJson,
+    createdAt,
+    updatedAt,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is LocalPayment &&
-          other.localId == this.localId &&
-          other.orderLocalId == this.orderLocalId &&
-          other.serverPaymentId == this.serverPaymentId &&
+      (other is OrderPayment &&
+          other.clientPaymentUuid == this.clientPaymentUuid &&
+          other.serverId == this.serverId &&
+          other.bookingOrderClientUuid == this.bookingOrderClientUuid &&
+          other.bookingOrderServerId == this.bookingOrderServerId &&
+          other.employeeId == this.employeeId &&
+          other.customerId == this.customerId &&
+          other.customerName == this.customerName &&
           other.paymentType == this.paymentType &&
-          other.manualPaymentServerId == this.manualPaymentServerId &&
-          other.amountBeforePpn == this.amountBeforePpn &&
-          other.ppn == this.ppn &&
           other.paidAmount == this.paidAmount &&
           other.changeAmount == this.changeAmount &&
           other.paymentStatus == this.paymentStatus &&
           other.note == this.note &&
-          other.proofImageLocalPath == this.proofImageLocalPath &&
-          other.proofImageUploaded == this.proofImageUploaded &&
-          other.createdAtLocal == this.createdAtLocal &&
-          other.syncedAt == this.syncedAt);
+          other.ppn == this.ppn &&
+          other.amountBeforePpn == this.amountBeforePpn &&
+          other.roundingAmount == this.roundingAmount &&
+          other.ownerManualPaymentId == this.ownerManualPaymentId &&
+          other.manualProviderName == this.manualProviderName &&
+          other.manualProviderAccountName == this.manualProviderAccountName &&
+          other.manualProviderAccountNo == this.manualProviderAccountNo &&
+          other.syncDirty == this.syncDirty &&
+          other.localFilePathsJson == this.localFilePathsJson &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
 }
 
-class LocalPaymentsCompanion extends UpdateCompanion<LocalPayment> {
-  final Value<String> localId;
-  final Value<String> orderLocalId;
-  final Value<int?> serverPaymentId;
+class OrderPaymentsCompanion extends UpdateCompanion<OrderPayment> {
+  final Value<String> clientPaymentUuid;
+  final Value<int?> serverId;
+  final Value<String> bookingOrderClientUuid;
+  final Value<int?> bookingOrderServerId;
+  final Value<int?> employeeId;
+  final Value<int?> customerId;
+  final Value<String?> customerName;
   final Value<String> paymentType;
-  final Value<int?> manualPaymentServerId;
-  final Value<double> amountBeforePpn;
-  final Value<double> ppn;
   final Value<double> paidAmount;
   final Value<double> changeAmount;
   final Value<String> paymentStatus;
   final Value<String?> note;
-  final Value<String?> proofImageLocalPath;
-  final Value<bool> proofImageUploaded;
-  final Value<DateTime> createdAtLocal;
-  final Value<DateTime?> syncedAt;
+  final Value<double?> ppn;
+  final Value<double?> amountBeforePpn;
+  final Value<double?> roundingAmount;
+  final Value<int?> ownerManualPaymentId;
+  final Value<String?> manualProviderName;
+  final Value<String?> manualProviderAccountName;
+  final Value<String?> manualProviderAccountNo;
+  final Value<bool> syncDirty;
+  final Value<String?> localFilePathsJson;
+  final Value<DateTime?> createdAt;
+  final Value<DateTime?> updatedAt;
   final Value<int> rowid;
-  const LocalPaymentsCompanion({
-    this.localId = const Value.absent(),
-    this.orderLocalId = const Value.absent(),
-    this.serverPaymentId = const Value.absent(),
+  const OrderPaymentsCompanion({
+    this.clientPaymentUuid = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.bookingOrderClientUuid = const Value.absent(),
+    this.bookingOrderServerId = const Value.absent(),
+    this.employeeId = const Value.absent(),
+    this.customerId = const Value.absent(),
+    this.customerName = const Value.absent(),
     this.paymentType = const Value.absent(),
-    this.manualPaymentServerId = const Value.absent(),
-    this.amountBeforePpn = const Value.absent(),
-    this.ppn = const Value.absent(),
     this.paidAmount = const Value.absent(),
     this.changeAmount = const Value.absent(),
     this.paymentStatus = const Value.absent(),
     this.note = const Value.absent(),
-    this.proofImageLocalPath = const Value.absent(),
-    this.proofImageUploaded = const Value.absent(),
-    this.createdAtLocal = const Value.absent(),
-    this.syncedAt = const Value.absent(),
+    this.ppn = const Value.absent(),
+    this.amountBeforePpn = const Value.absent(),
+    this.roundingAmount = const Value.absent(),
+    this.ownerManualPaymentId = const Value.absent(),
+    this.manualProviderName = const Value.absent(),
+    this.manualProviderAccountName = const Value.absent(),
+    this.manualProviderAccountNo = const Value.absent(),
+    this.syncDirty = const Value.absent(),
+    this.localFilePathsJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  LocalPaymentsCompanion.insert({
-    required String localId,
-    required String orderLocalId,
-    this.serverPaymentId = const Value.absent(),
+  OrderPaymentsCompanion.insert({
+    required String clientPaymentUuid,
+    this.serverId = const Value.absent(),
+    required String bookingOrderClientUuid,
+    this.bookingOrderServerId = const Value.absent(),
+    this.employeeId = const Value.absent(),
+    this.customerId = const Value.absent(),
+    this.customerName = const Value.absent(),
     required String paymentType,
-    this.manualPaymentServerId = const Value.absent(),
-    this.amountBeforePpn = const Value.absent(),
-    this.ppn = const Value.absent(),
     this.paidAmount = const Value.absent(),
     this.changeAmount = const Value.absent(),
     this.paymentStatus = const Value.absent(),
     this.note = const Value.absent(),
-    this.proofImageLocalPath = const Value.absent(),
-    this.proofImageUploaded = const Value.absent(),
-    required DateTime createdAtLocal,
-    this.syncedAt = const Value.absent(),
+    this.ppn = const Value.absent(),
+    this.amountBeforePpn = const Value.absent(),
+    this.roundingAmount = const Value.absent(),
+    this.ownerManualPaymentId = const Value.absent(),
+    this.manualProviderName = const Value.absent(),
+    this.manualProviderAccountName = const Value.absent(),
+    this.manualProviderAccountNo = const Value.absent(),
+    this.syncDirty = const Value.absent(),
+    this.localFilePathsJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
-  }) : localId = Value(localId),
-       orderLocalId = Value(orderLocalId),
-       paymentType = Value(paymentType),
-       createdAtLocal = Value(createdAtLocal);
-  static Insertable<LocalPayment> custom({
-    Expression<String>? localId,
-    Expression<String>? orderLocalId,
-    Expression<int>? serverPaymentId,
+  }) : clientPaymentUuid = Value(clientPaymentUuid),
+       bookingOrderClientUuid = Value(bookingOrderClientUuid),
+       paymentType = Value(paymentType);
+  static Insertable<OrderPayment> custom({
+    Expression<String>? clientPaymentUuid,
+    Expression<int>? serverId,
+    Expression<String>? bookingOrderClientUuid,
+    Expression<int>? bookingOrderServerId,
+    Expression<int>? employeeId,
+    Expression<int>? customerId,
+    Expression<String>? customerName,
     Expression<String>? paymentType,
-    Expression<int>? manualPaymentServerId,
-    Expression<double>? amountBeforePpn,
-    Expression<double>? ppn,
     Expression<double>? paidAmount,
     Expression<double>? changeAmount,
     Expression<String>? paymentStatus,
     Expression<String>? note,
-    Expression<String>? proofImageLocalPath,
-    Expression<bool>? proofImageUploaded,
-    Expression<DateTime>? createdAtLocal,
-    Expression<DateTime>? syncedAt,
+    Expression<double>? ppn,
+    Expression<double>? amountBeforePpn,
+    Expression<double>? roundingAmount,
+    Expression<int>? ownerManualPaymentId,
+    Expression<String>? manualProviderName,
+    Expression<String>? manualProviderAccountName,
+    Expression<String>? manualProviderAccountNo,
+    Expression<bool>? syncDirty,
+    Expression<String>? localFilePathsJson,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (localId != null) 'local_id': localId,
-      if (orderLocalId != null) 'order_local_id': orderLocalId,
-      if (serverPaymentId != null) 'server_payment_id': serverPaymentId,
+      if (clientPaymentUuid != null) 'client_payment_uuid': clientPaymentUuid,
+      if (serverId != null) 'server_id': serverId,
+      if (bookingOrderClientUuid != null)
+        'booking_order_client_uuid': bookingOrderClientUuid,
+      if (bookingOrderServerId != null)
+        'booking_order_server_id': bookingOrderServerId,
+      if (employeeId != null) 'employee_id': employeeId,
+      if (customerId != null) 'customer_id': customerId,
+      if (customerName != null) 'customer_name': customerName,
       if (paymentType != null) 'payment_type': paymentType,
-      if (manualPaymentServerId != null)
-        'manual_payment_server_id': manualPaymentServerId,
-      if (amountBeforePpn != null) 'amount_before_ppn': amountBeforePpn,
-      if (ppn != null) 'ppn': ppn,
       if (paidAmount != null) 'paid_amount': paidAmount,
       if (changeAmount != null) 'change_amount': changeAmount,
       if (paymentStatus != null) 'payment_status': paymentStatus,
       if (note != null) 'note': note,
-      if (proofImageLocalPath != null)
-        'proof_image_local_path': proofImageLocalPath,
-      if (proofImageUploaded != null)
-        'proof_image_uploaded': proofImageUploaded,
-      if (createdAtLocal != null) 'created_at_local': createdAtLocal,
-      if (syncedAt != null) 'synced_at': syncedAt,
+      if (ppn != null) 'ppn': ppn,
+      if (amountBeforePpn != null) 'amount_before_ppn': amountBeforePpn,
+      if (roundingAmount != null) 'rounding_amount': roundingAmount,
+      if (ownerManualPaymentId != null)
+        'owner_manual_payment_id': ownerManualPaymentId,
+      if (manualProviderName != null)
+        'manual_provider_name': manualProviderName,
+      if (manualProviderAccountName != null)
+        'manual_provider_account_name': manualProviderAccountName,
+      if (manualProviderAccountNo != null)
+        'manual_provider_account_no': manualProviderAccountNo,
+      if (syncDirty != null) 'sync_dirty': syncDirty,
+      if (localFilePathsJson != null)
+        'local_file_paths_json': localFilePathsJson,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  LocalPaymentsCompanion copyWith({
-    Value<String>? localId,
-    Value<String>? orderLocalId,
-    Value<int?>? serverPaymentId,
+  OrderPaymentsCompanion copyWith({
+    Value<String>? clientPaymentUuid,
+    Value<int?>? serverId,
+    Value<String>? bookingOrderClientUuid,
+    Value<int?>? bookingOrderServerId,
+    Value<int?>? employeeId,
+    Value<int?>? customerId,
+    Value<String?>? customerName,
     Value<String>? paymentType,
-    Value<int?>? manualPaymentServerId,
-    Value<double>? amountBeforePpn,
-    Value<double>? ppn,
     Value<double>? paidAmount,
     Value<double>? changeAmount,
     Value<String>? paymentStatus,
     Value<String?>? note,
-    Value<String?>? proofImageLocalPath,
-    Value<bool>? proofImageUploaded,
-    Value<DateTime>? createdAtLocal,
-    Value<DateTime?>? syncedAt,
+    Value<double?>? ppn,
+    Value<double?>? amountBeforePpn,
+    Value<double?>? roundingAmount,
+    Value<int?>? ownerManualPaymentId,
+    Value<String?>? manualProviderName,
+    Value<String?>? manualProviderAccountName,
+    Value<String?>? manualProviderAccountNo,
+    Value<bool>? syncDirty,
+    Value<String?>? localFilePathsJson,
+    Value<DateTime?>? createdAt,
+    Value<DateTime?>? updatedAt,
     Value<int>? rowid,
   }) {
-    return LocalPaymentsCompanion(
-      localId: localId ?? this.localId,
-      orderLocalId: orderLocalId ?? this.orderLocalId,
-      serverPaymentId: serverPaymentId ?? this.serverPaymentId,
+    return OrderPaymentsCompanion(
+      clientPaymentUuid: clientPaymentUuid ?? this.clientPaymentUuid,
+      serverId: serverId ?? this.serverId,
+      bookingOrderClientUuid:
+          bookingOrderClientUuid ?? this.bookingOrderClientUuid,
+      bookingOrderServerId: bookingOrderServerId ?? this.bookingOrderServerId,
+      employeeId: employeeId ?? this.employeeId,
+      customerId: customerId ?? this.customerId,
+      customerName: customerName ?? this.customerName,
       paymentType: paymentType ?? this.paymentType,
-      manualPaymentServerId:
-          manualPaymentServerId ?? this.manualPaymentServerId,
-      amountBeforePpn: amountBeforePpn ?? this.amountBeforePpn,
-      ppn: ppn ?? this.ppn,
       paidAmount: paidAmount ?? this.paidAmount,
       changeAmount: changeAmount ?? this.changeAmount,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       note: note ?? this.note,
-      proofImageLocalPath: proofImageLocalPath ?? this.proofImageLocalPath,
-      proofImageUploaded: proofImageUploaded ?? this.proofImageUploaded,
-      createdAtLocal: createdAtLocal ?? this.createdAtLocal,
-      syncedAt: syncedAt ?? this.syncedAt,
+      ppn: ppn ?? this.ppn,
+      amountBeforePpn: amountBeforePpn ?? this.amountBeforePpn,
+      roundingAmount: roundingAmount ?? this.roundingAmount,
+      ownerManualPaymentId: ownerManualPaymentId ?? this.ownerManualPaymentId,
+      manualProviderName: manualProviderName ?? this.manualProviderName,
+      manualProviderAccountName:
+          manualProviderAccountName ?? this.manualProviderAccountName,
+      manualProviderAccountNo:
+          manualProviderAccountNo ?? this.manualProviderAccountNo,
+      syncDirty: syncDirty ?? this.syncDirty,
+      localFilePathsJson: localFilePathsJson ?? this.localFilePathsJson,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -8615,28 +10255,33 @@ class LocalPaymentsCompanion extends UpdateCompanion<LocalPayment> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (localId.present) {
-      map['local_id'] = Variable<String>(localId.value);
+    if (clientPaymentUuid.present) {
+      map['client_payment_uuid'] = Variable<String>(clientPaymentUuid.value);
     }
-    if (orderLocalId.present) {
-      map['order_local_id'] = Variable<String>(orderLocalId.value);
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
     }
-    if (serverPaymentId.present) {
-      map['server_payment_id'] = Variable<int>(serverPaymentId.value);
+    if (bookingOrderClientUuid.present) {
+      map['booking_order_client_uuid'] = Variable<String>(
+        bookingOrderClientUuid.value,
+      );
+    }
+    if (bookingOrderServerId.present) {
+      map['booking_order_server_id'] = Variable<int>(
+        bookingOrderServerId.value,
+      );
+    }
+    if (employeeId.present) {
+      map['employee_id'] = Variable<int>(employeeId.value);
+    }
+    if (customerId.present) {
+      map['customer_id'] = Variable<int>(customerId.value);
+    }
+    if (customerName.present) {
+      map['customer_name'] = Variable<String>(customerName.value);
     }
     if (paymentType.present) {
       map['payment_type'] = Variable<String>(paymentType.value);
-    }
-    if (manualPaymentServerId.present) {
-      map['manual_payment_server_id'] = Variable<int>(
-        manualPaymentServerId.value,
-      );
-    }
-    if (amountBeforePpn.present) {
-      map['amount_before_ppn'] = Variable<double>(amountBeforePpn.value);
-    }
-    if (ppn.present) {
-      map['ppn'] = Variable<double>(ppn.value);
     }
     if (paidAmount.present) {
       map['paid_amount'] = Variable<double>(paidAmount.value);
@@ -8650,19 +10295,44 @@ class LocalPaymentsCompanion extends UpdateCompanion<LocalPayment> {
     if (note.present) {
       map['note'] = Variable<String>(note.value);
     }
-    if (proofImageLocalPath.present) {
-      map['proof_image_local_path'] = Variable<String>(
-        proofImageLocalPath.value,
+    if (ppn.present) {
+      map['ppn'] = Variable<double>(ppn.value);
+    }
+    if (amountBeforePpn.present) {
+      map['amount_before_ppn'] = Variable<double>(amountBeforePpn.value);
+    }
+    if (roundingAmount.present) {
+      map['rounding_amount'] = Variable<double>(roundingAmount.value);
+    }
+    if (ownerManualPaymentId.present) {
+      map['owner_manual_payment_id'] = Variable<int>(
+        ownerManualPaymentId.value,
       );
     }
-    if (proofImageUploaded.present) {
-      map['proof_image_uploaded'] = Variable<bool>(proofImageUploaded.value);
+    if (manualProviderName.present) {
+      map['manual_provider_name'] = Variable<String>(manualProviderName.value);
     }
-    if (createdAtLocal.present) {
-      map['created_at_local'] = Variable<DateTime>(createdAtLocal.value);
+    if (manualProviderAccountName.present) {
+      map['manual_provider_account_name'] = Variable<String>(
+        manualProviderAccountName.value,
+      );
     }
-    if (syncedAt.present) {
-      map['synced_at'] = Variable<DateTime>(syncedAt.value);
+    if (manualProviderAccountNo.present) {
+      map['manual_provider_account_no'] = Variable<String>(
+        manualProviderAccountNo.value,
+      );
+    }
+    if (syncDirty.present) {
+      map['sync_dirty'] = Variable<bool>(syncDirty.value);
+    }
+    if (localFilePathsJson.present) {
+      map['local_file_paths_json'] = Variable<String>(localFilePathsJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -8672,34 +10342,42 @@ class LocalPaymentsCompanion extends UpdateCompanion<LocalPayment> {
 
   @override
   String toString() {
-    return (StringBuffer('LocalPaymentsCompanion(')
-          ..write('localId: $localId, ')
-          ..write('orderLocalId: $orderLocalId, ')
-          ..write('serverPaymentId: $serverPaymentId, ')
+    return (StringBuffer('OrderPaymentsCompanion(')
+          ..write('clientPaymentUuid: $clientPaymentUuid, ')
+          ..write('serverId: $serverId, ')
+          ..write('bookingOrderClientUuid: $bookingOrderClientUuid, ')
+          ..write('bookingOrderServerId: $bookingOrderServerId, ')
+          ..write('employeeId: $employeeId, ')
+          ..write('customerId: $customerId, ')
+          ..write('customerName: $customerName, ')
           ..write('paymentType: $paymentType, ')
-          ..write('manualPaymentServerId: $manualPaymentServerId, ')
-          ..write('amountBeforePpn: $amountBeforePpn, ')
-          ..write('ppn: $ppn, ')
           ..write('paidAmount: $paidAmount, ')
           ..write('changeAmount: $changeAmount, ')
           ..write('paymentStatus: $paymentStatus, ')
           ..write('note: $note, ')
-          ..write('proofImageLocalPath: $proofImageLocalPath, ')
-          ..write('proofImageUploaded: $proofImageUploaded, ')
-          ..write('createdAtLocal: $createdAtLocal, ')
-          ..write('syncedAt: $syncedAt, ')
+          ..write('ppn: $ppn, ')
+          ..write('amountBeforePpn: $amountBeforePpn, ')
+          ..write('roundingAmount: $roundingAmount, ')
+          ..write('ownerManualPaymentId: $ownerManualPaymentId, ')
+          ..write('manualProviderName: $manualProviderName, ')
+          ..write('manualProviderAccountName: $manualProviderAccountName, ')
+          ..write('manualProviderAccountNo: $manualProviderAccountNo, ')
+          ..write('syncDirty: $syncDirty, ')
+          ..write('localFilePathsJson: $localFilePathsJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
 }
 
-class $SyncQueueTable extends SyncQueue
-    with TableInfo<$SyncQueueTable, SyncQueueData> {
+class $SyncConflictsTable extends SyncConflicts
+    with TableInfo<$SyncConflictsTable, SyncConflict> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $SyncQueueTable(this.attachedDatabase, [this._alias]);
+  $SyncConflictsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
@@ -8713,101 +10391,106 @@ class $SyncQueueTable extends SyncQueue
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
-  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
-    'entityType',
+  static const VerificationMeta _entityTableMeta = const VerificationMeta(
+    'entityTable',
   );
   @override
-  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
-    'entity_type',
+  late final GeneratedColumn<String> entityTable = GeneratedColumn<String>(
+    'entity_table',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _entityLocalIdMeta = const VerificationMeta(
-    'entityLocalId',
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
   );
   @override
-  late final GeneratedColumn<String> entityLocalId = GeneratedColumn<String>(
-    'entity_local_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _actionMeta = const VerificationMeta('action');
-  @override
-  late final GeneratedColumn<String> action = GeneratedColumn<String>(
-    'action',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _dependsOnQueueIdMeta = const VerificationMeta(
-    'dependsOnQueueId',
-  );
-  @override
-  late final GeneratedColumn<int> dependsOnQueueId = GeneratedColumn<int>(
-    'depends_on_queue_id',
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
     aliasedName,
     true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
-    'payloadJson',
+  static const VerificationMeta _clientUuidMeta = const VerificationMeta(
+    'clientUuid',
   );
   @override
-  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
-    'payload_json',
+  late final GeneratedColumn<String> clientUuid = GeneratedColumn<String>(
+    'client_uuid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  static const VerificationMeta _localSnapshotJsonMeta = const VerificationMeta(
+    'localSnapshotJson',
+  );
   @override
-  late final GeneratedColumn<String> status = GeneratedColumn<String>(
-    'status',
+  late final GeneratedColumn<String> localSnapshotJson =
+      GeneratedColumn<String>(
+        'local_snapshot_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _serverSnapshotJsonMeta =
+      const VerificationMeta('serverSnapshotJson');
+  @override
+  late final GeneratedColumn<String> serverSnapshotJson =
+      GeneratedColumn<String>(
+        'server_snapshot_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _suggestedResolutionMeta =
+      const VerificationMeta('suggestedResolution');
+  @override
+  late final GeneratedColumn<String> suggestedResolution =
+      GeneratedColumn<String>(
+        'suggested_resolution',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _isResolvedMeta = const VerificationMeta(
+    'isResolved',
+  );
+  @override
+  late final GeneratedColumn<bool> isResolved = GeneratedColumn<bool>(
+    'is_resolved',
     aliasedName,
     false,
-    type: DriftSqlType.string,
+    type: DriftSqlType.bool,
     requiredDuringInsert: false,
-    defaultValue: const Constant('PENDING'),
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_resolved" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
   );
-  static const VerificationMeta _attemptCountMeta = const VerificationMeta(
-    'attemptCount',
+  static const VerificationMeta _resolutionChoiceMeta = const VerificationMeta(
+    'resolutionChoice',
   );
   @override
-  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
-    'attempt_count',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
-    'lastError',
-  );
-  @override
-  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
-    'last_error',
+  late final GeneratedColumn<String> resolutionChoice = GeneratedColumn<String>(
+    'resolution_choice',
     aliasedName,
     true,
     type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _nextRetryAtMeta = const VerificationMeta(
-    'nextRetryAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> nextRetryAt = GeneratedColumn<DateTime>(
-    'next_retry_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
@@ -8821,40 +10504,28 @@ class $SyncQueueTable extends SyncQueue
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
-    entityType,
-    entityLocalId,
-    action,
-    dependsOnQueueId,
-    payloadJson,
-    status,
-    attemptCount,
-    lastError,
-    nextRetryAt,
+    entityTable,
+    serverId,
+    clientUuid,
+    reason,
+    localSnapshotJson,
+    serverSnapshotJson,
+    suggestedResolution,
+    isResolved,
+    resolutionChoice,
     createdAt,
-    updatedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'sync_queue';
+  static const String $name = 'sync_conflicts';
   @override
   VerificationContext validateIntegrity(
-    Insertable<SyncQueueData> instance, {
+    Insertable<SyncConflict> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -8862,80 +10533,76 @@ class $SyncQueueTable extends SyncQueue
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
-    if (data.containsKey('entity_type')) {
+    if (data.containsKey('entity_table')) {
       context.handle(
-        _entityTypeMeta,
-        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_entityTypeMeta);
-    }
-    if (data.containsKey('entity_local_id')) {
-      context.handle(
-        _entityLocalIdMeta,
-        entityLocalId.isAcceptableOrUnknown(
-          data['entity_local_id']!,
-          _entityLocalIdMeta,
+        _entityTableMeta,
+        entityTable.isAcceptableOrUnknown(
+          data['entity_table']!,
+          _entityTableMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_entityLocalIdMeta);
+      context.missing(_entityTableMeta);
     }
-    if (data.containsKey('action')) {
+    if (data.containsKey('server_id')) {
       context.handle(
-        _actionMeta,
-        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('client_uuid')) {
+      context.handle(
+        _clientUuidMeta,
+        clientUuid.isAcceptableOrUnknown(data['client_uuid']!, _clientUuidMeta),
+      );
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
       );
     } else if (isInserting) {
-      context.missing(_actionMeta);
+      context.missing(_reasonMeta);
     }
-    if (data.containsKey('depends_on_queue_id')) {
+    if (data.containsKey('local_snapshot_json')) {
       context.handle(
-        _dependsOnQueueIdMeta,
-        dependsOnQueueId.isAcceptableOrUnknown(
-          data['depends_on_queue_id']!,
-          _dependsOnQueueIdMeta,
+        _localSnapshotJsonMeta,
+        localSnapshotJson.isAcceptableOrUnknown(
+          data['local_snapshot_json']!,
+          _localSnapshotJsonMeta,
         ),
       );
     }
-    if (data.containsKey('payload_json')) {
+    if (data.containsKey('server_snapshot_json')) {
       context.handle(
-        _payloadJsonMeta,
-        payloadJson.isAcceptableOrUnknown(
-          data['payload_json']!,
-          _payloadJsonMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_payloadJsonMeta);
-    }
-    if (data.containsKey('status')) {
-      context.handle(
-        _statusMeta,
-        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
-      );
-    }
-    if (data.containsKey('attempt_count')) {
-      context.handle(
-        _attemptCountMeta,
-        attemptCount.isAcceptableOrUnknown(
-          data['attempt_count']!,
-          _attemptCountMeta,
+        _serverSnapshotJsonMeta,
+        serverSnapshotJson.isAcceptableOrUnknown(
+          data['server_snapshot_json']!,
+          _serverSnapshotJsonMeta,
         ),
       );
     }
-    if (data.containsKey('last_error')) {
+    if (data.containsKey('suggested_resolution')) {
       context.handle(
-        _lastErrorMeta,
-        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+        _suggestedResolutionMeta,
+        suggestedResolution.isAcceptableOrUnknown(
+          data['suggested_resolution']!,
+          _suggestedResolutionMeta,
+        ),
       );
     }
-    if (data.containsKey('next_retry_at')) {
+    if (data.containsKey('is_resolved')) {
       context.handle(
-        _nextRetryAtMeta,
-        nextRetryAt.isAcceptableOrUnknown(
-          data['next_retry_at']!,
-          _nextRetryAtMeta,
+        _isResolvedMeta,
+        isResolved.isAcceptableOrUnknown(data['is_resolved']!, _isResolvedMeta),
+      );
+    }
+    if (data.containsKey('resolution_choice')) {
+      context.handle(
+        _resolutionChoiceMeta,
+        resolutionChoice.isAcceptableOrUnknown(
+          data['resolution_choice']!,
+          _resolutionChoiceMeta,
         ),
       );
     }
@@ -8947,172 +10614,173 @@ class $SyncQueueTable extends SyncQueue
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_updatedAtMeta);
-    }
     return context;
   }
 
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  SyncQueueData map(Map<String, dynamic> data, {String? tablePrefix}) {
+  SyncConflict map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return SyncQueueData(
+    return SyncConflict(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
-      entityType: attachedDatabase.typeMapping.read(
+      entityTable: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}entity_type'],
+        data['${effectivePrefix}entity_table'],
       )!,
-      entityLocalId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}entity_local_id'],
-      )!,
-      action: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}action'],
-      )!,
-      dependsOnQueueId: attachedDatabase.typeMapping.read(
+      serverId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}depends_on_queue_id'],
+        data['${effectivePrefix}server_id'],
       ),
-      payloadJson: attachedDatabase.typeMapping.read(
+      clientUuid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}payload_json'],
-      )!,
-      status: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}status'],
-      )!,
-      attemptCount: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}attempt_count'],
-      )!,
-      lastError: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}last_error'],
+        data['${effectivePrefix}client_uuid'],
       ),
-      nextRetryAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}next_retry_at'],
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      localSnapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_snapshot_json'],
+      ),
+      serverSnapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}server_snapshot_json'],
+      ),
+      suggestedResolution: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}suggested_resolution'],
+      ),
+      isResolved: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_resolved'],
+      )!,
+      resolutionChoice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}resolution_choice'],
       ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
     );
   }
 
   @override
-  $SyncQueueTable createAlias(String alias) {
-    return $SyncQueueTable(attachedDatabase, alias);
+  $SyncConflictsTable createAlias(String alias) {
+    return $SyncConflictsTable(attachedDatabase, alias);
   }
 }
 
-class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
+class SyncConflict extends DataClass implements Insertable<SyncConflict> {
   final int id;
-  final String entityType;
-  final String entityLocalId;
-  final String action;
-  final int? dependsOnQueueId;
-  final String payloadJson;
-  final String status;
-  final int attemptCount;
-  final String? lastError;
-  final DateTime? nextRetryAt;
+  final String entityTable;
+  final int? serverId;
+  final String? clientUuid;
+  final String reason;
+  final String? localSnapshotJson;
+  final String? serverSnapshotJson;
+  final String? suggestedResolution;
+  final bool isResolved;
+  final String? resolutionChoice;
   final DateTime createdAt;
-  final DateTime updatedAt;
-  const SyncQueueData({
+  const SyncConflict({
     required this.id,
-    required this.entityType,
-    required this.entityLocalId,
-    required this.action,
-    this.dependsOnQueueId,
-    required this.payloadJson,
-    required this.status,
-    required this.attemptCount,
-    this.lastError,
-    this.nextRetryAt,
+    required this.entityTable,
+    this.serverId,
+    this.clientUuid,
+    required this.reason,
+    this.localSnapshotJson,
+    this.serverSnapshotJson,
+    this.suggestedResolution,
+    required this.isResolved,
+    this.resolutionChoice,
     required this.createdAt,
-    required this.updatedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
-    map['entity_type'] = Variable<String>(entityType);
-    map['entity_local_id'] = Variable<String>(entityLocalId);
-    map['action'] = Variable<String>(action);
-    if (!nullToAbsent || dependsOnQueueId != null) {
-      map['depends_on_queue_id'] = Variable<int>(dependsOnQueueId);
+    map['entity_table'] = Variable<String>(entityTable);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
     }
-    map['payload_json'] = Variable<String>(payloadJson);
-    map['status'] = Variable<String>(status);
-    map['attempt_count'] = Variable<int>(attemptCount);
-    if (!nullToAbsent || lastError != null) {
-      map['last_error'] = Variable<String>(lastError);
+    if (!nullToAbsent || clientUuid != null) {
+      map['client_uuid'] = Variable<String>(clientUuid);
     }
-    if (!nullToAbsent || nextRetryAt != null) {
-      map['next_retry_at'] = Variable<DateTime>(nextRetryAt);
+    map['reason'] = Variable<String>(reason);
+    if (!nullToAbsent || localSnapshotJson != null) {
+      map['local_snapshot_json'] = Variable<String>(localSnapshotJson);
+    }
+    if (!nullToAbsent || serverSnapshotJson != null) {
+      map['server_snapshot_json'] = Variable<String>(serverSnapshotJson);
+    }
+    if (!nullToAbsent || suggestedResolution != null) {
+      map['suggested_resolution'] = Variable<String>(suggestedResolution);
+    }
+    map['is_resolved'] = Variable<bool>(isResolved);
+    if (!nullToAbsent || resolutionChoice != null) {
+      map['resolution_choice'] = Variable<String>(resolutionChoice);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
   }
 
-  SyncQueueCompanion toCompanion(bool nullToAbsent) {
-    return SyncQueueCompanion(
+  SyncConflictsCompanion toCompanion(bool nullToAbsent) {
+    return SyncConflictsCompanion(
       id: Value(id),
-      entityType: Value(entityType),
-      entityLocalId: Value(entityLocalId),
-      action: Value(action),
-      dependsOnQueueId: dependsOnQueueId == null && nullToAbsent
+      entityTable: Value(entityTable),
+      serverId: serverId == null && nullToAbsent
           ? const Value.absent()
-          : Value(dependsOnQueueId),
-      payloadJson: Value(payloadJson),
-      status: Value(status),
-      attemptCount: Value(attemptCount),
-      lastError: lastError == null && nullToAbsent
+          : Value(serverId),
+      clientUuid: clientUuid == null && nullToAbsent
           ? const Value.absent()
-          : Value(lastError),
-      nextRetryAt: nextRetryAt == null && nullToAbsent
+          : Value(clientUuid),
+      reason: Value(reason),
+      localSnapshotJson: localSnapshotJson == null && nullToAbsent
           ? const Value.absent()
-          : Value(nextRetryAt),
+          : Value(localSnapshotJson),
+      serverSnapshotJson: serverSnapshotJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverSnapshotJson),
+      suggestedResolution: suggestedResolution == null && nullToAbsent
+          ? const Value.absent()
+          : Value(suggestedResolution),
+      isResolved: Value(isResolved),
+      resolutionChoice: resolutionChoice == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resolutionChoice),
       createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
     );
   }
 
-  factory SyncQueueData.fromJson(
+  factory SyncConflict.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return SyncQueueData(
+    return SyncConflict(
       id: serializer.fromJson<int>(json['id']),
-      entityType: serializer.fromJson<String>(json['entityType']),
-      entityLocalId: serializer.fromJson<String>(json['entityLocalId']),
-      action: serializer.fromJson<String>(json['action']),
-      dependsOnQueueId: serializer.fromJson<int?>(json['dependsOnQueueId']),
-      payloadJson: serializer.fromJson<String>(json['payloadJson']),
-      status: serializer.fromJson<String>(json['status']),
-      attemptCount: serializer.fromJson<int>(json['attemptCount']),
-      lastError: serializer.fromJson<String?>(json['lastError']),
-      nextRetryAt: serializer.fromJson<DateTime?>(json['nextRetryAt']),
+      entityTable: serializer.fromJson<String>(json['entityTable']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      clientUuid: serializer.fromJson<String?>(json['clientUuid']),
+      reason: serializer.fromJson<String>(json['reason']),
+      localSnapshotJson: serializer.fromJson<String?>(
+        json['localSnapshotJson'],
+      ),
+      serverSnapshotJson: serializer.fromJson<String?>(
+        json['serverSnapshotJson'],
+      ),
+      suggestedResolution: serializer.fromJson<String?>(
+        json['suggestedResolution'],
+      ),
+      isResolved: serializer.fromJson<bool>(json['isResolved']),
+      resolutionChoice: serializer.fromJson<String?>(json['resolutionChoice']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
   }
   @override
@@ -9120,93 +10788,96 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
-      'entityType': serializer.toJson<String>(entityType),
-      'entityLocalId': serializer.toJson<String>(entityLocalId),
-      'action': serializer.toJson<String>(action),
-      'dependsOnQueueId': serializer.toJson<int?>(dependsOnQueueId),
-      'payloadJson': serializer.toJson<String>(payloadJson),
-      'status': serializer.toJson<String>(status),
-      'attemptCount': serializer.toJson<int>(attemptCount),
-      'lastError': serializer.toJson<String?>(lastError),
-      'nextRetryAt': serializer.toJson<DateTime?>(nextRetryAt),
+      'entityTable': serializer.toJson<String>(entityTable),
+      'serverId': serializer.toJson<int?>(serverId),
+      'clientUuid': serializer.toJson<String?>(clientUuid),
+      'reason': serializer.toJson<String>(reason),
+      'localSnapshotJson': serializer.toJson<String?>(localSnapshotJson),
+      'serverSnapshotJson': serializer.toJson<String?>(serverSnapshotJson),
+      'suggestedResolution': serializer.toJson<String?>(suggestedResolution),
+      'isResolved': serializer.toJson<bool>(isResolved),
+      'resolutionChoice': serializer.toJson<String?>(resolutionChoice),
       'createdAt': serializer.toJson<DateTime>(createdAt),
-      'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
   }
 
-  SyncQueueData copyWith({
+  SyncConflict copyWith({
     int? id,
-    String? entityType,
-    String? entityLocalId,
-    String? action,
-    Value<int?> dependsOnQueueId = const Value.absent(),
-    String? payloadJson,
-    String? status,
-    int? attemptCount,
-    Value<String?> lastError = const Value.absent(),
-    Value<DateTime?> nextRetryAt = const Value.absent(),
+    String? entityTable,
+    Value<int?> serverId = const Value.absent(),
+    Value<String?> clientUuid = const Value.absent(),
+    String? reason,
+    Value<String?> localSnapshotJson = const Value.absent(),
+    Value<String?> serverSnapshotJson = const Value.absent(),
+    Value<String?> suggestedResolution = const Value.absent(),
+    bool? isResolved,
+    Value<String?> resolutionChoice = const Value.absent(),
     DateTime? createdAt,
-    DateTime? updatedAt,
-  }) => SyncQueueData(
+  }) => SyncConflict(
     id: id ?? this.id,
-    entityType: entityType ?? this.entityType,
-    entityLocalId: entityLocalId ?? this.entityLocalId,
-    action: action ?? this.action,
-    dependsOnQueueId: dependsOnQueueId.present
-        ? dependsOnQueueId.value
-        : this.dependsOnQueueId,
-    payloadJson: payloadJson ?? this.payloadJson,
-    status: status ?? this.status,
-    attemptCount: attemptCount ?? this.attemptCount,
-    lastError: lastError.present ? lastError.value : this.lastError,
-    nextRetryAt: nextRetryAt.present ? nextRetryAt.value : this.nextRetryAt,
+    entityTable: entityTable ?? this.entityTable,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    clientUuid: clientUuid.present ? clientUuid.value : this.clientUuid,
+    reason: reason ?? this.reason,
+    localSnapshotJson: localSnapshotJson.present
+        ? localSnapshotJson.value
+        : this.localSnapshotJson,
+    serverSnapshotJson: serverSnapshotJson.present
+        ? serverSnapshotJson.value
+        : this.serverSnapshotJson,
+    suggestedResolution: suggestedResolution.present
+        ? suggestedResolution.value
+        : this.suggestedResolution,
+    isResolved: isResolved ?? this.isResolved,
+    resolutionChoice: resolutionChoice.present
+        ? resolutionChoice.value
+        : this.resolutionChoice,
     createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
   );
-  SyncQueueData copyWithCompanion(SyncQueueCompanion data) {
-    return SyncQueueData(
+  SyncConflict copyWithCompanion(SyncConflictsCompanion data) {
+    return SyncConflict(
       id: data.id.present ? data.id.value : this.id,
-      entityType: data.entityType.present
-          ? data.entityType.value
-          : this.entityType,
-      entityLocalId: data.entityLocalId.present
-          ? data.entityLocalId.value
-          : this.entityLocalId,
-      action: data.action.present ? data.action.value : this.action,
-      dependsOnQueueId: data.dependsOnQueueId.present
-          ? data.dependsOnQueueId.value
-          : this.dependsOnQueueId,
-      payloadJson: data.payloadJson.present
-          ? data.payloadJson.value
-          : this.payloadJson,
-      status: data.status.present ? data.status.value : this.status,
-      attemptCount: data.attemptCount.present
-          ? data.attemptCount.value
-          : this.attemptCount,
-      lastError: data.lastError.present ? data.lastError.value : this.lastError,
-      nextRetryAt: data.nextRetryAt.present
-          ? data.nextRetryAt.value
-          : this.nextRetryAt,
+      entityTable: data.entityTable.present
+          ? data.entityTable.value
+          : this.entityTable,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      clientUuid: data.clientUuid.present
+          ? data.clientUuid.value
+          : this.clientUuid,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      localSnapshotJson: data.localSnapshotJson.present
+          ? data.localSnapshotJson.value
+          : this.localSnapshotJson,
+      serverSnapshotJson: data.serverSnapshotJson.present
+          ? data.serverSnapshotJson.value
+          : this.serverSnapshotJson,
+      suggestedResolution: data.suggestedResolution.present
+          ? data.suggestedResolution.value
+          : this.suggestedResolution,
+      isResolved: data.isResolved.present
+          ? data.isResolved.value
+          : this.isResolved,
+      resolutionChoice: data.resolutionChoice.present
+          ? data.resolutionChoice.value
+          : this.resolutionChoice,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('SyncQueueData(')
+    return (StringBuffer('SyncConflict(')
           ..write('id: $id, ')
-          ..write('entityType: $entityType, ')
-          ..write('entityLocalId: $entityLocalId, ')
-          ..write('action: $action, ')
-          ..write('dependsOnQueueId: $dependsOnQueueId, ')
-          ..write('payloadJson: $payloadJson, ')
-          ..write('status: $status, ')
-          ..write('attemptCount: $attemptCount, ')
-          ..write('lastError: $lastError, ')
-          ..write('nextRetryAt: $nextRetryAt, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('entityTable: $entityTable, ')
+          ..write('serverId: $serverId, ')
+          ..write('clientUuid: $clientUuid, ')
+          ..write('reason: $reason, ')
+          ..write('localSnapshotJson: $localSnapshotJson, ')
+          ..write('serverSnapshotJson: $serverSnapshotJson, ')
+          ..write('suggestedResolution: $suggestedResolution, ')
+          ..write('isResolved: $isResolved, ')
+          ..write('resolutionChoice: $resolutionChoice, ')
+          ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
@@ -9214,139 +10885,129 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
   @override
   int get hashCode => Object.hash(
     id,
-    entityType,
-    entityLocalId,
-    action,
-    dependsOnQueueId,
-    payloadJson,
-    status,
-    attemptCount,
-    lastError,
-    nextRetryAt,
+    entityTable,
+    serverId,
+    clientUuid,
+    reason,
+    localSnapshotJson,
+    serverSnapshotJson,
+    suggestedResolution,
+    isResolved,
+    resolutionChoice,
     createdAt,
-    updatedAt,
   );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is SyncQueueData &&
+      (other is SyncConflict &&
           other.id == this.id &&
-          other.entityType == this.entityType &&
-          other.entityLocalId == this.entityLocalId &&
-          other.action == this.action &&
-          other.dependsOnQueueId == this.dependsOnQueueId &&
-          other.payloadJson == this.payloadJson &&
-          other.status == this.status &&
-          other.attemptCount == this.attemptCount &&
-          other.lastError == this.lastError &&
-          other.nextRetryAt == this.nextRetryAt &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.entityTable == this.entityTable &&
+          other.serverId == this.serverId &&
+          other.clientUuid == this.clientUuid &&
+          other.reason == this.reason &&
+          other.localSnapshotJson == this.localSnapshotJson &&
+          other.serverSnapshotJson == this.serverSnapshotJson &&
+          other.suggestedResolution == this.suggestedResolution &&
+          other.isResolved == this.isResolved &&
+          other.resolutionChoice == this.resolutionChoice &&
+          other.createdAt == this.createdAt);
 }
 
-class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
+class SyncConflictsCompanion extends UpdateCompanion<SyncConflict> {
   final Value<int> id;
-  final Value<String> entityType;
-  final Value<String> entityLocalId;
-  final Value<String> action;
-  final Value<int?> dependsOnQueueId;
-  final Value<String> payloadJson;
-  final Value<String> status;
-  final Value<int> attemptCount;
-  final Value<String?> lastError;
-  final Value<DateTime?> nextRetryAt;
+  final Value<String> entityTable;
+  final Value<int?> serverId;
+  final Value<String?> clientUuid;
+  final Value<String> reason;
+  final Value<String?> localSnapshotJson;
+  final Value<String?> serverSnapshotJson;
+  final Value<String?> suggestedResolution;
+  final Value<bool> isResolved;
+  final Value<String?> resolutionChoice;
   final Value<DateTime> createdAt;
-  final Value<DateTime> updatedAt;
-  const SyncQueueCompanion({
+  const SyncConflictsCompanion({
     this.id = const Value.absent(),
-    this.entityType = const Value.absent(),
-    this.entityLocalId = const Value.absent(),
-    this.action = const Value.absent(),
-    this.dependsOnQueueId = const Value.absent(),
-    this.payloadJson = const Value.absent(),
-    this.status = const Value.absent(),
-    this.attemptCount = const Value.absent(),
-    this.lastError = const Value.absent(),
-    this.nextRetryAt = const Value.absent(),
+    this.entityTable = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.clientUuid = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.localSnapshotJson = const Value.absent(),
+    this.serverSnapshotJson = const Value.absent(),
+    this.suggestedResolution = const Value.absent(),
+    this.isResolved = const Value.absent(),
+    this.resolutionChoice = const Value.absent(),
     this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
   });
-  SyncQueueCompanion.insert({
+  SyncConflictsCompanion.insert({
     this.id = const Value.absent(),
-    required String entityType,
-    required String entityLocalId,
-    required String action,
-    this.dependsOnQueueId = const Value.absent(),
-    required String payloadJson,
-    this.status = const Value.absent(),
-    this.attemptCount = const Value.absent(),
-    this.lastError = const Value.absent(),
-    this.nextRetryAt = const Value.absent(),
+    required String entityTable,
+    this.serverId = const Value.absent(),
+    this.clientUuid = const Value.absent(),
+    required String reason,
+    this.localSnapshotJson = const Value.absent(),
+    this.serverSnapshotJson = const Value.absent(),
+    this.suggestedResolution = const Value.absent(),
+    this.isResolved = const Value.absent(),
+    this.resolutionChoice = const Value.absent(),
     required DateTime createdAt,
-    required DateTime updatedAt,
-  }) : entityType = Value(entityType),
-       entityLocalId = Value(entityLocalId),
-       action = Value(action),
-       payloadJson = Value(payloadJson),
-       createdAt = Value(createdAt),
-       updatedAt = Value(updatedAt);
-  static Insertable<SyncQueueData> custom({
+  }) : entityTable = Value(entityTable),
+       reason = Value(reason),
+       createdAt = Value(createdAt);
+  static Insertable<SyncConflict> custom({
     Expression<int>? id,
-    Expression<String>? entityType,
-    Expression<String>? entityLocalId,
-    Expression<String>? action,
-    Expression<int>? dependsOnQueueId,
-    Expression<String>? payloadJson,
-    Expression<String>? status,
-    Expression<int>? attemptCount,
-    Expression<String>? lastError,
-    Expression<DateTime>? nextRetryAt,
+    Expression<String>? entityTable,
+    Expression<int>? serverId,
+    Expression<String>? clientUuid,
+    Expression<String>? reason,
+    Expression<String>? localSnapshotJson,
+    Expression<String>? serverSnapshotJson,
+    Expression<String>? suggestedResolution,
+    Expression<bool>? isResolved,
+    Expression<String>? resolutionChoice,
     Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (entityType != null) 'entity_type': entityType,
-      if (entityLocalId != null) 'entity_local_id': entityLocalId,
-      if (action != null) 'action': action,
-      if (dependsOnQueueId != null) 'depends_on_queue_id': dependsOnQueueId,
-      if (payloadJson != null) 'payload_json': payloadJson,
-      if (status != null) 'status': status,
-      if (attemptCount != null) 'attempt_count': attemptCount,
-      if (lastError != null) 'last_error': lastError,
-      if (nextRetryAt != null) 'next_retry_at': nextRetryAt,
+      if (entityTable != null) 'entity_table': entityTable,
+      if (serverId != null) 'server_id': serverId,
+      if (clientUuid != null) 'client_uuid': clientUuid,
+      if (reason != null) 'reason': reason,
+      if (localSnapshotJson != null) 'local_snapshot_json': localSnapshotJson,
+      if (serverSnapshotJson != null)
+        'server_snapshot_json': serverSnapshotJson,
+      if (suggestedResolution != null)
+        'suggested_resolution': suggestedResolution,
+      if (isResolved != null) 'is_resolved': isResolved,
+      if (resolutionChoice != null) 'resolution_choice': resolutionChoice,
       if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
     });
   }
 
-  SyncQueueCompanion copyWith({
+  SyncConflictsCompanion copyWith({
     Value<int>? id,
-    Value<String>? entityType,
-    Value<String>? entityLocalId,
-    Value<String>? action,
-    Value<int?>? dependsOnQueueId,
-    Value<String>? payloadJson,
-    Value<String>? status,
-    Value<int>? attemptCount,
-    Value<String?>? lastError,
-    Value<DateTime?>? nextRetryAt,
+    Value<String>? entityTable,
+    Value<int?>? serverId,
+    Value<String?>? clientUuid,
+    Value<String>? reason,
+    Value<String?>? localSnapshotJson,
+    Value<String?>? serverSnapshotJson,
+    Value<String?>? suggestedResolution,
+    Value<bool>? isResolved,
+    Value<String?>? resolutionChoice,
     Value<DateTime>? createdAt,
-    Value<DateTime>? updatedAt,
   }) {
-    return SyncQueueCompanion(
+    return SyncConflictsCompanion(
       id: id ?? this.id,
-      entityType: entityType ?? this.entityType,
-      entityLocalId: entityLocalId ?? this.entityLocalId,
-      action: action ?? this.action,
-      dependsOnQueueId: dependsOnQueueId ?? this.dependsOnQueueId,
-      payloadJson: payloadJson ?? this.payloadJson,
-      status: status ?? this.status,
-      attemptCount: attemptCount ?? this.attemptCount,
-      lastError: lastError ?? this.lastError,
-      nextRetryAt: nextRetryAt ?? this.nextRetryAt,
+      entityTable: entityTable ?? this.entityTable,
+      serverId: serverId ?? this.serverId,
+      clientUuid: clientUuid ?? this.clientUuid,
+      reason: reason ?? this.reason,
+      localSnapshotJson: localSnapshotJson ?? this.localSnapshotJson,
+      serverSnapshotJson: serverSnapshotJson ?? this.serverSnapshotJson,
+      suggestedResolution: suggestedResolution ?? this.suggestedResolution,
+      isResolved: isResolved ?? this.isResolved,
+      resolutionChoice: resolutionChoice ?? this.resolutionChoice,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -9356,3879 +11017,261 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
-    if (entityType.present) {
-      map['entity_type'] = Variable<String>(entityType.value);
+    if (entityTable.present) {
+      map['entity_table'] = Variable<String>(entityTable.value);
     }
-    if (entityLocalId.present) {
-      map['entity_local_id'] = Variable<String>(entityLocalId.value);
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
     }
-    if (action.present) {
-      map['action'] = Variable<String>(action.value);
+    if (clientUuid.present) {
+      map['client_uuid'] = Variable<String>(clientUuid.value);
     }
-    if (dependsOnQueueId.present) {
-      map['depends_on_queue_id'] = Variable<int>(dependsOnQueueId.value);
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
     }
-    if (payloadJson.present) {
-      map['payload_json'] = Variable<String>(payloadJson.value);
+    if (localSnapshotJson.present) {
+      map['local_snapshot_json'] = Variable<String>(localSnapshotJson.value);
     }
-    if (status.present) {
-      map['status'] = Variable<String>(status.value);
+    if (serverSnapshotJson.present) {
+      map['server_snapshot_json'] = Variable<String>(serverSnapshotJson.value);
     }
-    if (attemptCount.present) {
-      map['attempt_count'] = Variable<int>(attemptCount.value);
+    if (suggestedResolution.present) {
+      map['suggested_resolution'] = Variable<String>(suggestedResolution.value);
     }
-    if (lastError.present) {
-      map['last_error'] = Variable<String>(lastError.value);
+    if (isResolved.present) {
+      map['is_resolved'] = Variable<bool>(isResolved.value);
     }
-    if (nextRetryAt.present) {
-      map['next_retry_at'] = Variable<DateTime>(nextRetryAt.value);
+    if (resolutionChoice.present) {
+      map['resolution_choice'] = Variable<String>(resolutionChoice.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
     return map;
   }
 
   @override
   String toString() {
-    return (StringBuffer('SyncQueueCompanion(')
+    return (StringBuffer('SyncConflictsCompanion(')
           ..write('id: $id, ')
-          ..write('entityType: $entityType, ')
-          ..write('entityLocalId: $entityLocalId, ')
-          ..write('action: $action, ')
-          ..write('dependsOnQueueId: $dependsOnQueueId, ')
-          ..write('payloadJson: $payloadJson, ')
-          ..write('status: $status, ')
-          ..write('attemptCount: $attemptCount, ')
-          ..write('lastError: $lastError, ')
-          ..write('nextRetryAt: $nextRetryAt, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('entityTable: $entityTable, ')
+          ..write('serverId: $serverId, ')
+          ..write('clientUuid: $clientUuid, ')
+          ..write('reason: $reason, ')
+          ..write('localSnapshotJson: $localSnapshotJson, ')
+          ..write('serverSnapshotJson: $serverSnapshotJson, ')
+          ..write('suggestedResolution: $suggestedResolution, ')
+          ..write('isResolved: $isResolved, ')
+          ..write('resolutionChoice: $resolutionChoice, ')
+          ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 }
 
-class $CachedPaymentOrdersTable extends CachedPaymentOrders
-    with TableInfo<$CachedPaymentOrdersTable, CachedPaymentOrder> {
+class $SyncMetaTable extends SyncMeta
+    with TableInfo<$SyncMetaTable, SyncMetaData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $CachedPaymentOrdersTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _serverIdMeta = const VerificationMeta(
-    'serverId',
-  );
+  $SyncMetaTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
   @override
-  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
-    'server_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _bookingOrderCodeMeta = const VerificationMeta(
-    'bookingOrderCode',
-  );
-  @override
-  late final GeneratedColumn<String> bookingOrderCode = GeneratedColumn<String>(
-    'booking_order_code',
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _customerNameMeta = const VerificationMeta(
-    'customerName',
-  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
   @override
-  late final GeneratedColumn<String> customerName = GeneratedColumn<String>(
-    'customer_name',
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _tableNoMeta = const VerificationMeta(
-    'tableNo',
-  );
   @override
-  late final GeneratedColumn<String> tableNo = GeneratedColumn<String>(
-    'table_no',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _paymentRequestJsonMeta =
-      const VerificationMeta('paymentRequestJson');
-  @override
-  late final GeneratedColumn<String> paymentRequestJson =
-      GeneratedColumn<String>(
-        'payment_request_json',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _latestPaymentJsonMeta = const VerificationMeta(
-    'latestPaymentJson',
-  );
-  @override
-  late final GeneratedColumn<String> latestPaymentJson =
-      GeneratedColumn<String>(
-        'latest_payment_json',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _paymentMethodMeta = const VerificationMeta(
-    'paymentMethod',
-  );
-  @override
-  late final GeneratedColumn<String> paymentMethod = GeneratedColumn<String>(
-    'payment_method',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _orderStatusMeta = const VerificationMeta(
-    'orderStatus',
-  );
-  @override
-  late final GeneratedColumn<String> orderStatus = GeneratedColumn<String>(
-    'order_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _detailJsonMeta = const VerificationMeta(
-    'detailJson',
-  );
-  @override
-  late final GeneratedColumn<String> detailJson = GeneratedColumn<String>(
-    'detail_json',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _subtotalMeta = const VerificationMeta(
-    'subtotal',
-  );
-  @override
-  late final GeneratedColumn<double> subtotal = GeneratedColumn<double>(
-    'subtotal',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _ppnPercentMeta = const VerificationMeta(
-    'ppnPercent',
-  );
-  @override
-  late final GeneratedColumn<double> ppnPercent = GeneratedColumn<double>(
-    'ppn_percent',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _isPpnActiveMeta = const VerificationMeta(
-    'isPpnActive',
-  );
-  @override
-  late final GeneratedColumn<bool> isPpnActive = GeneratedColumn<bool>(
-    'is_ppn_active',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_ppn_active" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _isPendingDeleteMeta = const VerificationMeta(
-    'isPendingDelete',
-  );
-  @override
-  late final GeneratedColumn<bool> isPendingDelete = GeneratedColumn<bool>(
-    'is_pending_delete',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_pending_delete" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _grandTotalMeta = const VerificationMeta(
-    'grandTotal',
-  );
-  @override
-  late final GeneratedColumn<double> grandTotal = GeneratedColumn<double>(
-    'grand_total',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _cachedAtMeta = const VerificationMeta(
-    'cachedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
-    'cached_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    serverId,
-    bookingOrderCode,
-    customerName,
-    tableNo,
-    paymentRequestJson,
-    latestPaymentJson,
-    paymentMethod,
-    orderStatus,
-    detailJson,
-    subtotal,
-    ppnPercent,
-    isPpnActive,
-    isPendingDelete,
-    grandTotal,
-    createdAt,
-    updatedAt,
-    cachedAt,
-  ];
+  List<GeneratedColumn> get $columns => [key, value];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'cached_payment_orders';
+  static const String $name = 'sync_meta';
   @override
   VerificationContext validateIntegrity(
-    Insertable<CachedPaymentOrder> instance, {
+    Insertable<SyncMetaData> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
-    if (data.containsKey('server_id')) {
+    if (data.containsKey('key')) {
       context.handle(
-        _serverIdMeta,
-        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
-      );
-    }
-    if (data.containsKey('booking_order_code')) {
-      context.handle(
-        _bookingOrderCodeMeta,
-        bookingOrderCode.isAcceptableOrUnknown(
-          data['booking_order_code']!,
-          _bookingOrderCodeMeta,
-        ),
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
       );
     } else if (isInserting) {
-      context.missing(_bookingOrderCodeMeta);
+      context.missing(_keyMeta);
     }
-    if (data.containsKey('customer_name')) {
+    if (data.containsKey('value')) {
       context.handle(
-        _customerNameMeta,
-        customerName.isAcceptableOrUnknown(
-          data['customer_name']!,
-          _customerNameMeta,
-        ),
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
       );
     } else if (isInserting) {
-      context.missing(_customerNameMeta);
-    }
-    if (data.containsKey('table_no')) {
-      context.handle(
-        _tableNoMeta,
-        tableNo.isAcceptableOrUnknown(data['table_no']!, _tableNoMeta),
-      );
-    }
-    if (data.containsKey('payment_request_json')) {
-      context.handle(
-        _paymentRequestJsonMeta,
-        paymentRequestJson.isAcceptableOrUnknown(
-          data['payment_request_json']!,
-          _paymentRequestJsonMeta,
-        ),
-      );
-    }
-    if (data.containsKey('latest_payment_json')) {
-      context.handle(
-        _latestPaymentJsonMeta,
-        latestPaymentJson.isAcceptableOrUnknown(
-          data['latest_payment_json']!,
-          _latestPaymentJsonMeta,
-        ),
-      );
-    }
-    if (data.containsKey('payment_method')) {
-      context.handle(
-        _paymentMethodMeta,
-        paymentMethod.isAcceptableOrUnknown(
-          data['payment_method']!,
-          _paymentMethodMeta,
-        ),
-      );
-    }
-    if (data.containsKey('order_status')) {
-      context.handle(
-        _orderStatusMeta,
-        orderStatus.isAcceptableOrUnknown(
-          data['order_status']!,
-          _orderStatusMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_orderStatusMeta);
-    }
-    if (data.containsKey('detail_json')) {
-      context.handle(
-        _detailJsonMeta,
-        detailJson.isAcceptableOrUnknown(data['detail_json']!, _detailJsonMeta),
-      );
-    }
-    if (data.containsKey('subtotal')) {
-      context.handle(
-        _subtotalMeta,
-        subtotal.isAcceptableOrUnknown(data['subtotal']!, _subtotalMeta),
-      );
-    }
-    if (data.containsKey('ppn_percent')) {
-      context.handle(
-        _ppnPercentMeta,
-        ppnPercent.isAcceptableOrUnknown(data['ppn_percent']!, _ppnPercentMeta),
-      );
-    }
-    if (data.containsKey('is_ppn_active')) {
-      context.handle(
-        _isPpnActiveMeta,
-        isPpnActive.isAcceptableOrUnknown(
-          data['is_ppn_active']!,
-          _isPpnActiveMeta,
-        ),
-      );
-    }
-    if (data.containsKey('is_pending_delete')) {
-      context.handle(
-        _isPendingDeleteMeta,
-        isPendingDelete.isAcceptableOrUnknown(
-          data['is_pending_delete']!,
-          _isPendingDeleteMeta,
-        ),
-      );
-    }
-    if (data.containsKey('grand_total')) {
-      context.handle(
-        _grandTotalMeta,
-        grandTotal.isAcceptableOrUnknown(data['grand_total']!, _grandTotalMeta),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
-    if (data.containsKey('cached_at')) {
-      context.handle(
-        _cachedAtMeta,
-        cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_cachedAtMeta);
+      context.missing(_valueMeta);
     }
     return context;
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {serverId};
+  Set<GeneratedColumn> get $primaryKey => {key};
   @override
-  CachedPaymentOrder map(Map<String, dynamic> data, {String? tablePrefix}) {
+  SyncMetaData map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CachedPaymentOrder(
-      serverId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}server_id'],
-      )!,
-      bookingOrderCode: attachedDatabase.typeMapping.read(
+    return SyncMetaData(
+      key: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}booking_order_code'],
+        data['${effectivePrefix}key'],
       )!,
-      customerName: attachedDatabase.typeMapping.read(
+      value: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}customer_name'],
-      )!,
-      tableNo: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}table_no'],
-      ),
-      paymentRequestJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}payment_request_json'],
-      ),
-      latestPaymentJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}latest_payment_json'],
-      ),
-      paymentMethod: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}payment_method'],
-      ),
-      orderStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}order_status'],
-      )!,
-      detailJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}detail_json'],
-      ),
-      subtotal: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}subtotal'],
-      )!,
-      ppnPercent: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}ppn_percent'],
-      )!,
-      isPpnActive: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_ppn_active'],
-      )!,
-      isPendingDelete: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_pending_delete'],
-      )!,
-      grandTotal: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}grand_total'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      ),
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      ),
-      cachedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}cached_at'],
+        data['${effectivePrefix}value'],
       )!,
     );
   }
 
   @override
-  $CachedPaymentOrdersTable createAlias(String alias) {
-    return $CachedPaymentOrdersTable(attachedDatabase, alias);
+  $SyncMetaTable createAlias(String alias) {
+    return $SyncMetaTable(attachedDatabase, alias);
   }
 }
 
-class CachedPaymentOrder extends DataClass
-    implements Insertable<CachedPaymentOrder> {
-  final int serverId;
-  final String bookingOrderCode;
-  final String customerName;
-  final String? tableNo;
-  final String? paymentRequestJson;
-  final String? latestPaymentJson;
-  final String? paymentMethod;
-  final String orderStatus;
-  final String? detailJson;
-  final double subtotal;
-  final double ppnPercent;
-  final bool isPpnActive;
-  final bool isPendingDelete;
-  final double grandTotal;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-  final DateTime cachedAt;
-  const CachedPaymentOrder({
-    required this.serverId,
-    required this.bookingOrderCode,
-    required this.customerName,
-    this.tableNo,
-    this.paymentRequestJson,
-    this.latestPaymentJson,
-    this.paymentMethod,
-    required this.orderStatus,
-    this.detailJson,
-    required this.subtotal,
-    required this.ppnPercent,
-    required this.isPpnActive,
-    required this.isPendingDelete,
-    required this.grandTotal,
-    this.createdAt,
-    this.updatedAt,
-    required this.cachedAt,
-  });
+class SyncMetaData extends DataClass implements Insertable<SyncMetaData> {
+  final String key;
+  final String value;
+  const SyncMetaData({required this.key, required this.value});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['server_id'] = Variable<int>(serverId);
-    map['booking_order_code'] = Variable<String>(bookingOrderCode);
-    map['customer_name'] = Variable<String>(customerName);
-    if (!nullToAbsent || tableNo != null) {
-      map['table_no'] = Variable<String>(tableNo);
-    }
-    if (!nullToAbsent || paymentRequestJson != null) {
-      map['payment_request_json'] = Variable<String>(paymentRequestJson);
-    }
-    if (!nullToAbsent || latestPaymentJson != null) {
-      map['latest_payment_json'] = Variable<String>(latestPaymentJson);
-    }
-    if (!nullToAbsent || paymentMethod != null) {
-      map['payment_method'] = Variable<String>(paymentMethod);
-    }
-    map['order_status'] = Variable<String>(orderStatus);
-    if (!nullToAbsent || detailJson != null) {
-      map['detail_json'] = Variable<String>(detailJson);
-    }
-    map['subtotal'] = Variable<double>(subtotal);
-    map['ppn_percent'] = Variable<double>(ppnPercent);
-    map['is_ppn_active'] = Variable<bool>(isPpnActive);
-    map['is_pending_delete'] = Variable<bool>(isPendingDelete);
-    map['grand_total'] = Variable<double>(grandTotal);
-    if (!nullToAbsent || createdAt != null) {
-      map['created_at'] = Variable<DateTime>(createdAt);
-    }
-    if (!nullToAbsent || updatedAt != null) {
-      map['updated_at'] = Variable<DateTime>(updatedAt);
-    }
-    map['cached_at'] = Variable<DateTime>(cachedAt);
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
     return map;
   }
 
-  CachedPaymentOrdersCompanion toCompanion(bool nullToAbsent) {
-    return CachedPaymentOrdersCompanion(
-      serverId: Value(serverId),
-      bookingOrderCode: Value(bookingOrderCode),
-      customerName: Value(customerName),
-      tableNo: tableNo == null && nullToAbsent
-          ? const Value.absent()
-          : Value(tableNo),
-      paymentRequestJson: paymentRequestJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(paymentRequestJson),
-      latestPaymentJson: latestPaymentJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(latestPaymentJson),
-      paymentMethod: paymentMethod == null && nullToAbsent
-          ? const Value.absent()
-          : Value(paymentMethod),
-      orderStatus: Value(orderStatus),
-      detailJson: detailJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(detailJson),
-      subtotal: Value(subtotal),
-      ppnPercent: Value(ppnPercent),
-      isPpnActive: Value(isPpnActive),
-      isPendingDelete: Value(isPendingDelete),
-      grandTotal: Value(grandTotal),
-      createdAt: createdAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(createdAt),
-      updatedAt: updatedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(updatedAt),
-      cachedAt: Value(cachedAt),
-    );
+  SyncMetaCompanion toCompanion(bool nullToAbsent) {
+    return SyncMetaCompanion(key: Value(key), value: Value(value));
   }
 
-  factory CachedPaymentOrder.fromJson(
+  factory SyncMetaData.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CachedPaymentOrder(
-      serverId: serializer.fromJson<int>(json['serverId']),
-      bookingOrderCode: serializer.fromJson<String>(json['bookingOrderCode']),
-      customerName: serializer.fromJson<String>(json['customerName']),
-      tableNo: serializer.fromJson<String?>(json['tableNo']),
-      paymentRequestJson: serializer.fromJson<String?>(
-        json['paymentRequestJson'],
-      ),
-      latestPaymentJson: serializer.fromJson<String?>(
-        json['latestPaymentJson'],
-      ),
-      paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
-      orderStatus: serializer.fromJson<String>(json['orderStatus']),
-      detailJson: serializer.fromJson<String?>(json['detailJson']),
-      subtotal: serializer.fromJson<double>(json['subtotal']),
-      ppnPercent: serializer.fromJson<double>(json['ppnPercent']),
-      isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
-      isPendingDelete: serializer.fromJson<bool>(json['isPendingDelete']),
-      grandTotal: serializer.fromJson<double>(json['grandTotal']),
-      createdAt: serializer.fromJson<DateTime?>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
-      cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+    return SyncMetaData(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'serverId': serializer.toJson<int>(serverId),
-      'bookingOrderCode': serializer.toJson<String>(bookingOrderCode),
-      'customerName': serializer.toJson<String>(customerName),
-      'tableNo': serializer.toJson<String?>(tableNo),
-      'paymentRequestJson': serializer.toJson<String?>(paymentRequestJson),
-      'latestPaymentJson': serializer.toJson<String?>(latestPaymentJson),
-      'paymentMethod': serializer.toJson<String?>(paymentMethod),
-      'orderStatus': serializer.toJson<String>(orderStatus),
-      'detailJson': serializer.toJson<String?>(detailJson),
-      'subtotal': serializer.toJson<double>(subtotal),
-      'ppnPercent': serializer.toJson<double>(ppnPercent),
-      'isPpnActive': serializer.toJson<bool>(isPpnActive),
-      'isPendingDelete': serializer.toJson<bool>(isPendingDelete),
-      'grandTotal': serializer.toJson<double>(grandTotal),
-      'createdAt': serializer.toJson<DateTime?>(createdAt),
-      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
-      'cachedAt': serializer.toJson<DateTime>(cachedAt),
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
     };
   }
 
-  CachedPaymentOrder copyWith({
-    int? serverId,
-    String? bookingOrderCode,
-    String? customerName,
-    Value<String?> tableNo = const Value.absent(),
-    Value<String?> paymentRequestJson = const Value.absent(),
-    Value<String?> latestPaymentJson = const Value.absent(),
-    Value<String?> paymentMethod = const Value.absent(),
-    String? orderStatus,
-    Value<String?> detailJson = const Value.absent(),
-    double? subtotal,
-    double? ppnPercent,
-    bool? isPpnActive,
-    bool? isPendingDelete,
-    double? grandTotal,
-    Value<DateTime?> createdAt = const Value.absent(),
-    Value<DateTime?> updatedAt = const Value.absent(),
-    DateTime? cachedAt,
-  }) => CachedPaymentOrder(
-    serverId: serverId ?? this.serverId,
-    bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
-    customerName: customerName ?? this.customerName,
-    tableNo: tableNo.present ? tableNo.value : this.tableNo,
-    paymentRequestJson: paymentRequestJson.present
-        ? paymentRequestJson.value
-        : this.paymentRequestJson,
-    latestPaymentJson: latestPaymentJson.present
-        ? latestPaymentJson.value
-        : this.latestPaymentJson,
-    paymentMethod: paymentMethod.present
-        ? paymentMethod.value
-        : this.paymentMethod,
-    orderStatus: orderStatus ?? this.orderStatus,
-    detailJson: detailJson.present ? detailJson.value : this.detailJson,
-    subtotal: subtotal ?? this.subtotal,
-    ppnPercent: ppnPercent ?? this.ppnPercent,
-    isPpnActive: isPpnActive ?? this.isPpnActive,
-    isPendingDelete: isPendingDelete ?? this.isPendingDelete,
-    grandTotal: grandTotal ?? this.grandTotal,
-    createdAt: createdAt.present ? createdAt.value : this.createdAt,
-    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
-    cachedAt: cachedAt ?? this.cachedAt,
-  );
-  CachedPaymentOrder copyWithCompanion(CachedPaymentOrdersCompanion data) {
-    return CachedPaymentOrder(
-      serverId: data.serverId.present ? data.serverId.value : this.serverId,
-      bookingOrderCode: data.bookingOrderCode.present
-          ? data.bookingOrderCode.value
-          : this.bookingOrderCode,
-      customerName: data.customerName.present
-          ? data.customerName.value
-          : this.customerName,
-      tableNo: data.tableNo.present ? data.tableNo.value : this.tableNo,
-      paymentRequestJson: data.paymentRequestJson.present
-          ? data.paymentRequestJson.value
-          : this.paymentRequestJson,
-      latestPaymentJson: data.latestPaymentJson.present
-          ? data.latestPaymentJson.value
-          : this.latestPaymentJson,
-      paymentMethod: data.paymentMethod.present
-          ? data.paymentMethod.value
-          : this.paymentMethod,
-      orderStatus: data.orderStatus.present
-          ? data.orderStatus.value
-          : this.orderStatus,
-      detailJson: data.detailJson.present
-          ? data.detailJson.value
-          : this.detailJson,
-      subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
-      ppnPercent: data.ppnPercent.present
-          ? data.ppnPercent.value
-          : this.ppnPercent,
-      isPpnActive: data.isPpnActive.present
-          ? data.isPpnActive.value
-          : this.isPpnActive,
-      isPendingDelete: data.isPendingDelete.present
-          ? data.isPendingDelete.value
-          : this.isPendingDelete,
-      grandTotal: data.grandTotal.present
-          ? data.grandTotal.value
-          : this.grandTotal,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+  SyncMetaData copyWith({String? key, String? value}) =>
+      SyncMetaData(key: key ?? this.key, value: value ?? this.value);
+  SyncMetaData copyWithCompanion(SyncMetaCompanion data) {
+    return SyncMetaData(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('CachedPaymentOrder(')
-          ..write('serverId: $serverId, ')
-          ..write('bookingOrderCode: $bookingOrderCode, ')
-          ..write('customerName: $customerName, ')
-          ..write('tableNo: $tableNo, ')
-          ..write('paymentRequestJson: $paymentRequestJson, ')
-          ..write('latestPaymentJson: $latestPaymentJson, ')
-          ..write('paymentMethod: $paymentMethod, ')
-          ..write('orderStatus: $orderStatus, ')
-          ..write('detailJson: $detailJson, ')
-          ..write('subtotal: $subtotal, ')
-          ..write('ppnPercent: $ppnPercent, ')
-          ..write('isPpnActive: $isPpnActive, ')
-          ..write('isPendingDelete: $isPendingDelete, ')
-          ..write('grandTotal: $grandTotal, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('cachedAt: $cachedAt')
+    return (StringBuffer('SyncMetaData(')
+          ..write('key: $key, ')
+          ..write('value: $value')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
-    serverId,
-    bookingOrderCode,
-    customerName,
-    tableNo,
-    paymentRequestJson,
-    latestPaymentJson,
-    paymentMethod,
-    orderStatus,
-    detailJson,
-    subtotal,
-    ppnPercent,
-    isPpnActive,
-    isPendingDelete,
-    grandTotal,
-    createdAt,
-    updatedAt,
-    cachedAt,
-  );
+  int get hashCode => Object.hash(key, value);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is CachedPaymentOrder &&
-          other.serverId == this.serverId &&
-          other.bookingOrderCode == this.bookingOrderCode &&
-          other.customerName == this.customerName &&
-          other.tableNo == this.tableNo &&
-          other.paymentRequestJson == this.paymentRequestJson &&
-          other.latestPaymentJson == this.latestPaymentJson &&
-          other.paymentMethod == this.paymentMethod &&
-          other.orderStatus == this.orderStatus &&
-          other.detailJson == this.detailJson &&
-          other.subtotal == this.subtotal &&
-          other.ppnPercent == this.ppnPercent &&
-          other.isPpnActive == this.isPpnActive &&
-          other.isPendingDelete == this.isPendingDelete &&
-          other.grandTotal == this.grandTotal &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt &&
-          other.cachedAt == this.cachedAt);
+      (other is SyncMetaData &&
+          other.key == this.key &&
+          other.value == this.value);
 }
 
-class CachedPaymentOrdersCompanion extends UpdateCompanion<CachedPaymentOrder> {
-  final Value<int> serverId;
-  final Value<String> bookingOrderCode;
-  final Value<String> customerName;
-  final Value<String?> tableNo;
-  final Value<String?> paymentRequestJson;
-  final Value<String?> latestPaymentJson;
-  final Value<String?> paymentMethod;
-  final Value<String> orderStatus;
-  final Value<String?> detailJson;
-  final Value<double> subtotal;
-  final Value<double> ppnPercent;
-  final Value<bool> isPpnActive;
-  final Value<bool> isPendingDelete;
-  final Value<double> grandTotal;
-  final Value<DateTime?> createdAt;
-  final Value<DateTime?> updatedAt;
-  final Value<DateTime> cachedAt;
-  const CachedPaymentOrdersCompanion({
-    this.serverId = const Value.absent(),
-    this.bookingOrderCode = const Value.absent(),
-    this.customerName = const Value.absent(),
-    this.tableNo = const Value.absent(),
-    this.paymentRequestJson = const Value.absent(),
-    this.latestPaymentJson = const Value.absent(),
-    this.paymentMethod = const Value.absent(),
-    this.orderStatus = const Value.absent(),
-    this.detailJson = const Value.absent(),
-    this.subtotal = const Value.absent(),
-    this.ppnPercent = const Value.absent(),
-    this.isPpnActive = const Value.absent(),
-    this.isPendingDelete = const Value.absent(),
-    this.grandTotal = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.cachedAt = const Value.absent(),
+class SyncMetaCompanion extends UpdateCompanion<SyncMetaData> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<int> rowid;
+  const SyncMetaCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
-  CachedPaymentOrdersCompanion.insert({
-    this.serverId = const Value.absent(),
-    required String bookingOrderCode,
-    required String customerName,
-    this.tableNo = const Value.absent(),
-    this.paymentRequestJson = const Value.absent(),
-    this.latestPaymentJson = const Value.absent(),
-    this.paymentMethod = const Value.absent(),
-    required String orderStatus,
-    this.detailJson = const Value.absent(),
-    this.subtotal = const Value.absent(),
-    this.ppnPercent = const Value.absent(),
-    this.isPpnActive = const Value.absent(),
-    this.isPendingDelete = const Value.absent(),
-    this.grandTotal = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    required DateTime cachedAt,
-  }) : bookingOrderCode = Value(bookingOrderCode),
-       customerName = Value(customerName),
-       orderStatus = Value(orderStatus),
-       cachedAt = Value(cachedAt);
-  static Insertable<CachedPaymentOrder> custom({
-    Expression<int>? serverId,
-    Expression<String>? bookingOrderCode,
-    Expression<String>? customerName,
-    Expression<String>? tableNo,
-    Expression<String>? paymentRequestJson,
-    Expression<String>? latestPaymentJson,
-    Expression<String>? paymentMethod,
-    Expression<String>? orderStatus,
-    Expression<String>? detailJson,
-    Expression<double>? subtotal,
-    Expression<double>? ppnPercent,
-    Expression<bool>? isPpnActive,
-    Expression<bool>? isPendingDelete,
-    Expression<double>? grandTotal,
-    Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
-    Expression<DateTime>? cachedAt,
+  SyncMetaCompanion.insert({
+    required String key,
+    required String value,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       value = Value(value);
+  static Insertable<SyncMetaData> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (serverId != null) 'server_id': serverId,
-      if (bookingOrderCode != null) 'booking_order_code': bookingOrderCode,
-      if (customerName != null) 'customer_name': customerName,
-      if (tableNo != null) 'table_no': tableNo,
-      if (paymentRequestJson != null)
-        'payment_request_json': paymentRequestJson,
-      if (latestPaymentJson != null) 'latest_payment_json': latestPaymentJson,
-      if (paymentMethod != null) 'payment_method': paymentMethod,
-      if (orderStatus != null) 'order_status': orderStatus,
-      if (detailJson != null) 'detail_json': detailJson,
-      if (subtotal != null) 'subtotal': subtotal,
-      if (ppnPercent != null) 'ppn_percent': ppnPercent,
-      if (isPpnActive != null) 'is_ppn_active': isPpnActive,
-      if (isPendingDelete != null) 'is_pending_delete': isPendingDelete,
-      if (grandTotal != null) 'grand_total': grandTotal,
-      if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (cachedAt != null) 'cached_at': cachedAt,
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
-  CachedPaymentOrdersCompanion copyWith({
-    Value<int>? serverId,
-    Value<String>? bookingOrderCode,
-    Value<String>? customerName,
-    Value<String?>? tableNo,
-    Value<String?>? paymentRequestJson,
-    Value<String?>? latestPaymentJson,
-    Value<String?>? paymentMethod,
-    Value<String>? orderStatus,
-    Value<String?>? detailJson,
-    Value<double>? subtotal,
-    Value<double>? ppnPercent,
-    Value<bool>? isPpnActive,
-    Value<bool>? isPendingDelete,
-    Value<double>? grandTotal,
-    Value<DateTime?>? createdAt,
-    Value<DateTime?>? updatedAt,
-    Value<DateTime>? cachedAt,
+  SyncMetaCompanion copyWith({
+    Value<String>? key,
+    Value<String>? value,
+    Value<int>? rowid,
   }) {
-    return CachedPaymentOrdersCompanion(
-      serverId: serverId ?? this.serverId,
-      bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
-      customerName: customerName ?? this.customerName,
-      tableNo: tableNo ?? this.tableNo,
-      paymentRequestJson: paymentRequestJson ?? this.paymentRequestJson,
-      latestPaymentJson: latestPaymentJson ?? this.latestPaymentJson,
-      paymentMethod: paymentMethod ?? this.paymentMethod,
-      orderStatus: orderStatus ?? this.orderStatus,
-      detailJson: detailJson ?? this.detailJson,
-      subtotal: subtotal ?? this.subtotal,
-      ppnPercent: ppnPercent ?? this.ppnPercent,
-      isPpnActive: isPpnActive ?? this.isPpnActive,
-      isPendingDelete: isPendingDelete ?? this.isPendingDelete,
-      grandTotal: grandTotal ?? this.grandTotal,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      cachedAt: cachedAt ?? this.cachedAt,
+    return SyncMetaCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
     );
   }
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (serverId.present) {
-      map['server_id'] = Variable<int>(serverId.value);
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
     }
-    if (bookingOrderCode.present) {
-      map['booking_order_code'] = Variable<String>(bookingOrderCode.value);
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
     }
-    if (customerName.present) {
-      map['customer_name'] = Variable<String>(customerName.value);
-    }
-    if (tableNo.present) {
-      map['table_no'] = Variable<String>(tableNo.value);
-    }
-    if (paymentRequestJson.present) {
-      map['payment_request_json'] = Variable<String>(paymentRequestJson.value);
-    }
-    if (latestPaymentJson.present) {
-      map['latest_payment_json'] = Variable<String>(latestPaymentJson.value);
-    }
-    if (paymentMethod.present) {
-      map['payment_method'] = Variable<String>(paymentMethod.value);
-    }
-    if (orderStatus.present) {
-      map['order_status'] = Variable<String>(orderStatus.value);
-    }
-    if (detailJson.present) {
-      map['detail_json'] = Variable<String>(detailJson.value);
-    }
-    if (subtotal.present) {
-      map['subtotal'] = Variable<double>(subtotal.value);
-    }
-    if (ppnPercent.present) {
-      map['ppn_percent'] = Variable<double>(ppnPercent.value);
-    }
-    if (isPpnActive.present) {
-      map['is_ppn_active'] = Variable<bool>(isPpnActive.value);
-    }
-    if (isPendingDelete.present) {
-      map['is_pending_delete'] = Variable<bool>(isPendingDelete.value);
-    }
-    if (grandTotal.present) {
-      map['grand_total'] = Variable<double>(grandTotal.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (cachedAt.present) {
-      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
     }
     return map;
   }
 
   @override
   String toString() {
-    return (StringBuffer('CachedPaymentOrdersCompanion(')
-          ..write('serverId: $serverId, ')
-          ..write('bookingOrderCode: $bookingOrderCode, ')
-          ..write('customerName: $customerName, ')
-          ..write('tableNo: $tableNo, ')
-          ..write('paymentRequestJson: $paymentRequestJson, ')
-          ..write('latestPaymentJson: $latestPaymentJson, ')
-          ..write('paymentMethod: $paymentMethod, ')
-          ..write('orderStatus: $orderStatus, ')
-          ..write('detailJson: $detailJson, ')
-          ..write('subtotal: $subtotal, ')
-          ..write('ppnPercent: $ppnPercent, ')
-          ..write('isPpnActive: $isPpnActive, ')
-          ..write('isPendingDelete: $isPendingDelete, ')
-          ..write('grandTotal: $grandTotal, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('cachedAt: $cachedAt')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $CachedProcessOrdersTable extends CachedProcessOrders
-    with TableInfo<$CachedProcessOrdersTable, CachedProcessOrder> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $CachedProcessOrdersTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _serverIdMeta = const VerificationMeta(
-    'serverId',
-  );
-  @override
-  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
-    'server_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _bookingOrderCodeMeta = const VerificationMeta(
-    'bookingOrderCode',
-  );
-  @override
-  late final GeneratedColumn<String> bookingOrderCode = GeneratedColumn<String>(
-    'booking_order_code',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _customerNameMeta = const VerificationMeta(
-    'customerName',
-  );
-  @override
-  late final GeneratedColumn<String> customerName = GeneratedColumn<String>(
-    'customer_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _tableNoMeta = const VerificationMeta(
-    'tableNo',
-  );
-  @override
-  late final GeneratedColumn<String> tableNo = GeneratedColumn<String>(
-    'table_no',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _processRequestJsonMeta =
-      const VerificationMeta('processRequestJson');
-  @override
-  late final GeneratedColumn<String> processRequestJson =
-      GeneratedColumn<String>(
-        'process_request_json',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _latestProcessJsonMeta = const VerificationMeta(
-    'latestProcessJson',
-  );
-  @override
-  late final GeneratedColumn<String> latestProcessJson =
-      GeneratedColumn<String>(
-        'latest_process_json',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _detailJsonMeta = const VerificationMeta(
-    'detailJson',
-  );
-  @override
-  late final GeneratedColumn<String> detailJson = GeneratedColumn<String>(
-    'detail_json',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _paymentMethodMeta = const VerificationMeta(
-    'paymentMethod',
-  );
-  @override
-  late final GeneratedColumn<String> paymentMethod = GeneratedColumn<String>(
-    'payment_method',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _orderStatusMeta = const VerificationMeta(
-    'orderStatus',
-  );
-  @override
-  late final GeneratedColumn<String> orderStatus = GeneratedColumn<String>(
-    'order_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _subtotalMeta = const VerificationMeta(
-    'subtotal',
-  );
-  @override
-  late final GeneratedColumn<double> subtotal = GeneratedColumn<double>(
-    'subtotal',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _ppnPercentMeta = const VerificationMeta(
-    'ppnPercent',
-  );
-  @override
-  late final GeneratedColumn<double> ppnPercent = GeneratedColumn<double>(
-    'ppn_percent',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _isPpnActiveMeta = const VerificationMeta(
-    'isPpnActive',
-  );
-  @override
-  late final GeneratedColumn<bool> isPpnActive = GeneratedColumn<bool>(
-    'is_ppn_active',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_ppn_active" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _pendingActionMeta = const VerificationMeta(
-    'pendingAction',
-  );
-  @override
-  late final GeneratedColumn<String> pendingAction = GeneratedColumn<String>(
-    'pending_action',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _isSyncedMeta = const VerificationMeta(
-    'isSynced',
-  );
-  @override
-  late final GeneratedColumn<bool> isSynced = GeneratedColumn<bool>(
-    'is_synced',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_synced" IN (0, 1))',
-    ),
-    defaultValue: const Constant(true),
-  );
-  static const VerificationMeta _processedByKitchenMeta =
-      const VerificationMeta('processedByKitchen');
-  @override
-  late final GeneratedColumn<bool> processedByKitchen = GeneratedColumn<bool>(
-    'processed_by_kitchen',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("processed_by_kitchen" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _deletedLocallyMeta = const VerificationMeta(
-    'deletedLocally',
-  );
-  @override
-  late final GeneratedColumn<bool> deletedLocally = GeneratedColumn<bool>(
-    'deleted_locally',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("deleted_locally" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _syncedAtMeta = const VerificationMeta(
-    'syncedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
-    'synced_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    serverId,
-    bookingOrderCode,
-    customerName,
-    tableNo,
-    processRequestJson,
-    latestProcessJson,
-    detailJson,
-    paymentMethod,
-    orderStatus,
-    subtotal,
-    ppnPercent,
-    isPpnActive,
-    pendingAction,
-    isSynced,
-    processedByKitchen,
-    deletedLocally,
-    syncedAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'cached_process_orders';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<CachedProcessOrder> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('server_id')) {
-      context.handle(
-        _serverIdMeta,
-        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
-      );
-    }
-    if (data.containsKey('booking_order_code')) {
-      context.handle(
-        _bookingOrderCodeMeta,
-        bookingOrderCode.isAcceptableOrUnknown(
-          data['booking_order_code']!,
-          _bookingOrderCodeMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_bookingOrderCodeMeta);
-    }
-    if (data.containsKey('customer_name')) {
-      context.handle(
-        _customerNameMeta,
-        customerName.isAcceptableOrUnknown(
-          data['customer_name']!,
-          _customerNameMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_customerNameMeta);
-    }
-    if (data.containsKey('table_no')) {
-      context.handle(
-        _tableNoMeta,
-        tableNo.isAcceptableOrUnknown(data['table_no']!, _tableNoMeta),
-      );
-    }
-    if (data.containsKey('process_request_json')) {
-      context.handle(
-        _processRequestJsonMeta,
-        processRequestJson.isAcceptableOrUnknown(
-          data['process_request_json']!,
-          _processRequestJsonMeta,
-        ),
-      );
-    }
-    if (data.containsKey('latest_process_json')) {
-      context.handle(
-        _latestProcessJsonMeta,
-        latestProcessJson.isAcceptableOrUnknown(
-          data['latest_process_json']!,
-          _latestProcessJsonMeta,
-        ),
-      );
-    }
-    if (data.containsKey('detail_json')) {
-      context.handle(
-        _detailJsonMeta,
-        detailJson.isAcceptableOrUnknown(data['detail_json']!, _detailJsonMeta),
-      );
-    }
-    if (data.containsKey('payment_method')) {
-      context.handle(
-        _paymentMethodMeta,
-        paymentMethod.isAcceptableOrUnknown(
-          data['payment_method']!,
-          _paymentMethodMeta,
-        ),
-      );
-    }
-    if (data.containsKey('order_status')) {
-      context.handle(
-        _orderStatusMeta,
-        orderStatus.isAcceptableOrUnknown(
-          data['order_status']!,
-          _orderStatusMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_orderStatusMeta);
-    }
-    if (data.containsKey('subtotal')) {
-      context.handle(
-        _subtotalMeta,
-        subtotal.isAcceptableOrUnknown(data['subtotal']!, _subtotalMeta),
-      );
-    }
-    if (data.containsKey('ppn_percent')) {
-      context.handle(
-        _ppnPercentMeta,
-        ppnPercent.isAcceptableOrUnknown(data['ppn_percent']!, _ppnPercentMeta),
-      );
-    }
-    if (data.containsKey('is_ppn_active')) {
-      context.handle(
-        _isPpnActiveMeta,
-        isPpnActive.isAcceptableOrUnknown(
-          data['is_ppn_active']!,
-          _isPpnActiveMeta,
-        ),
-      );
-    }
-    if (data.containsKey('pending_action')) {
-      context.handle(
-        _pendingActionMeta,
-        pendingAction.isAcceptableOrUnknown(
-          data['pending_action']!,
-          _pendingActionMeta,
-        ),
-      );
-    }
-    if (data.containsKey('is_synced')) {
-      context.handle(
-        _isSyncedMeta,
-        isSynced.isAcceptableOrUnknown(data['is_synced']!, _isSyncedMeta),
-      );
-    }
-    if (data.containsKey('processed_by_kitchen')) {
-      context.handle(
-        _processedByKitchenMeta,
-        processedByKitchen.isAcceptableOrUnknown(
-          data['processed_by_kitchen']!,
-          _processedByKitchenMeta,
-        ),
-      );
-    }
-    if (data.containsKey('deleted_locally')) {
-      context.handle(
-        _deletedLocallyMeta,
-        deletedLocally.isAcceptableOrUnknown(
-          data['deleted_locally']!,
-          _deletedLocallyMeta,
-        ),
-      );
-    }
-    if (data.containsKey('synced_at')) {
-      context.handle(
-        _syncedAtMeta,
-        syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {serverId};
-  @override
-  CachedProcessOrder map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CachedProcessOrder(
-      serverId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}server_id'],
-      )!,
-      bookingOrderCode: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}booking_order_code'],
-      )!,
-      customerName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}customer_name'],
-      )!,
-      tableNo: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}table_no'],
-      ),
-      processRequestJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}process_request_json'],
-      ),
-      latestProcessJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}latest_process_json'],
-      ),
-      detailJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}detail_json'],
-      ),
-      paymentMethod: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}payment_method'],
-      ),
-      orderStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}order_status'],
-      )!,
-      subtotal: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}subtotal'],
-      )!,
-      ppnPercent: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}ppn_percent'],
-      )!,
-      isPpnActive: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_ppn_active'],
-      )!,
-      pendingAction: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}pending_action'],
-      ),
-      isSynced: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_synced'],
-      )!,
-      processedByKitchen: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}processed_by_kitchen'],
-      )!,
-      deletedLocally: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}deleted_locally'],
-      )!,
-      syncedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}synced_at'],
-      ),
-    );
-  }
-
-  @override
-  $CachedProcessOrdersTable createAlias(String alias) {
-    return $CachedProcessOrdersTable(attachedDatabase, alias);
-  }
-}
-
-class CachedProcessOrder extends DataClass
-    implements Insertable<CachedProcessOrder> {
-  final int serverId;
-  final String bookingOrderCode;
-  final String customerName;
-  final String? tableNo;
-  final String? processRequestJson;
-  final String? latestProcessJson;
-  final String? detailJson;
-  final String? paymentMethod;
-  final String orderStatus;
-  final double subtotal;
-  final double ppnPercent;
-  final bool isPpnActive;
-  final String? pendingAction;
-  final bool isSynced;
-  final bool processedByKitchen;
-  final bool deletedLocally;
-  final DateTime? syncedAt;
-  const CachedProcessOrder({
-    required this.serverId,
-    required this.bookingOrderCode,
-    required this.customerName,
-    this.tableNo,
-    this.processRequestJson,
-    this.latestProcessJson,
-    this.detailJson,
-    this.paymentMethod,
-    required this.orderStatus,
-    required this.subtotal,
-    required this.ppnPercent,
-    required this.isPpnActive,
-    this.pendingAction,
-    required this.isSynced,
-    required this.processedByKitchen,
-    required this.deletedLocally,
-    this.syncedAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['server_id'] = Variable<int>(serverId);
-    map['booking_order_code'] = Variable<String>(bookingOrderCode);
-    map['customer_name'] = Variable<String>(customerName);
-    if (!nullToAbsent || tableNo != null) {
-      map['table_no'] = Variable<String>(tableNo);
-    }
-    if (!nullToAbsent || processRequestJson != null) {
-      map['process_request_json'] = Variable<String>(processRequestJson);
-    }
-    if (!nullToAbsent || latestProcessJson != null) {
-      map['latest_process_json'] = Variable<String>(latestProcessJson);
-    }
-    if (!nullToAbsent || detailJson != null) {
-      map['detail_json'] = Variable<String>(detailJson);
-    }
-    if (!nullToAbsent || paymentMethod != null) {
-      map['payment_method'] = Variable<String>(paymentMethod);
-    }
-    map['order_status'] = Variable<String>(orderStatus);
-    map['subtotal'] = Variable<double>(subtotal);
-    map['ppn_percent'] = Variable<double>(ppnPercent);
-    map['is_ppn_active'] = Variable<bool>(isPpnActive);
-    if (!nullToAbsent || pendingAction != null) {
-      map['pending_action'] = Variable<String>(pendingAction);
-    }
-    map['is_synced'] = Variable<bool>(isSynced);
-    map['processed_by_kitchen'] = Variable<bool>(processedByKitchen);
-    map['deleted_locally'] = Variable<bool>(deletedLocally);
-    if (!nullToAbsent || syncedAt != null) {
-      map['synced_at'] = Variable<DateTime>(syncedAt);
-    }
-    return map;
-  }
-
-  CachedProcessOrdersCompanion toCompanion(bool nullToAbsent) {
-    return CachedProcessOrdersCompanion(
-      serverId: Value(serverId),
-      bookingOrderCode: Value(bookingOrderCode),
-      customerName: Value(customerName),
-      tableNo: tableNo == null && nullToAbsent
-          ? const Value.absent()
-          : Value(tableNo),
-      processRequestJson: processRequestJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(processRequestJson),
-      latestProcessJson: latestProcessJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(latestProcessJson),
-      detailJson: detailJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(detailJson),
-      paymentMethod: paymentMethod == null && nullToAbsent
-          ? const Value.absent()
-          : Value(paymentMethod),
-      orderStatus: Value(orderStatus),
-      subtotal: Value(subtotal),
-      ppnPercent: Value(ppnPercent),
-      isPpnActive: Value(isPpnActive),
-      pendingAction: pendingAction == null && nullToAbsent
-          ? const Value.absent()
-          : Value(pendingAction),
-      isSynced: Value(isSynced),
-      processedByKitchen: Value(processedByKitchen),
-      deletedLocally: Value(deletedLocally),
-      syncedAt: syncedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(syncedAt),
-    );
-  }
-
-  factory CachedProcessOrder.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CachedProcessOrder(
-      serverId: serializer.fromJson<int>(json['serverId']),
-      bookingOrderCode: serializer.fromJson<String>(json['bookingOrderCode']),
-      customerName: serializer.fromJson<String>(json['customerName']),
-      tableNo: serializer.fromJson<String?>(json['tableNo']),
-      processRequestJson: serializer.fromJson<String?>(
-        json['processRequestJson'],
-      ),
-      latestProcessJson: serializer.fromJson<String?>(
-        json['latestProcessJson'],
-      ),
-      detailJson: serializer.fromJson<String?>(json['detailJson']),
-      paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
-      orderStatus: serializer.fromJson<String>(json['orderStatus']),
-      subtotal: serializer.fromJson<double>(json['subtotal']),
-      ppnPercent: serializer.fromJson<double>(json['ppnPercent']),
-      isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
-      pendingAction: serializer.fromJson<String?>(json['pendingAction']),
-      isSynced: serializer.fromJson<bool>(json['isSynced']),
-      processedByKitchen: serializer.fromJson<bool>(json['processedByKitchen']),
-      deletedLocally: serializer.fromJson<bool>(json['deletedLocally']),
-      syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'serverId': serializer.toJson<int>(serverId),
-      'bookingOrderCode': serializer.toJson<String>(bookingOrderCode),
-      'customerName': serializer.toJson<String>(customerName),
-      'tableNo': serializer.toJson<String?>(tableNo),
-      'processRequestJson': serializer.toJson<String?>(processRequestJson),
-      'latestProcessJson': serializer.toJson<String?>(latestProcessJson),
-      'detailJson': serializer.toJson<String?>(detailJson),
-      'paymentMethod': serializer.toJson<String?>(paymentMethod),
-      'orderStatus': serializer.toJson<String>(orderStatus),
-      'subtotal': serializer.toJson<double>(subtotal),
-      'ppnPercent': serializer.toJson<double>(ppnPercent),
-      'isPpnActive': serializer.toJson<bool>(isPpnActive),
-      'pendingAction': serializer.toJson<String?>(pendingAction),
-      'isSynced': serializer.toJson<bool>(isSynced),
-      'processedByKitchen': serializer.toJson<bool>(processedByKitchen),
-      'deletedLocally': serializer.toJson<bool>(deletedLocally),
-      'syncedAt': serializer.toJson<DateTime?>(syncedAt),
-    };
-  }
-
-  CachedProcessOrder copyWith({
-    int? serverId,
-    String? bookingOrderCode,
-    String? customerName,
-    Value<String?> tableNo = const Value.absent(),
-    Value<String?> processRequestJson = const Value.absent(),
-    Value<String?> latestProcessJson = const Value.absent(),
-    Value<String?> detailJson = const Value.absent(),
-    Value<String?> paymentMethod = const Value.absent(),
-    String? orderStatus,
-    double? subtotal,
-    double? ppnPercent,
-    bool? isPpnActive,
-    Value<String?> pendingAction = const Value.absent(),
-    bool? isSynced,
-    bool? processedByKitchen,
-    bool? deletedLocally,
-    Value<DateTime?> syncedAt = const Value.absent(),
-  }) => CachedProcessOrder(
-    serverId: serverId ?? this.serverId,
-    bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
-    customerName: customerName ?? this.customerName,
-    tableNo: tableNo.present ? tableNo.value : this.tableNo,
-    processRequestJson: processRequestJson.present
-        ? processRequestJson.value
-        : this.processRequestJson,
-    latestProcessJson: latestProcessJson.present
-        ? latestProcessJson.value
-        : this.latestProcessJson,
-    detailJson: detailJson.present ? detailJson.value : this.detailJson,
-    paymentMethod: paymentMethod.present
-        ? paymentMethod.value
-        : this.paymentMethod,
-    orderStatus: orderStatus ?? this.orderStatus,
-    subtotal: subtotal ?? this.subtotal,
-    ppnPercent: ppnPercent ?? this.ppnPercent,
-    isPpnActive: isPpnActive ?? this.isPpnActive,
-    pendingAction: pendingAction.present
-        ? pendingAction.value
-        : this.pendingAction,
-    isSynced: isSynced ?? this.isSynced,
-    processedByKitchen: processedByKitchen ?? this.processedByKitchen,
-    deletedLocally: deletedLocally ?? this.deletedLocally,
-    syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
-  );
-  CachedProcessOrder copyWithCompanion(CachedProcessOrdersCompanion data) {
-    return CachedProcessOrder(
-      serverId: data.serverId.present ? data.serverId.value : this.serverId,
-      bookingOrderCode: data.bookingOrderCode.present
-          ? data.bookingOrderCode.value
-          : this.bookingOrderCode,
-      customerName: data.customerName.present
-          ? data.customerName.value
-          : this.customerName,
-      tableNo: data.tableNo.present ? data.tableNo.value : this.tableNo,
-      processRequestJson: data.processRequestJson.present
-          ? data.processRequestJson.value
-          : this.processRequestJson,
-      latestProcessJson: data.latestProcessJson.present
-          ? data.latestProcessJson.value
-          : this.latestProcessJson,
-      detailJson: data.detailJson.present
-          ? data.detailJson.value
-          : this.detailJson,
-      paymentMethod: data.paymentMethod.present
-          ? data.paymentMethod.value
-          : this.paymentMethod,
-      orderStatus: data.orderStatus.present
-          ? data.orderStatus.value
-          : this.orderStatus,
-      subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
-      ppnPercent: data.ppnPercent.present
-          ? data.ppnPercent.value
-          : this.ppnPercent,
-      isPpnActive: data.isPpnActive.present
-          ? data.isPpnActive.value
-          : this.isPpnActive,
-      pendingAction: data.pendingAction.present
-          ? data.pendingAction.value
-          : this.pendingAction,
-      isSynced: data.isSynced.present ? data.isSynced.value : this.isSynced,
-      processedByKitchen: data.processedByKitchen.present
-          ? data.processedByKitchen.value
-          : this.processedByKitchen,
-      deletedLocally: data.deletedLocally.present
-          ? data.deletedLocally.value
-          : this.deletedLocally,
-      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CachedProcessOrder(')
-          ..write('serverId: $serverId, ')
-          ..write('bookingOrderCode: $bookingOrderCode, ')
-          ..write('customerName: $customerName, ')
-          ..write('tableNo: $tableNo, ')
-          ..write('processRequestJson: $processRequestJson, ')
-          ..write('latestProcessJson: $latestProcessJson, ')
-          ..write('detailJson: $detailJson, ')
-          ..write('paymentMethod: $paymentMethod, ')
-          ..write('orderStatus: $orderStatus, ')
-          ..write('subtotal: $subtotal, ')
-          ..write('ppnPercent: $ppnPercent, ')
-          ..write('isPpnActive: $isPpnActive, ')
-          ..write('pendingAction: $pendingAction, ')
-          ..write('isSynced: $isSynced, ')
-          ..write('processedByKitchen: $processedByKitchen, ')
-          ..write('deletedLocally: $deletedLocally, ')
-          ..write('syncedAt: $syncedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    serverId,
-    bookingOrderCode,
-    customerName,
-    tableNo,
-    processRequestJson,
-    latestProcessJson,
-    detailJson,
-    paymentMethod,
-    orderStatus,
-    subtotal,
-    ppnPercent,
-    isPpnActive,
-    pendingAction,
-    isSynced,
-    processedByKitchen,
-    deletedLocally,
-    syncedAt,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is CachedProcessOrder &&
-          other.serverId == this.serverId &&
-          other.bookingOrderCode == this.bookingOrderCode &&
-          other.customerName == this.customerName &&
-          other.tableNo == this.tableNo &&
-          other.processRequestJson == this.processRequestJson &&
-          other.latestProcessJson == this.latestProcessJson &&
-          other.detailJson == this.detailJson &&
-          other.paymentMethod == this.paymentMethod &&
-          other.orderStatus == this.orderStatus &&
-          other.subtotal == this.subtotal &&
-          other.ppnPercent == this.ppnPercent &&
-          other.isPpnActive == this.isPpnActive &&
-          other.pendingAction == this.pendingAction &&
-          other.isSynced == this.isSynced &&
-          other.processedByKitchen == this.processedByKitchen &&
-          other.deletedLocally == this.deletedLocally &&
-          other.syncedAt == this.syncedAt);
-}
-
-class CachedProcessOrdersCompanion extends UpdateCompanion<CachedProcessOrder> {
-  final Value<int> serverId;
-  final Value<String> bookingOrderCode;
-  final Value<String> customerName;
-  final Value<String?> tableNo;
-  final Value<String?> processRequestJson;
-  final Value<String?> latestProcessJson;
-  final Value<String?> detailJson;
-  final Value<String?> paymentMethod;
-  final Value<String> orderStatus;
-  final Value<double> subtotal;
-  final Value<double> ppnPercent;
-  final Value<bool> isPpnActive;
-  final Value<String?> pendingAction;
-  final Value<bool> isSynced;
-  final Value<bool> processedByKitchen;
-  final Value<bool> deletedLocally;
-  final Value<DateTime?> syncedAt;
-  const CachedProcessOrdersCompanion({
-    this.serverId = const Value.absent(),
-    this.bookingOrderCode = const Value.absent(),
-    this.customerName = const Value.absent(),
-    this.tableNo = const Value.absent(),
-    this.processRequestJson = const Value.absent(),
-    this.latestProcessJson = const Value.absent(),
-    this.detailJson = const Value.absent(),
-    this.paymentMethod = const Value.absent(),
-    this.orderStatus = const Value.absent(),
-    this.subtotal = const Value.absent(),
-    this.ppnPercent = const Value.absent(),
-    this.isPpnActive = const Value.absent(),
-    this.pendingAction = const Value.absent(),
-    this.isSynced = const Value.absent(),
-    this.processedByKitchen = const Value.absent(),
-    this.deletedLocally = const Value.absent(),
-    this.syncedAt = const Value.absent(),
-  });
-  CachedProcessOrdersCompanion.insert({
-    this.serverId = const Value.absent(),
-    required String bookingOrderCode,
-    required String customerName,
-    this.tableNo = const Value.absent(),
-    this.processRequestJson = const Value.absent(),
-    this.latestProcessJson = const Value.absent(),
-    this.detailJson = const Value.absent(),
-    this.paymentMethod = const Value.absent(),
-    required String orderStatus,
-    this.subtotal = const Value.absent(),
-    this.ppnPercent = const Value.absent(),
-    this.isPpnActive = const Value.absent(),
-    this.pendingAction = const Value.absent(),
-    this.isSynced = const Value.absent(),
-    this.processedByKitchen = const Value.absent(),
-    this.deletedLocally = const Value.absent(),
-    this.syncedAt = const Value.absent(),
-  }) : bookingOrderCode = Value(bookingOrderCode),
-       customerName = Value(customerName),
-       orderStatus = Value(orderStatus);
-  static Insertable<CachedProcessOrder> custom({
-    Expression<int>? serverId,
-    Expression<String>? bookingOrderCode,
-    Expression<String>? customerName,
-    Expression<String>? tableNo,
-    Expression<String>? processRequestJson,
-    Expression<String>? latestProcessJson,
-    Expression<String>? detailJson,
-    Expression<String>? paymentMethod,
-    Expression<String>? orderStatus,
-    Expression<double>? subtotal,
-    Expression<double>? ppnPercent,
-    Expression<bool>? isPpnActive,
-    Expression<String>? pendingAction,
-    Expression<bool>? isSynced,
-    Expression<bool>? processedByKitchen,
-    Expression<bool>? deletedLocally,
-    Expression<DateTime>? syncedAt,
-  }) {
-    return RawValuesInsertable({
-      if (serverId != null) 'server_id': serverId,
-      if (bookingOrderCode != null) 'booking_order_code': bookingOrderCode,
-      if (customerName != null) 'customer_name': customerName,
-      if (tableNo != null) 'table_no': tableNo,
-      if (processRequestJson != null)
-        'process_request_json': processRequestJson,
-      if (latestProcessJson != null) 'latest_process_json': latestProcessJson,
-      if (detailJson != null) 'detail_json': detailJson,
-      if (paymentMethod != null) 'payment_method': paymentMethod,
-      if (orderStatus != null) 'order_status': orderStatus,
-      if (subtotal != null) 'subtotal': subtotal,
-      if (ppnPercent != null) 'ppn_percent': ppnPercent,
-      if (isPpnActive != null) 'is_ppn_active': isPpnActive,
-      if (pendingAction != null) 'pending_action': pendingAction,
-      if (isSynced != null) 'is_synced': isSynced,
-      if (processedByKitchen != null)
-        'processed_by_kitchen': processedByKitchen,
-      if (deletedLocally != null) 'deleted_locally': deletedLocally,
-      if (syncedAt != null) 'synced_at': syncedAt,
-    });
-  }
-
-  CachedProcessOrdersCompanion copyWith({
-    Value<int>? serverId,
-    Value<String>? bookingOrderCode,
-    Value<String>? customerName,
-    Value<String?>? tableNo,
-    Value<String?>? processRequestJson,
-    Value<String?>? latestProcessJson,
-    Value<String?>? detailJson,
-    Value<String?>? paymentMethod,
-    Value<String>? orderStatus,
-    Value<double>? subtotal,
-    Value<double>? ppnPercent,
-    Value<bool>? isPpnActive,
-    Value<String?>? pendingAction,
-    Value<bool>? isSynced,
-    Value<bool>? processedByKitchen,
-    Value<bool>? deletedLocally,
-    Value<DateTime?>? syncedAt,
-  }) {
-    return CachedProcessOrdersCompanion(
-      serverId: serverId ?? this.serverId,
-      bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
-      customerName: customerName ?? this.customerName,
-      tableNo: tableNo ?? this.tableNo,
-      processRequestJson: processRequestJson ?? this.processRequestJson,
-      latestProcessJson: latestProcessJson ?? this.latestProcessJson,
-      detailJson: detailJson ?? this.detailJson,
-      paymentMethod: paymentMethod ?? this.paymentMethod,
-      orderStatus: orderStatus ?? this.orderStatus,
-      subtotal: subtotal ?? this.subtotal,
-      ppnPercent: ppnPercent ?? this.ppnPercent,
-      isPpnActive: isPpnActive ?? this.isPpnActive,
-      pendingAction: pendingAction ?? this.pendingAction,
-      isSynced: isSynced ?? this.isSynced,
-      processedByKitchen: processedByKitchen ?? this.processedByKitchen,
-      deletedLocally: deletedLocally ?? this.deletedLocally,
-      syncedAt: syncedAt ?? this.syncedAt,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (serverId.present) {
-      map['server_id'] = Variable<int>(serverId.value);
-    }
-    if (bookingOrderCode.present) {
-      map['booking_order_code'] = Variable<String>(bookingOrderCode.value);
-    }
-    if (customerName.present) {
-      map['customer_name'] = Variable<String>(customerName.value);
-    }
-    if (tableNo.present) {
-      map['table_no'] = Variable<String>(tableNo.value);
-    }
-    if (processRequestJson.present) {
-      map['process_request_json'] = Variable<String>(processRequestJson.value);
-    }
-    if (latestProcessJson.present) {
-      map['latest_process_json'] = Variable<String>(latestProcessJson.value);
-    }
-    if (detailJson.present) {
-      map['detail_json'] = Variable<String>(detailJson.value);
-    }
-    if (paymentMethod.present) {
-      map['payment_method'] = Variable<String>(paymentMethod.value);
-    }
-    if (orderStatus.present) {
-      map['order_status'] = Variable<String>(orderStatus.value);
-    }
-    if (subtotal.present) {
-      map['subtotal'] = Variable<double>(subtotal.value);
-    }
-    if (ppnPercent.present) {
-      map['ppn_percent'] = Variable<double>(ppnPercent.value);
-    }
-    if (isPpnActive.present) {
-      map['is_ppn_active'] = Variable<bool>(isPpnActive.value);
-    }
-    if (pendingAction.present) {
-      map['pending_action'] = Variable<String>(pendingAction.value);
-    }
-    if (isSynced.present) {
-      map['is_synced'] = Variable<bool>(isSynced.value);
-    }
-    if (processedByKitchen.present) {
-      map['processed_by_kitchen'] = Variable<bool>(processedByKitchen.value);
-    }
-    if (deletedLocally.present) {
-      map['deleted_locally'] = Variable<bool>(deletedLocally.value);
-    }
-    if (syncedAt.present) {
-      map['synced_at'] = Variable<DateTime>(syncedAt.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CachedProcessOrdersCompanion(')
-          ..write('serverId: $serverId, ')
-          ..write('bookingOrderCode: $bookingOrderCode, ')
-          ..write('customerName: $customerName, ')
-          ..write('tableNo: $tableNo, ')
-          ..write('processRequestJson: $processRequestJson, ')
-          ..write('latestProcessJson: $latestProcessJson, ')
-          ..write('detailJson: $detailJson, ')
-          ..write('paymentMethod: $paymentMethod, ')
-          ..write('orderStatus: $orderStatus, ')
-          ..write('subtotal: $subtotal, ')
-          ..write('ppnPercent: $ppnPercent, ')
-          ..write('isPpnActive: $isPpnActive, ')
-          ..write('pendingAction: $pendingAction, ')
-          ..write('isSynced: $isSynced, ')
-          ..write('processedByKitchen: $processedByKitchen, ')
-          ..write('deletedLocally: $deletedLocally, ')
-          ..write('syncedAt: $syncedAt')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $CachedPaymentOrderItemsTable extends CachedPaymentOrderItems
-    with TableInfo<$CachedPaymentOrderItemsTable, CachedPaymentOrderItem> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $CachedPaymentOrderItemsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _serverDetailIdMeta = const VerificationMeta(
-    'serverDetailId',
-  );
-  @override
-  late final GeneratedColumn<int> serverDetailId = GeneratedColumn<int>(
-    'server_detail_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _orderServerIdMeta = const VerificationMeta(
-    'orderServerId',
-  );
-  @override
-  late final GeneratedColumn<int> orderServerId = GeneratedColumn<int>(
-    'order_server_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _productServerIdMeta = const VerificationMeta(
-    'productServerId',
-  );
-  @override
-  late final GeneratedColumn<int> productServerId = GeneratedColumn<int>(
-    'product_server_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _productNameMeta = const VerificationMeta(
-    'productName',
-  );
-  @override
-  late final GeneratedColumn<String> productName = GeneratedColumn<String>(
-    'product_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _basePriceMeta = const VerificationMeta(
-    'basePrice',
-  );
-  @override
-  late final GeneratedColumn<double> basePrice = GeneratedColumn<double>(
-    'base_price',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _promoAmountMeta = const VerificationMeta(
-    'promoAmount',
-  );
-  @override
-  late final GeneratedColumn<double> promoAmount = GeneratedColumn<double>(
-    'promo_amount',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _qtyMeta = const VerificationMeta('qty');
-  @override
-  late final GeneratedColumn<int> qty = GeneratedColumn<int>(
-    'qty',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(1),
-  );
-  static const VerificationMeta _customerNoteMeta = const VerificationMeta(
-    'customerNote',
-  );
-  @override
-  late final GeneratedColumn<String> customerNote = GeneratedColumn<String>(
-    'customer_note',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    serverDetailId,
-    orderServerId,
-    productServerId,
-    productName,
-    basePrice,
-    promoAmount,
-    qty,
-    customerNote,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'cached_payment_order_items';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<CachedPaymentOrderItem> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('server_detail_id')) {
-      context.handle(
-        _serverDetailIdMeta,
-        serverDetailId.isAcceptableOrUnknown(
-          data['server_detail_id']!,
-          _serverDetailIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('order_server_id')) {
-      context.handle(
-        _orderServerIdMeta,
-        orderServerId.isAcceptableOrUnknown(
-          data['order_server_id']!,
-          _orderServerIdMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_orderServerIdMeta);
-    }
-    if (data.containsKey('product_server_id')) {
-      context.handle(
-        _productServerIdMeta,
-        productServerId.isAcceptableOrUnknown(
-          data['product_server_id']!,
-          _productServerIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('product_name')) {
-      context.handle(
-        _productNameMeta,
-        productName.isAcceptableOrUnknown(
-          data['product_name']!,
-          _productNameMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_productNameMeta);
-    }
-    if (data.containsKey('base_price')) {
-      context.handle(
-        _basePriceMeta,
-        basePrice.isAcceptableOrUnknown(data['base_price']!, _basePriceMeta),
-      );
-    }
-    if (data.containsKey('promo_amount')) {
-      context.handle(
-        _promoAmountMeta,
-        promoAmount.isAcceptableOrUnknown(
-          data['promo_amount']!,
-          _promoAmountMeta,
-        ),
-      );
-    }
-    if (data.containsKey('qty')) {
-      context.handle(
-        _qtyMeta,
-        qty.isAcceptableOrUnknown(data['qty']!, _qtyMeta),
-      );
-    }
-    if (data.containsKey('customer_note')) {
-      context.handle(
-        _customerNoteMeta,
-        customerNote.isAcceptableOrUnknown(
-          data['customer_note']!,
-          _customerNoteMeta,
-        ),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {serverDetailId};
-  @override
-  CachedPaymentOrderItem map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CachedPaymentOrderItem(
-      serverDetailId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}server_detail_id'],
-      )!,
-      orderServerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}order_server_id'],
-      )!,
-      productServerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}product_server_id'],
-      ),
-      productName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}product_name'],
-      )!,
-      basePrice: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}base_price'],
-      )!,
-      promoAmount: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}promo_amount'],
-      )!,
-      qty: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}qty'],
-      )!,
-      customerNote: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}customer_note'],
-      ),
-    );
-  }
-
-  @override
-  $CachedPaymentOrderItemsTable createAlias(String alias) {
-    return $CachedPaymentOrderItemsTable(attachedDatabase, alias);
-  }
-}
-
-class CachedPaymentOrderItem extends DataClass
-    implements Insertable<CachedPaymentOrderItem> {
-  final int serverDetailId;
-  final int orderServerId;
-  final int? productServerId;
-  final String productName;
-  final double basePrice;
-  final double promoAmount;
-  final int qty;
-  final String? customerNote;
-  const CachedPaymentOrderItem({
-    required this.serverDetailId,
-    required this.orderServerId,
-    this.productServerId,
-    required this.productName,
-    required this.basePrice,
-    required this.promoAmount,
-    required this.qty,
-    this.customerNote,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['server_detail_id'] = Variable<int>(serverDetailId);
-    map['order_server_id'] = Variable<int>(orderServerId);
-    if (!nullToAbsent || productServerId != null) {
-      map['product_server_id'] = Variable<int>(productServerId);
-    }
-    map['product_name'] = Variable<String>(productName);
-    map['base_price'] = Variable<double>(basePrice);
-    map['promo_amount'] = Variable<double>(promoAmount);
-    map['qty'] = Variable<int>(qty);
-    if (!nullToAbsent || customerNote != null) {
-      map['customer_note'] = Variable<String>(customerNote);
-    }
-    return map;
-  }
-
-  CachedPaymentOrderItemsCompanion toCompanion(bool nullToAbsent) {
-    return CachedPaymentOrderItemsCompanion(
-      serverDetailId: Value(serverDetailId),
-      orderServerId: Value(orderServerId),
-      productServerId: productServerId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(productServerId),
-      productName: Value(productName),
-      basePrice: Value(basePrice),
-      promoAmount: Value(promoAmount),
-      qty: Value(qty),
-      customerNote: customerNote == null && nullToAbsent
-          ? const Value.absent()
-          : Value(customerNote),
-    );
-  }
-
-  factory CachedPaymentOrderItem.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CachedPaymentOrderItem(
-      serverDetailId: serializer.fromJson<int>(json['serverDetailId']),
-      orderServerId: serializer.fromJson<int>(json['orderServerId']),
-      productServerId: serializer.fromJson<int?>(json['productServerId']),
-      productName: serializer.fromJson<String>(json['productName']),
-      basePrice: serializer.fromJson<double>(json['basePrice']),
-      promoAmount: serializer.fromJson<double>(json['promoAmount']),
-      qty: serializer.fromJson<int>(json['qty']),
-      customerNote: serializer.fromJson<String?>(json['customerNote']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'serverDetailId': serializer.toJson<int>(serverDetailId),
-      'orderServerId': serializer.toJson<int>(orderServerId),
-      'productServerId': serializer.toJson<int?>(productServerId),
-      'productName': serializer.toJson<String>(productName),
-      'basePrice': serializer.toJson<double>(basePrice),
-      'promoAmount': serializer.toJson<double>(promoAmount),
-      'qty': serializer.toJson<int>(qty),
-      'customerNote': serializer.toJson<String?>(customerNote),
-    };
-  }
-
-  CachedPaymentOrderItem copyWith({
-    int? serverDetailId,
-    int? orderServerId,
-    Value<int?> productServerId = const Value.absent(),
-    String? productName,
-    double? basePrice,
-    double? promoAmount,
-    int? qty,
-    Value<String?> customerNote = const Value.absent(),
-  }) => CachedPaymentOrderItem(
-    serverDetailId: serverDetailId ?? this.serverDetailId,
-    orderServerId: orderServerId ?? this.orderServerId,
-    productServerId: productServerId.present
-        ? productServerId.value
-        : this.productServerId,
-    productName: productName ?? this.productName,
-    basePrice: basePrice ?? this.basePrice,
-    promoAmount: promoAmount ?? this.promoAmount,
-    qty: qty ?? this.qty,
-    customerNote: customerNote.present ? customerNote.value : this.customerNote,
-  );
-  CachedPaymentOrderItem copyWithCompanion(
-    CachedPaymentOrderItemsCompanion data,
-  ) {
-    return CachedPaymentOrderItem(
-      serverDetailId: data.serverDetailId.present
-          ? data.serverDetailId.value
-          : this.serverDetailId,
-      orderServerId: data.orderServerId.present
-          ? data.orderServerId.value
-          : this.orderServerId,
-      productServerId: data.productServerId.present
-          ? data.productServerId.value
-          : this.productServerId,
-      productName: data.productName.present
-          ? data.productName.value
-          : this.productName,
-      basePrice: data.basePrice.present ? data.basePrice.value : this.basePrice,
-      promoAmount: data.promoAmount.present
-          ? data.promoAmount.value
-          : this.promoAmount,
-      qty: data.qty.present ? data.qty.value : this.qty,
-      customerNote: data.customerNote.present
-          ? data.customerNote.value
-          : this.customerNote,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CachedPaymentOrderItem(')
-          ..write('serverDetailId: $serverDetailId, ')
-          ..write('orderServerId: $orderServerId, ')
-          ..write('productServerId: $productServerId, ')
-          ..write('productName: $productName, ')
-          ..write('basePrice: $basePrice, ')
-          ..write('promoAmount: $promoAmount, ')
-          ..write('qty: $qty, ')
-          ..write('customerNote: $customerNote')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    serverDetailId,
-    orderServerId,
-    productServerId,
-    productName,
-    basePrice,
-    promoAmount,
-    qty,
-    customerNote,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is CachedPaymentOrderItem &&
-          other.serverDetailId == this.serverDetailId &&
-          other.orderServerId == this.orderServerId &&
-          other.productServerId == this.productServerId &&
-          other.productName == this.productName &&
-          other.basePrice == this.basePrice &&
-          other.promoAmount == this.promoAmount &&
-          other.qty == this.qty &&
-          other.customerNote == this.customerNote);
-}
-
-class CachedPaymentOrderItemsCompanion
-    extends UpdateCompanion<CachedPaymentOrderItem> {
-  final Value<int> serverDetailId;
-  final Value<int> orderServerId;
-  final Value<int?> productServerId;
-  final Value<String> productName;
-  final Value<double> basePrice;
-  final Value<double> promoAmount;
-  final Value<int> qty;
-  final Value<String?> customerNote;
-  const CachedPaymentOrderItemsCompanion({
-    this.serverDetailId = const Value.absent(),
-    this.orderServerId = const Value.absent(),
-    this.productServerId = const Value.absent(),
-    this.productName = const Value.absent(),
-    this.basePrice = const Value.absent(),
-    this.promoAmount = const Value.absent(),
-    this.qty = const Value.absent(),
-    this.customerNote = const Value.absent(),
-  });
-  CachedPaymentOrderItemsCompanion.insert({
-    this.serverDetailId = const Value.absent(),
-    required int orderServerId,
-    this.productServerId = const Value.absent(),
-    required String productName,
-    this.basePrice = const Value.absent(),
-    this.promoAmount = const Value.absent(),
-    this.qty = const Value.absent(),
-    this.customerNote = const Value.absent(),
-  }) : orderServerId = Value(orderServerId),
-       productName = Value(productName);
-  static Insertable<CachedPaymentOrderItem> custom({
-    Expression<int>? serverDetailId,
-    Expression<int>? orderServerId,
-    Expression<int>? productServerId,
-    Expression<String>? productName,
-    Expression<double>? basePrice,
-    Expression<double>? promoAmount,
-    Expression<int>? qty,
-    Expression<String>? customerNote,
-  }) {
-    return RawValuesInsertable({
-      if (serverDetailId != null) 'server_detail_id': serverDetailId,
-      if (orderServerId != null) 'order_server_id': orderServerId,
-      if (productServerId != null) 'product_server_id': productServerId,
-      if (productName != null) 'product_name': productName,
-      if (basePrice != null) 'base_price': basePrice,
-      if (promoAmount != null) 'promo_amount': promoAmount,
-      if (qty != null) 'qty': qty,
-      if (customerNote != null) 'customer_note': customerNote,
-    });
-  }
-
-  CachedPaymentOrderItemsCompanion copyWith({
-    Value<int>? serverDetailId,
-    Value<int>? orderServerId,
-    Value<int?>? productServerId,
-    Value<String>? productName,
-    Value<double>? basePrice,
-    Value<double>? promoAmount,
-    Value<int>? qty,
-    Value<String?>? customerNote,
-  }) {
-    return CachedPaymentOrderItemsCompanion(
-      serverDetailId: serverDetailId ?? this.serverDetailId,
-      orderServerId: orderServerId ?? this.orderServerId,
-      productServerId: productServerId ?? this.productServerId,
-      productName: productName ?? this.productName,
-      basePrice: basePrice ?? this.basePrice,
-      promoAmount: promoAmount ?? this.promoAmount,
-      qty: qty ?? this.qty,
-      customerNote: customerNote ?? this.customerNote,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (serverDetailId.present) {
-      map['server_detail_id'] = Variable<int>(serverDetailId.value);
-    }
-    if (orderServerId.present) {
-      map['order_server_id'] = Variable<int>(orderServerId.value);
-    }
-    if (productServerId.present) {
-      map['product_server_id'] = Variable<int>(productServerId.value);
-    }
-    if (productName.present) {
-      map['product_name'] = Variable<String>(productName.value);
-    }
-    if (basePrice.present) {
-      map['base_price'] = Variable<double>(basePrice.value);
-    }
-    if (promoAmount.present) {
-      map['promo_amount'] = Variable<double>(promoAmount.value);
-    }
-    if (qty.present) {
-      map['qty'] = Variable<int>(qty.value);
-    }
-    if (customerNote.present) {
-      map['customer_note'] = Variable<String>(customerNote.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CachedPaymentOrderItemsCompanion(')
-          ..write('serverDetailId: $serverDetailId, ')
-          ..write('orderServerId: $orderServerId, ')
-          ..write('productServerId: $productServerId, ')
-          ..write('productName: $productName, ')
-          ..write('basePrice: $basePrice, ')
-          ..write('promoAmount: $promoAmount, ')
-          ..write('qty: $qty, ')
-          ..write('customerNote: $customerNote')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $CachedPaymentOrderItemOptionsTable extends CachedPaymentOrderItemOptions
-    with
-        TableInfo<
-          $CachedPaymentOrderItemOptionsTable,
-          CachedPaymentOrderItemOption
-        > {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $CachedPaymentOrderItemOptionsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _serverDetailOptionIdMeta =
-      const VerificationMeta('serverDetailOptionId');
-  @override
-  late final GeneratedColumn<int> serverDetailOptionId = GeneratedColumn<int>(
-    'server_detail_option_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _orderDetailServerIdMeta =
-      const VerificationMeta('orderDetailServerId');
-  @override
-  late final GeneratedColumn<int> orderDetailServerId = GeneratedColumn<int>(
-    'order_detail_server_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _parentNameMeta = const VerificationMeta(
-    'parentName',
-  );
-  @override
-  late final GeneratedColumn<String> parentName = GeneratedColumn<String>(
-    'parent_name',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _optionNameMeta = const VerificationMeta(
-    'optionName',
-  );
-  @override
-  late final GeneratedColumn<String> optionName = GeneratedColumn<String>(
-    'option_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _priceMeta = const VerificationMeta('price');
-  @override
-  late final GeneratedColumn<double> price = GeneratedColumn<double>(
-    'price',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    serverDetailOptionId,
-    orderDetailServerId,
-    parentName,
-    optionName,
-    price,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'cached_payment_order_item_options';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<CachedPaymentOrderItemOption> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('server_detail_option_id')) {
-      context.handle(
-        _serverDetailOptionIdMeta,
-        serverDetailOptionId.isAcceptableOrUnknown(
-          data['server_detail_option_id']!,
-          _serverDetailOptionIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('order_detail_server_id')) {
-      context.handle(
-        _orderDetailServerIdMeta,
-        orderDetailServerId.isAcceptableOrUnknown(
-          data['order_detail_server_id']!,
-          _orderDetailServerIdMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_orderDetailServerIdMeta);
-    }
-    if (data.containsKey('parent_name')) {
-      context.handle(
-        _parentNameMeta,
-        parentName.isAcceptableOrUnknown(data['parent_name']!, _parentNameMeta),
-      );
-    }
-    if (data.containsKey('option_name')) {
-      context.handle(
-        _optionNameMeta,
-        optionName.isAcceptableOrUnknown(data['option_name']!, _optionNameMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_optionNameMeta);
-    }
-    if (data.containsKey('price')) {
-      context.handle(
-        _priceMeta,
-        price.isAcceptableOrUnknown(data['price']!, _priceMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {serverDetailOptionId};
-  @override
-  CachedPaymentOrderItemOption map(
-    Map<String, dynamic> data, {
-    String? tablePrefix,
-  }) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CachedPaymentOrderItemOption(
-      serverDetailOptionId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}server_detail_option_id'],
-      )!,
-      orderDetailServerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}order_detail_server_id'],
-      )!,
-      parentName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}parent_name'],
-      ),
-      optionName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}option_name'],
-      )!,
-      price: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}price'],
-      )!,
-    );
-  }
-
-  @override
-  $CachedPaymentOrderItemOptionsTable createAlias(String alias) {
-    return $CachedPaymentOrderItemOptionsTable(attachedDatabase, alias);
-  }
-}
-
-class CachedPaymentOrderItemOption extends DataClass
-    implements Insertable<CachedPaymentOrderItemOption> {
-  final int serverDetailOptionId;
-  final int orderDetailServerId;
-  final String? parentName;
-  final String optionName;
-  final double price;
-  const CachedPaymentOrderItemOption({
-    required this.serverDetailOptionId,
-    required this.orderDetailServerId,
-    this.parentName,
-    required this.optionName,
-    required this.price,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['server_detail_option_id'] = Variable<int>(serverDetailOptionId);
-    map['order_detail_server_id'] = Variable<int>(orderDetailServerId);
-    if (!nullToAbsent || parentName != null) {
-      map['parent_name'] = Variable<String>(parentName);
-    }
-    map['option_name'] = Variable<String>(optionName);
-    map['price'] = Variable<double>(price);
-    return map;
-  }
-
-  CachedPaymentOrderItemOptionsCompanion toCompanion(bool nullToAbsent) {
-    return CachedPaymentOrderItemOptionsCompanion(
-      serverDetailOptionId: Value(serverDetailOptionId),
-      orderDetailServerId: Value(orderDetailServerId),
-      parentName: parentName == null && nullToAbsent
-          ? const Value.absent()
-          : Value(parentName),
-      optionName: Value(optionName),
-      price: Value(price),
-    );
-  }
-
-  factory CachedPaymentOrderItemOption.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CachedPaymentOrderItemOption(
-      serverDetailOptionId: serializer.fromJson<int>(
-        json['serverDetailOptionId'],
-      ),
-      orderDetailServerId: serializer.fromJson<int>(
-        json['orderDetailServerId'],
-      ),
-      parentName: serializer.fromJson<String?>(json['parentName']),
-      optionName: serializer.fromJson<String>(json['optionName']),
-      price: serializer.fromJson<double>(json['price']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'serverDetailOptionId': serializer.toJson<int>(serverDetailOptionId),
-      'orderDetailServerId': serializer.toJson<int>(orderDetailServerId),
-      'parentName': serializer.toJson<String?>(parentName),
-      'optionName': serializer.toJson<String>(optionName),
-      'price': serializer.toJson<double>(price),
-    };
-  }
-
-  CachedPaymentOrderItemOption copyWith({
-    int? serverDetailOptionId,
-    int? orderDetailServerId,
-    Value<String?> parentName = const Value.absent(),
-    String? optionName,
-    double? price,
-  }) => CachedPaymentOrderItemOption(
-    serverDetailOptionId: serverDetailOptionId ?? this.serverDetailOptionId,
-    orderDetailServerId: orderDetailServerId ?? this.orderDetailServerId,
-    parentName: parentName.present ? parentName.value : this.parentName,
-    optionName: optionName ?? this.optionName,
-    price: price ?? this.price,
-  );
-  CachedPaymentOrderItemOption copyWithCompanion(
-    CachedPaymentOrderItemOptionsCompanion data,
-  ) {
-    return CachedPaymentOrderItemOption(
-      serverDetailOptionId: data.serverDetailOptionId.present
-          ? data.serverDetailOptionId.value
-          : this.serverDetailOptionId,
-      orderDetailServerId: data.orderDetailServerId.present
-          ? data.orderDetailServerId.value
-          : this.orderDetailServerId,
-      parentName: data.parentName.present
-          ? data.parentName.value
-          : this.parentName,
-      optionName: data.optionName.present
-          ? data.optionName.value
-          : this.optionName,
-      price: data.price.present ? data.price.value : this.price,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CachedPaymentOrderItemOption(')
-          ..write('serverDetailOptionId: $serverDetailOptionId, ')
-          ..write('orderDetailServerId: $orderDetailServerId, ')
-          ..write('parentName: $parentName, ')
-          ..write('optionName: $optionName, ')
-          ..write('price: $price')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    serverDetailOptionId,
-    orderDetailServerId,
-    parentName,
-    optionName,
-    price,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is CachedPaymentOrderItemOption &&
-          other.serverDetailOptionId == this.serverDetailOptionId &&
-          other.orderDetailServerId == this.orderDetailServerId &&
-          other.parentName == this.parentName &&
-          other.optionName == this.optionName &&
-          other.price == this.price);
-}
-
-class CachedPaymentOrderItemOptionsCompanion
-    extends UpdateCompanion<CachedPaymentOrderItemOption> {
-  final Value<int> serverDetailOptionId;
-  final Value<int> orderDetailServerId;
-  final Value<String?> parentName;
-  final Value<String> optionName;
-  final Value<double> price;
-  const CachedPaymentOrderItemOptionsCompanion({
-    this.serverDetailOptionId = const Value.absent(),
-    this.orderDetailServerId = const Value.absent(),
-    this.parentName = const Value.absent(),
-    this.optionName = const Value.absent(),
-    this.price = const Value.absent(),
-  });
-  CachedPaymentOrderItemOptionsCompanion.insert({
-    this.serverDetailOptionId = const Value.absent(),
-    required int orderDetailServerId,
-    this.parentName = const Value.absent(),
-    required String optionName,
-    this.price = const Value.absent(),
-  }) : orderDetailServerId = Value(orderDetailServerId),
-       optionName = Value(optionName);
-  static Insertable<CachedPaymentOrderItemOption> custom({
-    Expression<int>? serverDetailOptionId,
-    Expression<int>? orderDetailServerId,
-    Expression<String>? parentName,
-    Expression<String>? optionName,
-    Expression<double>? price,
-  }) {
-    return RawValuesInsertable({
-      if (serverDetailOptionId != null)
-        'server_detail_option_id': serverDetailOptionId,
-      if (orderDetailServerId != null)
-        'order_detail_server_id': orderDetailServerId,
-      if (parentName != null) 'parent_name': parentName,
-      if (optionName != null) 'option_name': optionName,
-      if (price != null) 'price': price,
-    });
-  }
-
-  CachedPaymentOrderItemOptionsCompanion copyWith({
-    Value<int>? serverDetailOptionId,
-    Value<int>? orderDetailServerId,
-    Value<String?>? parentName,
-    Value<String>? optionName,
-    Value<double>? price,
-  }) {
-    return CachedPaymentOrderItemOptionsCompanion(
-      serverDetailOptionId: serverDetailOptionId ?? this.serverDetailOptionId,
-      orderDetailServerId: orderDetailServerId ?? this.orderDetailServerId,
-      parentName: parentName ?? this.parentName,
-      optionName: optionName ?? this.optionName,
-      price: price ?? this.price,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (serverDetailOptionId.present) {
-      map['server_detail_option_id'] = Variable<int>(
-        serverDetailOptionId.value,
-      );
-    }
-    if (orderDetailServerId.present) {
-      map['order_detail_server_id'] = Variable<int>(orderDetailServerId.value);
-    }
-    if (parentName.present) {
-      map['parent_name'] = Variable<String>(parentName.value);
-    }
-    if (optionName.present) {
-      map['option_name'] = Variable<String>(optionName.value);
-    }
-    if (price.present) {
-      map['price'] = Variable<double>(price.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CachedPaymentOrderItemOptionsCompanion(')
-          ..write('serverDetailOptionId: $serverDetailOptionId, ')
-          ..write('orderDetailServerId: $orderDetailServerId, ')
-          ..write('parentName: $parentName, ')
-          ..write('optionName: $optionName, ')
-          ..write('price: $price')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $CachedDoneOrdersTable extends CachedDoneOrders
-    with TableInfo<$CachedDoneOrdersTable, CachedDoneOrder> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $CachedDoneOrdersTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _serverIdMeta = const VerificationMeta(
-    'serverId',
-  );
-  @override
-  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
-    'server_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _bookingOrderCodeMeta = const VerificationMeta(
-    'bookingOrderCode',
-  );
-  @override
-  late final GeneratedColumn<String> bookingOrderCode = GeneratedColumn<String>(
-    'booking_order_code',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _customerNameMeta = const VerificationMeta(
-    'customerName',
-  );
-  @override
-  late final GeneratedColumn<String> customerName = GeneratedColumn<String>(
-    'customer_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _tableNoMeta = const VerificationMeta(
-    'tableNo',
-  );
-  @override
-  late final GeneratedColumn<String> tableNo = GeneratedColumn<String>(
-    'table_no',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _doneRequestJsonMeta = const VerificationMeta(
-    'doneRequestJson',
-  );
-  @override
-  late final GeneratedColumn<String> doneRequestJson = GeneratedColumn<String>(
-    'done_request_json',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _latestDoneJsonMeta = const VerificationMeta(
-    'latestDoneJson',
-  );
-  @override
-  late final GeneratedColumn<String> latestDoneJson = GeneratedColumn<String>(
-    'latest_done_json',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _paymentMethodMeta = const VerificationMeta(
-    'paymentMethod',
-  );
-  @override
-  late final GeneratedColumn<String> paymentMethod = GeneratedColumn<String>(
-    'payment_method',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _orderStatusMeta = const VerificationMeta(
-    'orderStatus',
-  );
-  @override
-  late final GeneratedColumn<String> orderStatus = GeneratedColumn<String>(
-    'order_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _detailJsonMeta = const VerificationMeta(
-    'detailJson',
-  );
-  @override
-  late final GeneratedColumn<String> detailJson = GeneratedColumn<String>(
-    'detail_json',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _subtotalMeta = const VerificationMeta(
-    'subtotal',
-  );
-  @override
-  late final GeneratedColumn<double> subtotal = GeneratedColumn<double>(
-    'subtotal',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _ppnPercentMeta = const VerificationMeta(
-    'ppnPercent',
-  );
-  @override
-  late final GeneratedColumn<double> ppnPercent = GeneratedColumn<double>(
-    'ppn_percent',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _isPpnActiveMeta = const VerificationMeta(
-    'isPpnActive',
-  );
-  @override
-  late final GeneratedColumn<bool> isPpnActive = GeneratedColumn<bool>(
-    'is_ppn_active',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_ppn_active" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _isSyncedMeta = const VerificationMeta(
-    'isSynced',
-  );
-  @override
-  late final GeneratedColumn<bool> isSynced = GeneratedColumn<bool>(
-    'is_synced',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_synced" IN (0, 1))',
-    ),
-    defaultValue: const Constant(true),
-  );
-  static const VerificationMeta _deletedLocallyMeta = const VerificationMeta(
-    'deletedLocally',
-  );
-  @override
-  late final GeneratedColumn<bool> deletedLocally = GeneratedColumn<bool>(
-    'deleted_locally',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("deleted_locally" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _syncedAtMeta = const VerificationMeta(
-    'syncedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
-    'synced_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    serverId,
-    bookingOrderCode,
-    customerName,
-    tableNo,
-    doneRequestJson,
-    latestDoneJson,
-    paymentMethod,
-    orderStatus,
-    detailJson,
-    subtotal,
-    ppnPercent,
-    isPpnActive,
-    isSynced,
-    deletedLocally,
-    syncedAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'cached_done_orders';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<CachedDoneOrder> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('server_id')) {
-      context.handle(
-        _serverIdMeta,
-        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
-      );
-    }
-    if (data.containsKey('booking_order_code')) {
-      context.handle(
-        _bookingOrderCodeMeta,
-        bookingOrderCode.isAcceptableOrUnknown(
-          data['booking_order_code']!,
-          _bookingOrderCodeMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_bookingOrderCodeMeta);
-    }
-    if (data.containsKey('customer_name')) {
-      context.handle(
-        _customerNameMeta,
-        customerName.isAcceptableOrUnknown(
-          data['customer_name']!,
-          _customerNameMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_customerNameMeta);
-    }
-    if (data.containsKey('table_no')) {
-      context.handle(
-        _tableNoMeta,
-        tableNo.isAcceptableOrUnknown(data['table_no']!, _tableNoMeta),
-      );
-    }
-    if (data.containsKey('done_request_json')) {
-      context.handle(
-        _doneRequestJsonMeta,
-        doneRequestJson.isAcceptableOrUnknown(
-          data['done_request_json']!,
-          _doneRequestJsonMeta,
-        ),
-      );
-    }
-    if (data.containsKey('latest_done_json')) {
-      context.handle(
-        _latestDoneJsonMeta,
-        latestDoneJson.isAcceptableOrUnknown(
-          data['latest_done_json']!,
-          _latestDoneJsonMeta,
-        ),
-      );
-    }
-    if (data.containsKey('payment_method')) {
-      context.handle(
-        _paymentMethodMeta,
-        paymentMethod.isAcceptableOrUnknown(
-          data['payment_method']!,
-          _paymentMethodMeta,
-        ),
-      );
-    }
-    if (data.containsKey('order_status')) {
-      context.handle(
-        _orderStatusMeta,
-        orderStatus.isAcceptableOrUnknown(
-          data['order_status']!,
-          _orderStatusMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_orderStatusMeta);
-    }
-    if (data.containsKey('detail_json')) {
-      context.handle(
-        _detailJsonMeta,
-        detailJson.isAcceptableOrUnknown(data['detail_json']!, _detailJsonMeta),
-      );
-    }
-    if (data.containsKey('subtotal')) {
-      context.handle(
-        _subtotalMeta,
-        subtotal.isAcceptableOrUnknown(data['subtotal']!, _subtotalMeta),
-      );
-    }
-    if (data.containsKey('ppn_percent')) {
-      context.handle(
-        _ppnPercentMeta,
-        ppnPercent.isAcceptableOrUnknown(data['ppn_percent']!, _ppnPercentMeta),
-      );
-    }
-    if (data.containsKey('is_ppn_active')) {
-      context.handle(
-        _isPpnActiveMeta,
-        isPpnActive.isAcceptableOrUnknown(
-          data['is_ppn_active']!,
-          _isPpnActiveMeta,
-        ),
-      );
-    }
-    if (data.containsKey('is_synced')) {
-      context.handle(
-        _isSyncedMeta,
-        isSynced.isAcceptableOrUnknown(data['is_synced']!, _isSyncedMeta),
-      );
-    }
-    if (data.containsKey('deleted_locally')) {
-      context.handle(
-        _deletedLocallyMeta,
-        deletedLocally.isAcceptableOrUnknown(
-          data['deleted_locally']!,
-          _deletedLocallyMeta,
-        ),
-      );
-    }
-    if (data.containsKey('synced_at')) {
-      context.handle(
-        _syncedAtMeta,
-        syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {serverId};
-  @override
-  CachedDoneOrder map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CachedDoneOrder(
-      serverId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}server_id'],
-      )!,
-      bookingOrderCode: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}booking_order_code'],
-      )!,
-      customerName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}customer_name'],
-      )!,
-      tableNo: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}table_no'],
-      ),
-      doneRequestJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}done_request_json'],
-      ),
-      latestDoneJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}latest_done_json'],
-      ),
-      paymentMethod: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}payment_method'],
-      ),
-      orderStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}order_status'],
-      )!,
-      detailJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}detail_json'],
-      ),
-      subtotal: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}subtotal'],
-      )!,
-      ppnPercent: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}ppn_percent'],
-      )!,
-      isPpnActive: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_ppn_active'],
-      )!,
-      isSynced: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_synced'],
-      )!,
-      deletedLocally: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}deleted_locally'],
-      )!,
-      syncedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}synced_at'],
-      ),
-    );
-  }
-
-  @override
-  $CachedDoneOrdersTable createAlias(String alias) {
-    return $CachedDoneOrdersTable(attachedDatabase, alias);
-  }
-}
-
-class CachedDoneOrder extends DataClass implements Insertable<CachedDoneOrder> {
-  final int serverId;
-  final String bookingOrderCode;
-  final String customerName;
-  final String? tableNo;
-  final String? doneRequestJson;
-  final String? latestDoneJson;
-  final String? paymentMethod;
-  final String orderStatus;
-  final String? detailJson;
-  final double subtotal;
-  final double ppnPercent;
-  final bool isPpnActive;
-  final bool isSynced;
-  final bool deletedLocally;
-  final DateTime? syncedAt;
-  const CachedDoneOrder({
-    required this.serverId,
-    required this.bookingOrderCode,
-    required this.customerName,
-    this.tableNo,
-    this.doneRequestJson,
-    this.latestDoneJson,
-    this.paymentMethod,
-    required this.orderStatus,
-    this.detailJson,
-    required this.subtotal,
-    required this.ppnPercent,
-    required this.isPpnActive,
-    required this.isSynced,
-    required this.deletedLocally,
-    this.syncedAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['server_id'] = Variable<int>(serverId);
-    map['booking_order_code'] = Variable<String>(bookingOrderCode);
-    map['customer_name'] = Variable<String>(customerName);
-    if (!nullToAbsent || tableNo != null) {
-      map['table_no'] = Variable<String>(tableNo);
-    }
-    if (!nullToAbsent || doneRequestJson != null) {
-      map['done_request_json'] = Variable<String>(doneRequestJson);
-    }
-    if (!nullToAbsent || latestDoneJson != null) {
-      map['latest_done_json'] = Variable<String>(latestDoneJson);
-    }
-    if (!nullToAbsent || paymentMethod != null) {
-      map['payment_method'] = Variable<String>(paymentMethod);
-    }
-    map['order_status'] = Variable<String>(orderStatus);
-    if (!nullToAbsent || detailJson != null) {
-      map['detail_json'] = Variable<String>(detailJson);
-    }
-    map['subtotal'] = Variable<double>(subtotal);
-    map['ppn_percent'] = Variable<double>(ppnPercent);
-    map['is_ppn_active'] = Variable<bool>(isPpnActive);
-    map['is_synced'] = Variable<bool>(isSynced);
-    map['deleted_locally'] = Variable<bool>(deletedLocally);
-    if (!nullToAbsent || syncedAt != null) {
-      map['synced_at'] = Variable<DateTime>(syncedAt);
-    }
-    return map;
-  }
-
-  CachedDoneOrdersCompanion toCompanion(bool nullToAbsent) {
-    return CachedDoneOrdersCompanion(
-      serverId: Value(serverId),
-      bookingOrderCode: Value(bookingOrderCode),
-      customerName: Value(customerName),
-      tableNo: tableNo == null && nullToAbsent
-          ? const Value.absent()
-          : Value(tableNo),
-      doneRequestJson: doneRequestJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(doneRequestJson),
-      latestDoneJson: latestDoneJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(latestDoneJson),
-      paymentMethod: paymentMethod == null && nullToAbsent
-          ? const Value.absent()
-          : Value(paymentMethod),
-      orderStatus: Value(orderStatus),
-      detailJson: detailJson == null && nullToAbsent
-          ? const Value.absent()
-          : Value(detailJson),
-      subtotal: Value(subtotal),
-      ppnPercent: Value(ppnPercent),
-      isPpnActive: Value(isPpnActive),
-      isSynced: Value(isSynced),
-      deletedLocally: Value(deletedLocally),
-      syncedAt: syncedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(syncedAt),
-    );
-  }
-
-  factory CachedDoneOrder.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CachedDoneOrder(
-      serverId: serializer.fromJson<int>(json['serverId']),
-      bookingOrderCode: serializer.fromJson<String>(json['bookingOrderCode']),
-      customerName: serializer.fromJson<String>(json['customerName']),
-      tableNo: serializer.fromJson<String?>(json['tableNo']),
-      doneRequestJson: serializer.fromJson<String?>(json['doneRequestJson']),
-      latestDoneJson: serializer.fromJson<String?>(json['latestDoneJson']),
-      paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
-      orderStatus: serializer.fromJson<String>(json['orderStatus']),
-      detailJson: serializer.fromJson<String?>(json['detailJson']),
-      subtotal: serializer.fromJson<double>(json['subtotal']),
-      ppnPercent: serializer.fromJson<double>(json['ppnPercent']),
-      isPpnActive: serializer.fromJson<bool>(json['isPpnActive']),
-      isSynced: serializer.fromJson<bool>(json['isSynced']),
-      deletedLocally: serializer.fromJson<bool>(json['deletedLocally']),
-      syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'serverId': serializer.toJson<int>(serverId),
-      'bookingOrderCode': serializer.toJson<String>(bookingOrderCode),
-      'customerName': serializer.toJson<String>(customerName),
-      'tableNo': serializer.toJson<String?>(tableNo),
-      'doneRequestJson': serializer.toJson<String?>(doneRequestJson),
-      'latestDoneJson': serializer.toJson<String?>(latestDoneJson),
-      'paymentMethod': serializer.toJson<String?>(paymentMethod),
-      'orderStatus': serializer.toJson<String>(orderStatus),
-      'detailJson': serializer.toJson<String?>(detailJson),
-      'subtotal': serializer.toJson<double>(subtotal),
-      'ppnPercent': serializer.toJson<double>(ppnPercent),
-      'isPpnActive': serializer.toJson<bool>(isPpnActive),
-      'isSynced': serializer.toJson<bool>(isSynced),
-      'deletedLocally': serializer.toJson<bool>(deletedLocally),
-      'syncedAt': serializer.toJson<DateTime?>(syncedAt),
-    };
-  }
-
-  CachedDoneOrder copyWith({
-    int? serverId,
-    String? bookingOrderCode,
-    String? customerName,
-    Value<String?> tableNo = const Value.absent(),
-    Value<String?> doneRequestJson = const Value.absent(),
-    Value<String?> latestDoneJson = const Value.absent(),
-    Value<String?> paymentMethod = const Value.absent(),
-    String? orderStatus,
-    Value<String?> detailJson = const Value.absent(),
-    double? subtotal,
-    double? ppnPercent,
-    bool? isPpnActive,
-    bool? isSynced,
-    bool? deletedLocally,
-    Value<DateTime?> syncedAt = const Value.absent(),
-  }) => CachedDoneOrder(
-    serverId: serverId ?? this.serverId,
-    bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
-    customerName: customerName ?? this.customerName,
-    tableNo: tableNo.present ? tableNo.value : this.tableNo,
-    doneRequestJson: doneRequestJson.present
-        ? doneRequestJson.value
-        : this.doneRequestJson,
-    latestDoneJson: latestDoneJson.present
-        ? latestDoneJson.value
-        : this.latestDoneJson,
-    paymentMethod: paymentMethod.present
-        ? paymentMethod.value
-        : this.paymentMethod,
-    orderStatus: orderStatus ?? this.orderStatus,
-    detailJson: detailJson.present ? detailJson.value : this.detailJson,
-    subtotal: subtotal ?? this.subtotal,
-    ppnPercent: ppnPercent ?? this.ppnPercent,
-    isPpnActive: isPpnActive ?? this.isPpnActive,
-    isSynced: isSynced ?? this.isSynced,
-    deletedLocally: deletedLocally ?? this.deletedLocally,
-    syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
-  );
-  CachedDoneOrder copyWithCompanion(CachedDoneOrdersCompanion data) {
-    return CachedDoneOrder(
-      serverId: data.serverId.present ? data.serverId.value : this.serverId,
-      bookingOrderCode: data.bookingOrderCode.present
-          ? data.bookingOrderCode.value
-          : this.bookingOrderCode,
-      customerName: data.customerName.present
-          ? data.customerName.value
-          : this.customerName,
-      tableNo: data.tableNo.present ? data.tableNo.value : this.tableNo,
-      doneRequestJson: data.doneRequestJson.present
-          ? data.doneRequestJson.value
-          : this.doneRequestJson,
-      latestDoneJson: data.latestDoneJson.present
-          ? data.latestDoneJson.value
-          : this.latestDoneJson,
-      paymentMethod: data.paymentMethod.present
-          ? data.paymentMethod.value
-          : this.paymentMethod,
-      orderStatus: data.orderStatus.present
-          ? data.orderStatus.value
-          : this.orderStatus,
-      detailJson: data.detailJson.present
-          ? data.detailJson.value
-          : this.detailJson,
-      subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
-      ppnPercent: data.ppnPercent.present
-          ? data.ppnPercent.value
-          : this.ppnPercent,
-      isPpnActive: data.isPpnActive.present
-          ? data.isPpnActive.value
-          : this.isPpnActive,
-      isSynced: data.isSynced.present ? data.isSynced.value : this.isSynced,
-      deletedLocally: data.deletedLocally.present
-          ? data.deletedLocally.value
-          : this.deletedLocally,
-      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CachedDoneOrder(')
-          ..write('serverId: $serverId, ')
-          ..write('bookingOrderCode: $bookingOrderCode, ')
-          ..write('customerName: $customerName, ')
-          ..write('tableNo: $tableNo, ')
-          ..write('doneRequestJson: $doneRequestJson, ')
-          ..write('latestDoneJson: $latestDoneJson, ')
-          ..write('paymentMethod: $paymentMethod, ')
-          ..write('orderStatus: $orderStatus, ')
-          ..write('detailJson: $detailJson, ')
-          ..write('subtotal: $subtotal, ')
-          ..write('ppnPercent: $ppnPercent, ')
-          ..write('isPpnActive: $isPpnActive, ')
-          ..write('isSynced: $isSynced, ')
-          ..write('deletedLocally: $deletedLocally, ')
-          ..write('syncedAt: $syncedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    serverId,
-    bookingOrderCode,
-    customerName,
-    tableNo,
-    doneRequestJson,
-    latestDoneJson,
-    paymentMethod,
-    orderStatus,
-    detailJson,
-    subtotal,
-    ppnPercent,
-    isPpnActive,
-    isSynced,
-    deletedLocally,
-    syncedAt,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is CachedDoneOrder &&
-          other.serverId == this.serverId &&
-          other.bookingOrderCode == this.bookingOrderCode &&
-          other.customerName == this.customerName &&
-          other.tableNo == this.tableNo &&
-          other.doneRequestJson == this.doneRequestJson &&
-          other.latestDoneJson == this.latestDoneJson &&
-          other.paymentMethod == this.paymentMethod &&
-          other.orderStatus == this.orderStatus &&
-          other.detailJson == this.detailJson &&
-          other.subtotal == this.subtotal &&
-          other.ppnPercent == this.ppnPercent &&
-          other.isPpnActive == this.isPpnActive &&
-          other.isSynced == this.isSynced &&
-          other.deletedLocally == this.deletedLocally &&
-          other.syncedAt == this.syncedAt);
-}
-
-class CachedDoneOrdersCompanion extends UpdateCompanion<CachedDoneOrder> {
-  final Value<int> serverId;
-  final Value<String> bookingOrderCode;
-  final Value<String> customerName;
-  final Value<String?> tableNo;
-  final Value<String?> doneRequestJson;
-  final Value<String?> latestDoneJson;
-  final Value<String?> paymentMethod;
-  final Value<String> orderStatus;
-  final Value<String?> detailJson;
-  final Value<double> subtotal;
-  final Value<double> ppnPercent;
-  final Value<bool> isPpnActive;
-  final Value<bool> isSynced;
-  final Value<bool> deletedLocally;
-  final Value<DateTime?> syncedAt;
-  const CachedDoneOrdersCompanion({
-    this.serverId = const Value.absent(),
-    this.bookingOrderCode = const Value.absent(),
-    this.customerName = const Value.absent(),
-    this.tableNo = const Value.absent(),
-    this.doneRequestJson = const Value.absent(),
-    this.latestDoneJson = const Value.absent(),
-    this.paymentMethod = const Value.absent(),
-    this.orderStatus = const Value.absent(),
-    this.detailJson = const Value.absent(),
-    this.subtotal = const Value.absent(),
-    this.ppnPercent = const Value.absent(),
-    this.isPpnActive = const Value.absent(),
-    this.isSynced = const Value.absent(),
-    this.deletedLocally = const Value.absent(),
-    this.syncedAt = const Value.absent(),
-  });
-  CachedDoneOrdersCompanion.insert({
-    this.serverId = const Value.absent(),
-    required String bookingOrderCode,
-    required String customerName,
-    this.tableNo = const Value.absent(),
-    this.doneRequestJson = const Value.absent(),
-    this.latestDoneJson = const Value.absent(),
-    this.paymentMethod = const Value.absent(),
-    required String orderStatus,
-    this.detailJson = const Value.absent(),
-    this.subtotal = const Value.absent(),
-    this.ppnPercent = const Value.absent(),
-    this.isPpnActive = const Value.absent(),
-    this.isSynced = const Value.absent(),
-    this.deletedLocally = const Value.absent(),
-    this.syncedAt = const Value.absent(),
-  }) : bookingOrderCode = Value(bookingOrderCode),
-       customerName = Value(customerName),
-       orderStatus = Value(orderStatus);
-  static Insertable<CachedDoneOrder> custom({
-    Expression<int>? serverId,
-    Expression<String>? bookingOrderCode,
-    Expression<String>? customerName,
-    Expression<String>? tableNo,
-    Expression<String>? doneRequestJson,
-    Expression<String>? latestDoneJson,
-    Expression<String>? paymentMethod,
-    Expression<String>? orderStatus,
-    Expression<String>? detailJson,
-    Expression<double>? subtotal,
-    Expression<double>? ppnPercent,
-    Expression<bool>? isPpnActive,
-    Expression<bool>? isSynced,
-    Expression<bool>? deletedLocally,
-    Expression<DateTime>? syncedAt,
-  }) {
-    return RawValuesInsertable({
-      if (serverId != null) 'server_id': serverId,
-      if (bookingOrderCode != null) 'booking_order_code': bookingOrderCode,
-      if (customerName != null) 'customer_name': customerName,
-      if (tableNo != null) 'table_no': tableNo,
-      if (doneRequestJson != null) 'done_request_json': doneRequestJson,
-      if (latestDoneJson != null) 'latest_done_json': latestDoneJson,
-      if (paymentMethod != null) 'payment_method': paymentMethod,
-      if (orderStatus != null) 'order_status': orderStatus,
-      if (detailJson != null) 'detail_json': detailJson,
-      if (subtotal != null) 'subtotal': subtotal,
-      if (ppnPercent != null) 'ppn_percent': ppnPercent,
-      if (isPpnActive != null) 'is_ppn_active': isPpnActive,
-      if (isSynced != null) 'is_synced': isSynced,
-      if (deletedLocally != null) 'deleted_locally': deletedLocally,
-      if (syncedAt != null) 'synced_at': syncedAt,
-    });
-  }
-
-  CachedDoneOrdersCompanion copyWith({
-    Value<int>? serverId,
-    Value<String>? bookingOrderCode,
-    Value<String>? customerName,
-    Value<String?>? tableNo,
-    Value<String?>? doneRequestJson,
-    Value<String?>? latestDoneJson,
-    Value<String?>? paymentMethod,
-    Value<String>? orderStatus,
-    Value<String?>? detailJson,
-    Value<double>? subtotal,
-    Value<double>? ppnPercent,
-    Value<bool>? isPpnActive,
-    Value<bool>? isSynced,
-    Value<bool>? deletedLocally,
-    Value<DateTime?>? syncedAt,
-  }) {
-    return CachedDoneOrdersCompanion(
-      serverId: serverId ?? this.serverId,
-      bookingOrderCode: bookingOrderCode ?? this.bookingOrderCode,
-      customerName: customerName ?? this.customerName,
-      tableNo: tableNo ?? this.tableNo,
-      doneRequestJson: doneRequestJson ?? this.doneRequestJson,
-      latestDoneJson: latestDoneJson ?? this.latestDoneJson,
-      paymentMethod: paymentMethod ?? this.paymentMethod,
-      orderStatus: orderStatus ?? this.orderStatus,
-      detailJson: detailJson ?? this.detailJson,
-      subtotal: subtotal ?? this.subtotal,
-      ppnPercent: ppnPercent ?? this.ppnPercent,
-      isPpnActive: isPpnActive ?? this.isPpnActive,
-      isSynced: isSynced ?? this.isSynced,
-      deletedLocally: deletedLocally ?? this.deletedLocally,
-      syncedAt: syncedAt ?? this.syncedAt,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (serverId.present) {
-      map['server_id'] = Variable<int>(serverId.value);
-    }
-    if (bookingOrderCode.present) {
-      map['booking_order_code'] = Variable<String>(bookingOrderCode.value);
-    }
-    if (customerName.present) {
-      map['customer_name'] = Variable<String>(customerName.value);
-    }
-    if (tableNo.present) {
-      map['table_no'] = Variable<String>(tableNo.value);
-    }
-    if (doneRequestJson.present) {
-      map['done_request_json'] = Variable<String>(doneRequestJson.value);
-    }
-    if (latestDoneJson.present) {
-      map['latest_done_json'] = Variable<String>(latestDoneJson.value);
-    }
-    if (paymentMethod.present) {
-      map['payment_method'] = Variable<String>(paymentMethod.value);
-    }
-    if (orderStatus.present) {
-      map['order_status'] = Variable<String>(orderStatus.value);
-    }
-    if (detailJson.present) {
-      map['detail_json'] = Variable<String>(detailJson.value);
-    }
-    if (subtotal.present) {
-      map['subtotal'] = Variable<double>(subtotal.value);
-    }
-    if (ppnPercent.present) {
-      map['ppn_percent'] = Variable<double>(ppnPercent.value);
-    }
-    if (isPpnActive.present) {
-      map['is_ppn_active'] = Variable<bool>(isPpnActive.value);
-    }
-    if (isSynced.present) {
-      map['is_synced'] = Variable<bool>(isSynced.value);
-    }
-    if (deletedLocally.present) {
-      map['deleted_locally'] = Variable<bool>(deletedLocally.value);
-    }
-    if (syncedAt.present) {
-      map['synced_at'] = Variable<DateTime>(syncedAt.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('CachedDoneOrdersCompanion(')
-          ..write('serverId: $serverId, ')
-          ..write('bookingOrderCode: $bookingOrderCode, ')
-          ..write('customerName: $customerName, ')
-          ..write('tableNo: $tableNo, ')
-          ..write('doneRequestJson: $doneRequestJson, ')
-          ..write('latestDoneJson: $latestDoneJson, ')
-          ..write('paymentMethod: $paymentMethod, ')
-          ..write('orderStatus: $orderStatus, ')
-          ..write('detailJson: $detailJson, ')
-          ..write('subtotal: $subtotal, ')
-          ..write('ppnPercent: $ppnPercent, ')
-          ..write('isPpnActive: $isPpnActive, ')
-          ..write('isSynced: $isSynced, ')
-          ..write('deletedLocally: $deletedLocally, ')
-          ..write('syncedAt: $syncedAt')
+    return (StringBuffer('SyncMetaCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -13248,30 +11291,15 @@ abstract class _$CashierDb extends GeneratedDatabase {
   late final $CachedTablesTable cachedTables = $CachedTablesTable(this);
   late final $CachedPaymentMethodsTable cachedPaymentMethods =
       $CachedPaymentMethodsTable(this);
-  late final $LocalOrdersTable localOrders = $LocalOrdersTable(this);
-  late final $LocalOrderItemsTable localOrderItems = $LocalOrderItemsTable(
-    this,
-  );
-  late final $LocalOrderItemOptionsTable localOrderItemOptions =
-      $LocalOrderItemOptionsTable(this);
-  late final $LocalPaymentsTable localPayments = $LocalPaymentsTable(this);
-  late final $SyncQueueTable syncQueue = $SyncQueueTable(this);
-  late final $CachedPaymentOrdersTable cachedPaymentOrders =
-      $CachedPaymentOrdersTable(this);
-  late final $CachedProcessOrdersTable cachedProcessOrders =
-      $CachedProcessOrdersTable(this);
-  late final $CachedPaymentOrderItemsTable cachedPaymentOrderItems =
-      $CachedPaymentOrderItemsTable(this);
-  late final $CachedPaymentOrderItemOptionsTable cachedPaymentOrderItemOptions =
-      $CachedPaymentOrderItemOptionsTable(this);
-  late final $CachedDoneOrdersTable cachedDoneOrders = $CachedDoneOrdersTable(
-    this,
-  );
-  late final CachedProcessOrdersDao cachedProcessOrdersDao =
-      CachedProcessOrdersDao(this as CashierDb);
-  late final CachedDoneOrdersDao cachedDoneOrdersDao = CachedDoneOrdersDao(
-    this as CashierDb,
-  );
+  late final $CachedPartnerSettingsTable cachedPartnerSettings =
+      $CachedPartnerSettingsTable(this);
+  late final $BookingOrdersTable bookingOrders = $BookingOrdersTable(this);
+  late final $OrderDetailsTable orderDetails = $OrderDetailsTable(this);
+  late final $OrderDetailOptionsTable orderDetailOptions =
+      $OrderDetailOptionsTable(this);
+  late final $OrderPaymentsTable orderPayments = $OrderPaymentsTable(this);
+  late final $SyncConflictsTable syncConflicts = $SyncConflictsTable(this);
+  late final $SyncMetaTable syncMeta = $SyncMetaTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -13283,16 +11311,13 @@ abstract class _$CashierDb extends GeneratedDatabase {
     cachedOptionItems,
     cachedTables,
     cachedPaymentMethods,
-    localOrders,
-    localOrderItems,
-    localOrderItemOptions,
-    localPayments,
-    syncQueue,
-    cachedPaymentOrders,
-    cachedProcessOrders,
-    cachedPaymentOrderItems,
-    cachedPaymentOrderItemOptions,
-    cachedDoneOrders,
+    cachedPartnerSettings,
+    bookingOrders,
+    orderDetails,
+    orderDetailOptions,
+    orderPayments,
+    syncConflicts,
+    syncMeta,
   ];
 }
 
@@ -15222,102 +13247,470 @@ typedef $$CachedPaymentMethodsTableProcessedTableManager =
       CachedPaymentMethod,
       PrefetchHooks Function()
     >;
-typedef $$LocalOrdersTableCreateCompanionBuilder =
-    LocalOrdersCompanion Function({
-      required String localId,
-      Value<int?> serverId,
-      required String clientOrderCode,
-      Value<String?> serverOrderCode,
-      Value<int?> partnerId,
-      Value<String?> partnerName,
-      Value<int?> tableServerId,
-      Value<String?> tableNoSnapshot,
-      required String customerName,
-      Value<String?> paymentMethodSelected,
-      Value<String?> paymentMethodEffective,
-      Value<double> subtotal,
-      Value<double> discountValue,
-      Value<double> ppnPercent,
+typedef $$CachedPartnerSettingsTableCreateCompanionBuilder =
+    CachedPartnerSettingsCompanion Function({
+      Value<int> partnerId,
+      required String name,
+      Value<bool> isQrActive,
+      Value<bool> isCashierActive,
+      Value<bool> isOpenbill,
+      Value<double> ppn,
       Value<bool> isPpnActive,
-      Value<double> grandTotal,
-      Value<double?> paidAmountLocal,
-      Value<double?> changeAmountLocal,
-      Value<String?> cashierProofImageLocalPath,
-      Value<DateTime?> paymentConfirmedAtLocal,
-      Value<int?> latestPaymentServerId,
-      Value<String?> orderSnapshotJson,
-      Value<String> orderStatusLocal,
-      Value<String> syncStatus,
-      Value<String?> lastError,
-      Value<int?> manualPaymentServerId,
-      Value<String?> manualPaymentType,
-      Value<String?> manualProviderName,
-      Value<String?> manualProviderAccountName,
-      Value<String?> manualProviderAccountNo,
-      Value<String?> manualQrisImageUrl,
-      Value<String?> manualQrisImageLocalPath,
-      Value<String?> manualPaymentLabel,
-      Value<String?> manualPaymentRawJson,
-      Value<String> backendSyncStage,
-      required DateTime createdAtLocal,
-      required DateTime updatedAtLocal,
-      Value<DateTime?> syncedAt,
-      Value<int> rowid,
+      Value<int> cashRoundingUnit,
+      Value<String?> logo,
+      Value<bool> printReceiptLogo,
+      Value<bool> canOrderNotes,
+      required DateTime cachedAt,
     });
-typedef $$LocalOrdersTableUpdateCompanionBuilder =
-    LocalOrdersCompanion Function({
-      Value<String> localId,
-      Value<int?> serverId,
-      Value<String> clientOrderCode,
-      Value<String?> serverOrderCode,
-      Value<int?> partnerId,
-      Value<String?> partnerName,
-      Value<int?> tableServerId,
-      Value<String?> tableNoSnapshot,
-      Value<String> customerName,
-      Value<String?> paymentMethodSelected,
-      Value<String?> paymentMethodEffective,
-      Value<double> subtotal,
-      Value<double> discountValue,
-      Value<double> ppnPercent,
+typedef $$CachedPartnerSettingsTableUpdateCompanionBuilder =
+    CachedPartnerSettingsCompanion Function({
+      Value<int> partnerId,
+      Value<String> name,
+      Value<bool> isQrActive,
+      Value<bool> isCashierActive,
+      Value<bool> isOpenbill,
+      Value<double> ppn,
       Value<bool> isPpnActive,
-      Value<double> grandTotal,
-      Value<double?> paidAmountLocal,
-      Value<double?> changeAmountLocal,
-      Value<String?> cashierProofImageLocalPath,
-      Value<DateTime?> paymentConfirmedAtLocal,
-      Value<int?> latestPaymentServerId,
-      Value<String?> orderSnapshotJson,
-      Value<String> orderStatusLocal,
-      Value<String> syncStatus,
-      Value<String?> lastError,
-      Value<int?> manualPaymentServerId,
-      Value<String?> manualPaymentType,
-      Value<String?> manualProviderName,
-      Value<String?> manualProviderAccountName,
-      Value<String?> manualProviderAccountNo,
-      Value<String?> manualQrisImageUrl,
-      Value<String?> manualQrisImageLocalPath,
-      Value<String?> manualPaymentLabel,
-      Value<String?> manualPaymentRawJson,
-      Value<String> backendSyncStage,
-      Value<DateTime> createdAtLocal,
-      Value<DateTime> updatedAtLocal,
-      Value<DateTime?> syncedAt,
-      Value<int> rowid,
+      Value<int> cashRoundingUnit,
+      Value<String?> logo,
+      Value<bool> printReceiptLogo,
+      Value<bool> canOrderNotes,
+      Value<DateTime> cachedAt,
     });
 
-class $$LocalOrdersTableFilterComposer
-    extends Composer<_$CashierDb, $LocalOrdersTable> {
-  $$LocalOrdersTableFilterComposer({
+class $$CachedPartnerSettingsTableFilterComposer
+    extends Composer<_$CashierDb, $CachedPartnerSettingsTable> {
+  $$CachedPartnerSettingsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get localId => $composableBuilder(
-    column: $table.localId,
+  ColumnFilters<int> get partnerId => $composableBuilder(
+    column: $table.partnerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isQrActive => $composableBuilder(
+    column: $table.isQrActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isCashierActive => $composableBuilder(
+    column: $table.isCashierActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isOpenbill => $composableBuilder(
+    column: $table.isOpenbill,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get ppn => $composableBuilder(
+    column: $table.ppn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get logo => $composableBuilder(
+    column: $table.logo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get printReceiptLogo => $composableBuilder(
+    column: $table.printReceiptLogo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get canOrderNotes => $composableBuilder(
+    column: $table.canOrderNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CachedPartnerSettingsTableOrderingComposer
+    extends Composer<_$CashierDb, $CachedPartnerSettingsTable> {
+  $$CachedPartnerSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get partnerId => $composableBuilder(
+    column: $table.partnerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isQrActive => $composableBuilder(
+    column: $table.isQrActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isCashierActive => $composableBuilder(
+    column: $table.isCashierActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isOpenbill => $composableBuilder(
+    column: $table.isOpenbill,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get ppn => $composableBuilder(
+    column: $table.ppn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get logo => $composableBuilder(
+    column: $table.logo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get printReceiptLogo => $composableBuilder(
+    column: $table.printReceiptLogo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get canOrderNotes => $composableBuilder(
+    column: $table.canOrderNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CachedPartnerSettingsTableAnnotationComposer
+    extends Composer<_$CashierDb, $CachedPartnerSettingsTable> {
+  $$CachedPartnerSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get partnerId =>
+      $composableBuilder(column: $table.partnerId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<bool> get isQrActive => $composableBuilder(
+    column: $table.isQrActive,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isCashierActive => $composableBuilder(
+    column: $table.isCashierActive,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isOpenbill => $composableBuilder(
+    column: $table.isOpenbill,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get ppn =>
+      $composableBuilder(column: $table.ppn, builder: (column) => column);
+
+  GeneratedColumn<bool> get isPpnActive => $composableBuilder(
+    column: $table.isPpnActive,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get logo =>
+      $composableBuilder(column: $table.logo, builder: (column) => column);
+
+  GeneratedColumn<bool> get printReceiptLogo => $composableBuilder(
+    column: $table.printReceiptLogo,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get canOrderNotes => $composableBuilder(
+    column: $table.canOrderNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+}
+
+class $$CachedPartnerSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$CashierDb,
+          $CachedPartnerSettingsTable,
+          CachedPartnerSetting,
+          $$CachedPartnerSettingsTableFilterComposer,
+          $$CachedPartnerSettingsTableOrderingComposer,
+          $$CachedPartnerSettingsTableAnnotationComposer,
+          $$CachedPartnerSettingsTableCreateCompanionBuilder,
+          $$CachedPartnerSettingsTableUpdateCompanionBuilder,
+          (
+            CachedPartnerSetting,
+            BaseReferences<
+              _$CashierDb,
+              $CachedPartnerSettingsTable,
+              CachedPartnerSetting
+            >,
+          ),
+          CachedPartnerSetting,
+          PrefetchHooks Function()
+        > {
+  $$CachedPartnerSettingsTableTableManager(
+    _$CashierDb db,
+    $CachedPartnerSettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CachedPartnerSettingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$CachedPartnerSettingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CachedPartnerSettingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> partnerId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<bool> isQrActive = const Value.absent(),
+                Value<bool> isCashierActive = const Value.absent(),
+                Value<bool> isOpenbill = const Value.absent(),
+                Value<double> ppn = const Value.absent(),
+                Value<bool> isPpnActive = const Value.absent(),
+                Value<int> cashRoundingUnit = const Value.absent(),
+                Value<String?> logo = const Value.absent(),
+                Value<bool> printReceiptLogo = const Value.absent(),
+                Value<bool> canOrderNotes = const Value.absent(),
+                Value<DateTime> cachedAt = const Value.absent(),
+              }) => CachedPartnerSettingsCompanion(
+                partnerId: partnerId,
+                name: name,
+                isQrActive: isQrActive,
+                isCashierActive: isCashierActive,
+                isOpenbill: isOpenbill,
+                ppn: ppn,
+                isPpnActive: isPpnActive,
+                cashRoundingUnit: cashRoundingUnit,
+                logo: logo,
+                printReceiptLogo: printReceiptLogo,
+                canOrderNotes: canOrderNotes,
+                cachedAt: cachedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> partnerId = const Value.absent(),
+                required String name,
+                Value<bool> isQrActive = const Value.absent(),
+                Value<bool> isCashierActive = const Value.absent(),
+                Value<bool> isOpenbill = const Value.absent(),
+                Value<double> ppn = const Value.absent(),
+                Value<bool> isPpnActive = const Value.absent(),
+                Value<int> cashRoundingUnit = const Value.absent(),
+                Value<String?> logo = const Value.absent(),
+                Value<bool> printReceiptLogo = const Value.absent(),
+                Value<bool> canOrderNotes = const Value.absent(),
+                required DateTime cachedAt,
+              }) => CachedPartnerSettingsCompanion.insert(
+                partnerId: partnerId,
+                name: name,
+                isQrActive: isQrActive,
+                isCashierActive: isCashierActive,
+                isOpenbill: isOpenbill,
+                ppn: ppn,
+                isPpnActive: isPpnActive,
+                cashRoundingUnit: cashRoundingUnit,
+                logo: logo,
+                printReceiptLogo: printReceiptLogo,
+                canOrderNotes: canOrderNotes,
+                cachedAt: cachedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CachedPartnerSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$CashierDb,
+      $CachedPartnerSettingsTable,
+      CachedPartnerSetting,
+      $$CachedPartnerSettingsTableFilterComposer,
+      $$CachedPartnerSettingsTableOrderingComposer,
+      $$CachedPartnerSettingsTableAnnotationComposer,
+      $$CachedPartnerSettingsTableCreateCompanionBuilder,
+      $$CachedPartnerSettingsTableUpdateCompanionBuilder,
+      (
+        CachedPartnerSetting,
+        BaseReferences<
+          _$CashierDb,
+          $CachedPartnerSettingsTable,
+          CachedPartnerSetting
+        >,
+      ),
+      CachedPartnerSetting,
+      PrefetchHooks Function()
+    >;
+typedef $$BookingOrdersTableCreateCompanionBuilder =
+    BookingOrdersCompanion Function({
+      required String clientUuid,
+      Value<int?> serverId,
+      Value<String?> bookingOrderCode,
+      Value<int?> partnerId,
+      Value<String?> partnerName,
+      Value<int?> tableId,
+      Value<String?> tableNo,
+      Value<int?> customerId,
+      Value<int?> employeeOrderId,
+      Value<String?> orderBy,
+      required String customerName,
+      Value<String> orderStatus,
+      Value<String?> paymentMethod,
+      Value<bool> openbillFlag,
+      Value<int?> discountId,
+      Value<double> discountValue,
+      Value<double> totalOrderValue,
+      Value<double?> ppn,
+      Value<bool> isPpnActive,
+      Value<String?> customerOrderNote,
+      Value<String?> employeeOrderNote,
+      Value<int?> cashierProcessId,
+      Value<int?> kitchenProcessId,
+      Value<int?> paymentId,
+      Value<bool> paymentFlag,
+      Value<String?> wifiSnapshotJson,
+      Value<String?> paymentRequestJson,
+      Value<String?> latestPaymentJson,
+      Value<int> syncVersion,
+      Value<bool> syncDirty,
+      Value<String?> syncIntent,
+      Value<String?> syncError,
+      Value<String?> localFilePathsJson,
+      Value<double?> paidAmountLocal,
+      Value<double?> changeAmountLocal,
+      Value<double?> cashRoundingAmount,
+      Value<int?> cashRoundingUnit,
+      Value<int?> latestPaymentServerId,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<DateTime?> syncedAt,
+      Value<int> rowid,
+    });
+typedef $$BookingOrdersTableUpdateCompanionBuilder =
+    BookingOrdersCompanion Function({
+      Value<String> clientUuid,
+      Value<int?> serverId,
+      Value<String?> bookingOrderCode,
+      Value<int?> partnerId,
+      Value<String?> partnerName,
+      Value<int?> tableId,
+      Value<String?> tableNo,
+      Value<int?> customerId,
+      Value<int?> employeeOrderId,
+      Value<String?> orderBy,
+      Value<String> customerName,
+      Value<String> orderStatus,
+      Value<String?> paymentMethod,
+      Value<bool> openbillFlag,
+      Value<int?> discountId,
+      Value<double> discountValue,
+      Value<double> totalOrderValue,
+      Value<double?> ppn,
+      Value<bool> isPpnActive,
+      Value<String?> customerOrderNote,
+      Value<String?> employeeOrderNote,
+      Value<int?> cashierProcessId,
+      Value<int?> kitchenProcessId,
+      Value<int?> paymentId,
+      Value<bool> paymentFlag,
+      Value<String?> wifiSnapshotJson,
+      Value<String?> paymentRequestJson,
+      Value<String?> latestPaymentJson,
+      Value<int> syncVersion,
+      Value<bool> syncDirty,
+      Value<String?> syncIntent,
+      Value<String?> syncError,
+      Value<String?> localFilePathsJson,
+      Value<double?> paidAmountLocal,
+      Value<double?> changeAmountLocal,
+      Value<double?> cashRoundingAmount,
+      Value<int?> cashRoundingUnit,
+      Value<int?> latestPaymentServerId,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<DateTime?> syncedAt,
+      Value<int> rowid,
+    });
+
+class $$BookingOrdersTableFilterComposer
+    extends Composer<_$CashierDb, $BookingOrdersTable> {
+  $$BookingOrdersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientUuid => $composableBuilder(
+    column: $table.clientUuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15326,13 +13719,8 @@ class $$LocalOrdersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get clientOrderCode => $composableBuilder(
-    column: $table.clientOrderCode,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get serverOrderCode => $composableBuilder(
-    column: $table.serverOrderCode,
+  ColumnFilters<String> get bookingOrderCode => $composableBuilder(
+    column: $table.bookingOrderCode,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15346,13 +13734,28 @@ class $$LocalOrdersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get tableServerId => $composableBuilder(
-    column: $table.tableServerId,
+  ColumnFilters<int> get tableId => $composableBuilder(
+    column: $table.tableId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get tableNoSnapshot => $composableBuilder(
-    column: $table.tableNoSnapshot,
+  ColumnFilters<String> get tableNo => $composableBuilder(
+    column: $table.tableNo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get employeeOrderId => $composableBuilder(
+    column: $table.employeeOrderId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get orderBy => $composableBuilder(
+    column: $table.orderBy,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15361,18 +13764,23 @@ class $$LocalOrdersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get paymentMethodSelected => $composableBuilder(
-    column: $table.paymentMethodSelected,
+  ColumnFilters<String> get orderStatus => $composableBuilder(
+    column: $table.orderStatus,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get paymentMethodEffective => $composableBuilder(
-    column: $table.paymentMethodEffective,
+  ColumnFilters<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get subtotal => $composableBuilder(
-    column: $table.subtotal,
+  ColumnFilters<bool> get openbillFlag => $composableBuilder(
+    column: $table.openbillFlag,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get discountId => $composableBuilder(
+    column: $table.discountId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15381,8 +13789,13 @@ class $$LocalOrdersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
+  ColumnFilters<double> get totalOrderValue => $composableBuilder(
+    column: $table.totalOrderValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get ppn => $composableBuilder(
+    column: $table.ppn,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15391,8 +13804,73 @@ class $$LocalOrdersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get grandTotal => $composableBuilder(
-    column: $table.grandTotal,
+  ColumnFilters<String> get customerOrderNote => $composableBuilder(
+    column: $table.customerOrderNote,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get employeeOrderNote => $composableBuilder(
+    column: $table.employeeOrderNote,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cashierProcessId => $composableBuilder(
+    column: $table.cashierProcessId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get kitchenProcessId => $composableBuilder(
+    column: $table.kitchenProcessId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get paymentId => $composableBuilder(
+    column: $table.paymentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get paymentFlag => $composableBuilder(
+    column: $table.paymentFlag,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get wifiSnapshotJson => $composableBuilder(
+    column: $table.wifiSnapshotJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get paymentRequestJson => $composableBuilder(
+    column: $table.paymentRequestJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get latestPaymentJson => $composableBuilder(
+    column: $table.latestPaymentJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncVersion => $composableBuilder(
+    column: $table.syncVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get syncDirty => $composableBuilder(
+    column: $table.syncDirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncIntent => $composableBuilder(
+    column: $table.syncIntent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncError => $composableBuilder(
+    column: $table.syncError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localFilePathsJson => $composableBuilder(
+    column: $table.localFilePathsJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15406,13 +13884,13 @@ class $$LocalOrdersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get cashierProofImageLocalPath => $composableBuilder(
-    column: $table.cashierProofImageLocalPath,
+  ColumnFilters<double> get cashRoundingAmount => $composableBuilder(
+    column: $table.cashRoundingAmount,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get paymentConfirmedAtLocal => $composableBuilder(
-    column: $table.paymentConfirmedAtLocal,
+  ColumnFilters<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15421,83 +13899,18 @@ class $$LocalOrdersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get orderSnapshotJson => $composableBuilder(
-    column: $table.orderSnapshotJson,
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get orderStatusLocal => $composableBuilder(
-    column: $table.orderStatusLocal,
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get lastError => $composableBuilder(
-    column: $table.lastError,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get manualPaymentServerId => $composableBuilder(
-    column: $table.manualPaymentServerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get manualPaymentType => $composableBuilder(
-    column: $table.manualPaymentType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get manualProviderName => $composableBuilder(
-    column: $table.manualProviderName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get manualProviderAccountName => $composableBuilder(
-    column: $table.manualProviderAccountName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get manualProviderAccountNo => $composableBuilder(
-    column: $table.manualProviderAccountNo,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get manualQrisImageUrl => $composableBuilder(
-    column: $table.manualQrisImageUrl,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get manualQrisImageLocalPath => $composableBuilder(
-    column: $table.manualQrisImageLocalPath,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get manualPaymentLabel => $composableBuilder(
-    column: $table.manualPaymentLabel,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get manualPaymentRawJson => $composableBuilder(
-    column: $table.manualPaymentRawJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get backendSyncStage => $composableBuilder(
-    column: $table.backendSyncStage,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get updatedAtLocal => $composableBuilder(
-    column: $table.updatedAtLocal,
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15507,17 +13920,17 @@ class $$LocalOrdersTableFilterComposer
   );
 }
 
-class $$LocalOrdersTableOrderingComposer
-    extends Composer<_$CashierDb, $LocalOrdersTable> {
-  $$LocalOrdersTableOrderingComposer({
+class $$BookingOrdersTableOrderingComposer
+    extends Composer<_$CashierDb, $BookingOrdersTable> {
+  $$BookingOrdersTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get localId => $composableBuilder(
-    column: $table.localId,
+  ColumnOrderings<String> get clientUuid => $composableBuilder(
+    column: $table.clientUuid,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15526,13 +13939,8 @@ class $$LocalOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get clientOrderCode => $composableBuilder(
-    column: $table.clientOrderCode,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get serverOrderCode => $composableBuilder(
-    column: $table.serverOrderCode,
+  ColumnOrderings<String> get bookingOrderCode => $composableBuilder(
+    column: $table.bookingOrderCode,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15546,13 +13954,28 @@ class $$LocalOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get tableServerId => $composableBuilder(
-    column: $table.tableServerId,
+  ColumnOrderings<int> get tableId => $composableBuilder(
+    column: $table.tableId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get tableNoSnapshot => $composableBuilder(
-    column: $table.tableNoSnapshot,
+  ColumnOrderings<String> get tableNo => $composableBuilder(
+    column: $table.tableNo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get employeeOrderId => $composableBuilder(
+    column: $table.employeeOrderId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get orderBy => $composableBuilder(
+    column: $table.orderBy,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15561,18 +13984,23 @@ class $$LocalOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get paymentMethodSelected => $composableBuilder(
-    column: $table.paymentMethodSelected,
+  ColumnOrderings<String> get orderStatus => $composableBuilder(
+    column: $table.orderStatus,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get paymentMethodEffective => $composableBuilder(
-    column: $table.paymentMethodEffective,
+  ColumnOrderings<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get subtotal => $composableBuilder(
-    column: $table.subtotal,
+  ColumnOrderings<bool> get openbillFlag => $composableBuilder(
+    column: $table.openbillFlag,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get discountId => $composableBuilder(
+    column: $table.discountId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15581,8 +14009,13 @@ class $$LocalOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
+  ColumnOrderings<double> get totalOrderValue => $composableBuilder(
+    column: $table.totalOrderValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get ppn => $composableBuilder(
+    column: $table.ppn,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15591,8 +14024,73 @@ class $$LocalOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get grandTotal => $composableBuilder(
-    column: $table.grandTotal,
+  ColumnOrderings<String> get customerOrderNote => $composableBuilder(
+    column: $table.customerOrderNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get employeeOrderNote => $composableBuilder(
+    column: $table.employeeOrderNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cashierProcessId => $composableBuilder(
+    column: $table.cashierProcessId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get kitchenProcessId => $composableBuilder(
+    column: $table.kitchenProcessId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get paymentId => $composableBuilder(
+    column: $table.paymentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get paymentFlag => $composableBuilder(
+    column: $table.paymentFlag,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get wifiSnapshotJson => $composableBuilder(
+    column: $table.wifiSnapshotJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get paymentRequestJson => $composableBuilder(
+    column: $table.paymentRequestJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get latestPaymentJson => $composableBuilder(
+    column: $table.latestPaymentJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get syncVersion => $composableBuilder(
+    column: $table.syncVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get syncDirty => $composableBuilder(
+    column: $table.syncDirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncIntent => $composableBuilder(
+    column: $table.syncIntent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncError => $composableBuilder(
+    column: $table.syncError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localFilePathsJson => $composableBuilder(
+    column: $table.localFilePathsJson,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15606,13 +14104,13 @@ class $$LocalOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get cashierProofImageLocalPath => $composableBuilder(
-    column: $table.cashierProofImageLocalPath,
+  ColumnOrderings<double> get cashRoundingAmount => $composableBuilder(
+    column: $table.cashRoundingAmount,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get paymentConfirmedAtLocal => $composableBuilder(
-    column: $table.paymentConfirmedAtLocal,
+  ColumnOrderings<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15621,83 +14119,18 @@ class $$LocalOrdersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get orderSnapshotJson => $composableBuilder(
-    column: $table.orderSnapshotJson,
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get orderStatusLocal => $composableBuilder(
-    column: $table.orderStatusLocal,
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get lastError => $composableBuilder(
-    column: $table.lastError,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get manualPaymentServerId => $composableBuilder(
-    column: $table.manualPaymentServerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get manualPaymentType => $composableBuilder(
-    column: $table.manualPaymentType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get manualProviderName => $composableBuilder(
-    column: $table.manualProviderName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get manualProviderAccountName => $composableBuilder(
-    column: $table.manualProviderAccountName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get manualProviderAccountNo => $composableBuilder(
-    column: $table.manualProviderAccountNo,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get manualQrisImageUrl => $composableBuilder(
-    column: $table.manualQrisImageUrl,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get manualQrisImageLocalPath => $composableBuilder(
-    column: $table.manualQrisImageLocalPath,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get manualPaymentLabel => $composableBuilder(
-    column: $table.manualPaymentLabel,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get manualPaymentRawJson => $composableBuilder(
-    column: $table.manualPaymentRawJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get backendSyncStage => $composableBuilder(
-    column: $table.backendSyncStage,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get updatedAtLocal => $composableBuilder(
-    column: $table.updatedAtLocal,
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15707,28 +14140,25 @@ class $$LocalOrdersTableOrderingComposer
   );
 }
 
-class $$LocalOrdersTableAnnotationComposer
-    extends Composer<_$CashierDb, $LocalOrdersTable> {
-  $$LocalOrdersTableAnnotationComposer({
+class $$BookingOrdersTableAnnotationComposer
+    extends Composer<_$CashierDb, $BookingOrdersTable> {
+  $$BookingOrdersTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get localId =>
-      $composableBuilder(column: $table.localId, builder: (column) => column);
+  GeneratedColumn<String> get clientUuid => $composableBuilder(
+    column: $table.clientUuid,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<String> get clientOrderCode => $composableBuilder(
-    column: $table.clientOrderCode,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get serverOrderCode => $composableBuilder(
-    column: $table.serverOrderCode,
+  GeneratedColumn<String> get bookingOrderCode => $composableBuilder(
+    column: $table.bookingOrderCode,
     builder: (column) => column,
   );
 
@@ -15740,51 +14170,129 @@ class $$LocalOrdersTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get tableServerId => $composableBuilder(
-    column: $table.tableServerId,
+  GeneratedColumn<int> get tableId =>
+      $composableBuilder(column: $table.tableId, builder: (column) => column);
+
+  GeneratedColumn<String> get tableNo =>
+      $composableBuilder(column: $table.tableNo, builder: (column) => column);
+
+  GeneratedColumn<int> get customerId => $composableBuilder(
+    column: $table.customerId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get tableNoSnapshot => $composableBuilder(
-    column: $table.tableNoSnapshot,
+  GeneratedColumn<int> get employeeOrderId => $composableBuilder(
+    column: $table.employeeOrderId,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get orderBy =>
+      $composableBuilder(column: $table.orderBy, builder: (column) => column);
 
   GeneratedColumn<String> get customerName => $composableBuilder(
     column: $table.customerName,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get paymentMethodSelected => $composableBuilder(
-    column: $table.paymentMethodSelected,
+  GeneratedColumn<String> get orderStatus => $composableBuilder(
+    column: $table.orderStatus,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get paymentMethodEffective => $composableBuilder(
-    column: $table.paymentMethodEffective,
+  GeneratedColumn<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get subtotal =>
-      $composableBuilder(column: $table.subtotal, builder: (column) => column);
+  GeneratedColumn<bool> get openbillFlag => $composableBuilder(
+    column: $table.openbillFlag,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get discountId => $composableBuilder(
+    column: $table.discountId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<double> get discountValue => $composableBuilder(
     column: $table.discountValue,
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
+  GeneratedColumn<double> get totalOrderValue => $composableBuilder(
+    column: $table.totalOrderValue,
     builder: (column) => column,
   );
+
+  GeneratedColumn<double> get ppn =>
+      $composableBuilder(column: $table.ppn, builder: (column) => column);
 
   GeneratedColumn<bool> get isPpnActive => $composableBuilder(
     column: $table.isPpnActive,
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get grandTotal => $composableBuilder(
-    column: $table.grandTotal,
+  GeneratedColumn<String> get customerOrderNote => $composableBuilder(
+    column: $table.customerOrderNote,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get employeeOrderNote => $composableBuilder(
+    column: $table.employeeOrderNote,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cashierProcessId => $composableBuilder(
+    column: $table.cashierProcessId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get kitchenProcessId => $composableBuilder(
+    column: $table.kitchenProcessId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get paymentId =>
+      $composableBuilder(column: $table.paymentId, builder: (column) => column);
+
+  GeneratedColumn<bool> get paymentFlag => $composableBuilder(
+    column: $table.paymentFlag,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get wifiSnapshotJson => $composableBuilder(
+    column: $table.wifiSnapshotJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get paymentRequestJson => $composableBuilder(
+    column: $table.paymentRequestJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get latestPaymentJson => $composableBuilder(
+    column: $table.latestPaymentJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get syncVersion => $composableBuilder(
+    column: $table.syncVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get syncDirty =>
+      $composableBuilder(column: $table.syncDirty, builder: (column) => column);
+
+  GeneratedColumn<String> get syncIntent => $composableBuilder(
+    column: $table.syncIntent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get syncError =>
+      $composableBuilder(column: $table.syncError, builder: (column) => column);
+
+  GeneratedColumn<String> get localFilePathsJson => $composableBuilder(
+    column: $table.localFilePathsJson,
     builder: (column) => column,
   );
 
@@ -15798,13 +14306,13 @@ class $$LocalOrdersTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get cashierProofImageLocalPath => $composableBuilder(
-    column: $table.cashierProofImageLocalPath,
+  GeneratedColumn<double> get cashRoundingAmount => $composableBuilder(
+    column: $table.cashRoundingAmount,
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get paymentConfirmedAtLocal => $composableBuilder(
-    column: $table.paymentConfirmedAtLocal,
+  GeneratedColumn<int> get cashRoundingUnit => $composableBuilder(
+    column: $table.cashRoundingUnit,
     builder: (column) => column,
   );
 
@@ -15813,280 +14321,225 @@ class $$LocalOrdersTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get orderSnapshotJson => $composableBuilder(
-    column: $table.orderSnapshotJson,
-    builder: (column) => column,
-  );
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<String> get orderStatusLocal => $composableBuilder(
-    column: $table.orderStatusLocal,
-    builder: (column) => column,
-  );
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
-  GeneratedColumn<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get lastError =>
-      $composableBuilder(column: $table.lastError, builder: (column) => column);
-
-  GeneratedColumn<int> get manualPaymentServerId => $composableBuilder(
-    column: $table.manualPaymentServerId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get manualPaymentType => $composableBuilder(
-    column: $table.manualPaymentType,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get manualProviderName => $composableBuilder(
-    column: $table.manualProviderName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get manualProviderAccountName => $composableBuilder(
-    column: $table.manualProviderAccountName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get manualProviderAccountNo => $composableBuilder(
-    column: $table.manualProviderAccountNo,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get manualQrisImageUrl => $composableBuilder(
-    column: $table.manualQrisImageUrl,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get manualQrisImageLocalPath => $composableBuilder(
-    column: $table.manualQrisImageLocalPath,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get manualPaymentLabel => $composableBuilder(
-    column: $table.manualPaymentLabel,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get manualPaymentRawJson => $composableBuilder(
-    column: $table.manualPaymentRawJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get backendSyncStage => $composableBuilder(
-    column: $table.backendSyncStage,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get updatedAtLocal => $composableBuilder(
-    column: $table.updatedAtLocal,
-    builder: (column) => column,
-  );
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 
   GeneratedColumn<DateTime> get syncedAt =>
       $composableBuilder(column: $table.syncedAt, builder: (column) => column);
 }
 
-class $$LocalOrdersTableTableManager
+class $$BookingOrdersTableTableManager
     extends
         RootTableManager<
           _$CashierDb,
-          $LocalOrdersTable,
-          LocalOrder,
-          $$LocalOrdersTableFilterComposer,
-          $$LocalOrdersTableOrderingComposer,
-          $$LocalOrdersTableAnnotationComposer,
-          $$LocalOrdersTableCreateCompanionBuilder,
-          $$LocalOrdersTableUpdateCompanionBuilder,
+          $BookingOrdersTable,
+          BookingOrder,
+          $$BookingOrdersTableFilterComposer,
+          $$BookingOrdersTableOrderingComposer,
+          $$BookingOrdersTableAnnotationComposer,
+          $$BookingOrdersTableCreateCompanionBuilder,
+          $$BookingOrdersTableUpdateCompanionBuilder,
           (
-            LocalOrder,
-            BaseReferences<_$CashierDb, $LocalOrdersTable, LocalOrder>,
+            BookingOrder,
+            BaseReferences<_$CashierDb, $BookingOrdersTable, BookingOrder>,
           ),
-          LocalOrder,
+          BookingOrder,
           PrefetchHooks Function()
         > {
-  $$LocalOrdersTableTableManager(_$CashierDb db, $LocalOrdersTable table)
+  $$BookingOrdersTableTableManager(_$CashierDb db, $BookingOrdersTable table)
     : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$LocalOrdersTableFilterComposer($db: db, $table: table),
+              $$BookingOrdersTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$LocalOrdersTableOrderingComposer($db: db, $table: table),
+              $$BookingOrdersTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$LocalOrdersTableAnnotationComposer($db: db, $table: table),
+              $$BookingOrdersTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<String> localId = const Value.absent(),
+                Value<String> clientUuid = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
-                Value<String> clientOrderCode = const Value.absent(),
-                Value<String?> serverOrderCode = const Value.absent(),
+                Value<String?> bookingOrderCode = const Value.absent(),
                 Value<int?> partnerId = const Value.absent(),
                 Value<String?> partnerName = const Value.absent(),
-                Value<int?> tableServerId = const Value.absent(),
-                Value<String?> tableNoSnapshot = const Value.absent(),
+                Value<int?> tableId = const Value.absent(),
+                Value<String?> tableNo = const Value.absent(),
+                Value<int?> customerId = const Value.absent(),
+                Value<int?> employeeOrderId = const Value.absent(),
+                Value<String?> orderBy = const Value.absent(),
                 Value<String> customerName = const Value.absent(),
-                Value<String?> paymentMethodSelected = const Value.absent(),
-                Value<String?> paymentMethodEffective = const Value.absent(),
-                Value<double> subtotal = const Value.absent(),
+                Value<String> orderStatus = const Value.absent(),
+                Value<String?> paymentMethod = const Value.absent(),
+                Value<bool> openbillFlag = const Value.absent(),
+                Value<int?> discountId = const Value.absent(),
                 Value<double> discountValue = const Value.absent(),
-                Value<double> ppnPercent = const Value.absent(),
+                Value<double> totalOrderValue = const Value.absent(),
+                Value<double?> ppn = const Value.absent(),
                 Value<bool> isPpnActive = const Value.absent(),
-                Value<double> grandTotal = const Value.absent(),
+                Value<String?> customerOrderNote = const Value.absent(),
+                Value<String?> employeeOrderNote = const Value.absent(),
+                Value<int?> cashierProcessId = const Value.absent(),
+                Value<int?> kitchenProcessId = const Value.absent(),
+                Value<int?> paymentId = const Value.absent(),
+                Value<bool> paymentFlag = const Value.absent(),
+                Value<String?> wifiSnapshotJson = const Value.absent(),
+                Value<String?> paymentRequestJson = const Value.absent(),
+                Value<String?> latestPaymentJson = const Value.absent(),
+                Value<int> syncVersion = const Value.absent(),
+                Value<bool> syncDirty = const Value.absent(),
+                Value<String?> syncIntent = const Value.absent(),
+                Value<String?> syncError = const Value.absent(),
+                Value<String?> localFilePathsJson = const Value.absent(),
                 Value<double?> paidAmountLocal = const Value.absent(),
                 Value<double?> changeAmountLocal = const Value.absent(),
-                Value<String?> cashierProofImageLocalPath =
-                    const Value.absent(),
-                Value<DateTime?> paymentConfirmedAtLocal = const Value.absent(),
+                Value<double?> cashRoundingAmount = const Value.absent(),
+                Value<int?> cashRoundingUnit = const Value.absent(),
                 Value<int?> latestPaymentServerId = const Value.absent(),
-                Value<String?> orderSnapshotJson = const Value.absent(),
-                Value<String> orderStatusLocal = const Value.absent(),
-                Value<String> syncStatus = const Value.absent(),
-                Value<String?> lastError = const Value.absent(),
-                Value<int?> manualPaymentServerId = const Value.absent(),
-                Value<String?> manualPaymentType = const Value.absent(),
-                Value<String?> manualProviderName = const Value.absent(),
-                Value<String?> manualProviderAccountName = const Value.absent(),
-                Value<String?> manualProviderAccountNo = const Value.absent(),
-                Value<String?> manualQrisImageUrl = const Value.absent(),
-                Value<String?> manualQrisImageLocalPath = const Value.absent(),
-                Value<String?> manualPaymentLabel = const Value.absent(),
-                Value<String?> manualPaymentRawJson = const Value.absent(),
-                Value<String> backendSyncStage = const Value.absent(),
-                Value<DateTime> createdAtLocal = const Value.absent(),
-                Value<DateTime> updatedAtLocal = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
                 Value<DateTime?> syncedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => LocalOrdersCompanion(
-                localId: localId,
+              }) => BookingOrdersCompanion(
+                clientUuid: clientUuid,
                 serverId: serverId,
-                clientOrderCode: clientOrderCode,
-                serverOrderCode: serverOrderCode,
+                bookingOrderCode: bookingOrderCode,
                 partnerId: partnerId,
                 partnerName: partnerName,
-                tableServerId: tableServerId,
-                tableNoSnapshot: tableNoSnapshot,
+                tableId: tableId,
+                tableNo: tableNo,
+                customerId: customerId,
+                employeeOrderId: employeeOrderId,
+                orderBy: orderBy,
                 customerName: customerName,
-                paymentMethodSelected: paymentMethodSelected,
-                paymentMethodEffective: paymentMethodEffective,
-                subtotal: subtotal,
+                orderStatus: orderStatus,
+                paymentMethod: paymentMethod,
+                openbillFlag: openbillFlag,
+                discountId: discountId,
                 discountValue: discountValue,
-                ppnPercent: ppnPercent,
+                totalOrderValue: totalOrderValue,
+                ppn: ppn,
                 isPpnActive: isPpnActive,
-                grandTotal: grandTotal,
+                customerOrderNote: customerOrderNote,
+                employeeOrderNote: employeeOrderNote,
+                cashierProcessId: cashierProcessId,
+                kitchenProcessId: kitchenProcessId,
+                paymentId: paymentId,
+                paymentFlag: paymentFlag,
+                wifiSnapshotJson: wifiSnapshotJson,
+                paymentRequestJson: paymentRequestJson,
+                latestPaymentJson: latestPaymentJson,
+                syncVersion: syncVersion,
+                syncDirty: syncDirty,
+                syncIntent: syncIntent,
+                syncError: syncError,
+                localFilePathsJson: localFilePathsJson,
                 paidAmountLocal: paidAmountLocal,
                 changeAmountLocal: changeAmountLocal,
-                cashierProofImageLocalPath: cashierProofImageLocalPath,
-                paymentConfirmedAtLocal: paymentConfirmedAtLocal,
+                cashRoundingAmount: cashRoundingAmount,
+                cashRoundingUnit: cashRoundingUnit,
                 latestPaymentServerId: latestPaymentServerId,
-                orderSnapshotJson: orderSnapshotJson,
-                orderStatusLocal: orderStatusLocal,
-                syncStatus: syncStatus,
-                lastError: lastError,
-                manualPaymentServerId: manualPaymentServerId,
-                manualPaymentType: manualPaymentType,
-                manualProviderName: manualProviderName,
-                manualProviderAccountName: manualProviderAccountName,
-                manualProviderAccountNo: manualProviderAccountNo,
-                manualQrisImageUrl: manualQrisImageUrl,
-                manualQrisImageLocalPath: manualQrisImageLocalPath,
-                manualPaymentLabel: manualPaymentLabel,
-                manualPaymentRawJson: manualPaymentRawJson,
-                backendSyncStage: backendSyncStage,
-                createdAtLocal: createdAtLocal,
-                updatedAtLocal: updatedAtLocal,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
                 syncedAt: syncedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required String localId,
+                required String clientUuid,
                 Value<int?> serverId = const Value.absent(),
-                required String clientOrderCode,
-                Value<String?> serverOrderCode = const Value.absent(),
+                Value<String?> bookingOrderCode = const Value.absent(),
                 Value<int?> partnerId = const Value.absent(),
                 Value<String?> partnerName = const Value.absent(),
-                Value<int?> tableServerId = const Value.absent(),
-                Value<String?> tableNoSnapshot = const Value.absent(),
+                Value<int?> tableId = const Value.absent(),
+                Value<String?> tableNo = const Value.absent(),
+                Value<int?> customerId = const Value.absent(),
+                Value<int?> employeeOrderId = const Value.absent(),
+                Value<String?> orderBy = const Value.absent(),
                 required String customerName,
-                Value<String?> paymentMethodSelected = const Value.absent(),
-                Value<String?> paymentMethodEffective = const Value.absent(),
-                Value<double> subtotal = const Value.absent(),
+                Value<String> orderStatus = const Value.absent(),
+                Value<String?> paymentMethod = const Value.absent(),
+                Value<bool> openbillFlag = const Value.absent(),
+                Value<int?> discountId = const Value.absent(),
                 Value<double> discountValue = const Value.absent(),
-                Value<double> ppnPercent = const Value.absent(),
+                Value<double> totalOrderValue = const Value.absent(),
+                Value<double?> ppn = const Value.absent(),
                 Value<bool> isPpnActive = const Value.absent(),
-                Value<double> grandTotal = const Value.absent(),
+                Value<String?> customerOrderNote = const Value.absent(),
+                Value<String?> employeeOrderNote = const Value.absent(),
+                Value<int?> cashierProcessId = const Value.absent(),
+                Value<int?> kitchenProcessId = const Value.absent(),
+                Value<int?> paymentId = const Value.absent(),
+                Value<bool> paymentFlag = const Value.absent(),
+                Value<String?> wifiSnapshotJson = const Value.absent(),
+                Value<String?> paymentRequestJson = const Value.absent(),
+                Value<String?> latestPaymentJson = const Value.absent(),
+                Value<int> syncVersion = const Value.absent(),
+                Value<bool> syncDirty = const Value.absent(),
+                Value<String?> syncIntent = const Value.absent(),
+                Value<String?> syncError = const Value.absent(),
+                Value<String?> localFilePathsJson = const Value.absent(),
                 Value<double?> paidAmountLocal = const Value.absent(),
                 Value<double?> changeAmountLocal = const Value.absent(),
-                Value<String?> cashierProofImageLocalPath =
-                    const Value.absent(),
-                Value<DateTime?> paymentConfirmedAtLocal = const Value.absent(),
+                Value<double?> cashRoundingAmount = const Value.absent(),
+                Value<int?> cashRoundingUnit = const Value.absent(),
                 Value<int?> latestPaymentServerId = const Value.absent(),
-                Value<String?> orderSnapshotJson = const Value.absent(),
-                Value<String> orderStatusLocal = const Value.absent(),
-                Value<String> syncStatus = const Value.absent(),
-                Value<String?> lastError = const Value.absent(),
-                Value<int?> manualPaymentServerId = const Value.absent(),
-                Value<String?> manualPaymentType = const Value.absent(),
-                Value<String?> manualProviderName = const Value.absent(),
-                Value<String?> manualProviderAccountName = const Value.absent(),
-                Value<String?> manualProviderAccountNo = const Value.absent(),
-                Value<String?> manualQrisImageUrl = const Value.absent(),
-                Value<String?> manualQrisImageLocalPath = const Value.absent(),
-                Value<String?> manualPaymentLabel = const Value.absent(),
-                Value<String?> manualPaymentRawJson = const Value.absent(),
-                Value<String> backendSyncStage = const Value.absent(),
-                required DateTime createdAtLocal,
-                required DateTime updatedAtLocal,
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
                 Value<DateTime?> syncedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => LocalOrdersCompanion.insert(
-                localId: localId,
+              }) => BookingOrdersCompanion.insert(
+                clientUuid: clientUuid,
                 serverId: serverId,
-                clientOrderCode: clientOrderCode,
-                serverOrderCode: serverOrderCode,
+                bookingOrderCode: bookingOrderCode,
                 partnerId: partnerId,
                 partnerName: partnerName,
-                tableServerId: tableServerId,
-                tableNoSnapshot: tableNoSnapshot,
+                tableId: tableId,
+                tableNo: tableNo,
+                customerId: customerId,
+                employeeOrderId: employeeOrderId,
+                orderBy: orderBy,
                 customerName: customerName,
-                paymentMethodSelected: paymentMethodSelected,
-                paymentMethodEffective: paymentMethodEffective,
-                subtotal: subtotal,
+                orderStatus: orderStatus,
+                paymentMethod: paymentMethod,
+                openbillFlag: openbillFlag,
+                discountId: discountId,
                 discountValue: discountValue,
-                ppnPercent: ppnPercent,
+                totalOrderValue: totalOrderValue,
+                ppn: ppn,
                 isPpnActive: isPpnActive,
-                grandTotal: grandTotal,
+                customerOrderNote: customerOrderNote,
+                employeeOrderNote: employeeOrderNote,
+                cashierProcessId: cashierProcessId,
+                kitchenProcessId: kitchenProcessId,
+                paymentId: paymentId,
+                paymentFlag: paymentFlag,
+                wifiSnapshotJson: wifiSnapshotJson,
+                paymentRequestJson: paymentRequestJson,
+                latestPaymentJson: latestPaymentJson,
+                syncVersion: syncVersion,
+                syncDirty: syncDirty,
+                syncIntent: syncIntent,
+                syncError: syncError,
+                localFilePathsJson: localFilePathsJson,
                 paidAmountLocal: paidAmountLocal,
                 changeAmountLocal: changeAmountLocal,
-                cashierProofImageLocalPath: cashierProofImageLocalPath,
-                paymentConfirmedAtLocal: paymentConfirmedAtLocal,
+                cashRoundingAmount: cashRoundingAmount,
+                cashRoundingUnit: cashRoundingUnit,
                 latestPaymentServerId: latestPaymentServerId,
-                orderSnapshotJson: orderSnapshotJson,
-                orderStatusLocal: orderStatusLocal,
-                syncStatus: syncStatus,
-                lastError: lastError,
-                manualPaymentServerId: manualPaymentServerId,
-                manualPaymentType: manualPaymentType,
-                manualProviderName: manualProviderName,
-                manualProviderAccountName: manualProviderAccountName,
-                manualProviderAccountNo: manualProviderAccountNo,
-                manualQrisImageUrl: manualQrisImageUrl,
-                manualQrisImageLocalPath: manualQrisImageLocalPath,
-                manualPaymentLabel: manualPaymentLabel,
-                manualPaymentRawJson: manualPaymentRawJson,
-                backendSyncStage: backendSyncStage,
-                createdAtLocal: createdAtLocal,
-                updatedAtLocal: updatedAtLocal,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
                 syncedAt: syncedAt,
                 rowid: rowid,
               ),
@@ -16098,92 +14551,122 @@ class $$LocalOrdersTableTableManager
       );
 }
 
-typedef $$LocalOrdersTableProcessedTableManager =
+typedef $$BookingOrdersTableProcessedTableManager =
     ProcessedTableManager<
       _$CashierDb,
-      $LocalOrdersTable,
-      LocalOrder,
-      $$LocalOrdersTableFilterComposer,
-      $$LocalOrdersTableOrderingComposer,
-      $$LocalOrdersTableAnnotationComposer,
-      $$LocalOrdersTableCreateCompanionBuilder,
-      $$LocalOrdersTableUpdateCompanionBuilder,
-      (LocalOrder, BaseReferences<_$CashierDb, $LocalOrdersTable, LocalOrder>),
-      LocalOrder,
+      $BookingOrdersTable,
+      BookingOrder,
+      $$BookingOrdersTableFilterComposer,
+      $$BookingOrdersTableOrderingComposer,
+      $$BookingOrdersTableAnnotationComposer,
+      $$BookingOrdersTableCreateCompanionBuilder,
+      $$BookingOrdersTableUpdateCompanionBuilder,
+      (
+        BookingOrder,
+        BaseReferences<_$CashierDb, $BookingOrdersTable, BookingOrder>,
+      ),
+      BookingOrder,
       PrefetchHooks Function()
     >;
-typedef $$LocalOrderItemsTableCreateCompanionBuilder =
-    LocalOrderItemsCompanion Function({
-      required String localId,
-      required String orderLocalId,
-      Value<int?> serverOrderDetailId,
-      required int productServerId,
-      required String productNameSnapshot,
+typedef $$OrderDetailsTableCreateCompanionBuilder =
+    OrderDetailsCompanion Function({
+      required String clientDetailUuid,
+      Value<int?> serverId,
+      required String bookingOrderClientUuid,
+      Value<int?> bookingOrderServerId,
+      Value<String?> productCode,
+      Value<String?> productName,
+      required int partnerProductId,
+      Value<int> quantity,
       Value<double> basePrice,
-      Value<int?> promoId,
-      Value<String?> promoType,
-      Value<double?> promoAmount,
-      Value<int?> categoryServerId,
-      Value<String?> categoryNameSnapshot,
+      Value<double?> cogs,
       Value<double> optionsPrice,
-      required int qty,
       Value<String?> customerNote,
-      Value<double> lineTotal,
-      required DateTime createdAtLocal,
+      Value<int?> promoId,
+      Value<double?> promoAmount,
+      Value<String?> promoType,
+      Value<String?> status,
+      Value<int?> cashierProcessId,
+      Value<int?> kitchenProcessId,
+      Value<int> syncVersion,
+      Value<bool> syncDirty,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
       Value<int> rowid,
     });
-typedef $$LocalOrderItemsTableUpdateCompanionBuilder =
-    LocalOrderItemsCompanion Function({
-      Value<String> localId,
-      Value<String> orderLocalId,
-      Value<int?> serverOrderDetailId,
-      Value<int> productServerId,
-      Value<String> productNameSnapshot,
+typedef $$OrderDetailsTableUpdateCompanionBuilder =
+    OrderDetailsCompanion Function({
+      Value<String> clientDetailUuid,
+      Value<int?> serverId,
+      Value<String> bookingOrderClientUuid,
+      Value<int?> bookingOrderServerId,
+      Value<String?> productCode,
+      Value<String?> productName,
+      Value<int> partnerProductId,
+      Value<int> quantity,
       Value<double> basePrice,
-      Value<int?> promoId,
-      Value<String?> promoType,
-      Value<double?> promoAmount,
-      Value<int?> categoryServerId,
-      Value<String?> categoryNameSnapshot,
+      Value<double?> cogs,
       Value<double> optionsPrice,
-      Value<int> qty,
       Value<String?> customerNote,
-      Value<double> lineTotal,
-      Value<DateTime> createdAtLocal,
+      Value<int?> promoId,
+      Value<double?> promoAmount,
+      Value<String?> promoType,
+      Value<String?> status,
+      Value<int?> cashierProcessId,
+      Value<int?> kitchenProcessId,
+      Value<int> syncVersion,
+      Value<bool> syncDirty,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
       Value<int> rowid,
     });
 
-class $$LocalOrderItemsTableFilterComposer
-    extends Composer<_$CashierDb, $LocalOrderItemsTable> {
-  $$LocalOrderItemsTableFilterComposer({
+class $$OrderDetailsTableFilterComposer
+    extends Composer<_$CashierDb, $OrderDetailsTable> {
+  $$OrderDetailsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get localId => $composableBuilder(
-    column: $table.localId,
+  ColumnFilters<String> get clientDetailUuid => $composableBuilder(
+    column: $table.clientDetailUuid,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get orderLocalId => $composableBuilder(
-    column: $table.orderLocalId,
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get serverOrderDetailId => $composableBuilder(
-    column: $table.serverOrderDetailId,
+  ColumnFilters<String> get bookingOrderClientUuid => $composableBuilder(
+    column: $table.bookingOrderClientUuid,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get productServerId => $composableBuilder(
-    column: $table.productServerId,
+  ColumnFilters<int> get bookingOrderServerId => $composableBuilder(
+    column: $table.bookingOrderServerId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get productNameSnapshot => $composableBuilder(
-    column: $table.productNameSnapshot,
+  ColumnFilters<String> get productCode => $composableBuilder(
+    column: $table.productCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get productName => $composableBuilder(
+    column: $table.productName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get partnerProductId => $composableBuilder(
+    column: $table.partnerProductId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get quantity => $composableBuilder(
+    column: $table.quantity,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16192,28 +14675,8 @@ class $$LocalOrderItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get promoId => $composableBuilder(
-    column: $table.promoId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get promoType => $composableBuilder(
-    column: $table.promoType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get promoAmount => $composableBuilder(
-    column: $table.promoAmount,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get categoryServerId => $composableBuilder(
-    column: $table.categoryServerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get categoryNameSnapshot => $composableBuilder(
-    column: $table.categoryNameSnapshot,
+  ColumnFilters<double> get cogs => $composableBuilder(
+    column: $table.cogs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16222,58 +14685,108 @@ class $$LocalOrderItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get qty => $composableBuilder(
-    column: $table.qty,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<String> get customerNote => $composableBuilder(
     column: $table.customerNote,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get lineTotal => $composableBuilder(
-    column: $table.lineTotal,
+  ColumnFilters<int> get promoId => $composableBuilder(
+    column: $table.promoId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
+  ColumnFilters<double> get promoAmount => $composableBuilder(
+    column: $table.promoAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get promoType => $composableBuilder(
+    column: $table.promoType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cashierProcessId => $composableBuilder(
+    column: $table.cashierProcessId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get kitchenProcessId => $composableBuilder(
+    column: $table.kitchenProcessId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncVersion => $composableBuilder(
+    column: $table.syncVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get syncDirty => $composableBuilder(
+    column: $table.syncDirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$LocalOrderItemsTableOrderingComposer
-    extends Composer<_$CashierDb, $LocalOrderItemsTable> {
-  $$LocalOrderItemsTableOrderingComposer({
+class $$OrderDetailsTableOrderingComposer
+    extends Composer<_$CashierDb, $OrderDetailsTable> {
+  $$OrderDetailsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get localId => $composableBuilder(
-    column: $table.localId,
+  ColumnOrderings<String> get clientDetailUuid => $composableBuilder(
+    column: $table.clientDetailUuid,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get orderLocalId => $composableBuilder(
-    column: $table.orderLocalId,
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get serverOrderDetailId => $composableBuilder(
-    column: $table.serverOrderDetailId,
+  ColumnOrderings<String> get bookingOrderClientUuid => $composableBuilder(
+    column: $table.bookingOrderClientUuid,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get productServerId => $composableBuilder(
-    column: $table.productServerId,
+  ColumnOrderings<int> get bookingOrderServerId => $composableBuilder(
+    column: $table.bookingOrderServerId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get productNameSnapshot => $composableBuilder(
-    column: $table.productNameSnapshot,
+  ColumnOrderings<String> get productCode => $composableBuilder(
+    column: $table.productCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get productName => $composableBuilder(
+    column: $table.productName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get partnerProductId => $composableBuilder(
+    column: $table.partnerProductId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get quantity => $composableBuilder(
+    column: $table.quantity,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -16282,28 +14795,8 @@ class $$LocalOrderItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get promoId => $composableBuilder(
-    column: $table.promoId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get promoType => $composableBuilder(
-    column: $table.promoType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get promoAmount => $composableBuilder(
-    column: $table.promoAmount,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get categoryServerId => $composableBuilder(
-    column: $table.categoryServerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get categoryNameSnapshot => $composableBuilder(
-    column: $table.categoryNameSnapshot,
+  ColumnOrderings<double> get cogs => $composableBuilder(
+    column: $table.cogs,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -16312,210 +14805,289 @@ class $$LocalOrderItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get qty => $composableBuilder(
-    column: $table.qty,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get customerNote => $composableBuilder(
     column: $table.customerNote,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get lineTotal => $composableBuilder(
-    column: $table.lineTotal,
+  ColumnOrderings<int> get promoId => $composableBuilder(
+    column: $table.promoId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
+  ColumnOrderings<double> get promoAmount => $composableBuilder(
+    column: $table.promoAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get promoType => $composableBuilder(
+    column: $table.promoType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cashierProcessId => $composableBuilder(
+    column: $table.cashierProcessId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get kitchenProcessId => $composableBuilder(
+    column: $table.kitchenProcessId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get syncVersion => $composableBuilder(
+    column: $table.syncVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get syncDirty => $composableBuilder(
+    column: $table.syncDirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$LocalOrderItemsTableAnnotationComposer
-    extends Composer<_$CashierDb, $LocalOrderItemsTable> {
-  $$LocalOrderItemsTableAnnotationComposer({
+class $$OrderDetailsTableAnnotationComposer
+    extends Composer<_$CashierDb, $OrderDetailsTable> {
+  $$OrderDetailsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get localId =>
-      $composableBuilder(column: $table.localId, builder: (column) => column);
-
-  GeneratedColumn<String> get orderLocalId => $composableBuilder(
-    column: $table.orderLocalId,
+  GeneratedColumn<String> get clientDetailUuid => $composableBuilder(
+    column: $table.clientDetailUuid,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get serverOrderDetailId => $composableBuilder(
-    column: $table.serverOrderDetailId,
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get bookingOrderClientUuid => $composableBuilder(
+    column: $table.bookingOrderClientUuid,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get productServerId => $composableBuilder(
-    column: $table.productServerId,
+  GeneratedColumn<int> get bookingOrderServerId => $composableBuilder(
+    column: $table.bookingOrderServerId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get productNameSnapshot => $composableBuilder(
-    column: $table.productNameSnapshot,
+  GeneratedColumn<String> get productCode => $composableBuilder(
+    column: $table.productCode,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get productName => $composableBuilder(
+    column: $table.productName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get partnerProductId => $composableBuilder(
+    column: $table.partnerProductId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get quantity =>
+      $composableBuilder(column: $table.quantity, builder: (column) => column);
 
   GeneratedColumn<double> get basePrice =>
       $composableBuilder(column: $table.basePrice, builder: (column) => column);
 
-  GeneratedColumn<int> get promoId =>
-      $composableBuilder(column: $table.promoId, builder: (column) => column);
-
-  GeneratedColumn<String> get promoType =>
-      $composableBuilder(column: $table.promoType, builder: (column) => column);
-
-  GeneratedColumn<double> get promoAmount => $composableBuilder(
-    column: $table.promoAmount,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get categoryServerId => $composableBuilder(
-    column: $table.categoryServerId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get categoryNameSnapshot => $composableBuilder(
-    column: $table.categoryNameSnapshot,
-    builder: (column) => column,
-  );
+  GeneratedColumn<double> get cogs =>
+      $composableBuilder(column: $table.cogs, builder: (column) => column);
 
   GeneratedColumn<double> get optionsPrice => $composableBuilder(
     column: $table.optionsPrice,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get qty =>
-      $composableBuilder(column: $table.qty, builder: (column) => column);
-
   GeneratedColumn<String> get customerNote => $composableBuilder(
     column: $table.customerNote,
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get lineTotal =>
-      $composableBuilder(column: $table.lineTotal, builder: (column) => column);
+  GeneratedColumn<int> get promoId =>
+      $composableBuilder(column: $table.promoId, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
+  GeneratedColumn<double> get promoAmount => $composableBuilder(
+    column: $table.promoAmount,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get promoType =>
+      $composableBuilder(column: $table.promoType, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get cashierProcessId => $composableBuilder(
+    column: $table.cashierProcessId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get kitchenProcessId => $composableBuilder(
+    column: $table.kitchenProcessId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get syncVersion => $composableBuilder(
+    column: $table.syncVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get syncDirty =>
+      $composableBuilder(column: $table.syncDirty, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
-class $$LocalOrderItemsTableTableManager
+class $$OrderDetailsTableTableManager
     extends
         RootTableManager<
           _$CashierDb,
-          $LocalOrderItemsTable,
-          LocalOrderItem,
-          $$LocalOrderItemsTableFilterComposer,
-          $$LocalOrderItemsTableOrderingComposer,
-          $$LocalOrderItemsTableAnnotationComposer,
-          $$LocalOrderItemsTableCreateCompanionBuilder,
-          $$LocalOrderItemsTableUpdateCompanionBuilder,
+          $OrderDetailsTable,
+          OrderDetail,
+          $$OrderDetailsTableFilterComposer,
+          $$OrderDetailsTableOrderingComposer,
+          $$OrderDetailsTableAnnotationComposer,
+          $$OrderDetailsTableCreateCompanionBuilder,
+          $$OrderDetailsTableUpdateCompanionBuilder,
           (
-            LocalOrderItem,
-            BaseReferences<_$CashierDb, $LocalOrderItemsTable, LocalOrderItem>,
+            OrderDetail,
+            BaseReferences<_$CashierDb, $OrderDetailsTable, OrderDetail>,
           ),
-          LocalOrderItem,
+          OrderDetail,
           PrefetchHooks Function()
         > {
-  $$LocalOrderItemsTableTableManager(
-    _$CashierDb db,
-    $LocalOrderItemsTable table,
-  ) : super(
+  $$OrderDetailsTableTableManager(_$CashierDb db, $OrderDetailsTable table)
+    : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$LocalOrderItemsTableFilterComposer($db: db, $table: table),
+              $$OrderDetailsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$LocalOrderItemsTableOrderingComposer($db: db, $table: table),
+              $$OrderDetailsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$LocalOrderItemsTableAnnotationComposer($db: db, $table: table),
+              $$OrderDetailsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<String> localId = const Value.absent(),
-                Value<String> orderLocalId = const Value.absent(),
-                Value<int?> serverOrderDetailId = const Value.absent(),
-                Value<int> productServerId = const Value.absent(),
-                Value<String> productNameSnapshot = const Value.absent(),
+                Value<String> clientDetailUuid = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String> bookingOrderClientUuid = const Value.absent(),
+                Value<int?> bookingOrderServerId = const Value.absent(),
+                Value<String?> productCode = const Value.absent(),
+                Value<String?> productName = const Value.absent(),
+                Value<int> partnerProductId = const Value.absent(),
+                Value<int> quantity = const Value.absent(),
                 Value<double> basePrice = const Value.absent(),
-                Value<int?> promoId = const Value.absent(),
-                Value<String?> promoType = const Value.absent(),
-                Value<double?> promoAmount = const Value.absent(),
-                Value<int?> categoryServerId = const Value.absent(),
-                Value<String?> categoryNameSnapshot = const Value.absent(),
+                Value<double?> cogs = const Value.absent(),
                 Value<double> optionsPrice = const Value.absent(),
-                Value<int> qty = const Value.absent(),
                 Value<String?> customerNote = const Value.absent(),
-                Value<double> lineTotal = const Value.absent(),
-                Value<DateTime> createdAtLocal = const Value.absent(),
+                Value<int?> promoId = const Value.absent(),
+                Value<double?> promoAmount = const Value.absent(),
+                Value<String?> promoType = const Value.absent(),
+                Value<String?> status = const Value.absent(),
+                Value<int?> cashierProcessId = const Value.absent(),
+                Value<int?> kitchenProcessId = const Value.absent(),
+                Value<int> syncVersion = const Value.absent(),
+                Value<bool> syncDirty = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => LocalOrderItemsCompanion(
-                localId: localId,
-                orderLocalId: orderLocalId,
-                serverOrderDetailId: serverOrderDetailId,
-                productServerId: productServerId,
-                productNameSnapshot: productNameSnapshot,
+              }) => OrderDetailsCompanion(
+                clientDetailUuid: clientDetailUuid,
+                serverId: serverId,
+                bookingOrderClientUuid: bookingOrderClientUuid,
+                bookingOrderServerId: bookingOrderServerId,
+                productCode: productCode,
+                productName: productName,
+                partnerProductId: partnerProductId,
+                quantity: quantity,
                 basePrice: basePrice,
-                promoId: promoId,
-                promoType: promoType,
-                promoAmount: promoAmount,
-                categoryServerId: categoryServerId,
-                categoryNameSnapshot: categoryNameSnapshot,
+                cogs: cogs,
                 optionsPrice: optionsPrice,
-                qty: qty,
                 customerNote: customerNote,
-                lineTotal: lineTotal,
-                createdAtLocal: createdAtLocal,
+                promoId: promoId,
+                promoAmount: promoAmount,
+                promoType: promoType,
+                status: status,
+                cashierProcessId: cashierProcessId,
+                kitchenProcessId: kitchenProcessId,
+                syncVersion: syncVersion,
+                syncDirty: syncDirty,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required String localId,
-                required String orderLocalId,
-                Value<int?> serverOrderDetailId = const Value.absent(),
-                required int productServerId,
-                required String productNameSnapshot,
+                required String clientDetailUuid,
+                Value<int?> serverId = const Value.absent(),
+                required String bookingOrderClientUuid,
+                Value<int?> bookingOrderServerId = const Value.absent(),
+                Value<String?> productCode = const Value.absent(),
+                Value<String?> productName = const Value.absent(),
+                required int partnerProductId,
+                Value<int> quantity = const Value.absent(),
                 Value<double> basePrice = const Value.absent(),
-                Value<int?> promoId = const Value.absent(),
-                Value<String?> promoType = const Value.absent(),
-                Value<double?> promoAmount = const Value.absent(),
-                Value<int?> categoryServerId = const Value.absent(),
-                Value<String?> categoryNameSnapshot = const Value.absent(),
+                Value<double?> cogs = const Value.absent(),
                 Value<double> optionsPrice = const Value.absent(),
-                required int qty,
                 Value<String?> customerNote = const Value.absent(),
-                Value<double> lineTotal = const Value.absent(),
-                required DateTime createdAtLocal,
+                Value<int?> promoId = const Value.absent(),
+                Value<double?> promoAmount = const Value.absent(),
+                Value<String?> promoType = const Value.absent(),
+                Value<String?> status = const Value.absent(),
+                Value<int?> cashierProcessId = const Value.absent(),
+                Value<int?> kitchenProcessId = const Value.absent(),
+                Value<int> syncVersion = const Value.absent(),
+                Value<bool> syncDirty = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => LocalOrderItemsCompanion.insert(
-                localId: localId,
-                orderLocalId: orderLocalId,
-                serverOrderDetailId: serverOrderDetailId,
-                productServerId: productServerId,
-                productNameSnapshot: productNameSnapshot,
+              }) => OrderDetailsCompanion.insert(
+                clientDetailUuid: clientDetailUuid,
+                serverId: serverId,
+                bookingOrderClientUuid: bookingOrderClientUuid,
+                bookingOrderServerId: bookingOrderServerId,
+                productCode: productCode,
+                productName: productName,
+                partnerProductId: partnerProductId,
+                quantity: quantity,
                 basePrice: basePrice,
-                promoId: promoId,
-                promoType: promoType,
-                promoAmount: promoAmount,
-                categoryServerId: categoryServerId,
-                categoryNameSnapshot: categoryNameSnapshot,
+                cogs: cogs,
                 optionsPrice: optionsPrice,
-                qty: qty,
                 customerNote: customerNote,
-                lineTotal: lineTotal,
-                createdAtLocal: createdAtLocal,
+                promoId: promoId,
+                promoAmount: promoAmount,
+                promoType: promoType,
+                status: status,
+                cashierProcessId: cashierProcessId,
+                kitchenProcessId: kitchenProcessId,
+                syncVersion: syncVersion,
+                syncDirty: syncDirty,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -16526,84 +15098,93 @@ class $$LocalOrderItemsTableTableManager
       );
 }
 
-typedef $$LocalOrderItemsTableProcessedTableManager =
+typedef $$OrderDetailsTableProcessedTableManager =
     ProcessedTableManager<
       _$CashierDb,
-      $LocalOrderItemsTable,
-      LocalOrderItem,
-      $$LocalOrderItemsTableFilterComposer,
-      $$LocalOrderItemsTableOrderingComposer,
-      $$LocalOrderItemsTableAnnotationComposer,
-      $$LocalOrderItemsTableCreateCompanionBuilder,
-      $$LocalOrderItemsTableUpdateCompanionBuilder,
+      $OrderDetailsTable,
+      OrderDetail,
+      $$OrderDetailsTableFilterComposer,
+      $$OrderDetailsTableOrderingComposer,
+      $$OrderDetailsTableAnnotationComposer,
+      $$OrderDetailsTableCreateCompanionBuilder,
+      $$OrderDetailsTableUpdateCompanionBuilder,
       (
-        LocalOrderItem,
-        BaseReferences<_$CashierDb, $LocalOrderItemsTable, LocalOrderItem>,
+        OrderDetail,
+        BaseReferences<_$CashierDb, $OrderDetailsTable, OrderDetail>,
       ),
-      LocalOrderItem,
+      OrderDetail,
       PrefetchHooks Function()
     >;
-typedef $$LocalOrderItemOptionsTableCreateCompanionBuilder =
-    LocalOrderItemOptionsCompanion Function({
-      required String localId,
-      required String orderItemLocalId,
-      Value<int?> serverOrderDetailOptionId,
-      required int optionServerId,
-      Value<String?> parentNameSnapshot,
-      required String optionNameSnapshot,
+typedef $$OrderDetailOptionsTableCreateCompanionBuilder =
+    OrderDetailOptionsCompanion Function({
+      required String clientOptionUuid,
+      Value<int?> serverId,
+      required String orderDetailClientUuid,
+      Value<int?> orderDetailServerId,
+      required int optionId,
+      Value<String?> parentName,
+      Value<String?> partnerProductOptionName,
       Value<double> price,
-      required DateTime createdAtLocal,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
       Value<int> rowid,
     });
-typedef $$LocalOrderItemOptionsTableUpdateCompanionBuilder =
-    LocalOrderItemOptionsCompanion Function({
-      Value<String> localId,
-      Value<String> orderItemLocalId,
-      Value<int?> serverOrderDetailOptionId,
-      Value<int> optionServerId,
-      Value<String?> parentNameSnapshot,
-      Value<String> optionNameSnapshot,
+typedef $$OrderDetailOptionsTableUpdateCompanionBuilder =
+    OrderDetailOptionsCompanion Function({
+      Value<String> clientOptionUuid,
+      Value<int?> serverId,
+      Value<String> orderDetailClientUuid,
+      Value<int?> orderDetailServerId,
+      Value<int> optionId,
+      Value<String?> parentName,
+      Value<String?> partnerProductOptionName,
       Value<double> price,
-      Value<DateTime> createdAtLocal,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
       Value<int> rowid,
     });
 
-class $$LocalOrderItemOptionsTableFilterComposer
-    extends Composer<_$CashierDb, $LocalOrderItemOptionsTable> {
-  $$LocalOrderItemOptionsTableFilterComposer({
+class $$OrderDetailOptionsTableFilterComposer
+    extends Composer<_$CashierDb, $OrderDetailOptionsTable> {
+  $$OrderDetailOptionsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get localId => $composableBuilder(
-    column: $table.localId,
+  ColumnFilters<String> get clientOptionUuid => $composableBuilder(
+    column: $table.clientOptionUuid,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get orderItemLocalId => $composableBuilder(
-    column: $table.orderItemLocalId,
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get serverOrderDetailOptionId => $composableBuilder(
-    column: $table.serverOrderDetailOptionId,
+  ColumnFilters<String> get orderDetailClientUuid => $composableBuilder(
+    column: $table.orderDetailClientUuid,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get optionServerId => $composableBuilder(
-    column: $table.optionServerId,
+  ColumnFilters<int> get orderDetailServerId => $composableBuilder(
+    column: $table.orderDetailServerId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get parentNameSnapshot => $composableBuilder(
-    column: $table.parentNameSnapshot,
+  ColumnFilters<int> get optionId => $composableBuilder(
+    column: $table.optionId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get optionNameSnapshot => $composableBuilder(
-    column: $table.optionNameSnapshot,
+  ColumnFilters<String> get parentName => $composableBuilder(
+    column: $table.parentName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get partnerProductOptionName => $composableBuilder(
+    column: $table.partnerProductOptionName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16612,48 +15193,58 @@ class $$LocalOrderItemOptionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$LocalOrderItemOptionsTableOrderingComposer
-    extends Composer<_$CashierDb, $LocalOrderItemOptionsTable> {
-  $$LocalOrderItemOptionsTableOrderingComposer({
+class $$OrderDetailOptionsTableOrderingComposer
+    extends Composer<_$CashierDb, $OrderDetailOptionsTable> {
+  $$OrderDetailOptionsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get localId => $composableBuilder(
-    column: $table.localId,
+  ColumnOrderings<String> get clientOptionUuid => $composableBuilder(
+    column: $table.clientOptionUuid,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get orderItemLocalId => $composableBuilder(
-    column: $table.orderItemLocalId,
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get serverOrderDetailOptionId => $composableBuilder(
-    column: $table.serverOrderDetailOptionId,
+  ColumnOrderings<String> get orderDetailClientUuid => $composableBuilder(
+    column: $table.orderDetailClientUuid,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get optionServerId => $composableBuilder(
-    column: $table.optionServerId,
+  ColumnOrderings<int> get orderDetailServerId => $composableBuilder(
+    column: $table.orderDetailServerId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get parentNameSnapshot => $composableBuilder(
-    column: $table.parentNameSnapshot,
+  ColumnOrderings<int> get optionId => $composableBuilder(
+    column: $table.optionId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get optionNameSnapshot => $composableBuilder(
-    column: $table.optionNameSnapshot,
+  ColumnOrderings<String> get parentName => $composableBuilder(
+    column: $table.parentName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get partnerProductOptionName => $composableBuilder(
+    column: $table.partnerProductOptionName,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -16662,144 +15253,155 @@ class $$LocalOrderItemOptionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$LocalOrderItemOptionsTableAnnotationComposer
-    extends Composer<_$CashierDb, $LocalOrderItemOptionsTable> {
-  $$LocalOrderItemOptionsTableAnnotationComposer({
+class $$OrderDetailOptionsTableAnnotationComposer
+    extends Composer<_$CashierDb, $OrderDetailOptionsTable> {
+  $$OrderDetailOptionsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get localId =>
-      $composableBuilder(column: $table.localId, builder: (column) => column);
-
-  GeneratedColumn<String> get orderItemLocalId => $composableBuilder(
-    column: $table.orderItemLocalId,
+  GeneratedColumn<String> get clientOptionUuid => $composableBuilder(
+    column: $table.clientOptionUuid,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get serverOrderDetailOptionId => $composableBuilder(
-    column: $table.serverOrderDetailOptionId,
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get orderDetailClientUuid => $composableBuilder(
+    column: $table.orderDetailClientUuid,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get optionServerId => $composableBuilder(
-    column: $table.optionServerId,
+  GeneratedColumn<int> get orderDetailServerId => $composableBuilder(
+    column: $table.orderDetailServerId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get parentNameSnapshot => $composableBuilder(
-    column: $table.parentNameSnapshot,
+  GeneratedColumn<int> get optionId =>
+      $composableBuilder(column: $table.optionId, builder: (column) => column);
+
+  GeneratedColumn<String> get parentName => $composableBuilder(
+    column: $table.parentName,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get optionNameSnapshot => $composableBuilder(
-    column: $table.optionNameSnapshot,
+  GeneratedColumn<String> get partnerProductOptionName => $composableBuilder(
+    column: $table.partnerProductOptionName,
     builder: (column) => column,
   );
 
   GeneratedColumn<double> get price =>
       $composableBuilder(column: $table.price, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
-    builder: (column) => column,
-  );
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
-class $$LocalOrderItemOptionsTableTableManager
+class $$OrderDetailOptionsTableTableManager
     extends
         RootTableManager<
           _$CashierDb,
-          $LocalOrderItemOptionsTable,
-          LocalOrderItemOption,
-          $$LocalOrderItemOptionsTableFilterComposer,
-          $$LocalOrderItemOptionsTableOrderingComposer,
-          $$LocalOrderItemOptionsTableAnnotationComposer,
-          $$LocalOrderItemOptionsTableCreateCompanionBuilder,
-          $$LocalOrderItemOptionsTableUpdateCompanionBuilder,
+          $OrderDetailOptionsTable,
+          OrderDetailOption,
+          $$OrderDetailOptionsTableFilterComposer,
+          $$OrderDetailOptionsTableOrderingComposer,
+          $$OrderDetailOptionsTableAnnotationComposer,
+          $$OrderDetailOptionsTableCreateCompanionBuilder,
+          $$OrderDetailOptionsTableUpdateCompanionBuilder,
           (
-            LocalOrderItemOption,
+            OrderDetailOption,
             BaseReferences<
               _$CashierDb,
-              $LocalOrderItemOptionsTable,
-              LocalOrderItemOption
+              $OrderDetailOptionsTable,
+              OrderDetailOption
             >,
           ),
-          LocalOrderItemOption,
+          OrderDetailOption,
           PrefetchHooks Function()
         > {
-  $$LocalOrderItemOptionsTableTableManager(
+  $$OrderDetailOptionsTableTableManager(
     _$CashierDb db,
-    $LocalOrderItemOptionsTable table,
+    $OrderDetailOptionsTable table,
   ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$LocalOrderItemOptionsTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
+              $$OrderDetailOptionsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$LocalOrderItemOptionsTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
+              $$OrderDetailOptionsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$LocalOrderItemOptionsTableAnnotationComposer(
+              $$OrderDetailOptionsTableAnnotationComposer(
                 $db: db,
                 $table: table,
               ),
           updateCompanionCallback:
               ({
-                Value<String> localId = const Value.absent(),
-                Value<String> orderItemLocalId = const Value.absent(),
-                Value<int?> serverOrderDetailOptionId = const Value.absent(),
-                Value<int> optionServerId = const Value.absent(),
-                Value<String?> parentNameSnapshot = const Value.absent(),
-                Value<String> optionNameSnapshot = const Value.absent(),
+                Value<String> clientOptionUuid = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String> orderDetailClientUuid = const Value.absent(),
+                Value<int?> orderDetailServerId = const Value.absent(),
+                Value<int> optionId = const Value.absent(),
+                Value<String?> parentName = const Value.absent(),
+                Value<String?> partnerProductOptionName = const Value.absent(),
                 Value<double> price = const Value.absent(),
-                Value<DateTime> createdAtLocal = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => LocalOrderItemOptionsCompanion(
-                localId: localId,
-                orderItemLocalId: orderItemLocalId,
-                serverOrderDetailOptionId: serverOrderDetailOptionId,
-                optionServerId: optionServerId,
-                parentNameSnapshot: parentNameSnapshot,
-                optionNameSnapshot: optionNameSnapshot,
+              }) => OrderDetailOptionsCompanion(
+                clientOptionUuid: clientOptionUuid,
+                serverId: serverId,
+                orderDetailClientUuid: orderDetailClientUuid,
+                orderDetailServerId: orderDetailServerId,
+                optionId: optionId,
+                parentName: parentName,
+                partnerProductOptionName: partnerProductOptionName,
                 price: price,
-                createdAtLocal: createdAtLocal,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required String localId,
-                required String orderItemLocalId,
-                Value<int?> serverOrderDetailOptionId = const Value.absent(),
-                required int optionServerId,
-                Value<String?> parentNameSnapshot = const Value.absent(),
-                required String optionNameSnapshot,
+                required String clientOptionUuid,
+                Value<int?> serverId = const Value.absent(),
+                required String orderDetailClientUuid,
+                Value<int?> orderDetailServerId = const Value.absent(),
+                required int optionId,
+                Value<String?> parentName = const Value.absent(),
+                Value<String?> partnerProductOptionName = const Value.absent(),
                 Value<double> price = const Value.absent(),
-                required DateTime createdAtLocal,
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => LocalOrderItemOptionsCompanion.insert(
-                localId: localId,
-                orderItemLocalId: orderItemLocalId,
-                serverOrderDetailOptionId: serverOrderDetailOptionId,
-                optionServerId: optionServerId,
-                parentNameSnapshot: parentNameSnapshot,
-                optionNameSnapshot: optionNameSnapshot,
+              }) => OrderDetailOptionsCompanion.insert(
+                clientOptionUuid: clientOptionUuid,
+                serverId: serverId,
+                orderDetailClientUuid: orderDetailClientUuid,
+                orderDetailServerId: orderDetailServerId,
+                optionId: optionId,
+                parentName: parentName,
+                partnerProductOptionName: partnerProductOptionName,
                 price: price,
-                createdAtLocal: createdAtLocal,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -16810,107 +15412,128 @@ class $$LocalOrderItemOptionsTableTableManager
       );
 }
 
-typedef $$LocalOrderItemOptionsTableProcessedTableManager =
+typedef $$OrderDetailOptionsTableProcessedTableManager =
     ProcessedTableManager<
       _$CashierDb,
-      $LocalOrderItemOptionsTable,
-      LocalOrderItemOption,
-      $$LocalOrderItemOptionsTableFilterComposer,
-      $$LocalOrderItemOptionsTableOrderingComposer,
-      $$LocalOrderItemOptionsTableAnnotationComposer,
-      $$LocalOrderItemOptionsTableCreateCompanionBuilder,
-      $$LocalOrderItemOptionsTableUpdateCompanionBuilder,
+      $OrderDetailOptionsTable,
+      OrderDetailOption,
+      $$OrderDetailOptionsTableFilterComposer,
+      $$OrderDetailOptionsTableOrderingComposer,
+      $$OrderDetailOptionsTableAnnotationComposer,
+      $$OrderDetailOptionsTableCreateCompanionBuilder,
+      $$OrderDetailOptionsTableUpdateCompanionBuilder,
       (
-        LocalOrderItemOption,
+        OrderDetailOption,
         BaseReferences<
           _$CashierDb,
-          $LocalOrderItemOptionsTable,
-          LocalOrderItemOption
+          $OrderDetailOptionsTable,
+          OrderDetailOption
         >,
       ),
-      LocalOrderItemOption,
+      OrderDetailOption,
       PrefetchHooks Function()
     >;
-typedef $$LocalPaymentsTableCreateCompanionBuilder =
-    LocalPaymentsCompanion Function({
-      required String localId,
-      required String orderLocalId,
-      Value<int?> serverPaymentId,
+typedef $$OrderPaymentsTableCreateCompanionBuilder =
+    OrderPaymentsCompanion Function({
+      required String clientPaymentUuid,
+      Value<int?> serverId,
+      required String bookingOrderClientUuid,
+      Value<int?> bookingOrderServerId,
+      Value<int?> employeeId,
+      Value<int?> customerId,
+      Value<String?> customerName,
       required String paymentType,
-      Value<int?> manualPaymentServerId,
-      Value<double> amountBeforePpn,
-      Value<double> ppn,
       Value<double> paidAmount,
       Value<double> changeAmount,
       Value<String> paymentStatus,
       Value<String?> note,
-      Value<String?> proofImageLocalPath,
-      Value<bool> proofImageUploaded,
-      required DateTime createdAtLocal,
-      Value<DateTime?> syncedAt,
+      Value<double?> ppn,
+      Value<double?> amountBeforePpn,
+      Value<double?> roundingAmount,
+      Value<int?> ownerManualPaymentId,
+      Value<String?> manualProviderName,
+      Value<String?> manualProviderAccountName,
+      Value<String?> manualProviderAccountNo,
+      Value<bool> syncDirty,
+      Value<String?> localFilePathsJson,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
       Value<int> rowid,
     });
-typedef $$LocalPaymentsTableUpdateCompanionBuilder =
-    LocalPaymentsCompanion Function({
-      Value<String> localId,
-      Value<String> orderLocalId,
-      Value<int?> serverPaymentId,
+typedef $$OrderPaymentsTableUpdateCompanionBuilder =
+    OrderPaymentsCompanion Function({
+      Value<String> clientPaymentUuid,
+      Value<int?> serverId,
+      Value<String> bookingOrderClientUuid,
+      Value<int?> bookingOrderServerId,
+      Value<int?> employeeId,
+      Value<int?> customerId,
+      Value<String?> customerName,
       Value<String> paymentType,
-      Value<int?> manualPaymentServerId,
-      Value<double> amountBeforePpn,
-      Value<double> ppn,
       Value<double> paidAmount,
       Value<double> changeAmount,
       Value<String> paymentStatus,
       Value<String?> note,
-      Value<String?> proofImageLocalPath,
-      Value<bool> proofImageUploaded,
-      Value<DateTime> createdAtLocal,
-      Value<DateTime?> syncedAt,
+      Value<double?> ppn,
+      Value<double?> amountBeforePpn,
+      Value<double?> roundingAmount,
+      Value<int?> ownerManualPaymentId,
+      Value<String?> manualProviderName,
+      Value<String?> manualProviderAccountName,
+      Value<String?> manualProviderAccountNo,
+      Value<bool> syncDirty,
+      Value<String?> localFilePathsJson,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
       Value<int> rowid,
     });
 
-class $$LocalPaymentsTableFilterComposer
-    extends Composer<_$CashierDb, $LocalPaymentsTable> {
-  $$LocalPaymentsTableFilterComposer({
+class $$OrderPaymentsTableFilterComposer
+    extends Composer<_$CashierDb, $OrderPaymentsTable> {
+  $$OrderPaymentsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get localId => $composableBuilder(
-    column: $table.localId,
+  ColumnFilters<String> get clientPaymentUuid => $composableBuilder(
+    column: $table.clientPaymentUuid,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get orderLocalId => $composableBuilder(
-    column: $table.orderLocalId,
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get serverPaymentId => $composableBuilder(
-    column: $table.serverPaymentId,
+  ColumnFilters<String> get bookingOrderClientUuid => $composableBuilder(
+    column: $table.bookingOrderClientUuid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bookingOrderServerId => $composableBuilder(
+    column: $table.bookingOrderServerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get employeeId => $composableBuilder(
+    column: $table.employeeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customerName => $composableBuilder(
+    column: $table.customerName,
     builder: (column) => ColumnFilters(column),
   );
 
   ColumnFilters<String> get paymentType => $composableBuilder(
     column: $table.paymentType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get manualPaymentServerId => $composableBuilder(
-    column: $table.manualPaymentServerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get amountBeforePpn => $composableBuilder(
-    column: $table.amountBeforePpn,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get ppn => $composableBuilder(
-    column: $table.ppn,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16934,68 +15557,108 @@ class $$LocalPaymentsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get proofImageLocalPath => $composableBuilder(
-    column: $table.proofImageLocalPath,
+  ColumnFilters<double> get ppn => $composableBuilder(
+    column: $table.ppn,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<bool> get proofImageUploaded => $composableBuilder(
-    column: $table.proofImageUploaded,
+  ColumnFilters<double> get amountBeforePpn => $composableBuilder(
+    column: $table.amountBeforePpn,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
+  ColumnFilters<double> get roundingAmount => $composableBuilder(
+    column: $table.roundingAmount,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
-    column: $table.syncedAt,
+  ColumnFilters<int> get ownerManualPaymentId => $composableBuilder(
+    column: $table.ownerManualPaymentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get manualProviderName => $composableBuilder(
+    column: $table.manualProviderName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get manualProviderAccountName => $composableBuilder(
+    column: $table.manualProviderAccountName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get manualProviderAccountNo => $composableBuilder(
+    column: $table.manualProviderAccountNo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get syncDirty => $composableBuilder(
+    column: $table.syncDirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localFilePathsJson => $composableBuilder(
+    column: $table.localFilePathsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$LocalPaymentsTableOrderingComposer
-    extends Composer<_$CashierDb, $LocalPaymentsTable> {
-  $$LocalPaymentsTableOrderingComposer({
+class $$OrderPaymentsTableOrderingComposer
+    extends Composer<_$CashierDb, $OrderPaymentsTable> {
+  $$OrderPaymentsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get localId => $composableBuilder(
-    column: $table.localId,
+  ColumnOrderings<String> get clientPaymentUuid => $composableBuilder(
+    column: $table.clientPaymentUuid,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get orderLocalId => $composableBuilder(
-    column: $table.orderLocalId,
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get serverPaymentId => $composableBuilder(
-    column: $table.serverPaymentId,
+  ColumnOrderings<String> get bookingOrderClientUuid => $composableBuilder(
+    column: $table.bookingOrderClientUuid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bookingOrderServerId => $composableBuilder(
+    column: $table.bookingOrderServerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get employeeId => $composableBuilder(
+    column: $table.employeeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customerName => $composableBuilder(
+    column: $table.customerName,
     builder: (column) => ColumnOrderings(column),
   );
 
   ColumnOrderings<String> get paymentType => $composableBuilder(
     column: $table.paymentType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get manualPaymentServerId => $composableBuilder(
-    column: $table.manualPaymentServerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get amountBeforePpn => $composableBuilder(
-    column: $table.amountBeforePpn,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get ppn => $composableBuilder(
-    column: $table.ppn,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -17019,46 +15682,101 @@ class $$LocalPaymentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get proofImageLocalPath => $composableBuilder(
-    column: $table.proofImageLocalPath,
+  ColumnOrderings<double> get ppn => $composableBuilder(
+    column: $table.ppn,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<bool> get proofImageUploaded => $composableBuilder(
-    column: $table.proofImageUploaded,
+  ColumnOrderings<double> get amountBeforePpn => $composableBuilder(
+    column: $table.amountBeforePpn,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
+  ColumnOrderings<double> get roundingAmount => $composableBuilder(
+    column: $table.roundingAmount,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
-    column: $table.syncedAt,
+  ColumnOrderings<int> get ownerManualPaymentId => $composableBuilder(
+    column: $table.ownerManualPaymentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get manualProviderName => $composableBuilder(
+    column: $table.manualProviderName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get manualProviderAccountName => $composableBuilder(
+    column: $table.manualProviderAccountName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get manualProviderAccountNo => $composableBuilder(
+    column: $table.manualProviderAccountNo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get syncDirty => $composableBuilder(
+    column: $table.syncDirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localFilePathsJson => $composableBuilder(
+    column: $table.localFilePathsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$LocalPaymentsTableAnnotationComposer
-    extends Composer<_$CashierDb, $LocalPaymentsTable> {
-  $$LocalPaymentsTableAnnotationComposer({
+class $$OrderPaymentsTableAnnotationComposer
+    extends Composer<_$CashierDb, $OrderPaymentsTable> {
+  $$OrderPaymentsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get localId =>
-      $composableBuilder(column: $table.localId, builder: (column) => column);
-
-  GeneratedColumn<String> get orderLocalId => $composableBuilder(
-    column: $table.orderLocalId,
+  GeneratedColumn<String> get clientPaymentUuid => $composableBuilder(
+    column: $table.clientPaymentUuid,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get serverPaymentId => $composableBuilder(
-    column: $table.serverPaymentId,
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get bookingOrderClientUuid => $composableBuilder(
+    column: $table.bookingOrderClientUuid,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bookingOrderServerId => $composableBuilder(
+    column: $table.bookingOrderServerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get employeeId => $composableBuilder(
+    column: $table.employeeId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get customerName => $composableBuilder(
+    column: $table.customerName,
     builder: (column) => column,
   );
 
@@ -17066,19 +15784,6 @@ class $$LocalPaymentsTableAnnotationComposer
     column: $table.paymentType,
     builder: (column) => column,
   );
-
-  GeneratedColumn<int> get manualPaymentServerId => $composableBuilder(
-    column: $table.manualPaymentServerId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get amountBeforePpn => $composableBuilder(
-    column: $table.amountBeforePpn,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get ppn =>
-      $composableBuilder(column: $table.ppn, builder: (column) => column);
 
   GeneratedColumn<double> get paidAmount => $composableBuilder(
     column: $table.paidAmount,
@@ -17098,124 +15803,185 @@ class $$LocalPaymentsTableAnnotationComposer
   GeneratedColumn<String> get note =>
       $composableBuilder(column: $table.note, builder: (column) => column);
 
-  GeneratedColumn<String> get proofImageLocalPath => $composableBuilder(
-    column: $table.proofImageLocalPath,
+  GeneratedColumn<double> get ppn =>
+      $composableBuilder(column: $table.ppn, builder: (column) => column);
+
+  GeneratedColumn<double> get amountBeforePpn => $composableBuilder(
+    column: $table.amountBeforePpn,
     builder: (column) => column,
   );
 
-  GeneratedColumn<bool> get proofImageUploaded => $composableBuilder(
-    column: $table.proofImageUploaded,
+  GeneratedColumn<double> get roundingAmount => $composableBuilder(
+    column: $table.roundingAmount,
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAtLocal => $composableBuilder(
-    column: $table.createdAtLocal,
+  GeneratedColumn<int> get ownerManualPaymentId => $composableBuilder(
+    column: $table.ownerManualPaymentId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get syncedAt =>
-      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+  GeneratedColumn<String> get manualProviderName => $composableBuilder(
+    column: $table.manualProviderName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get manualProviderAccountName => $composableBuilder(
+    column: $table.manualProviderAccountName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get manualProviderAccountNo => $composableBuilder(
+    column: $table.manualProviderAccountNo,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get syncDirty =>
+      $composableBuilder(column: $table.syncDirty, builder: (column) => column);
+
+  GeneratedColumn<String> get localFilePathsJson => $composableBuilder(
+    column: $table.localFilePathsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
-class $$LocalPaymentsTableTableManager
+class $$OrderPaymentsTableTableManager
     extends
         RootTableManager<
           _$CashierDb,
-          $LocalPaymentsTable,
-          LocalPayment,
-          $$LocalPaymentsTableFilterComposer,
-          $$LocalPaymentsTableOrderingComposer,
-          $$LocalPaymentsTableAnnotationComposer,
-          $$LocalPaymentsTableCreateCompanionBuilder,
-          $$LocalPaymentsTableUpdateCompanionBuilder,
+          $OrderPaymentsTable,
+          OrderPayment,
+          $$OrderPaymentsTableFilterComposer,
+          $$OrderPaymentsTableOrderingComposer,
+          $$OrderPaymentsTableAnnotationComposer,
+          $$OrderPaymentsTableCreateCompanionBuilder,
+          $$OrderPaymentsTableUpdateCompanionBuilder,
           (
-            LocalPayment,
-            BaseReferences<_$CashierDb, $LocalPaymentsTable, LocalPayment>,
+            OrderPayment,
+            BaseReferences<_$CashierDb, $OrderPaymentsTable, OrderPayment>,
           ),
-          LocalPayment,
+          OrderPayment,
           PrefetchHooks Function()
         > {
-  $$LocalPaymentsTableTableManager(_$CashierDb db, $LocalPaymentsTable table)
+  $$OrderPaymentsTableTableManager(_$CashierDb db, $OrderPaymentsTable table)
     : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$LocalPaymentsTableFilterComposer($db: db, $table: table),
+              $$OrderPaymentsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$LocalPaymentsTableOrderingComposer($db: db, $table: table),
+              $$OrderPaymentsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$LocalPaymentsTableAnnotationComposer($db: db, $table: table),
+              $$OrderPaymentsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<String> localId = const Value.absent(),
-                Value<String> orderLocalId = const Value.absent(),
-                Value<int?> serverPaymentId = const Value.absent(),
+                Value<String> clientPaymentUuid = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String> bookingOrderClientUuid = const Value.absent(),
+                Value<int?> bookingOrderServerId = const Value.absent(),
+                Value<int?> employeeId = const Value.absent(),
+                Value<int?> customerId = const Value.absent(),
+                Value<String?> customerName = const Value.absent(),
                 Value<String> paymentType = const Value.absent(),
-                Value<int?> manualPaymentServerId = const Value.absent(),
-                Value<double> amountBeforePpn = const Value.absent(),
-                Value<double> ppn = const Value.absent(),
                 Value<double> paidAmount = const Value.absent(),
                 Value<double> changeAmount = const Value.absent(),
                 Value<String> paymentStatus = const Value.absent(),
                 Value<String?> note = const Value.absent(),
-                Value<String?> proofImageLocalPath = const Value.absent(),
-                Value<bool> proofImageUploaded = const Value.absent(),
-                Value<DateTime> createdAtLocal = const Value.absent(),
-                Value<DateTime?> syncedAt = const Value.absent(),
+                Value<double?> ppn = const Value.absent(),
+                Value<double?> amountBeforePpn = const Value.absent(),
+                Value<double?> roundingAmount = const Value.absent(),
+                Value<int?> ownerManualPaymentId = const Value.absent(),
+                Value<String?> manualProviderName = const Value.absent(),
+                Value<String?> manualProviderAccountName = const Value.absent(),
+                Value<String?> manualProviderAccountNo = const Value.absent(),
+                Value<bool> syncDirty = const Value.absent(),
+                Value<String?> localFilePathsJson = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => LocalPaymentsCompanion(
-                localId: localId,
-                orderLocalId: orderLocalId,
-                serverPaymentId: serverPaymentId,
+              }) => OrderPaymentsCompanion(
+                clientPaymentUuid: clientPaymentUuid,
+                serverId: serverId,
+                bookingOrderClientUuid: bookingOrderClientUuid,
+                bookingOrderServerId: bookingOrderServerId,
+                employeeId: employeeId,
+                customerId: customerId,
+                customerName: customerName,
                 paymentType: paymentType,
-                manualPaymentServerId: manualPaymentServerId,
-                amountBeforePpn: amountBeforePpn,
-                ppn: ppn,
                 paidAmount: paidAmount,
                 changeAmount: changeAmount,
                 paymentStatus: paymentStatus,
                 note: note,
-                proofImageLocalPath: proofImageLocalPath,
-                proofImageUploaded: proofImageUploaded,
-                createdAtLocal: createdAtLocal,
-                syncedAt: syncedAt,
+                ppn: ppn,
+                amountBeforePpn: amountBeforePpn,
+                roundingAmount: roundingAmount,
+                ownerManualPaymentId: ownerManualPaymentId,
+                manualProviderName: manualProviderName,
+                manualProviderAccountName: manualProviderAccountName,
+                manualProviderAccountNo: manualProviderAccountNo,
+                syncDirty: syncDirty,
+                localFilePathsJson: localFilePathsJson,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required String localId,
-                required String orderLocalId,
-                Value<int?> serverPaymentId = const Value.absent(),
+                required String clientPaymentUuid,
+                Value<int?> serverId = const Value.absent(),
+                required String bookingOrderClientUuid,
+                Value<int?> bookingOrderServerId = const Value.absent(),
+                Value<int?> employeeId = const Value.absent(),
+                Value<int?> customerId = const Value.absent(),
+                Value<String?> customerName = const Value.absent(),
                 required String paymentType,
-                Value<int?> manualPaymentServerId = const Value.absent(),
-                Value<double> amountBeforePpn = const Value.absent(),
-                Value<double> ppn = const Value.absent(),
                 Value<double> paidAmount = const Value.absent(),
                 Value<double> changeAmount = const Value.absent(),
                 Value<String> paymentStatus = const Value.absent(),
                 Value<String?> note = const Value.absent(),
-                Value<String?> proofImageLocalPath = const Value.absent(),
-                Value<bool> proofImageUploaded = const Value.absent(),
-                required DateTime createdAtLocal,
-                Value<DateTime?> syncedAt = const Value.absent(),
+                Value<double?> ppn = const Value.absent(),
+                Value<double?> amountBeforePpn = const Value.absent(),
+                Value<double?> roundingAmount = const Value.absent(),
+                Value<int?> ownerManualPaymentId = const Value.absent(),
+                Value<String?> manualProviderName = const Value.absent(),
+                Value<String?> manualProviderAccountName = const Value.absent(),
+                Value<String?> manualProviderAccountNo = const Value.absent(),
+                Value<bool> syncDirty = const Value.absent(),
+                Value<String?> localFilePathsJson = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => LocalPaymentsCompanion.insert(
-                localId: localId,
-                orderLocalId: orderLocalId,
-                serverPaymentId: serverPaymentId,
+              }) => OrderPaymentsCompanion.insert(
+                clientPaymentUuid: clientPaymentUuid,
+                serverId: serverId,
+                bookingOrderClientUuid: bookingOrderClientUuid,
+                bookingOrderServerId: bookingOrderServerId,
+                employeeId: employeeId,
+                customerId: customerId,
+                customerName: customerName,
                 paymentType: paymentType,
-                manualPaymentServerId: manualPaymentServerId,
-                amountBeforePpn: amountBeforePpn,
-                ppn: ppn,
                 paidAmount: paidAmount,
                 changeAmount: changeAmount,
                 paymentStatus: paymentStatus,
                 note: note,
-                proofImageLocalPath: proofImageLocalPath,
-                proofImageUploaded: proofImageUploaded,
-                createdAtLocal: createdAtLocal,
-                syncedAt: syncedAt,
+                ppn: ppn,
+                amountBeforePpn: amountBeforePpn,
+                roundingAmount: roundingAmount,
+                ownerManualPaymentId: ownerManualPaymentId,
+                manualProviderName: manualProviderName,
+                manualProviderAccountName: manualProviderAccountName,
+                manualProviderAccountNo: manualProviderAccountNo,
+                syncDirty: syncDirty,
+                localFilePathsJson: localFilePathsJson,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -17226,57 +15992,55 @@ class $$LocalPaymentsTableTableManager
       );
 }
 
-typedef $$LocalPaymentsTableProcessedTableManager =
+typedef $$OrderPaymentsTableProcessedTableManager =
     ProcessedTableManager<
       _$CashierDb,
-      $LocalPaymentsTable,
-      LocalPayment,
-      $$LocalPaymentsTableFilterComposer,
-      $$LocalPaymentsTableOrderingComposer,
-      $$LocalPaymentsTableAnnotationComposer,
-      $$LocalPaymentsTableCreateCompanionBuilder,
-      $$LocalPaymentsTableUpdateCompanionBuilder,
+      $OrderPaymentsTable,
+      OrderPayment,
+      $$OrderPaymentsTableFilterComposer,
+      $$OrderPaymentsTableOrderingComposer,
+      $$OrderPaymentsTableAnnotationComposer,
+      $$OrderPaymentsTableCreateCompanionBuilder,
+      $$OrderPaymentsTableUpdateCompanionBuilder,
       (
-        LocalPayment,
-        BaseReferences<_$CashierDb, $LocalPaymentsTable, LocalPayment>,
+        OrderPayment,
+        BaseReferences<_$CashierDb, $OrderPaymentsTable, OrderPayment>,
       ),
-      LocalPayment,
+      OrderPayment,
       PrefetchHooks Function()
     >;
-typedef $$SyncQueueTableCreateCompanionBuilder =
-    SyncQueueCompanion Function({
+typedef $$SyncConflictsTableCreateCompanionBuilder =
+    SyncConflictsCompanion Function({
       Value<int> id,
-      required String entityType,
-      required String entityLocalId,
-      required String action,
-      Value<int?> dependsOnQueueId,
-      required String payloadJson,
-      Value<String> status,
-      Value<int> attemptCount,
-      Value<String?> lastError,
-      Value<DateTime?> nextRetryAt,
+      required String entityTable,
+      Value<int?> serverId,
+      Value<String?> clientUuid,
+      required String reason,
+      Value<String?> localSnapshotJson,
+      Value<String?> serverSnapshotJson,
+      Value<String?> suggestedResolution,
+      Value<bool> isResolved,
+      Value<String?> resolutionChoice,
       required DateTime createdAt,
-      required DateTime updatedAt,
     });
-typedef $$SyncQueueTableUpdateCompanionBuilder =
-    SyncQueueCompanion Function({
+typedef $$SyncConflictsTableUpdateCompanionBuilder =
+    SyncConflictsCompanion Function({
       Value<int> id,
-      Value<String> entityType,
-      Value<String> entityLocalId,
-      Value<String> action,
-      Value<int?> dependsOnQueueId,
-      Value<String> payloadJson,
-      Value<String> status,
-      Value<int> attemptCount,
-      Value<String?> lastError,
-      Value<DateTime?> nextRetryAt,
+      Value<String> entityTable,
+      Value<int?> serverId,
+      Value<String?> clientUuid,
+      Value<String> reason,
+      Value<String?> localSnapshotJson,
+      Value<String?> serverSnapshotJson,
+      Value<String?> suggestedResolution,
+      Value<bool> isResolved,
+      Value<String?> resolutionChoice,
       Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
     });
 
-class $$SyncQueueTableFilterComposer
-    extends Composer<_$CashierDb, $SyncQueueTable> {
-  $$SyncQueueTableFilterComposer({
+class $$SyncConflictsTableFilterComposer
+    extends Composer<_$CashierDb, $SyncConflictsTable> {
+  $$SyncConflictsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -17288,48 +16052,48 @@ class $$SyncQueueTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get entityType => $composableBuilder(
-    column: $table.entityType,
+  ColumnFilters<String> get entityTable => $composableBuilder(
+    column: $table.entityTable,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get entityLocalId => $composableBuilder(
-    column: $table.entityLocalId,
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get action => $composableBuilder(
-    column: $table.action,
+  ColumnFilters<String> get clientUuid => $composableBuilder(
+    column: $table.clientUuid,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get dependsOnQueueId => $composableBuilder(
-    column: $table.dependsOnQueueId,
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
+  ColumnFilters<String> get localSnapshotJson => $composableBuilder(
+    column: $table.localSnapshotJson,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get status => $composableBuilder(
-    column: $table.status,
+  ColumnFilters<String> get serverSnapshotJson => $composableBuilder(
+    column: $table.serverSnapshotJson,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get attemptCount => $composableBuilder(
-    column: $table.attemptCount,
+  ColumnFilters<String> get suggestedResolution => $composableBuilder(
+    column: $table.suggestedResolution,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get lastError => $composableBuilder(
-    column: $table.lastError,
+  ColumnFilters<bool> get isResolved => $composableBuilder(
+    column: $table.isResolved,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get nextRetryAt => $composableBuilder(
-    column: $table.nextRetryAt,
+  ColumnFilters<String> get resolutionChoice => $composableBuilder(
+    column: $table.resolutionChoice,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17337,16 +16101,11 @@ class $$SyncQueueTableFilterComposer
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
   );
-
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
 }
 
-class $$SyncQueueTableOrderingComposer
-    extends Composer<_$CashierDb, $SyncQueueTable> {
-  $$SyncQueueTableOrderingComposer({
+class $$SyncConflictsTableOrderingComposer
+    extends Composer<_$CashierDb, $SyncConflictsTable> {
+  $$SyncConflictsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -17358,48 +16117,48 @@ class $$SyncQueueTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get entityType => $composableBuilder(
-    column: $table.entityType,
+  ColumnOrderings<String> get entityTable => $composableBuilder(
+    column: $table.entityTable,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get entityLocalId => $composableBuilder(
-    column: $table.entityLocalId,
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get action => $composableBuilder(
-    column: $table.action,
+  ColumnOrderings<String> get clientUuid => $composableBuilder(
+    column: $table.clientUuid,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get dependsOnQueueId => $composableBuilder(
-    column: $table.dependsOnQueueId,
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
+  ColumnOrderings<String> get localSnapshotJson => $composableBuilder(
+    column: $table.localSnapshotJson,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get status => $composableBuilder(
-    column: $table.status,
+  ColumnOrderings<String> get serverSnapshotJson => $composableBuilder(
+    column: $table.serverSnapshotJson,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get attemptCount => $composableBuilder(
-    column: $table.attemptCount,
+  ColumnOrderings<String> get suggestedResolution => $composableBuilder(
+    column: $table.suggestedResolution,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get lastError => $composableBuilder(
-    column: $table.lastError,
+  ColumnOrderings<bool> get isResolved => $composableBuilder(
+    column: $table.isResolved,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get nextRetryAt => $composableBuilder(
-    column: $table.nextRetryAt,
+  ColumnOrderings<String> get resolutionChoice => $composableBuilder(
+    column: $table.resolutionChoice,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -17407,16 +16166,11 @@ class $$SyncQueueTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
-
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
 }
 
-class $$SyncQueueTableAnnotationComposer
-    extends Composer<_$CashierDb, $SyncQueueTable> {
-  $$SyncQueueTableAnnotationComposer({
+class $$SyncConflictsTableAnnotationComposer
+    extends Composer<_$CashierDb, $SyncConflictsTable> {
+  $$SyncConflictsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -17426,136 +16180,131 @@ class $$SyncQueueTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get entityType => $composableBuilder(
-    column: $table.entityType,
+  GeneratedColumn<String> get entityTable => $composableBuilder(
+    column: $table.entityTable,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get entityLocalId => $composableBuilder(
-    column: $table.entityLocalId,
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get clientUuid => $composableBuilder(
+    column: $table.clientUuid,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get action =>
-      $composableBuilder(column: $table.action, builder: (column) => column);
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
 
-  GeneratedColumn<int> get dependsOnQueueId => $composableBuilder(
-    column: $table.dependsOnQueueId,
+  GeneratedColumn<String> get localSnapshotJson => $composableBuilder(
+    column: $table.localSnapshotJson,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
+  GeneratedColumn<String> get serverSnapshotJson => $composableBuilder(
+    column: $table.serverSnapshotJson,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get status =>
-      $composableBuilder(column: $table.status, builder: (column) => column);
-
-  GeneratedColumn<int> get attemptCount => $composableBuilder(
-    column: $table.attemptCount,
+  GeneratedColumn<String> get suggestedResolution => $composableBuilder(
+    column: $table.suggestedResolution,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get lastError =>
-      $composableBuilder(column: $table.lastError, builder: (column) => column);
+  GeneratedColumn<bool> get isResolved => $composableBuilder(
+    column: $table.isResolved,
+    builder: (column) => column,
+  );
 
-  GeneratedColumn<DateTime> get nextRetryAt => $composableBuilder(
-    column: $table.nextRetryAt,
+  GeneratedColumn<String> get resolutionChoice => $composableBuilder(
+    column: $table.resolutionChoice,
     builder: (column) => column,
   );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
-class $$SyncQueueTableTableManager
+class $$SyncConflictsTableTableManager
     extends
         RootTableManager<
           _$CashierDb,
-          $SyncQueueTable,
-          SyncQueueData,
-          $$SyncQueueTableFilterComposer,
-          $$SyncQueueTableOrderingComposer,
-          $$SyncQueueTableAnnotationComposer,
-          $$SyncQueueTableCreateCompanionBuilder,
-          $$SyncQueueTableUpdateCompanionBuilder,
+          $SyncConflictsTable,
+          SyncConflict,
+          $$SyncConflictsTableFilterComposer,
+          $$SyncConflictsTableOrderingComposer,
+          $$SyncConflictsTableAnnotationComposer,
+          $$SyncConflictsTableCreateCompanionBuilder,
+          $$SyncConflictsTableUpdateCompanionBuilder,
           (
-            SyncQueueData,
-            BaseReferences<_$CashierDb, $SyncQueueTable, SyncQueueData>,
+            SyncConflict,
+            BaseReferences<_$CashierDb, $SyncConflictsTable, SyncConflict>,
           ),
-          SyncQueueData,
+          SyncConflict,
           PrefetchHooks Function()
         > {
-  $$SyncQueueTableTableManager(_$CashierDb db, $SyncQueueTable table)
+  $$SyncConflictsTableTableManager(_$CashierDb db, $SyncConflictsTable table)
     : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$SyncQueueTableFilterComposer($db: db, $table: table),
+              $$SyncConflictsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$SyncQueueTableOrderingComposer($db: db, $table: table),
+              $$SyncConflictsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$SyncQueueTableAnnotationComposer($db: db, $table: table),
+              $$SyncConflictsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
-                Value<String> entityType = const Value.absent(),
-                Value<String> entityLocalId = const Value.absent(),
-                Value<String> action = const Value.absent(),
-                Value<int?> dependsOnQueueId = const Value.absent(),
-                Value<String> payloadJson = const Value.absent(),
-                Value<String> status = const Value.absent(),
-                Value<int> attemptCount = const Value.absent(),
-                Value<String?> lastError = const Value.absent(),
-                Value<DateTime?> nextRetryAt = const Value.absent(),
+                Value<String> entityTable = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String?> clientUuid = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<String?> localSnapshotJson = const Value.absent(),
+                Value<String?> serverSnapshotJson = const Value.absent(),
+                Value<String?> suggestedResolution = const Value.absent(),
+                Value<bool> isResolved = const Value.absent(),
+                Value<String?> resolutionChoice = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
-                Value<DateTime> updatedAt = const Value.absent(),
-              }) => SyncQueueCompanion(
+              }) => SyncConflictsCompanion(
                 id: id,
-                entityType: entityType,
-                entityLocalId: entityLocalId,
-                action: action,
-                dependsOnQueueId: dependsOnQueueId,
-                payloadJson: payloadJson,
-                status: status,
-                attemptCount: attemptCount,
-                lastError: lastError,
-                nextRetryAt: nextRetryAt,
+                entityTable: entityTable,
+                serverId: serverId,
+                clientUuid: clientUuid,
+                reason: reason,
+                localSnapshotJson: localSnapshotJson,
+                serverSnapshotJson: serverSnapshotJson,
+                suggestedResolution: suggestedResolution,
+                isResolved: isResolved,
+                resolutionChoice: resolutionChoice,
                 createdAt: createdAt,
-                updatedAt: updatedAt,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
-                required String entityType,
-                required String entityLocalId,
-                required String action,
-                Value<int?> dependsOnQueueId = const Value.absent(),
-                required String payloadJson,
-                Value<String> status = const Value.absent(),
-                Value<int> attemptCount = const Value.absent(),
-                Value<String?> lastError = const Value.absent(),
-                Value<DateTime?> nextRetryAt = const Value.absent(),
+                required String entityTable,
+                Value<int?> serverId = const Value.absent(),
+                Value<String?> clientUuid = const Value.absent(),
+                required String reason,
+                Value<String?> localSnapshotJson = const Value.absent(),
+                Value<String?> serverSnapshotJson = const Value.absent(),
+                Value<String?> suggestedResolution = const Value.absent(),
+                Value<bool> isResolved = const Value.absent(),
+                Value<String?> resolutionChoice = const Value.absent(),
                 required DateTime createdAt,
-                required DateTime updatedAt,
-              }) => SyncQueueCompanion.insert(
+              }) => SyncConflictsCompanion.insert(
                 id: id,
-                entityType: entityType,
-                entityLocalId: entityLocalId,
-                action: action,
-                dependsOnQueueId: dependsOnQueueId,
-                payloadJson: payloadJson,
-                status: status,
-                attemptCount: attemptCount,
-                lastError: lastError,
-                nextRetryAt: nextRetryAt,
+                entityTable: entityTable,
+                serverId: serverId,
+                clientUuid: clientUuid,
+                reason: reason,
+                localSnapshotJson: localSnapshotJson,
+                serverSnapshotJson: serverSnapshotJson,
+                suggestedResolution: suggestedResolution,
+                isResolved: isResolved,
+                resolutionChoice: resolutionChoice,
                 createdAt: createdAt,
-                updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -17565,453 +16314,136 @@ class $$SyncQueueTableTableManager
       );
 }
 
-typedef $$SyncQueueTableProcessedTableManager =
+typedef $$SyncConflictsTableProcessedTableManager =
     ProcessedTableManager<
       _$CashierDb,
-      $SyncQueueTable,
-      SyncQueueData,
-      $$SyncQueueTableFilterComposer,
-      $$SyncQueueTableOrderingComposer,
-      $$SyncQueueTableAnnotationComposer,
-      $$SyncQueueTableCreateCompanionBuilder,
-      $$SyncQueueTableUpdateCompanionBuilder,
+      $SyncConflictsTable,
+      SyncConflict,
+      $$SyncConflictsTableFilterComposer,
+      $$SyncConflictsTableOrderingComposer,
+      $$SyncConflictsTableAnnotationComposer,
+      $$SyncConflictsTableCreateCompanionBuilder,
+      $$SyncConflictsTableUpdateCompanionBuilder,
       (
-        SyncQueueData,
-        BaseReferences<_$CashierDb, $SyncQueueTable, SyncQueueData>,
+        SyncConflict,
+        BaseReferences<_$CashierDb, $SyncConflictsTable, SyncConflict>,
       ),
-      SyncQueueData,
+      SyncConflict,
       PrefetchHooks Function()
     >;
-typedef $$CachedPaymentOrdersTableCreateCompanionBuilder =
-    CachedPaymentOrdersCompanion Function({
-      Value<int> serverId,
-      required String bookingOrderCode,
-      required String customerName,
-      Value<String?> tableNo,
-      Value<String?> paymentRequestJson,
-      Value<String?> latestPaymentJson,
-      Value<String?> paymentMethod,
-      required String orderStatus,
-      Value<String?> detailJson,
-      Value<double> subtotal,
-      Value<double> ppnPercent,
-      Value<bool> isPpnActive,
-      Value<bool> isPendingDelete,
-      Value<double> grandTotal,
-      Value<DateTime?> createdAt,
-      Value<DateTime?> updatedAt,
-      required DateTime cachedAt,
+typedef $$SyncMetaTableCreateCompanionBuilder =
+    SyncMetaCompanion Function({
+      required String key,
+      required String value,
+      Value<int> rowid,
     });
-typedef $$CachedPaymentOrdersTableUpdateCompanionBuilder =
-    CachedPaymentOrdersCompanion Function({
-      Value<int> serverId,
-      Value<String> bookingOrderCode,
-      Value<String> customerName,
-      Value<String?> tableNo,
-      Value<String?> paymentRequestJson,
-      Value<String?> latestPaymentJson,
-      Value<String?> paymentMethod,
-      Value<String> orderStatus,
-      Value<String?> detailJson,
-      Value<double> subtotal,
-      Value<double> ppnPercent,
-      Value<bool> isPpnActive,
-      Value<bool> isPendingDelete,
-      Value<double> grandTotal,
-      Value<DateTime?> createdAt,
-      Value<DateTime?> updatedAt,
-      Value<DateTime> cachedAt,
+typedef $$SyncMetaTableUpdateCompanionBuilder =
+    SyncMetaCompanion Function({
+      Value<String> key,
+      Value<String> value,
+      Value<int> rowid,
     });
 
-class $$CachedPaymentOrdersTableFilterComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrdersTable> {
-  $$CachedPaymentOrdersTableFilterComposer({
+class $$SyncMetaTableFilterComposer
+    extends Composer<_$CashierDb, $SyncMetaTable> {
+  $$SyncMetaTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get serverId => $composableBuilder(
-    column: $table.serverId,
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get tableNo => $composableBuilder(
-    column: $table.tableNo,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get paymentRequestJson => $composableBuilder(
-    column: $table.paymentRequestJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get latestPaymentJson => $composableBuilder(
-    column: $table.latestPaymentJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get subtotal => $composableBuilder(
-    column: $table.subtotal,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isPendingDelete => $composableBuilder(
-    column: $table.isPendingDelete,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get grandTotal => $composableBuilder(
-    column: $table.grandTotal,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
-    column: $table.cachedAt,
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$CachedPaymentOrdersTableOrderingComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrdersTable> {
-  $$CachedPaymentOrdersTableOrderingComposer({
+class $$SyncMetaTableOrderingComposer
+    extends Composer<_$CashierDb, $SyncMetaTable> {
+  $$SyncMetaTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get serverId => $composableBuilder(
-    column: $table.serverId,
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get tableNo => $composableBuilder(
-    column: $table.tableNo,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get paymentRequestJson => $composableBuilder(
-    column: $table.paymentRequestJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get latestPaymentJson => $composableBuilder(
-    column: $table.latestPaymentJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get subtotal => $composableBuilder(
-    column: $table.subtotal,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isPendingDelete => $composableBuilder(
-    column: $table.isPendingDelete,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get grandTotal => $composableBuilder(
-    column: $table.grandTotal,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
-    column: $table.cachedAt,
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$CachedPaymentOrdersTableAnnotationComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrdersTable> {
-  $$CachedPaymentOrdersTableAnnotationComposer({
+class $$SyncMetaTableAnnotationComposer
+    extends Composer<_$CashierDb, $SyncMetaTable> {
+  $$SyncMetaTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get serverId =>
-      $composableBuilder(column: $table.serverId, builder: (column) => column);
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
 
-  GeneratedColumn<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get tableNo =>
-      $composableBuilder(column: $table.tableNo, builder: (column) => column);
-
-  GeneratedColumn<String> get paymentRequestJson => $composableBuilder(
-    column: $table.paymentRequestJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get latestPaymentJson => $composableBuilder(
-    column: $table.latestPaymentJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get subtotal =>
-      $composableBuilder(column: $table.subtotal, builder: (column) => column);
-
-  GeneratedColumn<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<bool> get isPendingDelete => $composableBuilder(
-    column: $table.isPendingDelete,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get grandTotal => $composableBuilder(
-    column: $table.grandTotal,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get cachedAt =>
-      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
 }
 
-class $$CachedPaymentOrdersTableTableManager
+class $$SyncMetaTableTableManager
     extends
         RootTableManager<
           _$CashierDb,
-          $CachedPaymentOrdersTable,
-          CachedPaymentOrder,
-          $$CachedPaymentOrdersTableFilterComposer,
-          $$CachedPaymentOrdersTableOrderingComposer,
-          $$CachedPaymentOrdersTableAnnotationComposer,
-          $$CachedPaymentOrdersTableCreateCompanionBuilder,
-          $$CachedPaymentOrdersTableUpdateCompanionBuilder,
+          $SyncMetaTable,
+          SyncMetaData,
+          $$SyncMetaTableFilterComposer,
+          $$SyncMetaTableOrderingComposer,
+          $$SyncMetaTableAnnotationComposer,
+          $$SyncMetaTableCreateCompanionBuilder,
+          $$SyncMetaTableUpdateCompanionBuilder,
           (
-            CachedPaymentOrder,
-            BaseReferences<
-              _$CashierDb,
-              $CachedPaymentOrdersTable,
-              CachedPaymentOrder
-            >,
+            SyncMetaData,
+            BaseReferences<_$CashierDb, $SyncMetaTable, SyncMetaData>,
           ),
-          CachedPaymentOrder,
+          SyncMetaData,
           PrefetchHooks Function()
         > {
-  $$CachedPaymentOrdersTableTableManager(
-    _$CashierDb db,
-    $CachedPaymentOrdersTable table,
-  ) : super(
+  $$SyncMetaTableTableManager(_$CashierDb db, $SyncMetaTable table)
+    : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$CachedPaymentOrdersTableFilterComposer($db: db, $table: table),
+              $$SyncMetaTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$CachedPaymentOrdersTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
+              $$SyncMetaTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$CachedPaymentOrdersTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+              $$SyncMetaTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> serverId = const Value.absent(),
-                Value<String> bookingOrderCode = const Value.absent(),
-                Value<String> customerName = const Value.absent(),
-                Value<String?> tableNo = const Value.absent(),
-                Value<String?> paymentRequestJson = const Value.absent(),
-                Value<String?> latestPaymentJson = const Value.absent(),
-                Value<String?> paymentMethod = const Value.absent(),
-                Value<String> orderStatus = const Value.absent(),
-                Value<String?> detailJson = const Value.absent(),
-                Value<double> subtotal = const Value.absent(),
-                Value<double> ppnPercent = const Value.absent(),
-                Value<bool> isPpnActive = const Value.absent(),
-                Value<bool> isPendingDelete = const Value.absent(),
-                Value<double> grandTotal = const Value.absent(),
-                Value<DateTime?> createdAt = const Value.absent(),
-                Value<DateTime?> updatedAt = const Value.absent(),
-                Value<DateTime> cachedAt = const Value.absent(),
-              }) => CachedPaymentOrdersCompanion(
-                serverId: serverId,
-                bookingOrderCode: bookingOrderCode,
-                customerName: customerName,
-                tableNo: tableNo,
-                paymentRequestJson: paymentRequestJson,
-                latestPaymentJson: latestPaymentJson,
-                paymentMethod: paymentMethod,
-                orderStatus: orderStatus,
-                detailJson: detailJson,
-                subtotal: subtotal,
-                ppnPercent: ppnPercent,
-                isPpnActive: isPpnActive,
-                isPendingDelete: isPendingDelete,
-                grandTotal: grandTotal,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                cachedAt: cachedAt,
-              ),
+                Value<String> key = const Value.absent(),
+                Value<String> value = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncMetaCompanion(key: key, value: value, rowid: rowid),
           createCompanionCallback:
               ({
-                Value<int> serverId = const Value.absent(),
-                required String bookingOrderCode,
-                required String customerName,
-                Value<String?> tableNo = const Value.absent(),
-                Value<String?> paymentRequestJson = const Value.absent(),
-                Value<String?> latestPaymentJson = const Value.absent(),
-                Value<String?> paymentMethod = const Value.absent(),
-                required String orderStatus,
-                Value<String?> detailJson = const Value.absent(),
-                Value<double> subtotal = const Value.absent(),
-                Value<double> ppnPercent = const Value.absent(),
-                Value<bool> isPpnActive = const Value.absent(),
-                Value<bool> isPendingDelete = const Value.absent(),
-                Value<double> grandTotal = const Value.absent(),
-                Value<DateTime?> createdAt = const Value.absent(),
-                Value<DateTime?> updatedAt = const Value.absent(),
-                required DateTime cachedAt,
-              }) => CachedPaymentOrdersCompanion.insert(
-                serverId: serverId,
-                bookingOrderCode: bookingOrderCode,
-                customerName: customerName,
-                tableNo: tableNo,
-                paymentRequestJson: paymentRequestJson,
-                latestPaymentJson: latestPaymentJson,
-                paymentMethod: paymentMethod,
-                orderStatus: orderStatus,
-                detailJson: detailJson,
-                subtotal: subtotal,
-                ppnPercent: ppnPercent,
-                isPpnActive: isPpnActive,
-                isPendingDelete: isPendingDelete,
-                grandTotal: grandTotal,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                cachedAt: cachedAt,
+                required String key,
+                required String value,
+                Value<int> rowid = const Value.absent(),
+              }) => SyncMetaCompanion.insert(
+                key: key,
+                value: value,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -18021,1400 +16453,18 @@ class $$CachedPaymentOrdersTableTableManager
       );
 }
 
-typedef $$CachedPaymentOrdersTableProcessedTableManager =
+typedef $$SyncMetaTableProcessedTableManager =
     ProcessedTableManager<
       _$CashierDb,
-      $CachedPaymentOrdersTable,
-      CachedPaymentOrder,
-      $$CachedPaymentOrdersTableFilterComposer,
-      $$CachedPaymentOrdersTableOrderingComposer,
-      $$CachedPaymentOrdersTableAnnotationComposer,
-      $$CachedPaymentOrdersTableCreateCompanionBuilder,
-      $$CachedPaymentOrdersTableUpdateCompanionBuilder,
-      (
-        CachedPaymentOrder,
-        BaseReferences<
-          _$CashierDb,
-          $CachedPaymentOrdersTable,
-          CachedPaymentOrder
-        >,
-      ),
-      CachedPaymentOrder,
-      PrefetchHooks Function()
-    >;
-typedef $$CachedProcessOrdersTableCreateCompanionBuilder =
-    CachedProcessOrdersCompanion Function({
-      Value<int> serverId,
-      required String bookingOrderCode,
-      required String customerName,
-      Value<String?> tableNo,
-      Value<String?> processRequestJson,
-      Value<String?> latestProcessJson,
-      Value<String?> detailJson,
-      Value<String?> paymentMethod,
-      required String orderStatus,
-      Value<double> subtotal,
-      Value<double> ppnPercent,
-      Value<bool> isPpnActive,
-      Value<String?> pendingAction,
-      Value<bool> isSynced,
-      Value<bool> processedByKitchen,
-      Value<bool> deletedLocally,
-      Value<DateTime?> syncedAt,
-    });
-typedef $$CachedProcessOrdersTableUpdateCompanionBuilder =
-    CachedProcessOrdersCompanion Function({
-      Value<int> serverId,
-      Value<String> bookingOrderCode,
-      Value<String> customerName,
-      Value<String?> tableNo,
-      Value<String?> processRequestJson,
-      Value<String?> latestProcessJson,
-      Value<String?> detailJson,
-      Value<String?> paymentMethod,
-      Value<String> orderStatus,
-      Value<double> subtotal,
-      Value<double> ppnPercent,
-      Value<bool> isPpnActive,
-      Value<String?> pendingAction,
-      Value<bool> isSynced,
-      Value<bool> processedByKitchen,
-      Value<bool> deletedLocally,
-      Value<DateTime?> syncedAt,
-    });
-
-class $$CachedProcessOrdersTableFilterComposer
-    extends Composer<_$CashierDb, $CachedProcessOrdersTable> {
-  $$CachedProcessOrdersTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<int> get serverId => $composableBuilder(
-    column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get tableNo => $composableBuilder(
-    column: $table.tableNo,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get processRequestJson => $composableBuilder(
-    column: $table.processRequestJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get latestProcessJson => $composableBuilder(
-    column: $table.latestProcessJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get subtotal => $composableBuilder(
-    column: $table.subtotal,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get pendingAction => $composableBuilder(
-    column: $table.pendingAction,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isSynced => $composableBuilder(
-    column: $table.isSynced,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get processedByKitchen => $composableBuilder(
-    column: $table.processedByKitchen,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get deletedLocally => $composableBuilder(
-    column: $table.deletedLocally,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
-    column: $table.syncedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$CachedProcessOrdersTableOrderingComposer
-    extends Composer<_$CashierDb, $CachedProcessOrdersTable> {
-  $$CachedProcessOrdersTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<int> get serverId => $composableBuilder(
-    column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get tableNo => $composableBuilder(
-    column: $table.tableNo,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get processRequestJson => $composableBuilder(
-    column: $table.processRequestJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get latestProcessJson => $composableBuilder(
-    column: $table.latestProcessJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get subtotal => $composableBuilder(
-    column: $table.subtotal,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get pendingAction => $composableBuilder(
-    column: $table.pendingAction,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isSynced => $composableBuilder(
-    column: $table.isSynced,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get processedByKitchen => $composableBuilder(
-    column: $table.processedByKitchen,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get deletedLocally => $composableBuilder(
-    column: $table.deletedLocally,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
-    column: $table.syncedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$CachedProcessOrdersTableAnnotationComposer
-    extends Composer<_$CashierDb, $CachedProcessOrdersTable> {
-  $$CachedProcessOrdersTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<int> get serverId =>
-      $composableBuilder(column: $table.serverId, builder: (column) => column);
-
-  GeneratedColumn<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get tableNo =>
-      $composableBuilder(column: $table.tableNo, builder: (column) => column);
-
-  GeneratedColumn<String> get processRequestJson => $composableBuilder(
-    column: $table.processRequestJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get latestProcessJson => $composableBuilder(
-    column: $table.latestProcessJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get subtotal =>
-      $composableBuilder(column: $table.subtotal, builder: (column) => column);
-
-  GeneratedColumn<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get pendingAction => $composableBuilder(
-    column: $table.pendingAction,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<bool> get isSynced =>
-      $composableBuilder(column: $table.isSynced, builder: (column) => column);
-
-  GeneratedColumn<bool> get processedByKitchen => $composableBuilder(
-    column: $table.processedByKitchen,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<bool> get deletedLocally => $composableBuilder(
-    column: $table.deletedLocally,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get syncedAt =>
-      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
-}
-
-class $$CachedProcessOrdersTableTableManager
-    extends
-        RootTableManager<
-          _$CashierDb,
-          $CachedProcessOrdersTable,
-          CachedProcessOrder,
-          $$CachedProcessOrdersTableFilterComposer,
-          $$CachedProcessOrdersTableOrderingComposer,
-          $$CachedProcessOrdersTableAnnotationComposer,
-          $$CachedProcessOrdersTableCreateCompanionBuilder,
-          $$CachedProcessOrdersTableUpdateCompanionBuilder,
-          (
-            CachedProcessOrder,
-            BaseReferences<
-              _$CashierDb,
-              $CachedProcessOrdersTable,
-              CachedProcessOrder
-            >,
-          ),
-          CachedProcessOrder,
-          PrefetchHooks Function()
-        > {
-  $$CachedProcessOrdersTableTableManager(
-    _$CashierDb db,
-    $CachedProcessOrdersTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$CachedProcessOrdersTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$CachedProcessOrdersTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$CachedProcessOrdersTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
-          updateCompanionCallback:
-              ({
-                Value<int> serverId = const Value.absent(),
-                Value<String> bookingOrderCode = const Value.absent(),
-                Value<String> customerName = const Value.absent(),
-                Value<String?> tableNo = const Value.absent(),
-                Value<String?> processRequestJson = const Value.absent(),
-                Value<String?> latestProcessJson = const Value.absent(),
-                Value<String?> detailJson = const Value.absent(),
-                Value<String?> paymentMethod = const Value.absent(),
-                Value<String> orderStatus = const Value.absent(),
-                Value<double> subtotal = const Value.absent(),
-                Value<double> ppnPercent = const Value.absent(),
-                Value<bool> isPpnActive = const Value.absent(),
-                Value<String?> pendingAction = const Value.absent(),
-                Value<bool> isSynced = const Value.absent(),
-                Value<bool> processedByKitchen = const Value.absent(),
-                Value<bool> deletedLocally = const Value.absent(),
-                Value<DateTime?> syncedAt = const Value.absent(),
-              }) => CachedProcessOrdersCompanion(
-                serverId: serverId,
-                bookingOrderCode: bookingOrderCode,
-                customerName: customerName,
-                tableNo: tableNo,
-                processRequestJson: processRequestJson,
-                latestProcessJson: latestProcessJson,
-                detailJson: detailJson,
-                paymentMethod: paymentMethod,
-                orderStatus: orderStatus,
-                subtotal: subtotal,
-                ppnPercent: ppnPercent,
-                isPpnActive: isPpnActive,
-                pendingAction: pendingAction,
-                isSynced: isSynced,
-                processedByKitchen: processedByKitchen,
-                deletedLocally: deletedLocally,
-                syncedAt: syncedAt,
-              ),
-          createCompanionCallback:
-              ({
-                Value<int> serverId = const Value.absent(),
-                required String bookingOrderCode,
-                required String customerName,
-                Value<String?> tableNo = const Value.absent(),
-                Value<String?> processRequestJson = const Value.absent(),
-                Value<String?> latestProcessJson = const Value.absent(),
-                Value<String?> detailJson = const Value.absent(),
-                Value<String?> paymentMethod = const Value.absent(),
-                required String orderStatus,
-                Value<double> subtotal = const Value.absent(),
-                Value<double> ppnPercent = const Value.absent(),
-                Value<bool> isPpnActive = const Value.absent(),
-                Value<String?> pendingAction = const Value.absent(),
-                Value<bool> isSynced = const Value.absent(),
-                Value<bool> processedByKitchen = const Value.absent(),
-                Value<bool> deletedLocally = const Value.absent(),
-                Value<DateTime?> syncedAt = const Value.absent(),
-              }) => CachedProcessOrdersCompanion.insert(
-                serverId: serverId,
-                bookingOrderCode: bookingOrderCode,
-                customerName: customerName,
-                tableNo: tableNo,
-                processRequestJson: processRequestJson,
-                latestProcessJson: latestProcessJson,
-                detailJson: detailJson,
-                paymentMethod: paymentMethod,
-                orderStatus: orderStatus,
-                subtotal: subtotal,
-                ppnPercent: ppnPercent,
-                isPpnActive: isPpnActive,
-                pendingAction: pendingAction,
-                isSynced: isSynced,
-                processedByKitchen: processedByKitchen,
-                deletedLocally: deletedLocally,
-                syncedAt: syncedAt,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$CachedProcessOrdersTableProcessedTableManager =
-    ProcessedTableManager<
-      _$CashierDb,
-      $CachedProcessOrdersTable,
-      CachedProcessOrder,
-      $$CachedProcessOrdersTableFilterComposer,
-      $$CachedProcessOrdersTableOrderingComposer,
-      $$CachedProcessOrdersTableAnnotationComposer,
-      $$CachedProcessOrdersTableCreateCompanionBuilder,
-      $$CachedProcessOrdersTableUpdateCompanionBuilder,
-      (
-        CachedProcessOrder,
-        BaseReferences<
-          _$CashierDb,
-          $CachedProcessOrdersTable,
-          CachedProcessOrder
-        >,
-      ),
-      CachedProcessOrder,
-      PrefetchHooks Function()
-    >;
-typedef $$CachedPaymentOrderItemsTableCreateCompanionBuilder =
-    CachedPaymentOrderItemsCompanion Function({
-      Value<int> serverDetailId,
-      required int orderServerId,
-      Value<int?> productServerId,
-      required String productName,
-      Value<double> basePrice,
-      Value<double> promoAmount,
-      Value<int> qty,
-      Value<String?> customerNote,
-    });
-typedef $$CachedPaymentOrderItemsTableUpdateCompanionBuilder =
-    CachedPaymentOrderItemsCompanion Function({
-      Value<int> serverDetailId,
-      Value<int> orderServerId,
-      Value<int?> productServerId,
-      Value<String> productName,
-      Value<double> basePrice,
-      Value<double> promoAmount,
-      Value<int> qty,
-      Value<String?> customerNote,
-    });
-
-class $$CachedPaymentOrderItemsTableFilterComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrderItemsTable> {
-  $$CachedPaymentOrderItemsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<int> get serverDetailId => $composableBuilder(
-    column: $table.serverDetailId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get orderServerId => $composableBuilder(
-    column: $table.orderServerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get productServerId => $composableBuilder(
-    column: $table.productServerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get productName => $composableBuilder(
-    column: $table.productName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get basePrice => $composableBuilder(
-    column: $table.basePrice,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get promoAmount => $composableBuilder(
-    column: $table.promoAmount,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get qty => $composableBuilder(
-    column: $table.qty,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get customerNote => $composableBuilder(
-    column: $table.customerNote,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$CachedPaymentOrderItemsTableOrderingComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrderItemsTable> {
-  $$CachedPaymentOrderItemsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<int> get serverDetailId => $composableBuilder(
-    column: $table.serverDetailId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get orderServerId => $composableBuilder(
-    column: $table.orderServerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get productServerId => $composableBuilder(
-    column: $table.productServerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get productName => $composableBuilder(
-    column: $table.productName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get basePrice => $composableBuilder(
-    column: $table.basePrice,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get promoAmount => $composableBuilder(
-    column: $table.promoAmount,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get qty => $composableBuilder(
-    column: $table.qty,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get customerNote => $composableBuilder(
-    column: $table.customerNote,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$CachedPaymentOrderItemsTableAnnotationComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrderItemsTable> {
-  $$CachedPaymentOrderItemsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<int> get serverDetailId => $composableBuilder(
-    column: $table.serverDetailId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get orderServerId => $composableBuilder(
-    column: $table.orderServerId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get productServerId => $composableBuilder(
-    column: $table.productServerId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get productName => $composableBuilder(
-    column: $table.productName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get basePrice =>
-      $composableBuilder(column: $table.basePrice, builder: (column) => column);
-
-  GeneratedColumn<double> get promoAmount => $composableBuilder(
-    column: $table.promoAmount,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get qty =>
-      $composableBuilder(column: $table.qty, builder: (column) => column);
-
-  GeneratedColumn<String> get customerNote => $composableBuilder(
-    column: $table.customerNote,
-    builder: (column) => column,
-  );
-}
-
-class $$CachedPaymentOrderItemsTableTableManager
-    extends
-        RootTableManager<
-          _$CashierDb,
-          $CachedPaymentOrderItemsTable,
-          CachedPaymentOrderItem,
-          $$CachedPaymentOrderItemsTableFilterComposer,
-          $$CachedPaymentOrderItemsTableOrderingComposer,
-          $$CachedPaymentOrderItemsTableAnnotationComposer,
-          $$CachedPaymentOrderItemsTableCreateCompanionBuilder,
-          $$CachedPaymentOrderItemsTableUpdateCompanionBuilder,
-          (
-            CachedPaymentOrderItem,
-            BaseReferences<
-              _$CashierDb,
-              $CachedPaymentOrderItemsTable,
-              CachedPaymentOrderItem
-            >,
-          ),
-          CachedPaymentOrderItem,
-          PrefetchHooks Function()
-        > {
-  $$CachedPaymentOrderItemsTableTableManager(
-    _$CashierDb db,
-    $CachedPaymentOrderItemsTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$CachedPaymentOrderItemsTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$CachedPaymentOrderItemsTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$CachedPaymentOrderItemsTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
-          updateCompanionCallback:
-              ({
-                Value<int> serverDetailId = const Value.absent(),
-                Value<int> orderServerId = const Value.absent(),
-                Value<int?> productServerId = const Value.absent(),
-                Value<String> productName = const Value.absent(),
-                Value<double> basePrice = const Value.absent(),
-                Value<double> promoAmount = const Value.absent(),
-                Value<int> qty = const Value.absent(),
-                Value<String?> customerNote = const Value.absent(),
-              }) => CachedPaymentOrderItemsCompanion(
-                serverDetailId: serverDetailId,
-                orderServerId: orderServerId,
-                productServerId: productServerId,
-                productName: productName,
-                basePrice: basePrice,
-                promoAmount: promoAmount,
-                qty: qty,
-                customerNote: customerNote,
-              ),
-          createCompanionCallback:
-              ({
-                Value<int> serverDetailId = const Value.absent(),
-                required int orderServerId,
-                Value<int?> productServerId = const Value.absent(),
-                required String productName,
-                Value<double> basePrice = const Value.absent(),
-                Value<double> promoAmount = const Value.absent(),
-                Value<int> qty = const Value.absent(),
-                Value<String?> customerNote = const Value.absent(),
-              }) => CachedPaymentOrderItemsCompanion.insert(
-                serverDetailId: serverDetailId,
-                orderServerId: orderServerId,
-                productServerId: productServerId,
-                productName: productName,
-                basePrice: basePrice,
-                promoAmount: promoAmount,
-                qty: qty,
-                customerNote: customerNote,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$CachedPaymentOrderItemsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$CashierDb,
-      $CachedPaymentOrderItemsTable,
-      CachedPaymentOrderItem,
-      $$CachedPaymentOrderItemsTableFilterComposer,
-      $$CachedPaymentOrderItemsTableOrderingComposer,
-      $$CachedPaymentOrderItemsTableAnnotationComposer,
-      $$CachedPaymentOrderItemsTableCreateCompanionBuilder,
-      $$CachedPaymentOrderItemsTableUpdateCompanionBuilder,
-      (
-        CachedPaymentOrderItem,
-        BaseReferences<
-          _$CashierDb,
-          $CachedPaymentOrderItemsTable,
-          CachedPaymentOrderItem
-        >,
-      ),
-      CachedPaymentOrderItem,
-      PrefetchHooks Function()
-    >;
-typedef $$CachedPaymentOrderItemOptionsTableCreateCompanionBuilder =
-    CachedPaymentOrderItemOptionsCompanion Function({
-      Value<int> serverDetailOptionId,
-      required int orderDetailServerId,
-      Value<String?> parentName,
-      required String optionName,
-      Value<double> price,
-    });
-typedef $$CachedPaymentOrderItemOptionsTableUpdateCompanionBuilder =
-    CachedPaymentOrderItemOptionsCompanion Function({
-      Value<int> serverDetailOptionId,
-      Value<int> orderDetailServerId,
-      Value<String?> parentName,
-      Value<String> optionName,
-      Value<double> price,
-    });
-
-class $$CachedPaymentOrderItemOptionsTableFilterComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrderItemOptionsTable> {
-  $$CachedPaymentOrderItemOptionsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<int> get serverDetailOptionId => $composableBuilder(
-    column: $table.serverDetailOptionId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get orderDetailServerId => $composableBuilder(
-    column: $table.orderDetailServerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get parentName => $composableBuilder(
-    column: $table.parentName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get optionName => $composableBuilder(
-    column: $table.optionName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get price => $composableBuilder(
-    column: $table.price,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$CachedPaymentOrderItemOptionsTableOrderingComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrderItemOptionsTable> {
-  $$CachedPaymentOrderItemOptionsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<int> get serverDetailOptionId => $composableBuilder(
-    column: $table.serverDetailOptionId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get orderDetailServerId => $composableBuilder(
-    column: $table.orderDetailServerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get parentName => $composableBuilder(
-    column: $table.parentName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get optionName => $composableBuilder(
-    column: $table.optionName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get price => $composableBuilder(
-    column: $table.price,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$CachedPaymentOrderItemOptionsTableAnnotationComposer
-    extends Composer<_$CashierDb, $CachedPaymentOrderItemOptionsTable> {
-  $$CachedPaymentOrderItemOptionsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<int> get serverDetailOptionId => $composableBuilder(
-    column: $table.serverDetailOptionId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get orderDetailServerId => $composableBuilder(
-    column: $table.orderDetailServerId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get parentName => $composableBuilder(
-    column: $table.parentName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get optionName => $composableBuilder(
-    column: $table.optionName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get price =>
-      $composableBuilder(column: $table.price, builder: (column) => column);
-}
-
-class $$CachedPaymentOrderItemOptionsTableTableManager
-    extends
-        RootTableManager<
-          _$CashierDb,
-          $CachedPaymentOrderItemOptionsTable,
-          CachedPaymentOrderItemOption,
-          $$CachedPaymentOrderItemOptionsTableFilterComposer,
-          $$CachedPaymentOrderItemOptionsTableOrderingComposer,
-          $$CachedPaymentOrderItemOptionsTableAnnotationComposer,
-          $$CachedPaymentOrderItemOptionsTableCreateCompanionBuilder,
-          $$CachedPaymentOrderItemOptionsTableUpdateCompanionBuilder,
-          (
-            CachedPaymentOrderItemOption,
-            BaseReferences<
-              _$CashierDb,
-              $CachedPaymentOrderItemOptionsTable,
-              CachedPaymentOrderItemOption
-            >,
-          ),
-          CachedPaymentOrderItemOption,
-          PrefetchHooks Function()
-        > {
-  $$CachedPaymentOrderItemOptionsTableTableManager(
-    _$CashierDb db,
-    $CachedPaymentOrderItemOptionsTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$CachedPaymentOrderItemOptionsTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$CachedPaymentOrderItemOptionsTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$CachedPaymentOrderItemOptionsTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
-          updateCompanionCallback:
-              ({
-                Value<int> serverDetailOptionId = const Value.absent(),
-                Value<int> orderDetailServerId = const Value.absent(),
-                Value<String?> parentName = const Value.absent(),
-                Value<String> optionName = const Value.absent(),
-                Value<double> price = const Value.absent(),
-              }) => CachedPaymentOrderItemOptionsCompanion(
-                serverDetailOptionId: serverDetailOptionId,
-                orderDetailServerId: orderDetailServerId,
-                parentName: parentName,
-                optionName: optionName,
-                price: price,
-              ),
-          createCompanionCallback:
-              ({
-                Value<int> serverDetailOptionId = const Value.absent(),
-                required int orderDetailServerId,
-                Value<String?> parentName = const Value.absent(),
-                required String optionName,
-                Value<double> price = const Value.absent(),
-              }) => CachedPaymentOrderItemOptionsCompanion.insert(
-                serverDetailOptionId: serverDetailOptionId,
-                orderDetailServerId: orderDetailServerId,
-                parentName: parentName,
-                optionName: optionName,
-                price: price,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$CachedPaymentOrderItemOptionsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$CashierDb,
-      $CachedPaymentOrderItemOptionsTable,
-      CachedPaymentOrderItemOption,
-      $$CachedPaymentOrderItemOptionsTableFilterComposer,
-      $$CachedPaymentOrderItemOptionsTableOrderingComposer,
-      $$CachedPaymentOrderItemOptionsTableAnnotationComposer,
-      $$CachedPaymentOrderItemOptionsTableCreateCompanionBuilder,
-      $$CachedPaymentOrderItemOptionsTableUpdateCompanionBuilder,
-      (
-        CachedPaymentOrderItemOption,
-        BaseReferences<
-          _$CashierDb,
-          $CachedPaymentOrderItemOptionsTable,
-          CachedPaymentOrderItemOption
-        >,
-      ),
-      CachedPaymentOrderItemOption,
-      PrefetchHooks Function()
-    >;
-typedef $$CachedDoneOrdersTableCreateCompanionBuilder =
-    CachedDoneOrdersCompanion Function({
-      Value<int> serverId,
-      required String bookingOrderCode,
-      required String customerName,
-      Value<String?> tableNo,
-      Value<String?> doneRequestJson,
-      Value<String?> latestDoneJson,
-      Value<String?> paymentMethod,
-      required String orderStatus,
-      Value<String?> detailJson,
-      Value<double> subtotal,
-      Value<double> ppnPercent,
-      Value<bool> isPpnActive,
-      Value<bool> isSynced,
-      Value<bool> deletedLocally,
-      Value<DateTime?> syncedAt,
-    });
-typedef $$CachedDoneOrdersTableUpdateCompanionBuilder =
-    CachedDoneOrdersCompanion Function({
-      Value<int> serverId,
-      Value<String> bookingOrderCode,
-      Value<String> customerName,
-      Value<String?> tableNo,
-      Value<String?> doneRequestJson,
-      Value<String?> latestDoneJson,
-      Value<String?> paymentMethod,
-      Value<String> orderStatus,
-      Value<String?> detailJson,
-      Value<double> subtotal,
-      Value<double> ppnPercent,
-      Value<bool> isPpnActive,
-      Value<bool> isSynced,
-      Value<bool> deletedLocally,
-      Value<DateTime?> syncedAt,
-    });
-
-class $$CachedDoneOrdersTableFilterComposer
-    extends Composer<_$CashierDb, $CachedDoneOrdersTable> {
-  $$CachedDoneOrdersTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<int> get serverId => $composableBuilder(
-    column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get tableNo => $composableBuilder(
-    column: $table.tableNo,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get doneRequestJson => $composableBuilder(
-    column: $table.doneRequestJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get latestDoneJson => $composableBuilder(
-    column: $table.latestDoneJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get subtotal => $composableBuilder(
-    column: $table.subtotal,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isSynced => $composableBuilder(
-    column: $table.isSynced,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get deletedLocally => $composableBuilder(
-    column: $table.deletedLocally,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
-    column: $table.syncedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$CachedDoneOrdersTableOrderingComposer
-    extends Composer<_$CashierDb, $CachedDoneOrdersTable> {
-  $$CachedDoneOrdersTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<int> get serverId => $composableBuilder(
-    column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get tableNo => $composableBuilder(
-    column: $table.tableNo,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get doneRequestJson => $composableBuilder(
-    column: $table.doneRequestJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get latestDoneJson => $composableBuilder(
-    column: $table.latestDoneJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get subtotal => $composableBuilder(
-    column: $table.subtotal,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isSynced => $composableBuilder(
-    column: $table.isSynced,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get deletedLocally => $composableBuilder(
-    column: $table.deletedLocally,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
-    column: $table.syncedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$CachedDoneOrdersTableAnnotationComposer
-    extends Composer<_$CashierDb, $CachedDoneOrdersTable> {
-  $$CachedDoneOrdersTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<int> get serverId =>
-      $composableBuilder(column: $table.serverId, builder: (column) => column);
-
-  GeneratedColumn<String> get bookingOrderCode => $composableBuilder(
-    column: $table.bookingOrderCode,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get customerName => $composableBuilder(
-    column: $table.customerName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get tableNo =>
-      $composableBuilder(column: $table.tableNo, builder: (column) => column);
-
-  GeneratedColumn<String> get doneRequestJson => $composableBuilder(
-    column: $table.doneRequestJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get latestDoneJson => $composableBuilder(
-    column: $table.latestDoneJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get paymentMethod => $composableBuilder(
-    column: $table.paymentMethod,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get orderStatus => $composableBuilder(
-    column: $table.orderStatus,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get detailJson => $composableBuilder(
-    column: $table.detailJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get subtotal =>
-      $composableBuilder(column: $table.subtotal, builder: (column) => column);
-
-  GeneratedColumn<double> get ppnPercent => $composableBuilder(
-    column: $table.ppnPercent,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<bool> get isPpnActive => $composableBuilder(
-    column: $table.isPpnActive,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<bool> get isSynced =>
-      $composableBuilder(column: $table.isSynced, builder: (column) => column);
-
-  GeneratedColumn<bool> get deletedLocally => $composableBuilder(
-    column: $table.deletedLocally,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get syncedAt =>
-      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
-}
-
-class $$CachedDoneOrdersTableTableManager
-    extends
-        RootTableManager<
-          _$CashierDb,
-          $CachedDoneOrdersTable,
-          CachedDoneOrder,
-          $$CachedDoneOrdersTableFilterComposer,
-          $$CachedDoneOrdersTableOrderingComposer,
-          $$CachedDoneOrdersTableAnnotationComposer,
-          $$CachedDoneOrdersTableCreateCompanionBuilder,
-          $$CachedDoneOrdersTableUpdateCompanionBuilder,
-          (
-            CachedDoneOrder,
-            BaseReferences<
-              _$CashierDb,
-              $CachedDoneOrdersTable,
-              CachedDoneOrder
-            >,
-          ),
-          CachedDoneOrder,
-          PrefetchHooks Function()
-        > {
-  $$CachedDoneOrdersTableTableManager(
-    _$CashierDb db,
-    $CachedDoneOrdersTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$CachedDoneOrdersTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$CachedDoneOrdersTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$CachedDoneOrdersTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<int> serverId = const Value.absent(),
-                Value<String> bookingOrderCode = const Value.absent(),
-                Value<String> customerName = const Value.absent(),
-                Value<String?> tableNo = const Value.absent(),
-                Value<String?> doneRequestJson = const Value.absent(),
-                Value<String?> latestDoneJson = const Value.absent(),
-                Value<String?> paymentMethod = const Value.absent(),
-                Value<String> orderStatus = const Value.absent(),
-                Value<String?> detailJson = const Value.absent(),
-                Value<double> subtotal = const Value.absent(),
-                Value<double> ppnPercent = const Value.absent(),
-                Value<bool> isPpnActive = const Value.absent(),
-                Value<bool> isSynced = const Value.absent(),
-                Value<bool> deletedLocally = const Value.absent(),
-                Value<DateTime?> syncedAt = const Value.absent(),
-              }) => CachedDoneOrdersCompanion(
-                serverId: serverId,
-                bookingOrderCode: bookingOrderCode,
-                customerName: customerName,
-                tableNo: tableNo,
-                doneRequestJson: doneRequestJson,
-                latestDoneJson: latestDoneJson,
-                paymentMethod: paymentMethod,
-                orderStatus: orderStatus,
-                detailJson: detailJson,
-                subtotal: subtotal,
-                ppnPercent: ppnPercent,
-                isPpnActive: isPpnActive,
-                isSynced: isSynced,
-                deletedLocally: deletedLocally,
-                syncedAt: syncedAt,
-              ),
-          createCompanionCallback:
-              ({
-                Value<int> serverId = const Value.absent(),
-                required String bookingOrderCode,
-                required String customerName,
-                Value<String?> tableNo = const Value.absent(),
-                Value<String?> doneRequestJson = const Value.absent(),
-                Value<String?> latestDoneJson = const Value.absent(),
-                Value<String?> paymentMethod = const Value.absent(),
-                required String orderStatus,
-                Value<String?> detailJson = const Value.absent(),
-                Value<double> subtotal = const Value.absent(),
-                Value<double> ppnPercent = const Value.absent(),
-                Value<bool> isPpnActive = const Value.absent(),
-                Value<bool> isSynced = const Value.absent(),
-                Value<bool> deletedLocally = const Value.absent(),
-                Value<DateTime?> syncedAt = const Value.absent(),
-              }) => CachedDoneOrdersCompanion.insert(
-                serverId: serverId,
-                bookingOrderCode: bookingOrderCode,
-                customerName: customerName,
-                tableNo: tableNo,
-                doneRequestJson: doneRequestJson,
-                latestDoneJson: latestDoneJson,
-                paymentMethod: paymentMethod,
-                orderStatus: orderStatus,
-                detailJson: detailJson,
-                subtotal: subtotal,
-                ppnPercent: ppnPercent,
-                isPpnActive: isPpnActive,
-                isSynced: isSynced,
-                deletedLocally: deletedLocally,
-                syncedAt: syncedAt,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$CachedDoneOrdersTableProcessedTableManager =
-    ProcessedTableManager<
-      _$CashierDb,
-      $CachedDoneOrdersTable,
-      CachedDoneOrder,
-      $$CachedDoneOrdersTableFilterComposer,
-      $$CachedDoneOrdersTableOrderingComposer,
-      $$CachedDoneOrdersTableAnnotationComposer,
-      $$CachedDoneOrdersTableCreateCompanionBuilder,
-      $$CachedDoneOrdersTableUpdateCompanionBuilder,
-      (
-        CachedDoneOrder,
-        BaseReferences<_$CashierDb, $CachedDoneOrdersTable, CachedDoneOrder>,
-      ),
-      CachedDoneOrder,
+      $SyncMetaTable,
+      SyncMetaData,
+      $$SyncMetaTableFilterComposer,
+      $$SyncMetaTableOrderingComposer,
+      $$SyncMetaTableAnnotationComposer,
+      $$SyncMetaTableCreateCompanionBuilder,
+      $$SyncMetaTableUpdateCompanionBuilder,
+      (SyncMetaData, BaseReferences<_$CashierDb, $SyncMetaTable, SyncMetaData>),
+      SyncMetaData,
       PrefetchHooks Function()
     >;
 
@@ -19433,31 +16483,18 @@ class $CashierDbManager {
       $$CachedTablesTableTableManager(_db, _db.cachedTables);
   $$CachedPaymentMethodsTableTableManager get cachedPaymentMethods =>
       $$CachedPaymentMethodsTableTableManager(_db, _db.cachedPaymentMethods);
-  $$LocalOrdersTableTableManager get localOrders =>
-      $$LocalOrdersTableTableManager(_db, _db.localOrders);
-  $$LocalOrderItemsTableTableManager get localOrderItems =>
-      $$LocalOrderItemsTableTableManager(_db, _db.localOrderItems);
-  $$LocalOrderItemOptionsTableTableManager get localOrderItemOptions =>
-      $$LocalOrderItemOptionsTableTableManager(_db, _db.localOrderItemOptions);
-  $$LocalPaymentsTableTableManager get localPayments =>
-      $$LocalPaymentsTableTableManager(_db, _db.localPayments);
-  $$SyncQueueTableTableManager get syncQueue =>
-      $$SyncQueueTableTableManager(_db, _db.syncQueue);
-  $$CachedPaymentOrdersTableTableManager get cachedPaymentOrders =>
-      $$CachedPaymentOrdersTableTableManager(_db, _db.cachedPaymentOrders);
-  $$CachedProcessOrdersTableTableManager get cachedProcessOrders =>
-      $$CachedProcessOrdersTableTableManager(_db, _db.cachedProcessOrders);
-  $$CachedPaymentOrderItemsTableTableManager get cachedPaymentOrderItems =>
-      $$CachedPaymentOrderItemsTableTableManager(
-        _db,
-        _db.cachedPaymentOrderItems,
-      );
-  $$CachedPaymentOrderItemOptionsTableTableManager
-  get cachedPaymentOrderItemOptions =>
-      $$CachedPaymentOrderItemOptionsTableTableManager(
-        _db,
-        _db.cachedPaymentOrderItemOptions,
-      );
-  $$CachedDoneOrdersTableTableManager get cachedDoneOrders =>
-      $$CachedDoneOrdersTableTableManager(_db, _db.cachedDoneOrders);
+  $$CachedPartnerSettingsTableTableManager get cachedPartnerSettings =>
+      $$CachedPartnerSettingsTableTableManager(_db, _db.cachedPartnerSettings);
+  $$BookingOrdersTableTableManager get bookingOrders =>
+      $$BookingOrdersTableTableManager(_db, _db.bookingOrders);
+  $$OrderDetailsTableTableManager get orderDetails =>
+      $$OrderDetailsTableTableManager(_db, _db.orderDetails);
+  $$OrderDetailOptionsTableTableManager get orderDetailOptions =>
+      $$OrderDetailOptionsTableTableManager(_db, _db.orderDetailOptions);
+  $$OrderPaymentsTableTableManager get orderPayments =>
+      $$OrderPaymentsTableTableManager(_db, _db.orderPayments);
+  $$SyncConflictsTableTableManager get syncConflicts =>
+      $$SyncConflictsTableTableManager(_db, _db.syncConflicts);
+  $$SyncMetaTableTableManager get syncMeta =>
+      $$SyncMetaTableTableManager(_db, _db.syncMeta);
 }

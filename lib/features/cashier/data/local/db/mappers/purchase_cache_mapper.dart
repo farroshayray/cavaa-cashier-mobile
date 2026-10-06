@@ -206,13 +206,15 @@ class PurchaseCacheMapper {
   }
 
   static PaymentOption fromCachedPayment(CachedPaymentMethod row) {
+    final raw = _decodeRawMap(row.rawJson);
+
     PayKind kind;
     switch (row.kind) {
       case 'cashierCash':
         kind = PayKind.cashierCash;
         break;
-      case 'paylater':
-        kind = PayKind.paylater;
+      case 'openbill':
+        kind = PayKind.openbill;
         break;
       case 'onlineQris':
         kind = PayKind.onlineQris;
@@ -226,12 +228,23 @@ class PurchaseCacheMapper {
         break;
     }
 
+    final rawValue = raw['value']?.toString().trim();
+    final value = rawValue != null && rawValue.isNotEmpty
+        ? rawValue
+        : switch (kind) {
+            PayKind.cashierCash => 'CASH',
+            PayKind.openbill => 'OPENBILL',
+            PayKind.onlineQris => 'QRIS',
+            PayKind.manual =>
+              row.serverManualPaymentId?.toString() ?? row.localKey,
+          };
+
     return PaymentOption(
       kind: kind,
-      value: row.serverManualPaymentId?.toString() ?? row.localKey,
+      value: value,
       label: row.label,
-      desc: null,
-      manualType: row.kind,
+      desc: raw['desc']?.toString(),
+      manualType: raw['manual_type']?.toString() ?? row.kind,
       manualId: row.serverManualPaymentId,
       providerName: row.providerName,
       providerAccountName: row.providerAccountName,
@@ -241,6 +254,67 @@ class PurchaseCacheMapper {
     );
   }
 
+  static CachedPartnerSettingsCompanion toCachedPartnerSettings(PartnerData p) {
+    return CachedPartnerSettingsCompanion.insert(
+      partnerId: Value(p.id),
+      name: p.name,
+      isQrActive: Value(p.isQrisActive),
+      isCashierActive: Value(p.isCashierActive),
+      isOpenbill: Value(p.isOpenbillActive),
+      ppn: Value(p.ppn.toDouble()),
+      isPpnActive: Value(p.isPpnActive),
+      cashRoundingUnit: Value(p.cashRoundingUnit),
+      logo: Value(p.logo),
+      printReceiptLogo: Value(p.printReceiptLogo),
+      canOrderNotes: Value(p.canOrderNotes),
+      cachedAt: DateTime.now(),
+    );
+  }
+
+  static PartnerData fromCachedPartnerSettings(CachedPartnerSetting row) {
+    return PartnerData(
+      id: row.partnerId,
+      name: row.name,
+      isQrisActive: row.isQrActive,
+      isCashierActive: row.isCashierActive,
+      isOpenbillActive: row.isOpenbill,
+      ppn: row.ppn,
+      isPpnActive: row.isPpnActive,
+      cashRoundingUnit: row.cashRoundingUnit,
+      logo: row.logo,
+      printReceiptLogo: row.printReceiptLogo,
+      canOrderNotes: row.canOrderNotes,
+    );
+  }
+
+  /// Offline counterpart of [PurchasePayload.buildPurchasePaymentOptions]:
+  /// "Bayar Sekarang" needs any payable method, not cash specifically.
+  static List<PaymentOption> purchasePaymentOptionsFromPartner(
+    PartnerData? partner, {
+    required bool hasPayableMethod,
+  }) {
+    final options = <PaymentOption>[];
+    if (hasPayableMethod) {
+      options.add(
+        const PaymentOption(
+          kind: PayKind.cashierCash,
+          value: 'CASH',
+          label: 'Bayar Sekarang',
+        ),
+      );
+    }
+    if (partner?.isOpenbillActive == true) {
+      options.add(
+        const PaymentOption(
+          kind: PayKind.openbill,
+          value: 'OPENBILL',
+          label: 'Bayar Nanti',
+        ),
+      );
+    }
+    return options;
+  }
+
   static PurchasePayload buildPayloadFromCache({
     required List<CachedCategory> categories,
     required List<CachedProduct> products,
@@ -248,6 +322,7 @@ class PurchaseCacheMapper {
     required List<CachedOptionItem> items,
     required List<CachedTable> tables,
     required List<CachedPaymentMethod> payments,
+    CachedPartnerSetting? partnerSettings,
   }) {
     final mappedProducts = products
         .map((p) => fromCachedProduct(
@@ -263,14 +338,25 @@ class PurchaseCacheMapper {
       ..sort((a, b) => a.order.compareTo(b.order));
 
     final mappedTables = tables.map(fromCachedTable).toList();
-    final mappedPayments = payments.map(fromCachedPayment).toList();
+    final partnerData = partnerSettings == null
+        ? null
+        : fromCachedPartnerSettings(partnerSettings);
+    final allPaymentOptionsForCache = payments
+        .map(fromCachedPayment)
+        .where((p) => p.kind != PayKind.openbill)
+        .toList();
+    final paymentOptions = purchasePaymentOptionsFromPartner(
+      partnerData,
+      hasPayableMethod: allPaymentOptionsForCache.isNotEmpty,
+    );
 
     return PurchasePayload(
       products: mappedProducts,
       categories: mappedCategories,
       tables: mappedTables,
-      paymentOptions: mappedPayments,
-      partnerData: null,
+      paymentOptions: paymentOptions,
+      allPaymentOptionsForCache: allPaymentOptionsForCache,
+      partnerData: partnerData,
     );
   }
 

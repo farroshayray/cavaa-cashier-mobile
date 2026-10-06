@@ -2,22 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../../data/models/checkout_exceptions.dart';
 import '../../data/models/purchase_models.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
 import '/features/cashier/data/models/purchase_repository.dart';
 import '/features/cashier/data/local/db/cashier_db.dart';
 import 'dart:convert';
 
 import 'package:uuid/uuid.dart';
-import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
-import '/features/cashier/data/local/db/mappers/local_order_mapper.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/data/sync/purchase_stock_patcher.dart';
+import '/core/services/connectivity_status_provider.dart';
 
 class PurchaseProvider extends ChangeNotifier {
   final PurchaseRepository repo;
-  final LocalOrdersDao localOrdersDao;
+  final BookingOrdersDao bookingOrdersDao;
+  final ConnectivityStatusProvider connectivity;
+  final SyncService? syncService;
   final Uuid _uuid = const Uuid();
 
   PurchaseProvider({
     required this.repo,
-    required this.localOrdersDao,
+    required this.bookingOrdersDao,
+    required this.connectivity,
+    this.syncService,
   });
 
   bool isLoading = false;
@@ -27,9 +34,30 @@ class PurchaseProvider extends ChangeNotifier {
   List<Category> categories = [];
   List<StoreTable> tables = [];
   List<PaymentOption> paymentOptions = [];
+  List<PaymentOption> allPaymentOptions = [];
   PartnerData? partnerData;
 
-  List<LocalPendingStockLine> _pendingStockLines = [];
+  List<MirrorPendingStockLine> _pendingStockLines = [];
+  List<CartItem> _stockOverlayLines = [];
+
+  /// Lines from edit-order sheet counted toward stock validation.
+  void setStockOverlay(List<CartItem> lines) {
+    _stockOverlayLines = List<CartItem>.from(lines);
+  }
+
+  void clearStockOverlay() {
+    if (_stockOverlayLines.isEmpty) return;
+    _stockOverlayLines = [];
+  }
+
+  Iterable<CartItem> _stockItems({CartItem? excludingItem}) sync* {
+    for (final item in cart) {
+      if (!identical(item, excludingItem)) yield item;
+    }
+    for (final item in _stockOverlayLines) {
+      if (!identical(item, excludingItem)) yield item;
+    }
+  }
 
   // UI state
   int selectedCategoryId = -1; // -1 = All
@@ -74,16 +102,10 @@ class PurchaseProvider extends ChangeNotifier {
       cartGrandTotalRounded + cartCashRoundingAmount;
 
   num payableTotalForPayment(PaymentOption? payment) {
-    if (payment?.kind == PayKind.cashierCash || payment?.kind == PayKind.paylater) {
-      return cartCashPayableTotal;
-    }
     return cartGrandTotalRounded;
   }
 
   num roundingAmountForPayment(PaymentOption? payment) {
-    if (payment?.kind == PayKind.cashierCash || payment?.kind == PayKind.paylater) {
-      return cartCashRoundingAmount;
-    }
     return 0;
   }
 
@@ -114,33 +136,173 @@ class PurchaseProvider extends ChangeNotifier {
     return 'guest-$cleaned';
   }
 
-  // ===== LOAD =====
-  Future<void> load() async {
-    isLoading = true;
-    error = null;
-    notifyListeners();
+  bool _isConnectionError(Object e) {
+    if (e is DioException) {
+      return e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.unknown;
+    }
+    final msg = e.toString().toLowerCase();
+    return msg.contains('socketexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('connection error');
+  }
 
+  Future<void> _applyPendingStockLines() async {
     try {
-      final payload = await repo.fetchPurchaseData();
+      _pendingStockLines = await bookingOrdersDao.getPendingStockLines();
+    } catch (e) {
+      debugPrint('Failed to load local pending stock usage: $e');
+      _pendingStockLines = [];
+    }
+  }
 
-      products = payload.products;
-      categories = payload.categories;
-      paymentOptions = payload.paymentOptions;
-      tables = payload.tables;
-      partnerData = payload.partnerData;
-      try {
-        _pendingStockLines = await localOrdersDao.getPendingStockLines();
-      } catch (e) {
-        debugPrint('Failed to load local pending stock usage: $e');
-        _pendingStockLines = [];
+  void _applyPayload(PurchasePayload payload) {
+    products = payload.products;
+    categories = payload.categories;
+    paymentOptions = payload.paymentOptions;
+    allPaymentOptions = payload.allPaymentOptionsForCache;
+    tables = payload.tables;
+    partnerData = payload.partnerData;
+  }
+
+  /// Refresh pending stock reservation counts without a network catalog fetch.
+  Future<void> refreshPendingStockOnly() async {
+    await _applyPendingStockLines();
+    notifyListeners();
+  }
+
+  /// Apply latest stock quantities in-memory (no network, no spinner).
+  Future<void> refreshSilently() async {
+    try {
+      await _applyPendingStockLines();
+
+      if (products.isEmpty) {
+        final cached = await repo.loadFromLocalCache();
+        if (cached != null) {
+          _applyPayload(cached);
+        }
+        notifyListeners();
+        return;
       }
 
-      // ... logic lain (hot products, grouping, dst)
-    } catch (e) {
-      error = e.toString();
-    } finally {
-      isLoading = false;
+      final cached = await repo.loadFromLocalCache();
+      if (cached == null) {
+        notifyListeners();
+        return;
+      }
+
+      if (cached.products.length < products.length * 0.5) {
+        notifyListeners();
+        return;
+      }
+
+      products = patchProductsStock(
+        current: products,
+        fromCache: cached.products,
+      );
       notifyListeners();
+    } catch (e) {
+      debugPrint('PurchaseProvider.refreshSilently failed: $e');
+    }
+  }
+
+  Future<void>? _loadInFlight;
+  bool _loadInFlightSilent = true;
+
+  // ===== LOAD =====
+  Future<void> load({bool silent = false}) {
+    if (_loadInFlight != null) {
+      if (!silent) _loadInFlightSilent = false;
+      return _loadInFlight!;
+    }
+
+    _loadInFlightSilent = silent;
+    _loadInFlight = _loadImpl(silent: _loadInFlightSilent).whenComplete(() {
+      _loadInFlight = null;
+      _loadInFlightSilent = true;
+    });
+    return _loadInFlight!;
+  }
+
+  Future<void> _loadImpl({bool silent = false}) async {
+    final hadCatalog = products.isNotEmpty;
+    if (!silent) {
+      isLoading = true;
+      error = null;
+      notifyListeners();
+    }
+
+    try {
+      // Re-probe before treating as offline — owner→cashier switch can briefly
+      // mark the server unreachable after a non-fatal request failure.
+      if (!connectivity.isOnline) {
+        if (connectivity.hasNetwork) {
+          await connectivity.checkServerReachability();
+        }
+      }
+
+      if (!connectivity.isOnline) {
+        // Last resort: still try a network fetch if the device has a link.
+        if (connectivity.hasNetwork) {
+          try {
+            final payload = await repo.fetchPurchaseData();
+            connectivity.markServerReachable();
+            _applyPayload(payload);
+            await _applyPendingStockLines();
+            return;
+          } catch (_) {
+            // fall through to cache / offline message
+          }
+        }
+
+        final cached = await repo.loadFromLocalCache();
+        if (cached != null) {
+          _applyPayload(cached);
+        } else if (!hadCatalog && !silent) {
+          error =
+              'Mode offline — data menu belum tersedia. Sambungkan internet untuk memuat menu.';
+        }
+        await _applyPendingStockLines();
+        return;
+      }
+
+      final payload = await repo.fetchPurchaseData();
+      connectivity.markServerReachable();
+      _applyPayload(payload);
+      await _applyPendingStockLines();
+    } catch (e) {
+      final cached = await repo.loadFromLocalCache();
+      if (cached != null) {
+        _applyPayload(cached);
+        await _applyPendingStockLines();
+        if (_isConnectionError(e)) {
+          error = hadCatalog || products.isNotEmpty
+              ? null
+              : 'Mode offline — menampilkan data cache.';
+        }
+        return;
+      }
+
+      final msg = e.toString();
+      if (msg.contains('404')) {
+        error =
+            'Data menu tidak dapat dimuat (endpoint tidak ditemukan). Pastikan backend sudah di-update dan coba lagi.';
+      } else if (_isConnectionError(e) && (hadCatalog || products.isNotEmpty)) {
+        error = null;
+        await _applyPendingStockLines();
+      } else if (_isConnectionError(e)) {
+        error = 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
+      } else {
+        error = msg;
+      }
+    } finally {
+      if (!silent) {
+        isLoading = false;
+        notifyListeners();
+      } else if (products.isNotEmpty || error != null) {
+        notifyListeners();
+      }
     }
   }
 
@@ -150,106 +312,59 @@ class PurchaseProvider extends ChangeNotifier {
     required String paymentMethod,
     required PaymentOption payment,
   }) async {
-    // 1. simpan lokal dulu
-    // final normalizedCustomerName = _normalizeGuestName(customerName);
+    if (paymentMethod != 'CASH' &&
+        paymentMethod != 'OPENBILL' &&
+        !CashierShiftGate.canTakePayment) {
+      throw Exception(CashierShiftGate.blockedMessage);
+    }
     final normalizedCustomerName = customerName;
 
-    final localOrderId = await _saveOrderToLocal(
+    final localOrderId = await _saveOrderToMirror(
       customerName: normalizedCustomerName,
       table: table,
       paymentMethod: paymentMethod,
       payment: payment,
     );
 
-    // 2. siapkan payload API seperti sebelumnya
-    final itemsPayload = cart.map((it) {
-      final optionIds = it.selected.values.expand((s) => s).toList();
-
-      return <String, dynamic>{
-        "product_id": it.product.id,
-        "qty": it.qty,
-        "note": it.note,
-        "option_ids": optionIds,
-        "promo_id": it.product.promotion?.id,
-      };
-    }).toList();
-
-    try {
-      final resp = await repo.api.checkout(
-        orderTable: table.id,
-        orderName: normalizedCustomerName,
-        paymentMethod: paymentMethod,
-        totalAmount: cartGrandTotal,
-        items: itemsPayload,
-      );
-
-      await localOrdersDao.deleteOrderByLocalId(localOrderId);
-
-      if (paymentMethod != "QRIS") {
-        cart.clear();
-        notifyListeners();
-      }
-
-      return {
-        ...resp,
-        'local_order_id': localOrderId,
-        'saved_local': true,
-      };
-    } on StockInsufficientException {
-      await localOrdersDao.deleteOrderByLocalId(localOrderId);
-      rethrow;
-    } on DioException catch (e) {
-      if (e.response != null) {
-        await localOrdersDao.deleteOrderByLocalId(localOrderId);
-        rethrow;
-      }
-
-      debugPrint('checkout network failed, saved locally only: $e');
-
+    if (paymentMethod != 'QRIS') {
       cart.clear();
-      notifyListeners();
-
-      return {
-        'status': true,
-        'message': 'Order disimpan lokal, menunggu sinkronisasi',
-        'local_order_id': localOrderId,
-        'saved_local': true,
-        'offline': true,
-      };
-    } catch (e) {
-      debugPrint('checkout online failed, saved locally only: $e');
-
-      cart.clear();
-      notifyListeners();
-
-      return {
-        'status': true,
-        'message': 'Order disimpan lokal, menunggu sinkronisasi',
-        'local_order_id': localOrderId,
-        'saved_local': true,
-        'offline': true,
-      };
     }
+    notifyListeners();
+
+    if (syncService != null) {
+      try {
+        await syncService!.syncPendingOrders();
+      } catch (e) {
+        debugPrint('checkout post-sync failed: $e');
+      }
+    }
+
+    return {
+      'status': true,
+      'message': 'Order disimpan, menunggu sinkronisasi',
+      'local_order_id': localOrderId,
+      'saved_local': true,
+      'offline': true,
+    };
   }
 
-  Future<String> _saveOrderToLocal({
+  Future<String> _saveOrderToMirror({
     required String customerName,
     required StoreTable table,
     required String paymentMethod,
     required PaymentOption payment,
   }) async {
-    final localOrderId = _uuid.v4();
-    final clientOrderCode = _buildClientOrderCode();
-
     final subtotal = cartSubtotal.toDouble();
     final ppn = ppnPercent.toDouble();
-    final grandTotal = payableTotalForPayment(payment).toDouble();
+    final grandTotal = cartGrandTotalRounded.toDouble();
 
     final selectedPaymentMethod = paymentMethod;
     final effectivePaymentMethod =
-      payment.kind == PayKind.manual
-          ? (payment.manualType ?? paymentMethod)
-          : paymentMethod;
+      payment.isOpenbill
+          ? 'OPENBILL'
+          : payment.kind == PayKind.manual
+              ? (payment.manualType ?? paymentMethod)
+              : payment.backendPaymentMethod;
     String? manualPaymentRawJson;
 
     if (payment.kind == PayKind.manual) {
@@ -266,106 +381,79 @@ class PurchaseProvider extends ChangeNotifier {
       });
     }
 
-    final order = LocalOrderMapper.toLocalOrder(
-      localId: localOrderId,
-      clientOrderCode: clientOrderCode,
-      customerName: customerName,
-      partnerId: partnerData?.id,
-      partnerName: partnerData?.name,
-      tableServerId: table.id,
-      tableNoSnapshot: table.tableNo,
-
-      paymentMethodSelected: selectedPaymentMethod,   // untuk backend, contoh "3"
-      paymentMethodEffective: effectivePaymentMethod, // untuk UI, contoh "manual_qris"
-
-      manualPaymentRawJson: manualPaymentRawJson,
-      subtotal: subtotal,
-      discountValue: 0,
-      ppnPercent: ppn,
-      isPpnActive: isPpnActive,
-      grandTotal: grandTotal,
-      orderStatusLocal: 'UNPAID',
-      syncStatus: 'PENDING',
-    );
-
-    final items = <LocalOrderItemsCompanion>[];
-    final itemOptions = <String, List<LocalOrderItemOptionsCompanion>>{};
-
+    final cartItems = <Map<String, dynamic>>[];
     for (final cartItem in cart) {
-      final itemLocalId = _uuid.v4();
-
       num optionsPrice = 0;
-      final optionsForThisItem = <LocalOrderItemOptionsCompanion>[];
+      final optionsForThisItem = <Map<String, dynamic>>[];
 
       for (final group in cartItem.product.optionGroups) {
         final selectedIds = cartItem.selected[group.id] ?? <int>{};
-
         for (final optId in selectedIds) {
           final opt = group.items.cast<OptionItem?>().firstWhere(
                 (x) => x?.id == optId,
                 orElse: () => null,
               );
-
           if (opt != null) {
             optionsPrice += opt.price;
-
-            optionsForThisItem.add(
-              LocalOrderMapper.toLocalOption(
-                localId: _uuid.v4(),
-                orderItemLocalId: itemLocalId,
-                optionServerId: opt.id,
-                optionNameSnapshot: opt.name,
-                price: opt.price.toDouble(),
-                parentNameSnapshot: group.name,
-              ),
-            );
+            optionsForThisItem.add({
+              'option_id': opt.id,
+              'name': opt.name,
+              'parent_name': group.name,
+              'price': opt.price,
+            });
           }
         }
       }
 
       final promo = cartItem.product.promotion;
-      final category = categories.cast<Category?>().firstWhere(
-        (c) => c?.id == cartItem.product.categoryId,
-        orElse: () => null,
-      );
-
       num promoAmount = 0;
       if (promo != null) {
         if (promo.type == 'percentage') {
-          promoAmount = cartItem.product.price.toDouble() - _promoFinalUnitPrice(cartItem.product).toDouble();
+          promoAmount = cartItem.product.price.toDouble() -
+              _promoFinalUnitPrice(cartItem.product).toDouble();
         } else {
           promoAmount = promo.value;
         }
       }
 
-      final item = LocalOrderMapper.toLocalItem(
-        localId: itemLocalId,
-        orderLocalId: localOrderId,
-        productServerId: cartItem.product.id,
-        productNameSnapshot: cartItem.product.name,
-        basePrice: cartItem.product.price.toDouble(),
-        qty: cartItem.qty,
-        customerNote: cartItem.note.isEmpty ? null : cartItem.note,
-        optionsPrice: optionsPrice.toDouble(),
-        lineTotal: cartItem.lineTotal.toDouble(),
-        promoId: promo?.id,
-        promoType: promo?.type,
-        promoAmount: promoAmount.toDouble(),
-        categoryServerId: category?.id,
-        categoryNameSnapshot: category?.name,
-      );
-
-      items.add(item);
-      itemOptions[itemLocalId] = optionsForThisItem;
+      cartItems.add({
+        'product_id': cartItem.product.id,
+        'product_name': cartItem.product.name,
+        'base_price': cartItem.product.price.toDouble(),
+        'qty': cartItem.qty,
+        'note': cartItem.note.isEmpty ? null : cartItem.note,
+        'options_price': optionsPrice.toDouble(),
+        'promo_id': promo?.id,
+        'promo_type': promo?.type,
+        'promo_amount': promoAmount.toDouble(),
+        'options': optionsForThisItem,
+      });
     }
 
-    await localOrdersDao.createOrderWithItems(
-      order: order,
-      items: items,
-      itemOptions: itemOptions,
-    );
+    final pd = partnerData;
+    final wifiSnapshotJson = pd == null
+        ? null
+        : jsonEncode(pd.toWifiSnapshotMap());
 
-    return localOrderId;
+    return bookingOrdersDao.createCheckoutOrder(
+      customerName: customerName,
+      tableId: table.id,
+      tableNo: table.tableNo,
+      paymentMethodSelected: selectedPaymentMethod,
+      paymentMethodEffective: effectivePaymentMethod,
+      openbillFlag: payment.isOpenbill,
+      subtotal: subtotal,
+      grandTotal: grandTotal,
+      ppn: ppn,
+      isPpnActive: isPpnActive,
+      cashRoundingAmount: 0,
+      cashRoundingUnit: cashRoundingUnit,
+      partnerId: partnerData?.id,
+      partnerName: partnerData?.name,
+      manualPaymentRawJson: manualPaymentRawJson,
+      wifiSnapshotJson: wifiSnapshotJson,
+      cartItems: cartItems,
+    );
   }
 
 
@@ -375,8 +463,10 @@ class PurchaseProvider extends ChangeNotifier {
   int qtyOf(int productId) =>
       cart.where((e) => e.product.id == productId).fold<int>(0, (a, b) => a + b.qty);
 
-  int _qtyOfProduct(int productId, {CartItem? excludingItem}) => cart
-      .where((e) => e.product.id == productId && e != excludingItem)
+  int _qtyOfProduct(int productId, {CartItem? excludingItem}) => _stockItems(
+        excludingItem: excludingItem,
+      )
+      .where((e) => e.product.id == productId)
       .fold<int>(0, (sum, item) => sum + item.qty);
 
   int _pendingQtyOfProduct(int productId) => _pendingStockLines
@@ -390,9 +480,8 @@ class PurchaseProvider extends ChangeNotifier {
   }
 
   int _qtyOfOption(int optionId, {CartItem? excludingItem}) {
-    return cart
+    return _stockItems(excludingItem: excludingItem)
         .where((item) =>
-            item != excludingItem &&
             item.selected.values.any((ids) => ids.contains(optionId)))
         .fold<int>(0, (sum, item) => sum + item.qty);
   }
@@ -431,8 +520,7 @@ class PurchaseProvider extends ChangeNotifier {
       }
     }
 
-    for (final item in cart) {
-      if (item == excludingItem) continue;
+    for (final item in _stockItems(excludingItem: excludingItem)) {
 
       if (item.product.stockType == 'linked' &&
           item.product.recipes.isNotEmpty) {

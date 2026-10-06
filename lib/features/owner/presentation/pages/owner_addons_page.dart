@@ -1,0 +1,2500 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/billing_client_wrappers.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:provider/provider.dart';
+
+import '/core/services/push_notification_service.dart';
+import '/features/auth/presentation/auth_provider.dart';
+import '/features/owner/presentation/pages/owner_home_page.dart';
+import '/features/owner/presentation/pages/owner_manual_checkout_page.dart';
+import '/features/owner/presentation/pages/owner_cavaa_points_page.dart';
+import '../widgets/dock_inset.dart';
+
+const _monthShort = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'Mei',
+  'Jun',
+  'Jul',
+  'Agu',
+  'Sep',
+  'Okt',
+  'Nov',
+  'Des',
+];
+
+class _ExpiryLine {
+  const _ExpiryLine(this.text, {this.warning = false});
+
+  final String text;
+  final bool warning;
+}
+
+class _LinkedPlayPurchase {
+  const _LinkedPlayPurchase({
+    required this.purchase,
+    required this.itemName,
+    this.email,
+  });
+
+  final PurchaseDetails purchase;
+  final String itemName;
+  final String? email;
+}
+
+class _PlanOption {
+  const _PlanOption({
+    required this.token,
+    required this.title,
+    required this.price,
+    required this.caption,
+    required this.days,
+    required this.amountMicros,
+  });
+
+  final String token;
+  final String title;
+  final String price;
+  final String caption;
+  final int days;
+  final int amountMicros;
+
+  double get perDay => days <= 0 ? amountMicros.toDouble() : amountMicros / days;
+}
+
+class _BasePlanPickerDialog extends StatefulWidget {
+  const _BasePlanPickerDialog({
+    required this.options,
+    this.subtitle =
+        'Harga dari Google Play. Akses aktif sesuai masa yang Anda pilih.',
+  });
+
+  final List<_PlanOption> options;
+  final String subtitle;
+
+  @override
+  State<_BasePlanPickerDialog> createState() => _BasePlanPickerDialogState();
+}
+
+class _BasePlanPickerDialogState extends State<_BasePlanPickerDialog> {
+  static const _brand = Color(0xFFAE1504);
+
+  late String _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = _recommended?.token ?? widget.options.first.token;
+  }
+
+  _PlanOption? get _recommended {
+    if (widget.options.length < 2) return null;
+    return widget.options.reduce(
+      (best, item) => item.perDay < best.perDay ? item : best,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFFF6F7F9),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Pilih masa langganan',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.subtitle,
+              style: TextStyle(color: Colors.grey.shade700, height: 1.35),
+            ),
+            const SizedBox(height: 14),
+            for (final option in widget.options) ...[
+              _PlanOptionCard(
+                option: option,
+                selected: option.token == _selected,
+                recommended: option.token == _recommended?.token,
+                onTap: () => setState(() => _selected = option.token),
+              ),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, _selected),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _brand,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Lanjut bayar',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanOptionCard extends StatelessWidget {
+  const _PlanOptionCard({
+    required this.option,
+    required this.selected,
+    required this.recommended,
+    required this.onTap,
+  });
+
+  final _PlanOption option;
+  final bool selected;
+  final bool recommended;
+  final VoidCallback onTap;
+
+  static const _brand = Color(0xFFAE1504);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? _brand : const Color(0xFFE5E7EB),
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: selected ? _brand : Colors.grey.shade400,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            option.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        if (recommended) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _brand.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: const Text(
+                              'Hemat',
+                              style: TextStyle(
+                                color: _brand,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      option.caption,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                option.price,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+DateTime? _parseExpiry(Object? raw) {
+  final text = (raw ?? '').toString();
+  if (text.isEmpty) return null;
+  return DateTime.tryParse(text)?.toLocal();
+}
+
+String _confirmErrorMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map && data['message'] != null) {
+      final message = data['message'].toString().trim();
+      if (message.isNotEmpty) return message;
+    }
+  }
+  return 'Gagal konfirmasi pembelian.';
+}
+
+String _formatIdDate(DateTime date) {
+  return '${date.day} ${_monthShort[date.month - 1]} ${date.year}';
+}
+
+_ExpiryLine _expiryLine(DateTime date, {required String untilPrefix}) {
+  final day = DateTime(date.year, date.month, date.day);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final days = day.difference(today).inDays;
+  if (days <= 0) {
+    return const _ExpiryLine('Berakhir hari ini', warning: true);
+  }
+  final formatted = _formatIdDate(date);
+  if (days <= 7) {
+    return _ExpiryLine(
+      'Berakhir $formatted · $days hari lagi',
+      warning: true,
+    );
+  }
+  return _ExpiryLine('$untilPrefix $formatted');
+}
+
+class OwnerAddonsPage extends StatefulWidget {
+  const OwnerAddonsPage({
+    super.key,
+    this.highlightFeatureKey,
+    this.highlightAddonCode,
+  });
+
+  /// Feature key from FeatureGate, e.g. `feature_scan_table`.
+  final String? highlightFeatureKey;
+
+  /// Addon catalog code, e.g. `scan_table`.
+  final String? highlightAddonCode;
+
+  @override
+  State<OwnerAddonsPage> createState() => _OwnerAddonsPageState();
+}
+
+class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
+  static const _brand = Color(0xFFAE1504);
+  static const _bg = Color(0xFFF6F7F9);
+
+  bool _loading = true;
+  bool _busy = false;
+  String? _error;
+  List<Map<String, dynamic>> _addons = [];
+  List<Map<String, dynamic>> _plans = [];
+  Map<String, dynamic>? _currentPlan;
+  List<Map<String, dynamic>> _overlapping = [];
+  bool _playConfigured = false;
+  bool _allowPlay = true;
+  bool _allowManual = false;
+  bool _pointsEnabled = true;
+  final Set<String> _ownedPlayProductIds = {};
+  final ScrollController _scrollController = ScrollController();
+
+  final InAppPurchase _iap = InAppPurchase.instance;
+  StreamSubscription<List<PurchaseDetails>>? _purchaseSub;
+  StreamSubscription<Map<String, dynamic>>? _billingNotifSub;
+  final Map<String, ProductDetails> _products = {};
+
+  bool _isHighlighted(Map<String, dynamic> addon) {
+    final code = (addon['code'] ?? '').toString();
+    final feature = (addon['feature_key'] ?? '').toString();
+    final wantCode = widget.highlightAddonCode?.trim() ?? '';
+    final wantFeature = widget.highlightFeatureKey?.trim() ?? '';
+    if (wantCode.isNotEmpty && code == wantCode) return true;
+    if (wantFeature.isNotEmpty && feature == wantFeature) return true;
+    return false;
+  }
+
+  /// Highlighted add-on first so paywall entry lands on the relevant card.
+  List<Map<String, dynamic>> get _displayAddons {
+    final want = widget.highlightAddonCode != null ||
+        widget.highlightFeatureKey != null;
+    if (!want || _addons.isEmpty) return _addons;
+    final pinned = <Map<String, dynamic>>[];
+    final rest = <Map<String, dynamic>>[];
+    for (final a in _addons) {
+      if (_isHighlighted(a)) {
+        pinned.add(a);
+      } else {
+        rest.add(a);
+      }
+    }
+    if (pinned.isEmpty) return _addons;
+    return [...pinned, ...rest];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _purchaseSub = _iap.purchaseStream.listen(
+      _onPurchaseUpdated,
+      onError: (e) => debugPrint('IAP stream error: $e'),
+    );
+    _billingNotifSub = PushNotificationService.instance.onMessageReceived.listen(
+      (data) {
+        final type = (data['type'] ?? '').toString();
+        if (type != 'billing_approved' && type != 'billing_rejected') return;
+        if (mounted) _load();
+      },
+    );
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _purchaseSub?.cancel();
+    _billingNotifSub?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final api = ownerApiOf(context);
+    try {
+      final res = await api.listAddons();
+      final raw = res['addons'];
+      _addons = raw is List
+          ? raw
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+          : [];
+      final overlap = res['overlapping_subscriptions'];
+      _overlapping = overlap is List
+          ? overlap
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+          : [];
+      final plansRes = await api.listPlans();
+      final rawPlans = plansRes['plans'];
+      _plans = rawPlans is List
+          ? rawPlans
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+          : [];
+      final current = plansRes['current_plan'];
+      _currentPlan = current is Map
+          ? Map<String, dynamic>.from(current)
+          : null;
+      _playConfigured = res['play_configured'] == true ||
+          plansRes['play_configured'] == true;
+      _readBilling(res);
+      _readBilling(plansRes);
+      _readPoints(res);
+      _readPoints(plansRes);
+
+      final ids = {
+        ..._addons.map((a) => (a['play_product_id'] ?? '').toString()),
+        ..._plans.map((p) => (p['play_product_id'] ?? '').toString()),
+      }.where((id) => id.isNotEmpty).toSet();
+      if (ids.isNotEmpty) {
+        final available = await _iap.isAvailable();
+        if (available) {
+          final resp = await _iap.queryProductDetails(ids);
+          for (final p in resp.productDetails) {
+            _products[p.id] = p;
+          }
+          try {
+            final addition = _iap
+                .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+            final past = await addition.queryPastPurchases();
+            _ownedPlayProductIds
+              ..clear()
+              ..addAll(
+                past.pastPurchases
+                    .map((p) => p.productID)
+                    .where(ids.contains),
+              );
+          } catch (e) {
+            debugPrint('queryPastPurchases (load) gagal: $e');
+          }
+        }
+      }
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _onPurchaseUpdated(List<PurchaseDetails> purchases) async {
+    final restored = <PurchaseDetails>[];
+    for (final purchase in purchases) {
+      if (purchase.status == PurchaseStatus.pending) continue;
+      if (purchase.status == PurchaseStatus.error) {
+        final message = purchase.error?.message ?? '';
+        if (_isAlreadyOwned(message)) {
+          await _recoverAlreadyOwned();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message.isEmpty ? 'Pembelian gagal' : message),
+            ),
+          );
+        }
+        if (purchase.pendingCompletePurchase) {
+          await _iap.completePurchase(purchase);
+        }
+        continue;
+      }
+
+      if (purchase.status == PurchaseStatus.restored) {
+        restored.add(purchase);
+        continue;
+      }
+
+      if (purchase.status == PurchaseStatus.purchased) {
+        await _confirmWithBackend(purchase);
+        if (purchase.pendingCompletePurchase) {
+          await _iap.completePurchase(purchase);
+        }
+      }
+    }
+
+    if (restored.isNotEmpty) {
+      await _confirmRestored(restored);
+    }
+  }
+
+  void _readBilling(Map<String, dynamic> res) {
+    final billing = res['billing'];
+    if (billing is Map) {
+      _allowPlay = billing['play'] == true;
+      _allowManual = billing['manual'] == true;
+    }
+  }
+
+  void _readPoints(Map<String, dynamic> res) {
+    if (res.containsKey('referral_points_enabled')) {
+      _pointsEnabled = res['referral_points_enabled'] == true;
+    }
+  }
+
+  _ExpiryLine _currentPlanLine() {
+    final current = _currentPlan;
+    if (current == null) {
+      return const _ExpiryLine('Paket sedang aktif.');
+    }
+    if (current['is_mobile_free'] == true) {
+      return const _ExpiryLine('Tanpa batas waktu');
+    }
+    final parsed = _parseExpiry(current['expires_at']);
+    if (parsed == null) {
+      return const _ExpiryLine('Paket berbayar sedang aktif.');
+    }
+    return _expiryLine(parsed, untilPrefix: 'Aktif sampai');
+  }
+
+  _ExpiryLine? _addonExpiryLine(Map<String, dynamic> addon, {required bool isSub}) {
+    final entitlement = addon['entitlement_active'] == true;
+    final covered = addon['covered_by_plan'] == true;
+    if (entitlement) {
+      final parsed = _parseExpiry(addon['expires_at']);
+      if (parsed != null) {
+        return _expiryLine(parsed, untilPrefix: 'Aktif sampai');
+      }
+      if (!isSub) {
+        return const _ExpiryLine('Berlaku selamanya');
+      }
+    }
+    if (covered) {
+      final current = _currentPlan;
+      final planFree = current?['is_mobile_free'] == true;
+      final planExpiry = _parseExpiry(current?['expires_at']);
+      if (!planFree && planExpiry != null) {
+        return _expiryLine(planExpiry, untilPrefix: 'Termasuk paket sampai');
+      }
+      return const _ExpiryLine('Termasuk paket');
+    }
+    return null;
+  }
+
+  bool _canPayPlan(Map<String, dynamic> plan, bool hasSku) {
+    if (plan['is_current'] == true) return false;
+    if (_allowManual) return true;
+    return _allowPlay && hasSku && plan['can_purchase'] == true;
+  }
+
+  String _planCtaFor(Map<String, dynamic> plan, {required bool isCurrent, required bool hasSku}) {
+    if (isCurrent) return 'Sedang dipakai';
+    if (!_allowManual && _allowPlay && !hasSku) return 'Belum tersedia di Play';
+    final productId = (plan['play_product_id'] ?? '').toString();
+    if (_allowPlay &&
+        hasSku &&
+        productId.isNotEmpty &&
+        _ownedPlayProductIds.contains(productId) &&
+        plan['can_purchase'] == true) {
+      return 'Sinkronkan';
+    }
+    return 'Langganan sekarang';
+  }
+
+  String? _trialLabel(Map<String, dynamic> item) {
+    if (item['can_trial'] != true) return null;
+    final days = int.tryParse('${item['trial_days']}') ?? 0;
+    if (days < 1) return null;
+    return 'Coba $days hari';
+  }
+
+  Future<void> _startTrial({
+    required String kind,
+    required Map<String, dynamic> item,
+  }) async {
+    final id = int.tryParse('${item['id']}');
+    if (id == null) return;
+    setState(() => _busy = true);
+    try {
+      final api = ownerApiOf(context);
+      final res = kind == 'plan'
+          ? await api.startPlanTrial(id)
+          : await api.startAddonTrial(id);
+      final user = api.parseUser(res);
+      if (user != null && mounted) {
+        await context.read<AuthProvider>().refreshOwner();
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['message']?.toString() ?? 'Uji coba aktif')),
+      );
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Uji coba gagal: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _startPurchase({
+    required String kind,
+    required Map<String, dynamic> item,
+    required bool hasPlaySku,
+  }) async {
+    final play = _allowPlay && hasPlaySku;
+    final manual = _allowManual;
+    if (!play && !manual) {
+      if (_pointsEnabled) await _payWithPoints(kind, item);
+      return;
+    }
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'Pilih cara pembayaran',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            if (play)
+              ListTile(
+                leading: const Icon(Icons.shop_rounded),
+                title: const Text('Google Play'),
+                onTap: () => Navigator.pop(ctx, 'play'),
+              ),
+            if (manual)
+              ListTile(
+                leading: const Icon(Icons.account_balance_rounded),
+                title: const Text('Transfer bank'),
+                subtitle: const Text('Kirim bukti transfer'),
+                onTap: () => Navigator.pop(ctx, 'manual'),
+              ),
+            if (_pointsEnabled)
+              ListTile(
+                leading: const Icon(Icons.stars_rounded),
+                title: const Text('Cavaa Points'),
+                subtitle: Text(
+                  'Saldo ${context.read<AuthProvider>().owner?.cavaaPointsBalance ?? 0} poin',
+                ),
+                onTap: () => Navigator.pop(ctx, 'points'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+
+    if (choice == 'play') {
+      if (kind == 'plan') {
+        await _buyPlan(item);
+      } else {
+        await _buy(item);
+      }
+      return;
+    }
+    if (choice == 'points') {
+      await _payWithPoints(kind, item);
+      return;
+    }
+
+    await _openManualCheckout(kind, item);
+  }
+
+  Future<void> _payWithPoints(String kind, Map<String, dynamic> item) async {
+    final id = int.tryParse('${item['id']}');
+    if (id == null) return;
+    final isSub = (item['billing_type'] ?? '').toString() == 'subscription';
+    String? period;
+    var amount = _money(kind == 'plan' ? item['price'] : item['price_idr']);
+    if (kind == 'addon' && isSub) {
+      final choice = await _chooseManualPeriod(item);
+      if (!mounted || choice == null) return;
+      period = choice.period;
+      amount = choice.amount;
+    } else if (kind == 'plan') {
+      period = '1m';
+    }
+    final balance = context.read<AuthProvider>().owner?.cavaaPointsBalance ?? 0;
+    if (amount > balance) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saldo Cavaa Points tidak cukup.')),
+      );
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Bayar dengan Cavaa Points?'),
+        content: Text('${item['name']} membutuhkan $amount poin.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bayar')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final res = await ownerApiOf(context).purchaseWithPoints(
+        kind: kind,
+        id: id,
+        mode: 'period',
+        period: period,
+      );
+      final user = ownerApiOf(context).parseUser(res);
+      if (user != null && mounted) {
+        context.read<AuthProvider>().applyOwner(user);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text((res['message'] ?? 'Berhasil').toString())),
+      );
+      await _load();
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              data is Map ? (data['message'] ?? 'Pembelian gagal').toString() : 'Pembelian gagal',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openManualCheckout(String type, Map<String, dynamic> item) async {
+    final rawId = item['id'];
+    final itemId = rawId is int ? rawId : int.tryParse('$rawId');
+    if (itemId == null || itemId <= 0) return;
+
+    String? period;
+    String? periodLabel;
+    var amount = _money(type == 'plan' ? item['price'] : item['price_idr']);
+    if (type == 'addon' && (item['billing_type'] ?? '').toString() == 'subscription') {
+      final choice = await _chooseManualPeriod(item);
+      if (!mounted || choice == null) return;
+      period = choice.period;
+      periodLabel = choice.title;
+      amount = choice.amount;
+    }
+
+    final message = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OwnerManualCheckoutPage(
+          type: type,
+          itemId: itemId,
+          itemName: (item['name'] ?? '').toString(),
+          amount: amount,
+          period: period,
+          periodLabel: periodLabel,
+        ),
+      ),
+    );
+    if (!mounted || message == null || message.isEmpty) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    await _load();
+  }
+
+  Future<({String period, String title, int amount})?> _chooseManualPeriod(
+    Map<String, dynamic> addon,
+  ) async {
+    final flags = addon['play_periods'];
+    final prices = addon['manual_prices'];
+    final options = <({String period, String title, int amount, int days})>[];
+    if (flags is Map && prices is Map) {
+      const specs = [
+        ('3d', '3 hari', 3),
+        ('7d', '7 hari', 7),
+        ('1m', '1 bulan', 30),
+      ];
+      for (final spec in specs) {
+        final flag = flags[spec.$1];
+        final amount = _money(prices[spec.$1]);
+        final enabled = flag == true || flag == 1;
+        if (enabled && amount > 0) {
+          options.add((
+            period: spec.$1,
+            title: spec.$2,
+            amount: amount,
+            days: spec.$3,
+          ));
+        }
+      }
+    }
+    if (options.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tidak ada pilihan masa langganan yang aktif.'),
+          ),
+        );
+      }
+      return null;
+    }
+    if (options.length == 1) {
+      final only = options.first;
+      return (period: only.period, title: only.title, amount: only.amount);
+    }
+    final token = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _BasePlanPickerDialog(
+        subtitle:
+            'Harga transfer bank. Akses aktif sesuai masa yang Anda pilih.',
+        options: [
+          for (final option in options)
+            _PlanOption(
+              token: option.period,
+              title: option.title,
+              price: 'Rp ${_formatIdr(option.amount)}',
+              caption: 'Dibayar lewat transfer',
+              days: option.days,
+              amountMicros: option.amount * 1000000,
+            ),
+        ],
+      ),
+    );
+    if (token == null) return null;
+    final picked = options.firstWhere((option) => option.period == token);
+    return (period: picked.period, title: picked.title, amount: picked.amount);
+  }
+
+  int _money(Object? raw) {
+    if (raw is num) return raw.round();
+    return int.tryParse('$raw') ?? 0;
+  }
+
+  bool _isPlanProduct(String productId) {
+    return _plans.any(
+      (plan) => (plan['play_product_id'] ?? '').toString() == productId,
+    );
+  }
+
+  Future<Map<String, dynamic>> _postConfirm(PurchaseDetails purchase) {
+    final api = ownerApiOf(context);
+    final token = purchase.verificationData.serverVerificationData;
+    if (_isPlanProduct(purchase.productID)) {
+      return api.confirmPlanPurchase(
+        productId: purchase.productID,
+        purchaseToken: token,
+      );
+    }
+    return api.confirmAddonPurchase(
+      productId: purchase.productID,
+      purchaseToken: token,
+    );
+  }
+
+  Future<void> _confirmWithBackend(PurchaseDetails purchase) async {
+    final api = ownerApiOf(context);
+    setState(() => _busy = true);
+    try {
+      final res = await _postConfirm(purchase);
+      final user = api.parseUser(res);
+      if (user != null && mounted) {
+        await context.read<AuthProvider>().refreshOwner();
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message']?.toString() ?? 'Add-on aktif')),
+        );
+        await _load();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_confirmErrorMessage(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirmRestored(List<PurchaseDetails> purchases) async {
+    final api = ownerApiOf(context);
+    setState(() => _busy = true);
+    final successes = <String>[];
+    final failures = <String>[];
+    final linked = <_LinkedPlayPurchase>[];
+    try {
+      for (final purchase in purchases) {
+        try {
+          final res = await _postConfirm(purchase);
+          final message = res['message']?.toString().trim() ?? '';
+          successes.add(message.isEmpty ? 'Pembelian dipulihkan.' : message);
+          final user = api.parseUser(res);
+          if (user != null && mounted) {
+            await context.read<AuthProvider>().refreshOwner();
+          }
+        } on DioException catch (e) {
+          final data = e.response?.data;
+          if (data is Map && data['code'] == 'linked_to_other_owner') {
+            linked.add(_LinkedPlayPurchase(
+              purchase: purchase,
+              itemName: (data['item_name'] ?? purchase.productID).toString(),
+              email: data['linked_email']?.toString(),
+            ));
+          } else {
+            failures.add(_confirmErrorMessage(e));
+          }
+        } catch (e) {
+          failures.add(_confirmErrorMessage(e));
+        }
+        if (purchase.pendingCompletePurchase) {
+          await _iap.completePurchase(purchase);
+        }
+      }
+      if (linked.isNotEmpty && mounted) {
+        final moved = await _askTransfer(linked);
+        if (moved && mounted) {
+          successes.add('Fitur Play dipindahkan ke akun ini.');
+        }
+      }
+      if (successes.isNotEmpty && mounted) {
+        await _load();
+      }
+      if (!mounted) return;
+      final text = successes.isEmpty
+          ? (failures.isEmpty ? null : failures.first)
+          : failures.isEmpty
+              ? successes.first
+              : '${successes.first} ${failures.first}';
+      if (text != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(text)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool> _askTransfer(List<_LinkedPlayPurchase> linked) async {
+    final names = linked.map((item) => item.itemName).toSet().join(', ');
+    final emails = linked
+        .map((item) => item.email)
+        .whereType<String>()
+        .where((email) => email.isNotEmpty)
+        .toSet()
+        .join(', ');
+    final who = emails.isEmpty ? 'akun lain' : emails;
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pindahkan fitur Play?'),
+        content: Text(
+          '$names tertaut ke $who. Pindahkan ke akun ini? Akun itu langsung kehilangan akses. Pembayaran manual tidak ikut pindah.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Pindahkan'),
+          ),
+        ],
+      ),
+    );
+    if (agreed != true || !mounted) return false;
+    try {
+      await ownerApiOf(context).transferPlayPurchases([
+        for (final item in linked)
+          (
+            productId: item.purchase.productID,
+            purchaseToken: item.purchase.verificationData.serverVerificationData,
+          ),
+      ]);
+      await context.read<AuthProvider>().refreshOwner();
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_confirmErrorMessage(e))),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _buy(Map<String, dynamic> addon) async {
+    if (addon['can_purchase'] != true) return;
+    final productId = (addon['play_product_id'] ?? '').toString();
+    if (productId.isEmpty) return;
+
+    final details = _products[productId];
+    if (details == null) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Produk Play belum tersedia'),
+          content: Text(
+            _playConfigured
+                ? 'SKU "$productId" belum muncul dari Google Play. Pastikan internal testing + license tester.\n\nLanjut dengan stub token (hanya jika server GOOGLE_PLAY_DEV_STUB=true)?'
+                : 'Google Play Billing belum dikonfigurasi di server. Lanjut stub token untuk uji lokal?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Stub confirm'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      final api = ownerApiOf(context);
+      setState(() => _busy = true);
+      try {
+        final res = await api.confirmAddonPurchase(
+          productId: productId,
+          purchaseToken: 'DEV-STUB-${DateTime.now().millisecondsSinceEpoch}',
+        );
+        await context.read<AuthProvider>().refreshOwner();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(res['message']?.toString() ?? 'Add-on aktif'),
+            ),
+          );
+          await _load();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(_confirmErrorMessage(e))),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
+
+    final billingType = (addon['billing_type'] ?? '').toString();
+    final isSubscription = billingType == 'subscription';
+    String? offerToken;
+    if (isSubscription) {
+      offerToken = await _chooseBasePlan(details, addon: addon);
+      if (!mounted || offerToken == null) return;
+    }
+    final started = await _iap.buyNonConsumable(
+      purchaseParam: _purchaseParam(
+        details,
+        subscription: isSubscription,
+        offerToken: offerToken,
+      ),
+    );
+    if (!started && billingType != 'subscription') {
+      await _recoverAlreadyOwned();
+    }
+  }
+
+  bool _isAlreadyOwned(String message) {
+    final text = message.toLowerCase();
+    return text.contains('already own') ||
+        text.contains('itemalreadyowned') ||
+        text.contains('already subscribed') ||
+        text.contains('you\'re already subscribed') ||
+        text.contains('youre already subscribed') ||
+        text.contains('sudah berlangganan');
+  }
+
+  Set<String> _recoverablePlayProductIds() {
+    return {
+      for (final addon in _addons)
+        if ((addon['play_product_id'] ?? '').toString().isNotEmpty)
+          (addon['play_product_id'] ?? '').toString(),
+      for (final plan in _plans)
+        if ((plan['play_product_id'] ?? '').toString().isNotEmpty)
+          (plan['play_product_id'] ?? '').toString(),
+    };
+  }
+
+  Future<void> _recoverAlreadyOwned() async {
+    final recoverableIds = _recoverablePlayProductIds();
+    try {
+      final addition = _iap
+          .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+      final response = await addition.queryPastPurchases();
+      final owned = response.pastPurchases
+          .where((purchase) => recoverableIds.contains(purchase.productID))
+          .toList();
+      if (owned.isNotEmpty) {
+        await _confirmRestored(owned);
+        return;
+      }
+    } catch (e) {
+      debugPrint('queryPastPurchases gagal: $e');
+    }
+    try {
+      await _iap.restorePurchases();
+      return;
+    } catch (e) {
+      debugPrint('restorePurchases gagal: $e');
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Langganan Google Play masih aktif. Coba Pulihkan pembelian, atau buka ulang halaman Paket agar status tersinkron.',
+        ),
+      ),
+    );
+  }
+
+  PurchaseParam _purchaseParam(
+    ProductDetails details, {
+    required bool subscription,
+    String? offerToken,
+  }) {
+    if (!subscription || details is! GooglePlayProductDetails) {
+      return PurchaseParam(
+        productDetails: details,
+        applicationUserName: _playAccountId(),
+      );
+    }
+    final offers = details.productDetails.subscriptionOfferDetails;
+    var token = offerToken ?? details.offerToken;
+    if (offerToken == null && offers != null && offers.isNotEmpty) {
+      final base = offers.where((offer) => (offer.offerId ?? '').isEmpty);
+      token = (base.isEmpty ? offers.first : base.first).offerIdToken;
+    }
+    return GooglePlayPurchaseParam(
+      productDetails: details,
+      applicationUserName: _playAccountId(),
+      offerToken: token,
+    );
+  }
+
+  Future<String?> _chooseBasePlan(
+    ProductDetails details, {
+    Map<String, dynamic>? addon,
+  }) async {
+    if (details is! GooglePlayProductDetails) return null;
+    final offers = details.productDetails.subscriptionOfferDetails ?? [];
+    final allowed = _allowedPeriods(addon);
+    final base = offers.where((offer) {
+      if ((offer.offerId ?? '').isNotEmpty) return false;
+      if (allowed == null) return true;
+      final phase = offer.pricingPhases.isEmpty ? null : offer.pricingPhases.first;
+      return _periodAllowed(phase?.billingPeriod ?? '', allowed);
+    }).toList();
+    if (base.isEmpty) {
+      if (allowed != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Tidak ada pilihan masa langganan yang aktif.'),
+            ),
+          );
+        }
+        return null;
+      }
+      return details.offerToken;
+    }
+    if (base.length == 1) return base.first.offerIdToken;
+    final options = base.map((offer) {
+      final phase = offer.pricingPhases.isEmpty ? null : offer.pricingPhases.first;
+      final period = phase?.billingPeriod ?? '';
+      return _PlanOption(
+        token: offer.offerIdToken,
+        title: _periodLabel(period).isEmpty ? offer.basePlanId : _periodLabel(period),
+        price: phase?.formattedPrice ?? '',
+        caption: _renewCaption(phase?.recurrenceMode),
+        days: _periodDays(period),
+        amountMicros: phase?.priceAmountMicros ?? 0,
+      );
+    }).toList()
+      ..sort((a, b) => a.days.compareTo(b.days));
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => _BasePlanPickerDialog(options: options),
+    );
+  }
+
+  Map<String, dynamic>? _allowedPeriods(Map<String, dynamic>? addon) {
+    final raw = addon?['play_periods'];
+    if (raw is! Map) return null;
+    return Map<String, dynamic>.from(raw);
+  }
+
+  bool _periodAllowed(String period, Map<String, dynamic> allowed) {
+    final bucket = _periodBucket(period);
+    if (bucket == null) return false;
+    final flag = allowed[bucket];
+    return flag == true || flag == 1;
+  }
+
+  String? _periodBucket(String period) {
+    final match = RegExp(r'^P(\d+)([DWMY])').firstMatch(period);
+    if (match == null) return null;
+    final count = int.tryParse(match.group(1) ?? '') ?? 0;
+    return switch (match.group(2)) {
+      'D' when count == 3 => '3d',
+      'D' when count == 7 => '7d',
+      'W' when count == 1 => '7d',
+      'M' when count == 1 => '1m',
+      _ => null,
+    };
+  }
+
+  String _renewCaption(RecurrenceMode? mode) {
+    return switch (mode) {
+      RecurrenceMode.infiniteRecurring => 'Diperpanjang otomatis',
+      RecurrenceMode.finiteRecurring => 'Berlaku sesuai masa dipilih',
+      RecurrenceMode.nonRecurring => 'Sekali bayar, tanpa perpanjangan',
+      _ => 'Harga dari Google Play',
+    };
+  }
+
+  int _periodDays(String period) {
+    final match = RegExp(r'^P(\d+)([DWMY])').firstMatch(period);
+    if (match == null) return 9999;
+    final count = int.tryParse(match.group(1) ?? '') ?? 1;
+    return switch (match.group(2)) {
+      'D' => count,
+      'W' => count * 7,
+      'M' => count * 30,
+      'Y' => count * 365,
+      _ => 9999,
+    };
+  }
+
+  String _periodLabel(String period) {
+    final match = RegExp(r'^P(\d+)([DWMY])').firstMatch(period);
+    if (match == null) return '';
+    final count = int.tryParse(match.group(1) ?? '') ?? 0;
+    final unit = switch (match.group(2)) {
+      'D' => 'hari',
+      'W' => 'minggu',
+      'M' => 'bulan',
+      'Y' => 'tahun',
+      _ => '',
+    };
+    if (count < 1 || unit.isEmpty) return '';
+    return '$count $unit';
+  }
+
+  String? _playAccountId() {
+    final id = context.read<AuthProvider>().owner?.id;
+    if (id == null) return null;
+    return '$id';
+  }
+
+  Future<void> _buyPlan(Map<String, dynamic> plan) async {
+    if (plan['can_purchase'] != true) return;
+    final productId = (plan['play_product_id'] ?? '').toString();
+    if (productId.isEmpty) return;
+
+    final details = _products[productId];
+    if (details == null) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Produk Play belum tersedia'),
+          content: Text(
+            _playConfigured
+                ? 'SKU "$productId" belum muncul dari Google Play. Pastikan internal testing + license tester.\n\nLanjut dengan stub token (hanya jika server GOOGLE_PLAY_DEV_STUB=true)?'
+                : 'Google Play Billing belum dikonfigurasi di server. Lanjut stub token untuk uji lokal?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Stub confirm'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      final api = ownerApiOf(context);
+      setState(() => _busy = true);
+      try {
+        final res = await api.confirmPlanPurchase(
+          productId: productId,
+          purchaseToken: 'DEV-STUB-${DateTime.now().millisecondsSinceEpoch}',
+        );
+        await context.read<AuthProvider>().refreshOwner();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(res['message']?.toString() ?? 'Paket aktif')),
+          );
+          await _load();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(_confirmErrorMessage(e))),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
+
+    final offerToken = await _chooseBasePlan(details);
+    if (!mounted || offerToken == null) return;
+    await _iap.buyNonConsumable(
+      purchaseParam: _purchaseParam(
+        details,
+        subscription: true,
+        offerToken: offerToken,
+      ),
+    );
+  }
+
+  (String amount, String suffix) _planPrice(Map<String, dynamic> plan) {
+    final productId = (plan['play_product_id'] ?? '').toString();
+    final play = _products[productId];
+    if (play != null) {
+      return (play.price, '');
+    }
+    final raw = plan['price'];
+    final n = raw is num ? raw : num.tryParse('$raw') ?? 0;
+    final cycle = (plan['billing_cycle'] ?? '').toString().trim();
+    return ('Rp ${_formatIdr(n)}', cycle.isEmpty ? '' : cycle);
+  }
+
+  Widget _planCard(Map<String, dynamic> plan) {
+    final isCurrent = plan['is_current'] == true;
+    final hasSku = ((plan['play_product_id'] ?? '').toString()).isNotEmpty;
+    final parts = _planPrice(plan);
+    final name = (plan['name'] ?? '').toString();
+    final description = (plan['description'] ?? '').toString();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.white,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isCurrent ? _brand : const Color(0xFFE5E7EB),
+              width: isCurrent ? 1.6 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  if (isCurrent)
+                    const _Chip(
+                      label: 'Paket aktif',
+                      fg: _brand,
+                      bg: Color(0xFFFFF1EE),
+                    ),
+                ],
+              ),
+              if (description.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+              if (isCurrent) ...[
+                const SizedBox(height: 8),
+                _ExpiryText(line: _currentPlanLine()),
+              ],
+              const SizedBox(height: 10),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: parts.$1,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: _brand,
+                      ),
+                    ),
+                    if (parts.$2.isNotEmpty)
+                      TextSpan(
+                        text: ' ${parts.$2}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_trialLabel(plan) != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _startTrial(kind: 'plan', item: plan),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _brand,
+                      side: const BorderSide(color: _brand),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      _trialLabel(plan)!,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: FilledButton(
+                  onPressed: !isCurrent && _canPayPlan(plan, hasSku) && !_busy
+                      ? () {
+                          final productId =
+                              (plan['play_product_id'] ?? '').toString();
+                          if (_ownedPlayProductIds.contains(productId) &&
+                              plan['can_purchase'] == true) {
+                            _recoverAlreadyOwned();
+                            return;
+                          }
+                          _startPurchase(
+                            kind: 'plan',
+                            item: plan,
+                            hasPlaySku: hasSku,
+                          );
+                        }
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _brand,
+                    disabledBackgroundColor: const Color(0xFFE5E7EB),
+                    disabledForegroundColor: const Color(0xFF6B7280),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    _planCtaFor(plan, isCurrent: isCurrent, hasSku: hasSku),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restore() async {
+    setState(() => _busy = true);
+    try {
+      await _iap.restorePurchases();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore gagal: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  static String _formatIdr(num n) {
+    return n.toStringAsFixed(0).replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (m) => '${m[1]}.',
+        );
+  }
+
+  /// Returns (amount text, period suffix). Play price kept as-is when available.
+  (String amount, String suffix) _priceParts(Map<String, dynamic> addon) {
+    final productId = (addon['play_product_id'] ?? '').toString();
+    final play = _products[productId];
+    if (play != null) {
+      return (play.price, '');
+    }
+    final raw = addon['price_idr'];
+    final n = raw is num ? raw : num.tryParse('$raw') ?? 0;
+    final period = (addon['billing_period'] ?? '').toString();
+    final amount = 'Rp ${_formatIdr(n)}';
+    if (period == 'month') return (amount, '/bln');
+    return (amount, 'sekali bayar');
+  }
+
+  _AddonVisual _visualFor(String code) {
+    switch (code) {
+      case 'receipt_logo':
+        return const _AddonVisual(
+          icon: Icons.receipt_long_rounded,
+          accent: Color(0xFFB45309),
+          soft: Color(0xFFFFF7ED),
+        );
+      case 'order_notes':
+        return const _AddonVisual(
+          icon: Icons.sticky_note_2_rounded,
+          accent: Color(0xFF0369A1),
+          soft: Color(0xFFF0F9FF),
+        );
+      case 'promotions':
+        return const _AddonVisual(
+          icon: Icons.local_offer_rounded,
+          accent: Color(0xFF7C3AED),
+          soft: Color(0xFFF5F3FF),
+        );
+      case 'scan_table':
+        return const _AddonVisual(
+          icon: Icons.qr_code_2_rounded,
+          accent: _brand,
+          soft: Color(0xFFFFF1EE),
+        );
+      case 'open_bill':
+        return const _AddonVisual(
+          icon: Icons.payments_rounded,
+          accent: Color(0xFF0369A1),
+          soft: Color(0xFFF0F9FF),
+        );
+      default:
+        return const _AddonVisual(
+          icon: Icons.extension_rounded,
+          accent: _brand,
+          soft: Color(0xFFFFF1EE),
+        );
+    }
+  }
+
+  String _ctaLabel({
+    required bool covered,
+    required bool owned,
+    required bool isSub,
+  }) {
+    if (covered) return 'Sudah termasuk paket';
+    if (owned) return 'Sudah aktif';
+    return isSub ? 'Langganan sekarang' : 'Beli sekali';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayAddons = _displayAddons;
+
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        title: const Text(
+          'Paket',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: _brand,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          TextButton(
+            onPressed: _busy ? null : _restore,
+            child: const Text(
+              'Restore',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: _brand))
+          : _error != null
+              ? _ErrorState(message: _error!, onRetry: _load)
+              : RefreshIndicator(
+                  color: _brand,
+                  onRefresh: _load,
+                  child: ListView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
+                    children: [
+                      const _HeroBanner(),
+                      if (_pointsEnabled) ...[
+                        const SizedBox(height: 12),
+                        _PointsEntry(
+                          balance: context.watch<AuthProvider>().owner?.cavaaPointsBalance ?? 0,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const OwnerCavaaPointsPage(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                      if (_currentPlan != null) ...[
+                        const SizedBox(height: 12),
+                        _CurrentPlanBanner(plan: _currentPlan!),
+                      ],
+                      if (_overlapping.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _OverlapBanner(messages: _overlapping),
+                      ],
+                      const SizedBox(height: 18),
+                      Text(
+                        'Paket penuh',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Mengganti seluruh akses paket. Add-on yang sudah dibeli tetap ada.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.grey.shade600,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (_plans.isEmpty)
+                        const _EmptyNote(
+                          text: 'Belum ada paket yang ditawarkan di aplikasi.',
+                        )
+                      else
+                        ..._plans.map(_planCard),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Add-on fitur',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ...displayAddons.map((addon) {
+                        final covered = addon['covered_by_plan'] == true;
+                        final owned = addon['owned'] == true;
+                        final canBuy = addon['can_purchase'] == true;
+                        final code = (addon['code'] ?? '').toString();
+                        final highlighted = _isHighlighted(addon);
+                        final visual = _visualFor(code);
+                        final isSub =
+                            (addon['billing_type'] ?? '').toString() ==
+                                'subscription';
+                        final parts = _priceParts(addon);
+                        final status =
+                            (addon['status_label'] ?? '').toString();
+                        final overlap =
+                            addon['overlapping_subscription'] == true;
+                        final expiry = _addonExpiryLine(addon, isSub: isSub);
+
+                        final card = Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: _AddonCard(
+                            name: (addon['name'] ?? '').toString(),
+                            description:
+                                (addon['description'] ?? '').toString(),
+                            visual: visual,
+                            amount: parts.$1,
+                            periodSuffix: parts.$2,
+                            isSubscription: isSub,
+                            highlighted: highlighted,
+                            covered: covered,
+                            owned: owned,
+                            statusLabel: expiry == null ? status : '',
+                            expiry: expiry,
+                            overlapping: overlap,
+                            ctaLabel: _ctaLabel(
+                              covered: covered,
+                              owned: owned,
+                              isSub: isSub,
+                            ),
+                            canBuy: canBuy &&
+                                !_busy &&
+                                (_allowManual || _allowPlay),
+                            onBuy: () => _startPurchase(
+                              kind: 'addon',
+                              item: addon,
+                              hasPlaySku:
+                                  (addon['play_product_id'] ?? '')
+                                      .toString()
+                                      .isNotEmpty,
+                            ),
+                            trialLabel: _trialLabel(addon),
+                            onTrial: _busy
+                                ? null
+                                : () => _startTrial(kind: 'addon', item: addon),
+                          ),
+                        );
+
+                        if (!highlighted) return card;
+                        return _AutoScrollIntoView(child: card);
+                      }),
+                    ],
+                  ),
+                ),
+    );
+  }
+}
+
+/// Scrolls this subtree into view once after layout (and route transition).
+class _AutoScrollIntoView extends StatefulWidget {
+  const _AutoScrollIntoView({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_AutoScrollIntoView> createState() => _AutoScrollIntoViewState();
+}
+
+class _AutoScrollIntoViewState extends State<_AutoScrollIntoView> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollIntoView());
+  }
+
+  Future<void> _scrollIntoView() async {
+    // Wait for page transition + ListView extent calculation.
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    if (!mounted) return;
+
+    for (var attempt = 0; attempt < 20; attempt++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+
+      final object = context.findRenderObject();
+      final scrollable = Scrollable.maybeOf(context);
+      if (object == null || !object.attached || scrollable == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        continue;
+      }
+
+      final position = scrollable.position;
+      if (!position.hasContentDimensions) {
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        continue;
+      }
+
+      final viewport = RenderAbstractViewport.maybeOf(object);
+      if (viewport == null) {
+        await Scrollable.ensureVisible(
+          context,
+          alignment: 0.06,
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutCubic,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+        );
+        return;
+      }
+
+      final raw = viewport.getOffsetToReveal(object, 0.06).offset;
+      final target = raw.clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+
+      // Extent not ready yet but we clearly need to scroll.
+      if (raw > 24 && position.maxScrollExtent < 8) {
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        continue;
+      }
+
+      if ((position.pixels - target).abs() < 2) return;
+
+      await position.animateTo(
+        target,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+class _AddonVisual {
+  const _AddonVisual({
+    required this.icon,
+    required this.accent,
+    required this.soft,
+  });
+
+  final IconData icon;
+  final Color accent;
+  final Color soft;
+}
+
+class _PointsEntry extends StatelessWidget {
+  const _PointsEntry({required this.balance, required this.onTap});
+
+  final int balance;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.stars_rounded, color: Color(0xFFAE1504)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cavaa Points',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text('Saldo $balance poin'),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroBanner extends StatelessWidget {
+  const _HeroBanner();
+
+  static const _brand = Color(0xFFAE1504);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFAE1504),
+            Color(0xFF7A0E03),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _brand.withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tingkatkan tokomu',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    height: 1.2,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Aktifkan fitur ekstra sesuai kebutuhan — bayar sekali atau langganan bulanan lewat Google Play.',
+                  style: TextStyle(
+                    color: Color(0xFFFFE4E0),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CurrentPlanBanner extends StatelessWidget {
+  const _CurrentPlanBanner({required this.plan});
+
+  final Map<String, dynamic> plan;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (plan['name'] ?? 'Paket').toString();
+    final isFree = plan['is_mobile_free'] == true;
+    final parsed = _parseExpiry(plan['expires_at']);
+    final _ExpiryLine line;
+    if (isFree) {
+      line = const _ExpiryLine('Tanpa batas waktu');
+    } else if (parsed == null) {
+      line = const _ExpiryLine('Paket berbayar sedang aktif.');
+    } else {
+      line = _expiryLine(parsed, untilPrefix: 'Aktif sampai');
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.workspace_premium_rounded, color: Color(0xFFAE1504)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Paket aktif: $name',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                _ExpiryText(line: line),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpiryText extends StatelessWidget {
+  const _ExpiryText({required this.line});
+
+  final _ExpiryLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      line.text,
+      style: TextStyle(
+        fontSize: 12.5,
+        fontWeight: line.warning ? FontWeight.w800 : FontWeight.w600,
+        color: line.warning ? const Color(0xFFC2410C) : Colors.grey.shade700,
+        height: 1.3,
+      ),
+    );
+  }
+}
+
+class _EmptyNote extends StatelessWidget {
+  const _EmptyNote({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+      ),
+    );
+  }
+}
+
+class _OverlapBanner extends StatelessWidget {
+  const _OverlapBanner({required this.messages});
+
+  final List<Map<String, dynamic>> messages;
+
+  @override
+  Widget build(BuildContext context) {
+    if (messages.isEmpty) return const SizedBox.shrink();
+
+    final names = <String>[];
+    final seen = <String>{};
+    for (final e in messages) {
+      var name = (e['addon_name'] ?? '').toString().trim();
+      if (name.isEmpty) {
+        name = (e['addon_code'] ?? '').toString().trim();
+      }
+      if (name.isEmpty) continue;
+      final key = name.toLowerCase();
+      if (seen.add(key)) names.add(name);
+    }
+
+    if (names.isEmpty) {
+      final uniqueMessages = <String>{};
+      for (final e in messages) {
+        final m = (e['message'] ?? '').toString().trim();
+        if (m.isNotEmpty) uniqueMessages.add(m);
+      }
+      if (uniqueMessages.isEmpty) return const SizedBox.shrink();
+      return _banner(uniqueMessages.join('\n'));
+    }
+
+    final body = StringBuffer(
+      'Add-on berikut sudah termasuk paket Anda. Batalkan langganan add-on itu di Google Play agar tidak ditagih lagi:',
+    );
+    for (final name in names) {
+      body.write('\n• $name');
+    }
+    return _banner(body.toString());
+  }
+
+  Widget _banner(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFDBA74)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, color: Color(0xFFC2410C)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF9A3412),
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: onRetry,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFAE1504),
+              ),
+              child: const Text('Coba lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddonCard extends StatelessWidget {
+  const _AddonCard({
+    required this.name,
+    required this.description,
+    required this.visual,
+    required this.amount,
+    required this.periodSuffix,
+    required this.isSubscription,
+    required this.highlighted,
+    required this.covered,
+    required this.owned,
+    required this.statusLabel,
+    this.expiry,
+    required this.overlapping,
+    required this.ctaLabel,
+    required this.canBuy,
+    required this.onBuy,
+    this.trialLabel,
+    this.onTrial,
+  });
+
+  final String name;
+  final String description;
+  final _AddonVisual visual;
+  final String amount;
+  final String periodSuffix;
+  final bool isSubscription;
+  final bool highlighted;
+  final bool covered;
+  final bool owned;
+  final String statusLabel;
+  final _ExpiryLine? expiry;
+  final bool overlapping;
+  final String ctaLabel;
+  final bool canBuy;
+  final VoidCallback onBuy;
+  final String? trialLabel;
+  final VoidCallback? onTrial;
+
+  static const _brand = Color(0xFFAE1504);
+  static const _ink = Color(0xFF1C1C1E);
+
+  @override
+  Widget build(BuildContext context) {
+    final active = owned || covered;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: highlighted ? _brand : const Color(0xFFE8EAED),
+          width: highlighted ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: highlighted
+                ? _brand.withValues(alpha: 0.14)
+                : Colors.black.withValues(alpha: 0.04),
+            blurRadius: highlighted ? 16 : 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (highlighted)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: visual.soft,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.star_rounded, size: 18, color: _brand),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Direkomendasikan untuk fitur yang kamu buka',
+                      style: TextStyle(
+                        color: _brand,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: visual.soft,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        visual.icon,
+                        color: visual.accent,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 17,
+                              color: _ink,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              _Chip(
+                                label: isSubscription
+                                    ? 'Langganan'
+                                    : 'Sekali bayar',
+                                fg: visual.accent,
+                                bg: visual.soft,
+                              ),
+                              if (active)
+                                _Chip(
+                                  label: covered ? 'Di paket' : 'Aktif',
+                                  fg: const Color(0xFF15803D),
+                                  bg: const Color(0xFFDCFCE7),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontSize: 13.5,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8F9FB),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Harga',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            RichText(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: amount,
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: _brand,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                  if (periodSuffix.isNotEmpty)
+                                    TextSpan(
+                                      text: periodSuffix.startsWith('/')
+                                          ? periodSuffix
+                                          : ' · $periodSuffix',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (statusLabel.isNotEmpty && expiry == null)
+                        Flexible(
+                          child: Text(
+                            statusLabel,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: active
+                                  ? const Color(0xFF15803D)
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (expiry != null) ...[
+                  const SizedBox(height: 8),
+                  _ExpiryText(line: expiry!),
+                ],
+                if (overlapping) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Langganan Play masih aktif sementara paket sudah mencakup fitur ini. Batalkan di Google Play.',
+                    style: TextStyle(
+                      color: Color(0xFFC2410C),
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                if (trialLabel != null) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: OutlinedButton(
+                      onPressed: onTrial,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _brand,
+                        side: const BorderSide(color: _brand),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      child: Text(trialLabel!),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: FilledButton(
+                    onPressed: canBuy ? onBuy : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _brand,
+                      disabledBackgroundColor: const Color(0xFFE5E7EB),
+                      disabledForegroundColor: const Color(0xFF6B7280),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    child: Text(ctaLabel),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.fg,
+    required this.bg,
+  });
+
+  final String label;
+  final Color fg;
+  final Color bg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontWeight: FontWeight.w700,
+          fontSize: 11.5,
+        ),
+      ),
+    );
+  }
+}

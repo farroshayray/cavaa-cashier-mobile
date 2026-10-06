@@ -5,15 +5,91 @@ class PurchasePayload {
   final List<Category> categories;
   final List<StoreTable> tables;
   final List<PaymentOption> paymentOptions;
-  final PartnerData? partnerData; // ✅ baru
+  final List<PaymentOption> allPaymentOptionsForCache;
+  final PartnerData? partnerData;
 
   PurchasePayload({
     required this.products,
     required this.categories,
     required this.tables,
     required this.paymentOptions,
-    required this.partnerData, // ✅ baru
+    required this.allPaymentOptionsForCache,
+    required this.partnerData,
   });
+
+  /// Options in the checkout sheet. "Bayar Sekarang" means "pay now in the
+  /// payment tab", not "pay cash": the actual method (cash, QRIS, manual) is
+  /// picked in the payment sheet, which already hides cash when the store
+  /// turned it off. So it only needs *some* method to pay with
+  /// ([hasPayableMethod]), not cash specifically.
+  static List<PaymentOption> buildPurchasePaymentOptions(
+    PartnerData? partnerData, {
+    required bool hasPayableMethod,
+  }) {
+    final paymentOptions = <PaymentOption>[];
+
+    if (hasPayableMethod) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.cashierCash,
+          value: 'CASH',
+          label: 'Bayar Sekarang',
+        ),
+      );
+    }
+
+    if (partnerData?.isOpenbillActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.openbill,
+          value: 'OPENBILL',
+          label: 'Bayar Nanti',
+        ),
+      );
+    }
+
+    return paymentOptions;
+  }
+
+  static List<PaymentOption> buildAllPaymentOptionsForCache(
+    Map<String, dynamic> json, {
+    PartnerData? partnerData,
+  }) {
+    final paymentOptions = <PaymentOption>[];
+
+    if (partnerData?.isCashierActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.cashierCash,
+          value: 'CASH',
+          label: 'Cash (Kasir)',
+        ),
+      );
+    }
+
+    if (partnerData?.isQrisActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.onlineQris,
+          value: 'QRIS',
+          label: 'QRIS (Xendit)',
+        ),
+      );
+    }
+
+    if (partnerData?.isOpenbillActive == true) {
+      paymentOptions.add(
+        const PaymentOption(
+          kind: PayKind.openbill,
+          value: 'OPENBILL',
+          label: 'Bayar Nanti',
+        ),
+      );
+    }
+
+    paymentOptions.addAll(parseManualPaymentOptions(json));
+    return paymentOptions;
+  }
 
   factory PurchasePayload.fromJson(Map<String, dynamic> json) {
 
@@ -56,51 +132,19 @@ class PurchasePayload {
       partnerData = PartnerData.fromJson(Map<String, dynamic>.from(partnerRaw));
     }
 
-    final manualPayments = parseManualPaymentOptions(json);
-
-    final paymentOptions = <PaymentOption>[];
-
-    // ✅ tampilkan Cash hanya jika aktif
-    if (partnerData?.isCashierActive == true) {
-      paymentOptions.add(
-        const PaymentOption(
-          kind: PayKind.cashierCash,
-          value: 'CASH',
-          label: 'Cash (Kasir)',
-        ),
-      );
-    }
-
-    // ✅ tampilkan QRIS hanya jika aktif
-    if (partnerData?.isQrisActive == true) {
-      paymentOptions.add(
-        const PaymentOption(
-          kind: PayKind.onlineQris,
-          value: 'QRIS',
-          label: 'QRIS (Xendit)',
-        ),
-      );
-    }
-
-    // ✅ tampilkan PAYLATER hanya jika aktif
-    if (partnerData?.isPaylaterActive == true) {
-      paymentOptions.add(
-        const PaymentOption(
-          kind: PayKind.paylater,
-          value: 'PAYLATER',
-          label: 'Bayar Nanti',
-        ),
-      );
-    }
-
-    // manual payments tetap ditambahkan
-    paymentOptions.addAll(manualPayments);
+    final allPaymentOptionsForCache =
+        buildAllPaymentOptionsForCache(json, partnerData: partnerData);
+    final paymentOptions = buildPurchasePaymentOptions(
+      partnerData,
+      hasPayableMethod: allPaymentOptionsForCache.any((o) => !o.isOpenbill),
+    );
 
     return PurchasePayload(
       products: products,
       categories: categories,
       tables: tables,
       paymentOptions: paymentOptions,
+      allPaymentOptionsForCache: allPaymentOptionsForCache,
       partnerData: partnerData,
     );
   }
@@ -111,21 +155,37 @@ class PartnerData {
   final String name;
   final bool isQrisActive;
   final bool isCashierActive;
-  final bool isPaylaterActive;
+  final bool isOpenbillActive;
 
   final num ppn;
   final bool isPpnActive;
   final int cashRoundingUnit;
+  final bool isWifiShown;
+  final String? wifiUser;
+  final String? wifiPassword;
+  final String? address;
+  final String? logo;
+  final bool printReceiptLogo;
+  final bool canViewReports;
+  final bool canOrderNotes;
 
   PartnerData({
     required this.id,
     required this.name,
     required this.isQrisActive,
     required this.isCashierActive,
-    required this.isPaylaterActive,
+    required this.isOpenbillActive,
     required this.ppn,
     required this.isPpnActive,
     required this.cashRoundingUnit,
+    this.isWifiShown = false,
+    this.wifiUser,
+    this.wifiPassword,
+    this.address,
+    this.logo,
+    this.printReceiptLogo = false,
+    this.canViewReports = false,
+    this.canOrderNotes = false,
   });
 
   factory PartnerData.fromJson(Map<String, dynamic> json) {
@@ -134,11 +194,46 @@ class PartnerData {
       name: (json['name'] ?? '').toString(),
       isQrisActive: parseBool(json['is_qr_active']),
       isCashierActive: parseBool(json['is_cashier_active']),
-      isPaylaterActive: parseBool(json['is_paylater']),
+      isOpenbillActive: parseBool(json['is_openbill']),
       ppn: parseNum(json['ppn']),
       isPpnActive: parseBool(json['is_ppn_active']),
       cashRoundingUnit: parseInt(json['cash_rounding_unit']),
+      isWifiShown: parseBool(json['is_wifi_shown']),
+      wifiUser: json['user_wifi']?.toString(),
+      wifiPassword: json['pass_wifi']?.toString(),
+      address: json['address']?.toString(),
+      logo: json['logo']?.toString(),
+      printReceiptLogo: parseBool(json['print_receipt_logo']),
+      canViewReports: parseBool(json['can_view_reports']),
+      canOrderNotes: parseBool(json['can_order_notes']),
     );
+  }
+
+  void applyReceiptLogo(Map<String, dynamic> order) {
+    if (order['print_receipt_logo'] != null) return;
+    order['print_receipt_logo'] = printReceiptLogo;
+    final path = (logo ?? '').trim();
+    if (printReceiptLogo && path.isNotEmpty) {
+      order['store_logo'] ??= path;
+    }
+  }
+
+  void applyReceiptWifi(Map<String, dynamic> order) {
+    if (isWifiShown) return;
+    order['store_is_wifi_shown'] = 0;
+    order['store_wifi_user'] = '';
+    order['store_wifi_password'] = '';
+  }
+
+  Map<String, dynamic> toWifiSnapshotMap() {
+    return {
+      'wifi_shown': isWifiShown ? 1 : 0,
+      if (wifiUser != null && wifiUser!.trim().isNotEmpty) 'wifi_ssid': wifiUser,
+      if (wifiPassword != null && wifiPassword!.trim().isNotEmpty)
+        'wifi_password': wifiPassword,
+      if (address != null && address!.trim().isNotEmpty)
+        'store_address': address,
+    };
   }
 }
 
@@ -523,7 +618,7 @@ class StoreTable {
   }
 }
 
-enum PayKind { cashierCash, onlineQris, manual, paylater }
+enum PayKind { cashierCash, onlineQris, manual, openbill }
 
 class PaymentOption {
   final PayKind kind;
@@ -553,6 +648,22 @@ class PaymentOption {
     this.qrisImageUrl,
     this.qrisImageLocalPath,
   });
+
+  bool get isOpenbill =>
+      kind == PayKind.openbill || value.trim().toUpperCase() == 'OPENBILL';
+
+  String get backendPaymentMethod {
+    switch (kind) {
+      case PayKind.cashierCash:
+        return 'CASH';
+      case PayKind.openbill:
+        return 'OPENBILL';
+      case PayKind.onlineQris:
+        return 'QRIS';
+      case PayKind.manual:
+        return value;
+    }
+  }
 }
 
 List<PaymentOption> parseManualPaymentOptions(Map<String, dynamic> data) {

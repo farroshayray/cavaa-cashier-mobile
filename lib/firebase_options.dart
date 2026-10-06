@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBG79gH1lTDHmji_fNdSTM0a0gO2ZMVdfw',
-    appId: '1:599856970241:android:5a6ca9d2249e0e8f265e00',
+    appId: '1:599856970241:android:0b55493f67a0c2a7265e00',
     messagingSenderId: '599856970241',
     projectId: 'cavaa-e0406',
     storageBucket: 'cavaa-e0406.firebasestorage.app',
@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '599856970241',
     projectId: 'cavaa-e0406',
     storageBucket: 'cavaa-e0406.firebasestorage.app',
-    iosBundleId: 'com.example.cavaaCashier',
+    iosBundleId: 'id.cavaa.kasir',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -73,7 +73,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '599856970241',
     projectId: 'cavaa-e0406',
     storageBucket: 'cavaa-e0406.firebasestorage.app',
-    iosBundleId: 'com.example.cavaaCashier',
+    iosBundleId: 'id.cavaa.kasir',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

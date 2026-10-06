@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/auth_repository.dart';
 import '../data/models/user_model.dart';
+import '../data/models/owner_model.dart';
 import 'package:dio/dio.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -12,22 +13,54 @@ class AuthProvider extends ChangeNotifier {
   String? errorMessage;
   bool isLoggedIn = false;
   UserModel? user;
+  OwnerModel? owner;
+  String? authRole; // owner | cashier
+  bool viaOwner = false;
   Map<String, dynamic>? appUpdate;
   Map<String, List<WorkScheduleRange>>? blockedWorkSchedule;
   String? blockedWorkScheduleSummary;
 
+  bool get isOwner => authRole == 'owner';
+  bool get isCashier => authRole == 'cashier';
+
+  void applyOwner(OwnerModel next) {
+    owner = next;
+    notifyListeners();
+  }
+
   Future<void> bootstrap() async {
     final hasToken = await repo.hasToken();
+    authRole = await repo.getAuthRole();
+    viaOwner = await repo.getViaOwner();
 
     if (!hasToken) {
       isLoggedIn = false;
       user = null;
+      owner = null;
       appUpdate = null;
       notifyListeners();
       return;
     }
 
     isLoggedIn = true;
+
+    if (authRole == 'owner') {
+      final cachedOwner = await repo.getCachedOwner();
+      if (cachedOwner != null) {
+        owner = cachedOwner;
+      }
+      notifyListeners();
+
+      try {
+        await fetchOwnerMe();
+      } on DioException catch (e) {
+        await _handleBootstrapAuthError(e, isOwnerFlow: true);
+      } catch (e) {
+        debugPrint('bootstrap owner fetchMe failed: $e');
+        notifyListeners();
+      }
+      return;
+    }
 
     final cachedUser = await repo.getCachedUser();
     if (cachedUser != null) {
@@ -39,48 +72,49 @@ class AuthProvider extends ChangeNotifier {
     try {
       await fetchMe();
     } on DioException catch (e) {
-      debugPrint('bootstrap fetchMe dio failed: $e');
-
-      final data = e.response?.data;
-      final shouldLogoutWithMessage =
-          e.response?.statusCode == 403 &&
-          data is Map &&
-          data['message'] != null;
-
-      if (e.response?.statusCode == 401 || shouldLogoutWithMessage) {
-        errorMessage = shouldLogoutWithMessage
-            ? _messageFromErrorData(data)
-            : null;
-        await repo.logout();
-        isLoggedIn = false;
-        user = null;
-        appUpdate = null;
-        notifyListeners();
-        return;
-      }
-
-      if (cachedUser != null) {
-        user = cachedUser;
-        isLoggedIn = true;
-      } else {
-        isLoggedIn = true;
-      }
-
-      notifyListeners();
+      await _handleBootstrapAuthError(e, isOwnerFlow: false);
     } catch (e) {
       debugPrint(
         'bootstrap fetchMe failed, keep logged in with cached token: $e',
       );
-
-      if (cachedUser != null) {
-        user = cachedUser;
-        isLoggedIn = true;
-      } else {
-        isLoggedIn = true;
-      }
-
       notifyListeners();
     }
+  }
+
+  Future<void> _handleBootstrapAuthError(
+    DioException e, {
+    required bool isOwnerFlow,
+  }) async {
+    debugPrint('bootstrap fetchMe dio failed: $e');
+
+    final data = e.response?.data;
+    final shouldLogoutWithMessage =
+        e.response?.statusCode == 403 &&
+        data is Map &&
+        data['message'] != null;
+
+    if (e.response?.statusCode == 401 || shouldLogoutWithMessage) {
+      errorMessage = shouldLogoutWithMessage
+          ? _messageFromErrorData(data)
+          : null;
+      await repo.logout();
+      isLoggedIn = false;
+      user = null;
+      owner = null;
+      authRole = null;
+      viaOwner = false;
+      appUpdate = null;
+      notifyListeners();
+      return;
+    }
+
+    if (isOwnerFlow) {
+      owner ??= await repo.getCachedOwner();
+    } else {
+      user ??= await repo.getCachedUser();
+    }
+    isLoggedIn = true;
+    notifyListeners();
   }
 
   Future<bool> login(
@@ -99,7 +133,10 @@ class AuthProvider extends ChangeNotifier {
 
       final me = await repo.me();
       user = me.user;
+      owner = null;
       appUpdate = me.appUpdate;
+      authRole = 'cashier';
+      viaOwner = false;
       isLoggedIn = true;
 
       await repo.saveCachedUser(me.user);
@@ -134,6 +171,237 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> ownerLogin(String email, String password) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+
+      owner = await repo.ownerLogin(email: email, password: password);
+      user = null;
+      authRole = 'owner';
+      viaOwner = false;
+      isLoggedIn = true;
+      return true;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      errorMessage = data is Map && data['message'] != null
+          ? _messageFromErrorData(data)
+          : 'Login owner gagal';
+      return false;
+    } catch (e) {
+      errorMessage = 'Login owner gagal';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> ownerGoogle(String idToken) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+
+      owner = await repo.ownerGoogle(idToken: idToken);
+      user = null;
+      authRole = 'owner';
+      viaOwner = false;
+      isLoggedIn = true;
+      return true;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      errorMessage = data is Map && data['message'] != null
+          ? _messageFromErrorData(data)
+          : 'Daftar/login Google gagal';
+      return false;
+    } catch (e) {
+      errorMessage = 'Daftar/login Google gagal';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> setOwnerPassword(String password, String confirmation) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+
+      owner = await repo.ownerSetPassword(
+        password: password,
+        passwordConfirmation: confirmation,
+      );
+      return true;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        errorMessage = _messageFromErrorData(data);
+      } else if (data is Map && data['errors'] is Map) {
+        final errors = data['errors'] as Map;
+        errorMessage = errors.values
+            .expand((v) => v is List ? v : [v])
+            .map((e) => e.toString())
+            .join('\n');
+      } else {
+        errorMessage = 'Gagal menyimpan password';
+      }
+      return false;
+    } catch (e) {
+      errorMessage = 'Gagal menyimpan password';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateOwnerProfile({
+    required String name,
+    String? phoneNumber,
+    String? imagePath,
+  }) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+      owner = await repo.ownerUpdateProfile(
+        name: name,
+        phoneNumber: phoneNumber,
+        imagePath: imagePath,
+      );
+      return true;
+    } on DioException catch (e) {
+      errorMessage = _messageFromDio(e, 'Gagal menyimpan profil');
+      return false;
+    } catch (_) {
+      errorMessage = 'Gagal menyimpan profil';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> changeOwnerPassword({
+    required String currentPassword,
+    required String password,
+    required String confirmation,
+  }) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+      owner = await repo.ownerChangePassword(
+        currentPassword: currentPassword,
+        password: password,
+        passwordConfirmation: confirmation,
+      );
+      return true;
+    } on DioException catch (e) {
+      errorMessage = _messageFromDio(e, 'Gagal mengganti password');
+      return false;
+    } catch (_) {
+      errorMessage = 'Gagal mengganti password';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Returns success message on success, null on failure (see [errorMessage]).
+  Future<String?> ownerForgotPassword(String email) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+      return await repo.ownerForgotPassword(email: email);
+    } on DioException catch (e) {
+      errorMessage = _messageFromDio(e, 'Gagal mengirim link reset password');
+      return null;
+    } catch (_) {
+      errorMessage = 'Gagal mengirim link reset password';
+      return null;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  String _messageFromDio(DioException e, String fallback) {
+    final data = e.response?.data;
+    if (data is Map && data['message'] != null) {
+      return _messageFromErrorData(data);
+    }
+    if (data is Map && data['errors'] is Map) {
+      final errors = data['errors'] as Map;
+      final text = errors.values
+          .expand((v) => v is List ? v : [v])
+          .map((item) => item.toString())
+          .join('\n');
+      if (text.isNotEmpty) return text;
+    }
+    return fallback;
+  }
+
+  Future<bool> enterCashierAsOwner({int? storeId}) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+
+      final login = await repo.startOwnerCashierSession(storeId: storeId);
+      user = login.user;
+      authRole = 'cashier';
+      viaOwner = true;
+      isLoggedIn = true;
+      return true;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      errorMessage = data is Map && data['message'] != null
+          ? _messageFromErrorData(data)
+          : 'Gagal masuk mode kasir';
+      return false;
+    } catch (e) {
+      errorMessage = 'Gagal masuk mode kasir';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> returnToOwner() async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+
+      owner = await repo.returnToOwner();
+      user = null;
+      authRole = 'owner';
+      viaOwner = false;
+      isLoggedIn = true;
+      return true;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      errorMessage = data is Map && data['message'] != null
+          ? _messageFromErrorData(data)
+          : 'Gagal kembali ke menu owner';
+      return false;
+    } catch (e) {
+      errorMessage = 'Gagal kembali ke menu owner';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> fetchMe() async {
     try {
       final me = await repo.me();
@@ -149,10 +417,52 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> fetchOwnerMe() async {
+    try {
+      owner = await repo.ownerMe();
+      isLoggedIn = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('fetchOwnerMe error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> refreshOwner() async {
+    if (authRole != 'owner') return;
+    await fetchOwnerMe();
+  }
+
+  Future<bool> selectStore(int storeId) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+
+      owner = await repo.selectStore(storeId);
+      return true;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      errorMessage = data is Map && data['message'] != null
+          ? _messageFromErrorData(data)
+          : 'Gagal memilih toko';
+      return false;
+    } catch (e) {
+      errorMessage = 'Gagal memilih toko';
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> logout() async {
     await repo.logout();
     user = null;
+    owner = null;
     appUpdate = null;
+    authRole = null;
+    viaOwner = false;
     isLoggedIn = false;
     notifyListeners();
   }

@@ -1,0 +1,1429 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '/features/auth/presentation/auth_provider.dart';
+import 'owner_addons_page.dart';
+import 'owner_home_page.dart';
+import '../widgets/dock_inset.dart';
+
+const _brand = Color(0xFFAE1504);
+const _bg = Color(0xFFF6F7F9);
+
+const _dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const _dayLabels = {
+  'mon': 'Sen',
+  'tue': 'Sel',
+  'wed': 'Rab',
+  'thu': 'Kam',
+  'fri': 'Jum',
+  'sat': 'Sab',
+  'sun': 'Min',
+};
+
+String _formatMoney(num n) {
+  return n.toStringAsFixed(0).replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+        (m) => '${m[1]}.',
+      );
+}
+
+String promotionDiscountLabel(Map<String, dynamic> p) {
+  final type = p['promotion_type']?.toString() ?? p['type']?.toString() ?? '';
+  final raw = p['promotion_value'] ?? p['value'];
+  final n = raw is num ? raw : num.tryParse('$raw');
+  if (n == null || type.isEmpty) return '';
+  if (type == 'percentage') {
+    final shown = n == n.roundToDouble() ? '${n.toInt()}' : '$n';
+    return '$shown%';
+  }
+  if (type == 'amount') return 'Rp ${_formatMoney(n)}';
+  return '';
+}
+
+String _pad2(int n) => n.toString().padLeft(2, '0');
+
+String _formatDateTime(DateTime? dt) {
+  if (dt == null) return 'Pilih tanggal & jam';
+  final local = dt.toLocal();
+  return '${_pad2(local.day)}/${_pad2(local.month)}/${local.year}, '
+      '${_pad2(local.hour)}:${_pad2(local.minute)}';
+}
+
+/// Opens promotions manager and returns refreshed list when closed.
+Future<List<Map<String, dynamic>>?> openPromotionManager(
+  BuildContext context,
+) async {
+  return Navigator.of(context).push<List<Map<String, dynamic>>>(
+    MaterialPageRoute(builder: (_) => const PromotionsPage()),
+  );
+}
+
+class _DateTimeField extends StatelessWidget {
+  const _DateTimeField({
+    required this.label,
+    required this.value,
+    required this.hasValue,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final bool hasValue;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _brand.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.calendar_month_rounded,
+                  color: _brand,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
+                        color: Colors.black.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: hasValue ? FontWeight.w700 : FontWeight.w500,
+                        color: hasValue
+                            ? const Color(0xFF0F172A)
+                            : Colors.black.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.black.withValues(alpha: 0.28),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PromotionsPage extends StatefulWidget {
+  const PromotionsPage({super.key});
+
+  @override
+  State<PromotionsPage> createState() => _PromotionsPageState();
+}
+
+class _PromotionsPageState extends State<PromotionsPage> {
+  bool _loading = true;
+  bool _refreshing = false;
+  String? _error;
+  String _query = '';
+  String? _typeFilter; // percentage | amount | null
+  List<Map<String, dynamic>> _promotions = [];
+  final _search = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    } else {
+      setState(() => _refreshing = true);
+    }
+
+    try {
+      final data = await ownerApiOf(context).listPromotions(
+        q: _query,
+        type: _typeFilter,
+      );
+      final list = data['promotions'];
+      setState(() {
+        _promotions = list is List
+            ? list
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : [];
+        _error = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Gagal memuat promosi');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _refreshing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openEditor({Map<String, dynamic>? promo}) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PromotionEditorPage(promotion: promo),
+      ),
+    );
+    if (changed == true && mounted) await _load(silent: true);
+  }
+
+  Future<void> _confirmDelete(Map<String, dynamic> promo) async {
+    final id = int.tryParse('${promo['id'] ?? ''}');
+    if (id == null) return;
+    final name =
+        promo['name']?.toString() ?? promo['promotion_name']?.toString() ?? '';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus promosi?'),
+        content: Text('Hapus “$name”? Produk yang memakai promo ini akan kehilangan tautan promo.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ownerApiOf(context).deletePromotion(id);
+      await _load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Promosi dihapus')),
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            data is Map && data['message'] != null
+                ? data['message'].toString()
+                : 'Gagal menghapus',
+          ),
+        ),
+      );
+    }
+  }
+
+  Color _statusColor(String? status) {
+    switch (status) {
+      case 'inactive':
+        return const Color(0xFF64748B);
+      case 'upcoming':
+        return const Color(0xFF1D4ED8);
+      case 'expired':
+        return const Color(0xFFB45309);
+      default:
+        return const Color(0xFF0B6E4F);
+    }
+  }
+
+  String _valueLabel(Map<String, dynamic> p) {
+    final type = p['promotion_type']?.toString() ?? '';
+    final value = p['promotion_value'];
+    final n = value is num ? value : num.tryParse('$value') ?? 0;
+    if (type == 'percentage') return '${n.toStringAsFixed(0)}%';
+    return 'Rp ${_formatMoney(n)}';
+  }
+
+  String _daysLabel(dynamic raw) {
+    if (raw is! List || raw.isEmpty) return 'Setiap hari';
+    final keys = raw.map((e) => e.toString()).toList();
+    if (keys.length >= 7) return 'Setiap hari';
+    return keys.map((k) => _dayLabels[k] ?? k).join(', ');
+  }
+
+  Future<void> _popWithResult() async {
+    List<Map<String, dynamic>> result = _promotions;
+    try {
+      final data = await ownerApiOf(context).listPromotions();
+      final list = data['promotions'];
+      if (list is List) {
+        result = list
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {
+      // Fall back to in-memory list (may be filtered).
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _popWithResult();
+      },
+      child: Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        title: const Text(
+          'Promosi',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: _brand,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _popWithResult,
+        ),
+        actions: [
+          if (_refreshing)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      floatingActionButton: DockAwareFab(
+        child: FloatingActionButton.extended(
+          onPressed: _loading ? null : () => _openEditor(),
+          backgroundColor: _brand,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text(
+            'Tambah promo',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: _brand))
+          : RefreshIndicator(
+              color: _brand,
+              onRefresh: () => _load(silent: true),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100).withBottomInset(context),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFAE1504), Color(0xFF7A0E03)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Diskon & penawaran',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.98),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Buat promo persen atau nominal, atur jadwal, lalu pasang ke produk.',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.78),
+                                  fontSize: 12.5,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${_promotions.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _search,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Cari nama atau kode promo…',
+                      filled: true,
+                      fillColor: Colors.white,
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _search.clear();
+                                _query = '';
+                                _load(silent: true);
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Colors.black.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Colors.black.withValues(alpha: 0.06),
+                        ),
+                      ),
+                    ),
+                    onSubmitted: (v) {
+                      _query = v.trim();
+                      _load(silent: true);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB).withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        _PromoSegmentTab(
+                          label: 'Semua',
+                          icon: Icons.grid_view_rounded,
+                          selected: _typeFilter == null,
+                          onTap: () {
+                            setState(() => _typeFilter = null);
+                            _load(silent: true);
+                          },
+                        ),
+                        _PromoSegmentTab(
+                          label: 'Persen',
+                          icon: Icons.percent_rounded,
+                          selected: _typeFilter == 'percentage',
+                          onTap: () {
+                            setState(() => _typeFilter = 'percentage');
+                            _load(silent: true);
+                          },
+                        ),
+                        _PromoSegmentTab(
+                          label: 'Nominal',
+                          icon: Icons.payments_rounded,
+                          selected: _typeFilter == 'amount',
+                          onTap: () {
+                            setState(() => _typeFilter = 'amount');
+                            _load(silent: true);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                  ],
+                  const SizedBox(height: 14),
+                  if (_promotions.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.black.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              color: _brand.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Icon(
+                              Icons.local_offer_outlined,
+                              color: _brand,
+                              size: 30,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            _query.isEmpty && _typeFilter == null
+                                ? 'Belum ada promosi'
+                                : 'Tidak ada hasil',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _query.isEmpty && _typeFilter == null
+                                ? 'Tambah promo diskon persen atau potongan harga tetap.'
+                                : 'Coba ubah filter atau kata kunci.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.black.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._promotions.map((p) {
+                      final status = p['status']?.toString() ?? 'active';
+                      final statusColor = _statusColor(status);
+                      final type = p['promotion_type']?.toString() ?? '';
+                      final isPercent = type == 'percentage';
+                      final code = p['promotion_code']?.toString() ?? '';
+                      final name = p['name']?.toString() ??
+                          p['promotion_name']?.toString() ??
+                          '-';
+                      final usesExpiry = p['uses_expiry'] == true;
+                      final start = p['start_date']?.toString();
+                      final end = p['end_date']?.toString();
+                      final valueText = _valueLabel(p);
+                      final daysText = _daysLabel(p['active_days']);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.black.withValues(alpha: 0.06),
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => _openEditor(promo: p),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: _brand.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      isPercent
+                                          ? Icons.percent_rounded
+                                          : Icons.payments_rounded,
+                                      color: _brand,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          name,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          [
+                                            valueText,
+                                            if (code.isNotEmpty) code,
+                                            daysText,
+                                          ].join(' · '),
+                                          style: TextStyle(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.55),
+                                            fontSize: 12.5,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          children: [
+                                            _PromoMetaChip(
+                                              label: isPercent
+                                                  ? 'Persen'
+                                                  : 'Nominal',
+                                              filled: true,
+                                            ),
+                                            if (usesExpiry &&
+                                                (start != null || end != null))
+                                              _PromoMetaChip(
+                                                label:
+                                                    '${start ?? '…'} → ${end ?? '…'}',
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Icon(
+                                          status == 'active'
+                                              ? Icons.check_circle_rounded
+                                              : status == 'inactive'
+                                                  ? Icons
+                                                      .pause_circle_filled_rounded
+                                                  : Icons.schedule_rounded,
+                                          color: status == 'active'
+                                              ? const Color(0xFF0B6E4F)
+                                              : statusColor,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: () => _confirmDelete(p),
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: _brand,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            ),
+      ),
+    );
+  }
+}
+
+/// Promo dropdown + "Kelola promo" action for product forms.
+class PromotionSelectWithManage extends StatelessWidget {
+  const PromotionSelectWithManage({
+    super.key,
+    required this.promotions,
+    required this.promotionId,
+    required this.onChanged,
+    required this.onPromotionsUpdated,
+    this.enabled = true,
+  });
+
+  final List<Map<String, dynamic>> promotions;
+  final int? promotionId;
+  final ValueChanged<int?> onChanged;
+  final ValueChanged<List<Map<String, dynamic>>> onPromotionsUpdated;
+  final bool enabled;
+
+  Future<void> _openPaywall(BuildContext context) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fitur berbayar'),
+        content: const Text(
+          'Kelola promo memerlukan add-on Promosi menu atau paket yang mendukung.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: _brand),
+            child: const Text('Lihat Add-on'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const OwnerAddonsPage(
+          highlightFeatureKey: 'products_promotions',
+          highlightAddonCode: 'promotions',
+        ),
+      ),
+    );
+    if (context.mounted) {
+      await context.read<AuthProvider>().refreshOwner();
+    }
+  }
+
+  Future<void> _manage(BuildContext context) async {
+    final canPromo =
+        context.read<AuthProvider>().owner?.hasFeature('products_promotions') ??
+            false;
+    if (!canPromo) {
+      await _openPaywall(context);
+      return;
+    }
+    final result = await openPromotionManager(context);
+    if (result == null) return;
+    onPromotionsUpdated(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canPromo =
+        context.watch<AuthProvider>().owner?.hasFeature('products_promotions') ??
+            false;
+    final validId = promotionId != null &&
+            promotions.any((p) => int.tryParse('${p['id']}') == promotionId)
+        ? promotionId
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Promo',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: enabled ? () => _manage(context) : null,
+              style: TextButton.styleFrom(
+                foregroundColor: _brand,
+                visualDensity: VisualDensity.compact,
+              ),
+              icon: Icon(
+                canPromo ? Icons.tune_rounded : Icons.lock_outline_rounded,
+                size: 18,
+              ),
+              label: const Text(
+                'Kelola promo',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<int?>(
+          key: ValueKey(
+            'promo-dd-${promotions.map((p) => '${p['id']}-${p['promotion_type']}-${p['promotion_value']}').join('-')}-$validId',
+          ),
+          initialValue: validId,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            hintText: 'Pilih promo (opsional)',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem<int?>(
+              value: null,
+              child: Text('Tanpa promo'),
+            ),
+            ...promotions.map((p) {
+              final id = int.tryParse('${p['id']}');
+              if (id == null) return null;
+              final name =
+                  p['name']?.toString() ?? p['promotion_name']?.toString();
+              final discount = promotionDiscountLabel(p);
+              final label = (name == null || name.isEmpty) ? '-' : name;
+              return DropdownMenuItem<int?>(
+                value: id,
+                child: Text(
+                  discount.isEmpty ? label : '$label · $discount',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).whereType<DropdownMenuItem<int?>>(),
+          ],
+          onChanged: enabled ? onChanged : null,
+        ),
+        if (!canPromo) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFFDBA74)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: Color(0xFFC2410C),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Membuat & mengelola promo memerlukan add-on. Ketuk “Kelola promo” untuk melihatnya.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: Colors.brown.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PromoSegmentTab extends StatelessWidget {
+  const _PromoSegmentTab({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: selected ? _brand : const Color(0xFF6B7280),
+                ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                      color: selected ? _brand : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoMetaChip extends StatelessWidget {
+  const _PromoMetaChip({
+    required this.label,
+    this.filled = false,
+  });
+
+  final String label;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: filled
+            ? _brand.withValues(alpha: 0.1)
+            : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: filled ? _brand : const Color(0xFF475569),
+        ),
+      ),
+    );
+  }
+}
+
+class PromotionEditorPage extends StatefulWidget {
+  const PromotionEditorPage({super.key, this.promotion});
+
+  final Map<String, dynamic>? promotion;
+
+  @override
+  State<PromotionEditorPage> createState() => _PromotionEditorPageState();
+}
+
+class _PromotionEditorPageState extends State<PromotionEditorPage> {
+  final _name = TextEditingController();
+  final _value = TextEditingController();
+  final _desc = TextEditingController();
+
+  String _type = 'percentage';
+  bool _usesExpiry = false;
+  bool _isActive = true;
+  DateTime? _start;
+  DateTime? _end;
+  final Set<String> _days = {};
+  bool _saving = false;
+  String? _error;
+
+  bool get _isEdit => widget.promotion != null;
+  int? get _id => int.tryParse('${widget.promotion?['id'] ?? ''}');
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.promotion;
+    if (p != null) {
+      _name.text =
+          p['name']?.toString() ?? p['promotion_name']?.toString() ?? '';
+      _type = p['promotion_type']?.toString() == 'amount'
+          ? 'amount'
+          : 'percentage';
+      final v = p['promotion_value'];
+      _value.text = v is num
+          ? (v % 1 == 0 ? v.toStringAsFixed(0) : v.toString())
+          : (v?.toString() ?? '');
+      _desc.text = p['description']?.toString() ?? '';
+      _usesExpiry = p['uses_expiry'] == true;
+      _isActive = p['is_active'] == true || p['is_active'] == 1;
+      _start = _parseDt(p['start_date_iso'] ?? p['start_date']);
+      _end = _parseDt(p['end_date_iso'] ?? p['end_date']);
+      final days = p['active_days'];
+      if (days is List) {
+        _days.addAll(days.map((e) => e.toString()));
+      }
+    }
+  }
+
+  DateTime? _parseDt(dynamic raw) {
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString());
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _value.dispose();
+    _desc.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateTime({required bool isStart}) async {
+    final initial = (isStart ? _start : _end) ?? DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
+    );
+    if (time == null) return;
+    final dt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    setState(() {
+      if (isStart) {
+        _start = dt;
+      } else {
+        _end = dt;
+      }
+    });
+  }
+
+  String _fmt(DateTime? dt) => _formatDateTime(dt);
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    final value = num.tryParse(_value.text.trim().replaceAll(',', '.'));
+    if (name.isEmpty) {
+      setState(() => _error = 'Nama promo wajib diisi');
+      return;
+    }
+    if (value == null) {
+      setState(() => _error = 'Nilai promo wajib diisi');
+      return;
+    }
+    if (_type == 'percentage' && (value < 1 || value > 100)) {
+      setState(() => _error = 'Persentase harus 1–100');
+      return;
+    }
+    if (_usesExpiry) {
+      if (_start == null || _end == null) {
+        setState(() => _error = 'Lengkapi tanggal mulai dan selesai');
+        return;
+      }
+      if (!_end!.isAfter(_start!)) {
+        setState(() => _error = 'Tanggal selesai harus setelah mulai');
+        return;
+      }
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final api = ownerApiOf(context);
+      final days = _days.isEmpty ? null : _dayKeys.where(_days.contains).toList();
+      if (_isEdit && _id != null) {
+        await api.updatePromotion(
+          id: _id!,
+          name: name,
+          type: _type,
+          value: value,
+          usesExpiry: _usesExpiry,
+          startDate: _start,
+          endDate: _end,
+          activeDays: days,
+          isActive: _isActive,
+          description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+        );
+      } else {
+        await api.createPromotion(
+          name: name,
+          type: _type,
+          value: value,
+          usesExpiry: _usesExpiry,
+          startDate: _start,
+          endDate: _end,
+          activeDays: days,
+          isActive: _isActive,
+          description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isEdit ? 'Promosi diperbarui' : 'Promosi dibuat'),
+        ),
+      );
+      Navigator.of(context).pop(true);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      setState(() {
+        _error = data is Map && data['message'] != null
+            ? data['message'].toString()
+            : 'Gagal menyimpan promosi';
+      });
+    } catch (_) {
+      setState(() => _error = 'Gagal menyimpan promosi');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        title: Text(
+          _isEdit ? 'Edit Promosi' : 'Tambah Promosi',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: _brand,
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _name,
+                  enabled: !_saving,
+                  decoration: const InputDecoration(
+                    labelText: 'Nama promo',
+                    hintText: 'Contoh: Diskon Weekend',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Jenis diskon',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TypeCard(
+                        selected: _type == 'percentage',
+                        icon: Icons.percent_rounded,
+                        title: 'Persen',
+                        subtitle: 'Mis. 10%',
+                        onTap: _saving
+                            ? null
+                            : () => setState(() => _type = 'percentage'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _TypeCard(
+                        selected: _type == 'amount',
+                        icon: Icons.payments_outlined,
+                        title: 'Nominal',
+                        subtitle: 'Mis. Rp 5.000',
+                        onTap: _saving
+                            ? null
+                            : () => setState(() => _type = 'amount'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _value,
+                  enabled: !_saving,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: _type == 'percentage'
+                        ? 'Nilai persen (1–100)'
+                        : 'Nilai nominal (Rp)',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _desc,
+                  enabled: !_saving,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Deskripsi (opsional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeThumbColor: _brand,
+                  title: const Text(
+                    'Aktifkan promo',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: const Text('Nonaktif = tidak dipakai kasir'),
+                  value: _isActive,
+                  onChanged:
+                      _saving ? null : (v) => setState(() => _isActive = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeThumbColor: _brand,
+                  title: const Text(
+                    'Pakai masa berlaku',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: const Text('Batasi dengan tanggal mulai & selesai'),
+                  value: _usesExpiry,
+                  onChanged:
+                      _saving ? null : (v) => setState(() => _usesExpiry = v),
+                ),
+                if (_usesExpiry) ...[
+                  const SizedBox(height: 4),
+                  _DateTimeField(
+                    label: 'Mulai',
+                    value: _start != null ? _fmt(_start) : 'Pilih tanggal & jam',
+                    hasValue: _start != null,
+                    enabled: !_saving,
+                    onTap: () => _pickDateTime(isStart: true),
+                  ),
+                  const SizedBox(height: 8),
+                  _DateTimeField(
+                    label: 'Selesai',
+                    value: _end != null ? _fmt(_end) : 'Pilih tanggal & jam',
+                    hasValue: _end != null,
+                    enabled: !_saving,
+                    onTap: () => _pickDateTime(isStart: false),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Hari aktif',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Kosongkan = berlaku setiap hari',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.black.withValues(alpha: 0.5),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _dayKeys.map((d) {
+                    final selected = _days.contains(d);
+                    return FilterChip(
+                      label: Text(_dayLabels[d]!),
+                      selected: selected,
+                      onSelected: _saving
+                          ? null
+                          : (v) {
+                              setState(() {
+                                if (v) {
+                                  _days.add(d);
+                                } else {
+                                  _days.remove(d);
+                                }
+                              });
+                            },
+                      selectedColor: _brand.withValues(alpha: 0.12),
+                      checkmarkColor: _brand,
+                      side: BorderSide(
+                        color: selected
+                            ? _brand.withValues(alpha: 0.35)
+                            : Colors.black.withValues(alpha: 0.1),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _brand,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            _isEdit ? 'Simpan Perubahan' : 'Simpan Promo',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TypeCard extends StatelessWidget {
+  const _TypeCard({
+    required this.selected,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? _brand.withValues(alpha: 0.08) : const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? _brand.withValues(alpha: 0.4)
+                  : Colors.black.withValues(alpha: 0.06),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: selected ? _brand : const Color(0xFF64748B)),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: selected ? _brand : const Color(0xFF0F172A),
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

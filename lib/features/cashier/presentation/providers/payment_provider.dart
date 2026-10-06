@@ -1,17 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
-import 'package:drift/drift.dart';
-import '../../data/models/orders_repository.dart';
-import '/features/cashier/data/local/db/daos/local_orders_dao.dart';
-import '/features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
-import '/features/cashier/data/local/db/cashier_db.dart';
-import '/core/services/connectivity_status_provider.dart';
-import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
-import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
-import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
-import 'dart:convert';
-
 import 'dart:io';
+import 'package:drift/drift.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
+import '../../data/models/orders_repository.dart';
+import '/features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/local/db/daos/cache_dao.dart';
+import '/features/cashier/data/local/db/mappers/order_mirror_mapper.dart';
+import '/features/cashier/data/sync/manual_payment_image_cache.dart';
+import '/features/cashier/data/sync/order_detail_resolver.dart';
+import '/features/cashier/data/sync/order_stage_resolver.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/order_tab_item_mapper.dart';
+import '/features/cashier/presentation/utils/order_tab_sort.dart';
+import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/presentation/providers/done_provider.dart';
+import '/features/cashier/presentation/providers/process_provider.dart';
+import '/core/services/connectivity_status_provider.dart';
+import '/features/cashier/presentation/utils/order_edit_utils.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
@@ -19,22 +27,19 @@ import '/core/config/env.dart';
 
 class PaymentProvider extends ChangeNotifier {
   final OrdersRepository repo;
-  final LocalOrdersDao localOrdersDao;
-  final CachedPaymentOrdersDao cachedPaymentOrdersDao;
   final CachedPaymentMethodsDao cachedPaymentMethodsDao;
   final ConnectivityStatusProvider connectivity;
-  final CachedProcessOrdersDao cachedProcessOrdersDao;
-  final CachedDoneOrdersDao cachedDoneOrdersDao;
-  
+  final BookingOrdersDao bookingOrdersDao;
+  final OrderTabCoordinator tabCoordinator;
+  final SyncService? syncService;
 
   PaymentProvider({
     required this.repo,
-    required this.localOrdersDao,
-    required this.cachedPaymentOrdersDao,
     required this.cachedPaymentMethodsDao,
-    required this.cachedProcessOrdersDao,
-    required this.cachedDoneOrdersDao,
     required this.connectivity,
+    required this.bookingOrdersDao,
+    required this.tabCoordinator,
+    this.syncService,
   });
 
   bool isLoading = false;
@@ -42,214 +47,125 @@ class PaymentProvider extends ChangeNotifier {
 
   String query = '';
   List<Map<String, dynamic>> items = [];
+  Future<void>? _loadInFlight;
+  bool _loadInFlightSilent = true;
 
-  Future<void> load() async {
-    isLoading = true;
-    error = null;
-    notifyListeners();
+  Future<void> load({bool silent = false}) {
+    if (_loadInFlight != null) {
+      if (!silent) _loadInFlightSilent = false;
+      return _loadInFlight!;
+    }
+
+    _loadInFlightSilent = silent;
+    _loadInFlight = _loadImpl(silent: _loadInFlightSilent).whenComplete(() {
+      _loadInFlight = null;
+      _loadInFlightSilent = true;
+    });
+    return _loadInFlight!;
+  }
+
+  Future<void> _loadImpl({bool silent = false}) async {
+    if (!silent) {
+      isLoading = true;
+      error = null;
+      notifyListeners();
+    }
 
     try {
-      final mergedItems = <Map<String, dynamic>>[];
-      bool gotServer = false;
+      await bookingOrdersDao.reconcileDuplicateMirrors();
+      if (connectivity.isOnline) {
+        unawaited(
+          ManualPaymentImageCache.prefetchMissingFromCache(bookingOrdersDao.db),
+        );
+      }
 
-      final advancedLocalOrders =
-          await localOrdersDao.getLocallyAdvancedServerOrders();
-
-      final hiddenServerIds = advancedLocalOrders
-          .map((e) => e.serverId)
-          .whereType<int>()
-          .toSet();
-
-      final hiddenOrderCodes = advancedLocalOrders
-          .map((e) => e.serverOrderCode ?? e.clientOrderCode)
-          .where((e) => e.trim().isNotEmpty)
-          .toSet();
-
-      final processRows = await cachedProcessOrdersDao.getAllActive();
-      final doneRows = await cachedDoneOrdersDao.getAllActive();
+      final processRows = await bookingOrdersDao.getProcessTabOrders();
+      final doneRows = await bookingOrdersDao.getDoneTabOrders();
 
       final pendingFinishServerIds = processRows
-          .where((e) => e.pendingAction == 'FINISH' && e.isSynced == false)
-          .map((e) => e.serverId)
+          .where((e) =>
+              (e['sync_dirty'] == true || e['sync_dirty'] == 1) &&
+              (e['sync_intent']?.toString() ?? '').toUpperCase() == 'FINISH')
+          .map((e) => _toInt(e['id']))
+          .whereType<int>()
           .toSet();
 
       final processServerIds = processRows
           .where((e) {
-            if (e.paymentMethod == 'PAYLATER' &&
-                (e.pendingAction == 'FINISH' || e.orderStatus == 'SERVED')) {
-              return false;
+            final status = (e['order_status'] ?? '').toString();
+            if ((e['payment_method'] ?? '').toString() == 'OPENBILL' ||
+                status.startsWith('OPENBILL')) {
+              if (status == 'UNPAID' ||
+                  (e['sync_intent']?.toString() ?? '').toUpperCase() == 'FINISH' ||
+                  status == 'SERVED') {
+                return false;
+              }
             }
-            return true;
+            const activeProcessStatuses = {
+              'PROCESSED',
+              'PAID',
+              'OPENBILL_WAITING_ORDER',
+              'OPENBILL_CONFIRMATION',
+            };
+            return activeProcessStatuses.contains(status);
           })
-          .map((e) => e.serverId)
+          .map((e) => _toInt(e['id']))
+          .whereType<int>()
           .toSet();
 
       final doneServerIds = doneRows
-          .map((e) => e.serverId)
+          .map((e) => _toInt(e['id']))
+          .whereType<int>()
           .toSet();
 
       final doneOrderCodes = doneRows
-          .map((e) => e.bookingOrderCode.trim())
+          .map((e) => (e['booking_order_code'] ?? '').toString().trim())
           .where((e) => e.isNotEmpty)
           .toSet();
 
-      try {
-        final res = await repo.fetchOrdersData(
-          tab: 'pembayaran',
-          q: query.isEmpty ? null : query,
-        );
-
-        final raw = res['items'];
-        if (raw is List) {
-          final serverItems = raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-
-          mergedItems.addAll(serverItems.map(_normalizeServerItem));
-          gotServer = true;
-
-          final cachedRows = serverItems
-              .map(_mapServerItemToCachedCompanion)
-              .toList();
-
-          await cachedPaymentOrdersDao.replaceAllOrders(
-            orders: cachedRows,
-          );
-          unawaited(_prefetchAndCacheDetails(serverItems));
-        }
-      } catch (e) {
-        debugPrint('PaymentProvider server load failed: $e');
-      }
-
-      if (gotServer) {
-        final cachedOrders = await cachedPaymentOrdersDao.getCachedOrders(
-          query: query.isEmpty ? null : query,
-        );
-        for (final o in cachedOrders) {
-          if (pendingFinishServerIds.contains(o.serverId)) {
-            final alreadyAdded = mergedItems.any((item) => _toInt(item['server_id'] ?? item['id']) == o.serverId);
-            if (!alreadyAdded) {
-              mergedItems.add(_normalizeCachedServerItem(o, pendingFinishServerIds));
-            }
-          }
-        }
-      } else {
-        final cachedOrders = await cachedPaymentOrdersDao.getCachedOrders(
-          query: query.isEmpty ? null : query,
-        );
-
-        mergedItems.addAll(
-          cachedOrders.map((o) => _normalizeCachedServerItem(o, pendingFinishServerIds)),
-        );
-      }
-
-      final localOrders = await localOrdersDao.getUnpaidOrders(
+      var mirrorOrders = await bookingOrdersDao.getPaymentTabOrders(
         query: query.isEmpty ? null : query,
       );
 
-      final visibleLocalOrders = localOrders.where((o) {
-        final alreadyMirroredOnServer =
-            o.syncStatus == 'SYNCED' &&
-            o.serverId != null &&
-            o.serverId! > 0;
+      var dedupedMirrorOrders = _dedupePaymentMirrorRows(mirrorOrders);
 
-        final hiddenByProcess =
-            o.serverId != null && processServerIds.contains(o.serverId);
+      if (connectivity.isOnline &&
+          await _reconcileOpenbillPaymentReadyFromServer(dedupedMirrorOrders)) {
+        mirrorOrders = await bookingOrdersDao.getPaymentTabOrders(
+          query: query.isEmpty ? null : query,
+        );
+        dedupedMirrorOrders = _dedupePaymentMirrorRows(mirrorOrders);
+      }
 
-        final hiddenByDoneId =
-            o.serverId != null && doneServerIds.contains(o.serverId);
+      items = dedupedMirrorOrders
+          .map((o) => _normalizeMirrorPaymentItem(o, pendingFinishServerIds))
+          .where((e) {
+            final sid = _toInt(e['server_id'] ?? e['id']);
+            final code = (e['booking_order_code'] ?? e['client_order_code'] ?? '')
+                .toString()
+                .trim();
 
-        final code = (o.serverOrderCode ?? o.clientOrderCode).trim();
-        final hiddenByDoneCode =
-            code.isNotEmpty && doneOrderCodes.contains(code);
+            final hiddenBecauseAlreadyInProcess =
+                !_isOpenbillReadyForPayment(e) &&
+                sid != null &&
+                sid > 0 &&
+                processServerIds.contains(sid);
 
-        return !(alreadyMirroredOnServer ||
-            hiddenByProcess ||
-            hiddenByDoneId ||
-            hiddenByDoneCode);
-      }).toList();
+            final hiddenBecauseAlreadyInDone =
+                (sid != null && sid > 0 && doneServerIds.contains(sid)) ||
+                (code.isNotEmpty && doneOrderCodes.contains(code));
 
-      final localItems = visibleLocalOrders.map((o) {
-        final tableNo = o.tableNoSnapshot ?? '-';
+            return !(hiddenBecauseAlreadyInProcess || hiddenBecauseAlreadyInDone);
+          })
+          .toList();
 
-        return <String, dynamic>{
-          'id': -1,
-          'local_id': o.localId,
-          'client_order_code': o.clientOrderCode,
-          'booking_order_code': o.serverOrderCode ?? o.clientOrderCode,
-          'customer_name': o.customerName,
-          'customer': o.customerName,
-          'order_name': o.customerName,
-          'table': {
-            'table_no': tableNo,
-          },
-          'table_no': tableNo,
-          'table_name': tableNo,
-          'partner_name': o.partnerName,
-          'total_order_value': o.subtotal,
-          'subtotal': o.subtotal,
-          'grand_total': o.grandTotal,
-          'total_amount': o.grandTotal,
-          'is_ppn_active': o.isPpnActive,
-          'ppn': o.ppnPercent,
-          'payment_method': o.paymentMethodEffective,
-          'order_status': o.orderStatusLocal,
-          'sync_status': o.syncStatus,
-          'last_error': o.lastError,
-          'server_id': o.serverId,
-          'server_order_code': o.serverOrderCode,
-          'is_local_only': true,
-          'is_cached_server': false,
-          'created_at': o.createdAtLocal.toIso8601String(),
-        };
-      }).toList();
-
-      final filteredMergedItems = mergedItems.where((e) {
-        final sid = _toInt(e['server_id'] ?? e['id']);
-        final code = (e['booking_order_code'] ?? e['client_order_code'] ?? '')
-            .toString()
-            .trim();
-        final syncStatus = (e['sync_status'] ?? '').toString();
-
-        final hiddenById = sid != null && sid > 0 && hiddenServerIds.contains(sid);
-        final hiddenByCode = code.isNotEmpty && hiddenOrderCodes.contains(code);
-
-        final hiddenBecauseAlreadyInProcess =
-            sid != null && sid > 0 && processServerIds.contains(sid);
-
-        final hiddenBecauseAlreadyInDone =
-            (sid != null && sid > 0 && doneServerIds.contains(sid)) ||
-            (code.isNotEmpty && doneOrderCodes.contains(code));
-
-        final hiddenBecausePendingDelete = syncStatus == 'PENDING_DELETE';
-
-        return !(hiddenById ||
-            hiddenByCode ||
-            hiddenBecauseAlreadyInProcess ||
-            hiddenBecauseAlreadyInDone ||
-            hiddenBecausePendingDelete);
-      }).toList();
-
-      items = [
-        ...filteredMergedItems,
-        ...localItems,
-      ];
-
-      items.sort((a, b) {
-        final aCreated = DateTime.tryParse((a['created_at'] ?? '').toString());
-        final bCreated = DateTime.tryParse((b['created_at'] ?? '').toString());
-
-        if (aCreated == null && bCreated == null) return 0;
-        if (aCreated == null) return 1;
-        if (bCreated == null) return -1;
-
-        return aCreated.compareTo(bCreated);
-      });
+      items.sort(compareOrdersOldestFirst);
     } catch (e) {
       error = e.toString();
     } finally {
-      isLoading = false;
+      if (!silent) {
+        isLoading = false;
+      }
       notifyListeners();
     }
   }
@@ -259,164 +175,265 @@ class PaymentProvider extends ChangeNotifier {
     error = null;
     query = '';
     items = [];
-
-    await cachedPaymentOrdersDao.clearAll();
     notifyListeners();
   }
 
-  CachedPaymentOrdersCompanion _mapServerItemToCachedCompanion(
-    Map<String, dynamic> item,
+  bool _isOpenbillReadyForPayment(Map<String, dynamic> e) {
+    final status = (e['order_status'] ?? '').toString();
+    final isOpenbill =
+        _toBool(e['openbill_flag']) ||
+        (e['payment_method'] ?? '').toString() == 'OPENBILL' ||
+        status.startsWith('OPENBILL');
+    return isOpenbill && status == 'UNPAID';
+  }
+
+  /// When customer adds items on web, server regresses to OPENBILL_CONFIRMATION
+  /// while local mirror may still be payment-ready UNPAID.
+  Future<bool> _reconcileOpenbillPaymentReadyFromServer(
+    List<Map<String, dynamic>> mirrorRows,
+  ) async {
+    var changed = false;
+
+    for (final row in mirrorRows) {
+      if (!_isOpenbillReadyForPayment(row)) continue;
+
+      final serverId = _toInt(row['id']);
+      if (serverId == null || serverId <= 0) continue;
+
+      try {
+        final detail = await repo.fetchOrderDetail(serverId);
+        final serverStatus = (detail['order_status'] ?? '').toString().toUpperCase();
+        if (serverStatus != 'OPENBILL_CONFIRMATION' &&
+            serverStatus != 'OPENBILL_WAITING_ORDER') {
+          continue;
+        }
+
+        await bookingOrdersDao.upsertFromServer(detail);
+        changed = true;
+      } catch (e) {
+        debugPrint('PaymentProvider openbill reconcile failed for $serverId: $e');
+      }
+    }
+
+    return changed;
+  }
+
+  List<Map<String, dynamic>> _dedupePaymentMirrorRows(
+    List<Map<String, dynamic>> rows,
   ) {
-    final serverId = _toInt(item['id']) ?? 0;
-    final bookingOrderCode = (item['booking_order_code'] ?? '-').toString();
-    final customerName = (item['customer_name'] ?? '-').toString();
+    final byKey = <String, Map<String, dynamic>>{};
 
-    final tableNo = (item['table'] is Map)
-        ? ((item['table']['table_no'] ?? '-').toString())
-        : ((item['table_no'] ?? '-').toString());
-
-    final paymentMethod = item['payment_method']?.toString();
-    final orderStatus = (item['order_status'] ?? 'UNPAID').toString();
-
-    final subtotal = _toNum(item['total_order_value']);
-    final ppnPercent = _toNum(item['ppn']);
-    final isPpnActive = _toBool(item['is_ppn_active']);
-    final grandTotal = isPpnActive
-        ? (subtotal + (subtotal * ppnPercent / 100)).ceilToDouble()
-        : subtotal.ceilToDouble();
-    final roundingAmount = _toNum(item['cash_rounding_amount'] ??
-        item['rounding_amount'] ??
-        (item['payment'] is Map ? item['payment']['rounding_amount'] : null) ??
-        (item['latest_payment'] is Map ? item['latest_payment']['rounding_amount'] : null));
-
-    final createdAt = DateTime.tryParse((item['created_at'] ?? '').toString());
-    final updatedAt = DateTime.tryParse((item['updated_at'] ?? '').toString());
-
-    Map<String, dynamic>? paymentRequestJson;
-    if (item['payment_request'] is Map) {
-      paymentRequestJson = Map<String, dynamic>.from(item['payment_request']);
+    for (final row in rows) {
+      final key = _paymentMirrorDedupeKey(row);
+      final existing = byKey[key];
+      if (existing == null || _preferPaymentMirrorRow(row, existing)) {
+        byKey[key] = row;
+      }
     }
 
-    Map<String, dynamic>? latestPaymentJson;
-    if (item['latest_payment'] is Map) {
-      latestPaymentJson = Map<String, dynamic>.from(item['latest_payment']);
+    return byKey.values.toList();
+  }
+
+  String _paymentMirrorDedupeKey(Map<String, dynamic> row) {
+    final serverId = _toInt(row['id']);
+    if (serverId != null && serverId > 0) return 'id:$serverId';
+
+    final clientUuid = row['local_client_uuid']?.toString().trim();
+    if (clientUuid != null && clientUuid.isNotEmpty) {
+      return 'uuid:$clientUuid';
     }
 
-    return CachedPaymentOrdersCompanion(
-      serverId: Value(serverId),
-      bookingOrderCode: Value(bookingOrderCode),
-      customerName: Value(customerName),
-      cachedAt: Value(DateTime.now()),
-      tableNo: Value(tableNo),
-      paymentMethod: Value(paymentMethod),
-      orderStatus: Value(orderStatus),
-      subtotal: Value(subtotal.toDouble()),
-      ppnPercent: Value(ppnPercent.toDouble()),
-      isPpnActive: Value(isPpnActive),
-      grandTotal: Value(grandTotal + roundingAmount.toDouble()),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
+    final code = (row['booking_order_code'] ?? '').toString().trim();
+    if (code.isNotEmpty) return 'code:$code';
 
-      paymentRequestJson: Value(
-        paymentRequestJson == null ? null : jsonEncode(paymentRequestJson),
-      ),
-      latestPaymentJson: Value(
-        latestPaymentJson == null ? null : jsonEncode(latestPaymentJson),
-      ),
-    );
+    final name = (row['customer_name'] ?? '').toString().trim().toLowerCase();
+    final table = (row['table_id'] ?? row['table_no'] ?? '').toString();
+    return 'name:$name|$table';
   }
 
-  Map<String, dynamic> _normalizeServerItem(Map<String, dynamic> e) {
-    final subtotal = _toNum(e['total_order_value']);
-    final ppnPercent = _toNum(e['ppn']);
-    final isPpnActive = _toBool(e['is_ppn_active']);
-    final baseTotal = isPpnActive
-        ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
-        : subtotal.ceil();
-    final roundingAmount = _toNum(e['cash_rounding_amount'] ??
-        e['rounding_amount'] ??
-        (e['payment'] is Map ? e['payment']['rounding_amount'] : null) ??
-        (e['latest_payment'] is Map ? e['latest_payment']['rounding_amount'] : null));
+  bool _preferPaymentMirrorRow(
+    Map<String, dynamic> candidate,
+    Map<String, dynamic> current,
+  ) {
+    final candidateServerId = _toInt(candidate['id']) ?? 0;
+    final currentServerId = _toInt(current['id']) ?? 0;
+    if (candidateServerId > 0 && currentServerId <= 0) return true;
+    if (candidateServerId <= 0 && currentServerId > 0) return false;
 
-    return <String, dynamic>{
-      ...e,
-      'subtotal': subtotal,
-      'grand_total': baseTotal + roundingAmount,
-      'cash_rounding_amount': roundingAmount,
-      'is_local_only': false,
-      'is_cached_server': false,
-      'sync_status': 'SYNCED',
-    };
+    final candidateDirty =
+        candidate['sync_dirty'] == true || candidate['sync_dirty'] == 1;
+    final currentDirty = current['sync_dirty'] == true || current['sync_dirty'] == 1;
+    if (candidateDirty && !currentDirty) return true;
+    if (!candidateDirty && currentDirty) return false;
+
+    final candidateDetails =
+        ((candidate['order_details'] as List?) ?? []).length;
+    final currentDetails = ((current['order_details'] as List?) ?? []).length;
+    return candidateDetails > currentDetails;
   }
 
-  Map<String, dynamic> _normalizeCachedServerItem(
-    CachedPaymentOrder o,
+  Map<String, dynamic> _normalizeMirrorPaymentItem(
+    Map<String, dynamic> row,
     Set<int> pendingFinishServerIds,
   ) {
-    final tableNo = o.tableNo ?? '-';
-    final detail = _decodeCachedJson(o.detailJson);
-    final latestPayment = _decodeCachedJson(o.latestPaymentJson);
-    final paymentRequest = _decodeCachedJson(o.paymentRequestJson);
-    final roundingAmount = _toNum(
-      detail?['cash_rounding_amount'] ??
-          detail?['rounding_amount'] ??
-          (detail?['payment'] is Map ? detail!['payment']['rounding_amount'] : null) ??
-          (detail?['latest_payment'] is Map ? detail!['latest_payment']['rounding_amount'] : null) ??
-          latestPayment?['rounding_amount'] ??
-          paymentRequest?['rounding_amount'],
-    );
-
-    final isPendingFinish = pendingFinishServerIds.contains(o.serverId);
-
-    return <String, dynamic>{
-      'id': o.serverId,
-      'server_id': o.serverId,
-      'booking_order_code': o.bookingOrderCode,
-      'customer_name': o.customerName,
-      'customer': o.customerName,
-      'order_name': o.customerName,
-
-      'table': {
-        'table_no': tableNo,
-      },
-      'table_no': tableNo,
-      'table_name': tableNo,
-
-      'payment_method': o.paymentMethod,
-      'order_status': o.orderStatus,
-
-      'total_order_value': o.subtotal,
-      'subtotal': o.subtotal,
-      'grand_total': o.grandTotal,
-      'cash_rounding_amount': roundingAmount,
-      'payment': detail?['payment'],
-      'latest_payment': latestPayment ?? detail?['latest_payment'],
-      'payment_request': paymentRequest ?? detail?['payment_request'],
-      'total_amount': o.grandTotal,
-
-      'is_ppn_active': o.isPpnActive,
-      'ppn': o.ppnPercent,
-
-      'is_local_only': false,
-      'is_cached_server': true,
-      'sync_status': o.isPendingDelete
-          ? 'PENDING_DELETE'
-          : (isPendingFinish ? 'PENDING_FINISH' : 'SYNCED'),
-
-      'created_at': o.createdAt?.toIso8601String(),
-      'cached_at': o.cachedAt.toIso8601String(),
-    };
+    final item = OrderTabItemMapper.toPaymentItem(row);
+    final serverId = _toInt(item['id']);
+    final isPendingFinish =
+        serverId != null && pendingFinishServerIds.contains(serverId);
+    if (isPendingFinish) {
+      item['sync_status'] = 'PENDING_FINISH';
+    }
+    return item;
   }
 
-  Map<String, dynamic>? _decodeCachedJson(String? rawJson) {
-    if (rawJson == null || rawJson.trim().isEmpty) return null;
-    try {
-      final decoded = jsonDecode(rawJson);
-      if (decoded is Map) {
-        return Map<String, dynamic>.from(decoded);
+  /// Moves order to the correct tab after payment (PAID vs open-bill SERVED).
+  Future<void> afterPaymentSuccess({
+    required int serverId,
+    Map<String, dynamic>? orderSnapshot,
+    Map<String, dynamic>? apiResponse,
+    bool offline = false,
+    ProcessProvider? process,
+    DoneProvider? done,
+    num? paidAmount,
+    num? changeAmount,
+    String? paymentMethod,
+    bool reloadTabs = true,
+    bool backgroundSync = true,
+  }) async {
+    final snapshot = orderSnapshot ?? <String, dynamic>{};
+    final nextStatus = OrderStageResolver.resolveAfterPayment(
+      orderBeforePay: snapshot,
+      apiResponse: apiResponse,
+    );
+
+    final resolvedPaymentMethod = paymentMethod ??
+        snapshot['payment_method']?.toString();
+
+    final extras = <String, dynamic>{
+      if (paidAmount != null) 'paid_amount': paidAmount,
+      if (changeAmount != null) 'change_amount': changeAmount,
+      if (resolvedPaymentMethod != null && resolvedPaymentMethod.isNotEmpty)
+        'payment_method': resolvedPaymentMethod,
+    };
+
+    final updatedSnapshot = {
+      ...snapshot,
+      'order_status': nextStatus,
+      if (resolvedPaymentMethod != null) 'payment_method': resolvedPaymentMethod,
+      if (isOpenBillOrder(snapshot)) 'openbill_flag': true,
+    };
+
+    debugPrint(
+      'afterPaymentSuccess resolved_status=$nextStatus '
+      'openbill=${isOpenBillOrder(snapshot)} serverId=$serverId '
+      'reloadTabs=$reloadTabs backgroundSync=$backgroundSync',
+    );
+
+    final clientUuid = (snapshot['local_client_uuid'] ??
+            snapshot['local_id'] ??
+            '')
+        .toString()
+        .trim();
+    final useClientUuid = serverId <= 0 && clientUuid.isNotEmpty;
+
+    Future<void> applyTransition() async {
+      if (useClientUuid) {
+        await tabCoordinator.transitionOrderStageByClientUuid(
+          clientUuid: clientUuid,
+          orderStatus: nextStatus,
+          syncIntent: offline ? 'PAY' : null,
+          syncDirty: offline,
+          extras: extras.isEmpty ? null : extras,
+        );
+        return;
       }
-    } catch (_) {}
-    return null;
+
+      if (serverId <= 0) {
+        debugPrint(
+          'afterPaymentSuccess skipped transition: no serverId or clientUuid',
+        );
+        return;
+      }
+
+      await tabCoordinator.transitionOrderStage(
+        serverId: serverId,
+        orderStatus: nextStatus,
+        syncIntent: offline ? 'PAY' : null,
+        syncDirty: offline,
+        extras: extras.isEmpty ? null : extras,
+        orderSnapshot: updatedSnapshot,
+      );
+    }
+
+    if (reloadTabs && process != null && done != null) {
+      if (useClientUuid) {
+        await applyTransition();
+        await bookingOrdersDao.reconcileDuplicateMirrors();
+        await tabCoordinator.reloadAllTabs(
+          payment: this,
+          process: process,
+          done: done,
+        );
+      } else if (serverId > 0) {
+        await tabCoordinator.transitionAndReload(
+          serverId: serverId,
+          orderStatus: nextStatus,
+          syncIntent: offline ? 'PAY' : null,
+          syncDirty: offline,
+          extras: extras.isEmpty ? null : extras,
+          orderSnapshot: updatedSnapshot,
+          payment: this,
+          process: process,
+          done: done,
+        );
+      } else {
+        await tabCoordinator.reloadAllTabs(
+          payment: this,
+          process: process,
+          done: done,
+        );
+      }
+    } else {
+      await applyTransition();
+      if (useClientUuid) {
+        await bookingOrdersDao.reconcileDuplicateMirrors();
+      }
+      if (reloadTabs) {
+        await load(silent: true);
+      } else {
+        debugPrint('afterPaymentSuccess mirrorOnly serverId=$serverId status=$nextStatus');
+      }
+    }
+
+    if (!offline && backgroundSync) {
+      unawaited(_backgroundSyncAndReload(
+        process: reloadTabs ? process : null,
+        done: reloadTabs ? done : null,
+      ));
+    }
+  }
+
+  Future<void> _backgroundSyncAndReload({
+    ProcessProvider? process,
+    DoneProvider? done,
+  }) async {
+    final sync = syncService;
+    if (sync == null) return;
+
+    try {
+      await sync.syncPendingOrders();
+      if (process != null && done != null) {
+        await tabCoordinator.reloadAllTabs(
+          payment: this,
+          process: process,
+          done: done,
+        );
+      } else {
+        await load(silent: true);
+      }
+    } catch (e) {
+      debugPrint('background sync after payment failed: $e');
+    }
   }
 
   void setQuery(String q) {
@@ -432,9 +449,13 @@ class PaymentProvider extends ChangeNotifier {
     required Map<String, dynamic> row,
     required num paidAmount,
     required num changeAmount,
+    String? paymentMethod,
     String? cashierProofImagePath,
     String? lastPaymentId,
   }) async {
+    if (!CashierShiftGate.canTakePayment) {
+      throw Exception(CashierShiftGate.blockedMessage);
+    }
     final isStockConflict =
         (row['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
     final isOnline = connectivity.isOnline && !isStockConflict;
@@ -445,15 +466,24 @@ class PaymentProvider extends ChangeNotifier {
         throw Exception('ID order tidak valid untuk pembayaran online');
       }
 
-      await repo.paymentOrder(
+      final payResp = await repo.paymentOrder(
         id: serverId,
         paidAmount: paidAmount,
         changeAmount: changeAmount,
+        paymentMethod: paymentMethod,
         lastPaymentId: lastPaymentId,
         cashierProofImagePath: cashierProofImagePath,
       );
 
-      await load();
+      await afterPaymentSuccess(
+        serverId: serverId,
+        orderSnapshot: row,
+        apiResponse: payResp,
+        offline: false,
+        paidAmount: paidAmount,
+        changeAmount: changeAmount,
+        paymentMethod: paymentMethod,
+      );
       return;
     }
 
@@ -461,105 +491,102 @@ class PaymentProvider extends ChangeNotifier {
       order: row,
       paidAmount: paidAmount,
       changeAmount: changeAmount,
+      selectedPaymentMethod: paymentMethod,
       cashierProofImagePath: cashierProofImagePath,
       lastPaymentId: lastPaymentId,
     );
 
-    await load();
+    final serverId = _toInt(row['server_id'] ?? row['id']);
+    if (serverId != null && serverId > 0) {
+      await afterPaymentSuccess(
+        serverId: serverId,
+        orderSnapshot: row,
+        offline: true,
+        paidAmount: paidAmount,
+        changeAmount: changeAmount,
+        paymentMethod: paymentMethod,
+      );
+    } else {
+      await load();
+    }
   }
 
   Future<void> confirmPaymentOffline({
     required Map<String, dynamic> order,
     required num paidAmount,
     required num changeAmount,
+    String? selectedPaymentMethod,
     String? cashierProofImagePath,
     String? lastPaymentId,
   }) async {
-    final now = DateTime.now();
+    final clientUuid = (order['local_client_uuid'] ??
+            order['local_id'] ??
+            '')
+        .toString();
+    final serverId = _toInt(order['server_id'] ?? order['id']);
+    final paymentMethod =
+        (selectedPaymentMethod ?? order['payment_method'] ?? 'CASH').toString();
 
-    String localId = (order['local_id'] ?? '').toString();
-    final isLocalOnly = order['is_local_only'] == true;
-    final isStockConflict =
-        (order['sync_status'] ?? '').toString() == 'STOCK_CONFLICT';
-
-    // =========================
-    // A. Kalau order berasal dari server/cache
-    // buat shadow local order dulu
-    // =========================
-    if (!isLocalOnly || localId.isEmpty) {
-      final serverId = _toInt(order['server_id'] ?? order['id']);
-      if (serverId == null || serverId <= 0) {
-        throw Exception('ID server order tidak valid untuk offline payment');
+    if (clientUuid.isNotEmpty) {
+      Map<String, dynamic>? localFilePaths;
+      if (cashierProofImagePath != null && cashierProofImagePath.trim().isNotEmpty) {
+        final persisted = await bookingOrdersDao.persistCashierProofImage(
+          clientUuid: clientUuid,
+          sourcePath: cashierProofImagePath,
+        );
+        if (persisted != null) {
+          localFilePaths = {'cashier_proof': persisted};
+        }
       }
 
-      final bookingOrderCode =
-          (order['booking_order_code'] ?? order['client_order_code'] ?? '-')
-              .toString();
-
-      final customerName = (order['customer_name'] ?? '-').toString();
-
-      final tableNoSnapshot = (order['table'] is Map)
-          ? ((order['table']['table_no'] ?? '-').toString())
-          : ((order['table_no'] ?? '-').toString());
-
-      final paymentMethodEffective =
-          (order['payment_method'] ?? 'CASH').toString();
-
-      final subtotal = _toNum(order['total_order_value']).toDouble();
-      final ppnPercent = _toNum(order['ppn']).toDouble();
-      final isPpnActive = _toBool(order['is_ppn_active']);
-      final grandTotal = isPpnActive
-          ? (subtotal + (subtotal * ppnPercent / 100)).ceilToDouble()
-          : subtotal;
-
-      await localOrdersDao.createShadowOrderFromServerPayment(
-        serverId: serverId,
-        bookingOrderCode: bookingOrderCode,
-        customerName: customerName,
-        tableNoSnapshot: tableNoSnapshot,
-        paymentMethodEffective: paymentMethodEffective,
-        subtotal: subtotal,
-        grandTotal: grandTotal,
-        isPpnActive: isPpnActive,
-        ppnPercent: ppnPercent,
-        paidAmount: paidAmount.toDouble(),
-        changeAmount: changeAmount.toDouble(),
-        cashierProofImagePath: cashierProofImagePath,
-        lastPaymentId: lastPaymentId,
+      await bookingOrdersDao.markIntent(
+        clientUuid,
+        'PAY',
+        extras: {
+          'paid_amount': paidAmount,
+          'change_amount': changeAmount,
+          'payment_method': paymentMethod,
+          'order_status': OrderStageResolver.resolveAfterPayment(
+            orderBeforePay: order,
+          ),
+          if (localFilePaths != null) 'local_file_paths': localFilePaths,
+        },
       );
-
-      localId = 'shadow_pay_$serverId';
+      return;
     }
 
-    // =========================
-    // B. Simpan snapshot payment offline
-    // =========================
-    final snapshot = Map<String, dynamic>.from(order);
-    snapshot['is_local_only'] = true;
-    snapshot['local_id'] = localId;
-    snapshot['payment'] = {
-      'updated_at': now.toIso8601String(),
-      'paid_amount': paidAmount,
-      'change_amount': changeAmount,
-    };
-    snapshot.remove('sync_status');
-    snapshot.remove('pending_sync');
-
-    await localOrdersDao.markPaymentConfirmedOffline(
-      localId: localId,
-      paidAmount: paidAmount.toDouble(),
-      changeAmount: changeAmount.toDouble(),
-      cashierProofImageLocalPath: cashierProofImagePath,
-      paymentConfirmedAtLocal: now,
-      latestPaymentServerId: int.tryParse(lastPaymentId ?? ''),
-      orderSnapshotJson: jsonEncode(snapshot),
-      preserveStockConflict: isStockConflict,
-    );
-
-    // kalau source-nya cached server, tandai agar tidak tampil lagi di tab pembayaran
-    final serverId = _toInt(order['server_id'] ?? order['id']);
     if (serverId != null && serverId > 0) {
-      await cachedPaymentOrdersDao.markPendingDelete(serverId);
+      final extras = <String, dynamic>{
+        'paid_amount': paidAmount,
+        'change_amount': changeAmount,
+        'payment_method': paymentMethod,
+      };
+
+      if (cashierProofImagePath != null && cashierProofImagePath.trim().isNotEmpty) {
+        final mirrorUuid = clientUuid.isNotEmpty
+            ? clientUuid
+            : (await bookingOrdersDao.getByServerId(serverId))?.clientUuid;
+        if (mirrorUuid != null && mirrorUuid.isNotEmpty) {
+          final persisted = await bookingOrdersDao.persistCashierProofImage(
+            clientUuid: mirrorUuid,
+            sourcePath: cashierProofImagePath,
+          );
+          if (persisted != null) {
+            extras['local_file_paths'] = {'cashier_proof': persisted};
+          }
+        }
+      }
+
+      await tabCoordinator.transitionOrderStage(
+        serverId: serverId,
+        orderStatus: OrderStageResolver.resolveAfterPayment(
+          orderBeforePay: order,
+        ),
+        syncIntent: 'PAY',
+        syncDirty: true,
+        orderSnapshot: order,
+        extras: extras,
+      );
     }
   }
   
@@ -571,6 +598,7 @@ class PaymentProvider extends ChangeNotifier {
   Future<void> deleteOrder(int id) async {
     try {
       await repo.softDeleteOrder(id);
+      await tabCoordinator.markOrderDeleted(serverId: id);
       await load();
     } catch (e) {
       rethrow;
@@ -578,57 +606,32 @@ class PaymentProvider extends ChangeNotifier {
   }
 
   Future<void> deleteOrderItem(Map<String, dynamic> item, {required bool isOnline}) async {
-    final isLocalOnly = item['is_local_only'] == true;
-    final isCachedServer = item['is_cached_server'] == true;
-
-    final localId = (item['local_id'] ?? '').toString();
-    final syncStatus = (item['sync_status'] ?? '').toString();
-
+    final clientUuid =
+        (item['local_client_uuid'] ?? item['local_id'] ?? '').toString();
     final serverId = _toInt(item['server_id']) ?? _toInt(item['id']);
 
     try {
-      // =========================
-      // A. ORDER LOKAL
-      // =========================
-      if (isLocalOnly && localId.isNotEmpty) {
-        // belum pernah sync ke server -> hapus langsung
-        if (serverId == null || serverId <= 0) {
-          await localOrdersDao.deleteOrderByLocalId(localId);
-          await load();
-          return;
-        }
-
-        // sudah pernah sync ke server
-        if (!isOnline) {
-          await localOrdersDao.markOrderPendingDelete(localId);
-          await load();
-          return;
-        }
-
-        // online + sudah ada serverId -> delete backend lalu hapus lokal
-        await repo.softDeleteOrder(serverId);
-        await localOrdersDao.deleteOrderByLocalId(localId);
+      if (clientUuid.isNotEmpty && (serverId == null || serverId <= 0)) {
+        await tabCoordinator.markOrderDeleted(
+          clientUuid: clientUuid,
+          hardRemove: true,
+        );
         await load();
         return;
       }
 
-      // =========================
-      // B. ORDER SERVER / CACHED SERVER
-      // =========================
       if (serverId == null || serverId <= 0) {
         throw Exception('ID order tidak valid');
       }
 
       if (!isOnline) {
-        // saat offline: tandai pending delete di cache
-        await cachedPaymentOrdersDao.markPendingDelete(serverId);
+        await tabCoordinator.markOrderPendingDelete(serverId: serverId);
         await load();
         return;
       }
 
-      // saat online: langsung delete backend
       await repo.softDeleteOrder(serverId);
-      await cachedPaymentOrdersDao.deleteCachedOrderByServerId(serverId);
+      await tabCoordinator.markOrderDeleted(serverId: serverId);
       await load();
     } catch (e) {
       rethrow;
@@ -644,89 +647,135 @@ class PaymentProvider extends ChangeNotifier {
     String? lastPaymentId,
     String? cashierProofImagePath,
   }) async {
-    return repo.paymentOrder(
-      id: id,
+    final row = <String, dynamic>{'id': id, 'server_id': id};
+
+    await confirmPaymentOffline(
+      order: row,
       paidAmount: paidAmount,
       changeAmount: changeAmount,
-      note: note,
-      email: email,
-      lastPaymentId: lastPaymentId,
+      selectedPaymentMethod: note,
       cashierProofImagePath: cashierProofImagePath,
+      lastPaymentId: lastPaymentId,
     );
+
+    return {
+      'status': true,
+      'message': 'Pembayaran diantrekan untuk sinkronisasi',
+      'saved_local': true,
+    };
   }
 
   Future<Map<String, dynamic>> getOrderDetailFromListItem(
     Map<String, dynamic> row,
   ) async {
-    final isLocalOnly = row['is_local_only'] == true;
-    final isOnline = connectivity.isOnline;
-
-    if (isLocalOnly) {
-      final localId = (row['local_id'] ?? '').toString();
-      if (localId.isEmpty) {
-        throw Exception('Local ID order tidak valid');
-      }
-
-      final localDetail = await localOrdersDao.getOrderDetailMapByLocalId(localId);
-
-      // ✅ TARUH DI SINI
-      if (localDetail != null) {
-        return _enrichOfflinePaymentMethod(localDetail);
-      }
-
-      throw Exception('Detail order lokal tidak ditemukan');
-    }
-
+    final clientUuid = (row['local_client_uuid'] ?? row['local_id'] ?? '')
+        .toString();
     final serverId = _toInt(row['server_id'] ?? row['id']);
+
     if (serverId == null || serverId <= 0) {
-      throw Exception('Order ID tidak valid');
+      if (clientUuid.isEmpty) {
+        throw Exception('Order ID tidak valid');
+      }
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+      if (bundle == null) {
+        throw Exception('Detail order offline tidak tersedia');
+      }
+      final map = await _bundleToDetailMap(bundle);
+      return _enrichOrderDetailPaymentData(map);
     }
 
-    if (isOnline) {
+    if (connectivity.isOnline) {
       try {
         final detail = await repo.fetchOrderDetail(serverId);
-
-        debugPrint('method detail = ${detail['payment_method']}');
-        debugPrint('payment_request = ${detail['payment_request']}');
-        debugPrint('latest_payment = ${detail['latest_payment']}');
-
-        await cachedPaymentOrdersDao.upsertDetailFromApi(detail);
+        await bookingOrdersDao.upsertFromServer(detail);
         await _cacheManualPaymentMethodFromDetail(detail);
-
-        return detail;
+        return _enrichOrderDetailPaymentData(detail);
       } catch (_) {
-        final cached = await cachedPaymentOrdersDao.getCachedOrderDetailMap(serverId);
-        if (cached != null) {
-          return _enrichOfflinePaymentMethod(cached);
+        final mirror = await bookingOrdersDao.getByServerId(serverId);
+        if (mirror != null) {
+          final bundle = await bookingOrdersDao.getBundleByClientUuid(
+            mirror.clientUuid,
+          );
+          if (bundle != null) {
+            return _enrichOrderDetailPaymentData(
+              await _bundleToDetailMap(bundle),
+            );
+          }
         }
         rethrow;
       }
     }
 
-    final cached = await cachedPaymentOrdersDao.getCachedOrderDetailMap(serverId);
+    if (OrderDetailResolver.hasEmbeddedDetails(row)) {
+      return _enrichOrderDetailPaymentData(
+        OrderDetailResolver.detailFromListRow(row),
+      );
+    }
 
-    // ✅ TARUH DI SINI
-    if (cached != null) {
-      return _enrichOfflinePaymentMethod(cached);
+    if (clientUuid.isNotEmpty) {
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(clientUuid);
+      if (bundle != null) {
+        return _enrichOrderDetailPaymentData(await _bundleToDetailMap(bundle));
+      }
+    }
+
+    final mirror = await bookingOrdersDao.getByServerId(serverId);
+    if (mirror != null) {
+      final bundle = await bookingOrdersDao.getBundleByClientUuid(
+        mirror.clientUuid,
+      );
+      if (bundle != null) {
+        return _enrichOrderDetailPaymentData(await _bundleToDetailMap(bundle));
+      }
     }
 
     throw Exception('Detail order offline tidak tersedia');
   }
 
-  Future<Map<String, dynamic>> _enrichOfflinePaymentMethod(
+  Future<Map<String, dynamic>> _bundleToDetailMap(
+    BookingOrderBundle bundle,
+  ) async {
+    final map = OrderTabItemMapper.toPaymentItem(
+      OrderMirrorMapper.orderToUiMap(bundle.order),
+    );
+    map['order_details'] = bundle.details.map((d) {
+      final detailMap = OrderMirrorMapper.detailToUiMap(d);
+      detailMap['order_detail_options'] =
+          (bundle.optionsByDetailUuid[d.clientDetailUuid] ?? [])
+              .map(OrderMirrorMapper.optionToUiMap)
+              .toList();
+      return detailMap;
+    }).toList();
+    return OrderDetailResolver.detailFromListRow(map);
+  }
+
+  /// Order detail dari API tetap dipakai untuk status/items,
+  /// tapi daftar metode pembayaran + gambar QRIS diambil dari cache lokal
+  /// (hasil sync `GET /products` di tab Pembelian).
+  Future<Map<String, dynamic>> _enrichOrderDetailPaymentData(
     Map<String, dynamic> detail,
   ) async {
-    final method = (detail['payment_method'] ?? '').toString();
+    final cloned = Map<String, dynamic>.from(detail);
+
+    final cachedMethods =
+        await cachedPaymentMethodsDao.buildAvailablePaymentMethodsList();
+    if (cachedMethods.isNotEmpty) {
+      cloned['available_payment_methods'] = cachedMethods;
+    }
+
+    await _applyCashRoundingFields(cloned);
+
+    final method = (cloned['payment_method'] ?? '').toString();
 
     if (method != 'manual_qris' &&
         method != 'manual_tf' &&
         method != 'manual_ewallet') {
-      return detail;
+      return cloned;
     }
 
     int? serverManualPaymentId;
 
-    final latestRaw = detail['latest_payment'];
+    final latestRaw = cloned['latest_payment'];
     if (latestRaw is Map) {
       serverManualPaymentId = _toInt(
         latestRaw['owner_manual_payment_id'] ??
@@ -741,9 +790,7 @@ class PaymentProvider extends ChangeNotifier {
       paymentMethod: method,
     );
 
-    if (manual == null) return detail;
-
-    final cloned = Map<String, dynamic>.from(detail);
+    if (manual == null) return cloned;
 
     final latest = latestRaw is Map
         ? Map<String, dynamic>.from(latestRaw)
@@ -768,34 +815,69 @@ class PaymentProvider extends ChangeNotifier {
     return cloned;
   }
 
+  Future<void> _applyCashRoundingFields(Map<String, dynamic> detail) async {
+    final partnerUnit = await CacheDao(cachedPaymentMethodsDao.db)
+        .getPartnerCashRoundingUnit();
+    final unit = CashRoundingHelpers.resolveCashRoundingUnit(
+      detail,
+      partnerCashRoundingUnit: partnerUnit,
+    );
+    if (unit > 0) {
+      detail['cash_rounding_unit'] = unit;
+    }
+  }
+
+  Future<Map<String, dynamic>> enrichPaymentMethodInstruction(
+    Map<String, dynamic> raw,
+  ) async {
+    final type = (raw['payment_type'] ?? raw['type'] ?? '').toString();
+    final normalized = <String, dynamic>{
+      'payment_type': type,
+      'provider_name': raw['provider_name'],
+      'provider_account_name': raw['provider_account_name'],
+      'provider_account_no': raw['provider_account_no'],
+      'qris_image_url': raw['qris_image_url'],
+      'qris_image_local_path': raw['qris_image_local_path'],
+      'additional_info': raw['additional_info'],
+      'value': raw['value'],
+      'label': raw['label'],
+    };
+
+    final manualId = _toInt(raw['value']);
+    if (manualId == null || manualId <= 0) return normalized;
+
+    final cached = await cachedPaymentMethodsDao.buildManualPaymentMap(
+      serverManualPaymentId: manualId,
+    );
+    if (cached == null) return normalized;
+
+    String? pickString(dynamic primary, dynamic fallback) {
+      final p = primary?.toString().trim();
+      if (p != null && p.isNotEmpty) return p;
+      final f = fallback?.toString().trim();
+      if (f != null && f.isNotEmpty) return f;
+      return null;
+    }
+
+    normalized['payment_type'] = pickString(normalized['payment_type'], cached['payment_type']) ?? type;
+    normalized['provider_name'] = pickString(normalized['provider_name'], cached['provider_name']);
+    normalized['provider_account_name'] =
+        pickString(normalized['provider_account_name'], cached['provider_account_name']);
+    normalized['provider_account_no'] =
+        pickString(normalized['provider_account_no'], cached['provider_account_no']);
+    normalized['qris_image_url'] =
+        pickString(normalized['qris_image_url'], cached['qris_image_url']);
+    normalized['qris_image_local_path'] =
+        pickString(cached['qris_image_local_path'], normalized['qris_image_local_path']);
+
+    return normalized;
+  }
+
   String _manualTypeLabelForCache(String method) {
     if (method == 'manual_tf') return 'Transfer Manual';
     if (method == 'manual_ewallet') return 'E-Wallet';
     if (method == 'manual_qris') return 'QR Statis';
     return method;
-  }
-
-  Future<void> _prefetchAndCacheDetails(List<Map<String, dynamic>> serverItems) async {
-    for (final item in serverItems) {
-      try {
-        final id = _toInt(item['id']);
-        if (id == null || id <= 0) continue;
-
-        final detail = await repo.fetchOrderDetail(id);
-
-        debugPrint('==== PREFETCH DETAIL $id ====');
-        debugPrint('method detail = ${detail['payment_method']}');
-        debugPrint('payment_request = ${detail['payment_request']}');
-        debugPrint('latest_payment = ${detail['latest_payment']}');
-
-        await cachedPaymentOrdersDao.upsertDetailFromApi(detail);
-        await _cacheManualPaymentMethodFromDetail(detail);
-
-        debugPrint('✅ cached payment detail: $id');
-      } catch (e) {
-        debugPrint('⚠️ prefetch detail failed for payment order: $e');
-      }
-    }
   }
 
   Future<void> _cacheManualPaymentMethodFromDetail(Map<String, dynamic> detail) async {
@@ -862,40 +944,8 @@ class PaymentProvider extends ChangeNotifier {
     debugPrint('✅ manual payment method cached: $cacheKey');
   }
 
-  Future<String?> _downloadManualPaymentImageToLocal(String rawPath) async {
-    try {
-      if (rawPath.trim().isEmpty) return null;
-
-      final imageUrl = rawPath.startsWith('http')
-          ? rawPath
-          : '${Env.baseUrl}/storage/${rawPath.replaceFirst(RegExp(r'^\/?storage\/?'), '')}';
-
-      final dir = await getApplicationDocumentsDirectory();
-      final folder = Directory(p.join(dir.path, 'manual_payment_images'));
-      if (!await folder.exists()) {
-        await folder.create(recursive: true);
-      }
-
-      final ext = p.extension(Uri.parse(imageUrl).path);
-      final safeExt = ext.isEmpty ? '.jpg' : ext;
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${rawPath.hashCode}$safeExt';
-
-      final filePath = p.join(folder.path, fileName);
-
-      final dio = Dio();
-      await dio.download(imageUrl, filePath);
-
-      final file = File(filePath);
-      if (await file.exists()) {
-        return file.path;
-      }
-
-      return null;
-    } catch (e) {
-      debugPrint('❌ download manual payment image failed: $e');
-      return null;
-    }
+  Future<String?> _downloadManualPaymentImageToLocal(String rawPath) {
+    return ManualPaymentImageCache.downloadToLocal(rawPath);
   }
 
   int? _toInt(dynamic v) {

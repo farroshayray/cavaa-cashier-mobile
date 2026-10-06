@@ -2,27 +2,32 @@ import 'dart:async';
 import '/core/config/env.dart';
 import '/core/network/dio_client.dart';
 import '/core/services/app_update_provider.dart';
-import 'package:dio/dio.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/local/db/sync/sync_service.dart';
+import '/features/cashier/data/local/db/sync/sync_worker.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import 'tabs/modals/sync_conflicts_sheet.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
 import '../../../auth/presentation/auth_provider.dart';
 import '../../../auth/presentation/pages/login_page.dart';
-
+import '../../../owner/presentation/pages/owner_home_page.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
+import '/features/cashier/presentation/pages/opening_cash_dialog.dart';
+import '/features/cashier/presentation/pages/cash_book_page.dart';
 import '/features/cashier/presentation/widgets/notif_bell_button.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
-import '/features/cashier/presentation/realtime/pusher_orders_service.dart';
-
 import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/providers/purchase_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 
 import '/core/services/push_notification_service.dart';
-import '/core/services/in_app_apk_updater.dart';
+import '/core/services/store_updater.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'tabs/purchase_tab.dart' as purchase_tab;
@@ -44,16 +49,7 @@ class CashierHomePage extends StatefulWidget {
 
 class _CashierHomePageState extends State<CashierHomePage>
     with WidgetsBindingObserver {
-  // ===== Realtime =====
-  late final PusherOrdersService _pusherSvc;
-  bool _pusherStarted = false;
-  final InAppApkUpdater _apkUpdater = InAppApkUpdater();
-  final ValueNotifier<double> _updateProgressNotifier = ValueNotifier<double>(
-    0,
-  );
-
-  bool _isDownloadingUpdate = false;
-  bool _activeUpdateIsForce = false;
+  final StoreUpdater _storeUpdater = StoreUpdater();
 
   // ===== UI =====
   DateTime? _lastBackPressed;
@@ -62,11 +58,30 @@ class _CashierHomePageState extends State<CashierHomePage>
   // ===== Focus/highlight order =====
   int? _focusOrderId;
   int _focusRequestKey = 0;
+
+  /// "Bayar Sekarang" checkout: local uuid of the order to open for payment.
+  String? _payNowLocalId;
+  int _payNowRequestKey = 0;
   Timer? _focusTimer;
   Timer? _paymentReloadDebounce;
   Timer? _processReloadDebounce;
   Timer? _doneReloadDebounce;
+  Timer? _allTabsReloadDebounce;
   Timer? _resumeReloadDebounce;
+  Timer? _purchaseStockRefreshDebounce;
+  Future<void>? _reloadTabsInFlight;
+  Future<void>? _syncAndReloadInFlight;
+  bool _bootstrapSyncHandled = false;
+  int _conflictCount = 0;
+  SyncWorker? _syncWorker;
+
+  /// Full-screen gate until first sync/cache load finishes.
+  bool _isBootstrapping = true;
+  String _bootstrapPhase = 'Menyiapkan kasir…';
+  String? _bootstrapError;
+  String? _bootstrapSetupStep;
+  bool _usedCacheFallback = false;
+  Map<String, dynamic>? _queuedFcmTap;
 
   bool? _lastOnlineState;
 
@@ -81,7 +96,6 @@ class _CashierHomePageState extends State<CashierHomePage>
   @override
   void initState() {
     super.initState();
-    _pusherSvc = PusherOrdersService(context.read<DioClient>());
     WidgetsBinding.instance.addObserver(this);
     _listenFcmEvents();
 
@@ -91,13 +105,19 @@ class _CashierHomePageState extends State<CashierHomePage>
 
       if (pendingTap != null && mounted) {
         await context.read<NotificationsProvider>().pushFromFcm(pendingTap);
-        await _handleFcmTap(pendingTap);
+        if (_isBootstrapping) {
+          _queuedFcmTap = pendingTap;
+        } else {
+          await _handleFcmTap(pendingTap);
+        }
       }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _setupConnectivitySyncHook();
+      _setupSyncCallbacks();
+      unawaited(_bootstrapAfterLogin());
     });
 
     Future.microtask(() async {
@@ -112,22 +132,26 @@ class _CashierHomePageState extends State<CashierHomePage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (_isBootstrapping) return;
+
       Future.microtask(_reloadNotificationsFromStorage);
       context.read<PrinterManager>().connectDefault(silent: true);
       _refreshAfterResume();
 
       Future.microtask(() async {
+        final stale = await PushNotificationService.instance
+            .consumeOrdersStaleFlag();
+        if (stale && mounted && !_isBootstrapping) {
+          _debouncedSyncAndReloadAllOrderTabs();
+        }
+      });
+
+      Future.microtask(() async {
         try {
+          if (_isBootstrapping) return;
           final conn = context.read<ConnectivityStatusProvider>();
           if (conn.isOnline && !conn.isChecking) {
-            await context.read<SyncService>().syncPendingOrders();
-
-            if (!mounted) return;
-            await Future.wait([
-              context.read<PaymentProvider>().load(),
-              context.read<ProcessProvider>().load(),
-              context.read<DoneProvider>().load(),
-            ]);
+            await _syncAndReloadAllOrderTabs();
           }
         } catch (e) {
           debugPrint('❌ sync after resume failed: $e');
@@ -150,14 +174,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (!mounted) return;
 
       try {
-        final payVm = context.read<PaymentProvider>();
-        final procVm = context.read<ProcessProvider>();
-        final doneVm = context.read<DoneProvider>();
-
-        payVm.setQuery('');
-        procVm.setQuery('');
-
-        await Future.wait([payVm.load(), procVm.load(), doneVm.load()]);
+        await _reloadAllOrderTabsSequentially();
       } catch (e) {
         debugPrint('❌ refresh after resume failed: $e');
       }
@@ -166,29 +183,418 @@ class _CashierHomePageState extends State<CashierHomePage>
 
   void _setupConnectivitySyncHook() {
     final connectivityProvider = context.read<ConnectivityStatusProvider>();
-    final syncService = context.read<SyncService>();
 
     connectivityProvider.onBackOnline = () async {
-      debugPrint('🌐 koneksi kembali online, mulai sync pending orders...');
-      await syncService.syncPendingOrders();
+      if (_isBootstrapping) return;
+      await _ensureCashBook();
+      await _syncAndReloadAllOrderTabs();
+    };
+    connectivityProvider.onInitialOnline = () async {
+      if (_isBootstrapping || _bootstrapSyncHandled) return;
+      await _syncAndReloadAllOrderTabs();
+    };
+  }
+
+  void _setupSyncCallbacks() {
+    context.read<SyncService>().configureSyncCallbacks(
+      onSyncCompleted: (_) async {
+        if (!mounted || _isBootstrapping) return;
+        await _reloadAllOrderTabsSequentially();
+        _debouncedRefreshPurchaseStock();
+      },
+      resolveCashierProcessId: () => context.read<AuthProvider>().user?.id,
+    );
+  }
+
+  Future<void> _waitForConnectivityReady({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final conn = context.read<ConnectivityStatusProvider>();
+    if (!conn.isChecking) return;
+
+    final completer = Completer<void>();
+    void listener() {
+      if (!conn.isChecking && !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+
+    conn.addListener(listener);
+    try {
+      if (!conn.isChecking) return;
+      await completer.future.timeout(timeout, onTimeout: () {});
+    } finally {
+      conn.removeListener(listener);
+    }
+  }
+
+  void _setBootstrapPhase(String phase) {
+    if (!mounted) return;
+    setState(() {
+      _bootstrapPhase = phase;
+      _bootstrapError = null;
+      _bootstrapSetupStep = null;
+    });
+  }
+
+  bool _isConnectionMessage(String? message) {
+    final text = (message ?? '').toLowerCase();
+    if (text.isEmpty) return false;
+    return text.contains('koneksi') ||
+        text.contains('offline') ||
+        text.contains('terhubung') ||
+        text.contains('socket') ||
+        text.contains('timeout');
+  }
+
+  String _cashierSetupStep(String? nextStep) {
+    switch (nextStep) {
+      case 'create_store':
+      case 'create_payment_method':
+      case 'create_table':
+      case 'create_employee':
+        return nextStep!;
+      case 'create_master_product':
+        return 'create_product';
+      default:
+        return 'create_product';
+    }
+  }
+
+  String _setupHint(String step) {
+    switch (step) {
+      case 'create_store':
+        return 'Belum ada toko. Buat toko dulu sebelum membuka kasir.';
+      case 'create_payment_method':
+        return 'Belum ada metode pembayaran. Buat metode pembayaran dulu sebelum membuka kasir.';
+      case 'create_table':
+        return 'Belum ada meja. Buat meja dulu sebelum membuka kasir.';
+      case 'create_employee':
+        return 'Belum ada pegawai kasir. Buat pegawai kasir dulu sebelum membuka kasir.';
+      default:
+        return 'Belum ada produk di toko ini. Tambahkan produk dulu sebelum membuka kasir.';
+    }
+  }
+
+  String _setupActionLabel(String step) {
+    switch (step) {
+      case 'create_store':
+        return 'Buat toko Anda';
+      case 'create_payment_method':
+        return 'Buat metode pembayaran';
+      case 'create_table':
+        return 'Buat meja';
+      case 'create_employee':
+        return 'Buat pegawai kasir';
+      default:
+        return 'Tambahkan produk toko';
+    }
+  }
+
+  Future<void> _openSetupStep() async {
+    final step = _bootstrapSetupStep;
+    if (step == null || !mounted) return;
+
+    await context.read<NotificationsProvider>().clear();
+    await context.read<PaymentProvider>().clearStateAndCache();
+    await context.read<ProcessProvider>().clearStateAndCache();
+    await context.read<DoneProvider>().clearStateAndCache();
+    await context.read<SyncService>().clearCashierSessionData();
+    if (!mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final nav = Navigator.of(context);
+    final ok = await auth.returnToOwner();
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? 'Gagal kembali ke owner')),
+      );
+      return;
+    }
+
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => OwnerHomePage(initialStep: step),
+      ),
+      (_) => false,
+    );
+  }
+
+  Future<void> _bootstrapAfterLogin() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isBootstrapping = true;
+      _bootstrapError = null;
+      _bootstrapSetupStep = null;
+      _usedCacheFallback = false;
+      _bootstrapPhase = 'Cek koneksi…';
+    });
+
+    try {
+      await _waitForConnectivityReady();
+      if (!mounted) return;
+
+      final conn = context.read<ConnectivityStatusProvider>();
+
+      // Owner→cashier can land here with a stale "offline" flag; re-probe first.
+      if (!conn.isOnline && conn.hasNetwork) {
+        try {
+          await conn.checkServerReachability();
+        } catch (_) {}
+      }
+      if (!mounted) return;
+
+      var syncOk = false;
+      if (conn.isOnline) {
+        _setBootstrapPhase('Sinkron data…');
+        try {
+          await context.read<SyncService>().syncPendingOrders();
+          syncOk = true;
+        } catch (e) {
+          debugPrint('bootstrap sync failed: $e');
+          syncOk = false;
+        }
+        await _refreshConflictCount();
+      } else {
+        _setBootstrapPhase('Mode offline — memuat cache…');
+      }
+
+      if (!mounted) return;
+      _setBootstrapPhase('Muat menu…');
+      final purchase = context.read<PurchaseProvider>();
+      try {
+        await purchase.load();
+      } catch (e) {
+        debugPrint('bootstrap purchase load failed: $e');
+      }
 
       if (!mounted) return;
 
-      await Future.wait([
-        context.read<PaymentProvider>().load(),
-        context.read<ProcessProvider>().load(),
-        context.read<DoneProvider>().load(),
-      ]);
-    };
+      final hasMenu = purchase.products.isNotEmpty;
+      if (!hasMenu) {
+        final offline = !context.read<ConnectivityStatusProvider>().isOnline;
+        final loadError = purchase.error;
+        final connectionProblem = offline || _isConnectionMessage(loadError);
+        final setupStep = connectionProblem || (loadError ?? '').isNotEmpty
+            ? null
+            : _cashierSetupStep(
+                context.read<AuthProvider>().owner?.onboarding?.nextStep,
+              );
+        setState(() {
+          _isBootstrapping = true;
+          _bootstrapSetupStep = setupStep;
+          _bootstrapError = setupStep != null
+              ? _setupHint(setupStep)
+              : offline
+                  ? 'Mode offline — data menu belum tersedia. Sambungkan internet lalu coba lagi.'
+                  : (loadError ??
+                      'Data menu gagal dimuat. Periksa koneksi lalu coba lagi.');
+        });
+        return;
+      }
+
+      if (!syncOk &&
+          context.read<ConnectivityStatusProvider>().isOnline) {
+        _usedCacheFallback = true;
+      }
+
+      _setBootstrapPhase('Muat pesanan…');
+      try {
+        await _reloadAllOrderTabsSequentially();
+      } catch (e) {
+        debugPrint('bootstrap order tabs failed: $e');
+      }
+
+      if (!mounted) return;
+
+      _startSyncWorker();
+      _bootstrapSyncHandled = true;
+
+      setState(() {
+        _isBootstrapping = false;
+        _bootstrapError = null;
+        _bootstrapSetupStep = null;
+        _bootstrapPhase = 'Siap';
+      });
+
+      if (_usedCacheFallback && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sinkronisasi tidak lengkap — menampilkan data yang tersedia',
+            ),
+          ),
+        );
+      }
+
+      final queued = _queuedFcmTap;
+      _queuedFcmTap = null;
+      if (queued != null && mounted) {
+        await _handleFcmTap(queued);
+      }
+      await _ensureCashBook();
+    } catch (e, st) {
+      debugPrint('bootstrap fatal: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _isBootstrapping = true;
+        _bootstrapError =
+            'Gagal menyiapkan kasir. Periksa koneksi lalu coba lagi.';
+        _bootstrapSetupStep = null;
+      });
+    }
+  }
+
+  bool get _cashBookStillOpen {
+    final status = CashierShiftGate.shift?['status']?.toString();
+    return status == 'open' || status == 'recount';
+  }
+
+  Widget _withShiftBanner(Widget child) {
+    final status = CashierShiftGate.shift?['status']?.toString();
+    if (status == null || status == 'open' || status == 'closed') return child;
+    final text = status == 'pending_approval'
+        ? 'Buku kasir menunggu persetujuan. Pembayaran dikunci.'
+        : status == 'counted_offline'
+            ? 'Hitungan tersimpan. Akan dikirim saat tersambung. Pembayaran dikunci.'
+            : 'Hitung ulang uang di laci. Pembayaran dikunci.';
+    return Column(
+      children: [
+        Material(
+          color: const Color(0xFFFFF4E5),
+          child: ListTile(
+            dense: true,
+            title: Text(text),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CashBookPage()),
+              );
+              if (mounted) await _ensureCashBook();
+            },
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  Future<void> _ensureCashBook() async {
+    if (!mounted) return;
+    await CashierShiftGate.restore();
+    final online = context.read<ConnectivityStatusProvider>().isOnline;
+    if (!online) {
+      if (CashierShiftGate.shift == null && mounted) {
+        await _promptOpeningCash(localOnly: true);
+      }
+      if (mounted) setState(() {});
+      return;
+    }
+
+    try {
+      final api = CashierShiftApi(context.read<DioClient>().dio);
+      var shift = await api.current();
+      final local = CashierShiftGate.shift;
+      if (shift == null &&
+          local != null &&
+          local['local_only'] == true &&
+          local['client_uuid'] != null) {
+        shift = await api.open(
+          openingCash: num.tryParse('${local['opening_cash']}') ?? 0,
+          clientUuid: local['client_uuid'].toString(),
+        );
+        final movements = local['movements'];
+        if (movements is List) {
+          for (final movement in movements) {
+            if (movement is! Map) continue;
+            await api.movement(
+              direction: movement['direction'].toString(),
+              amount: num.tryParse('${movement['amount']}') ?? 0,
+              note: movement['note']?.toString(),
+            );
+          }
+          shift = await api.current();
+        }
+        if (local['counted_cash'] != null && shift != null) {
+          shift = await api.close(
+            countedCash: num.tryParse('${local['counted_cash']}') ?? 0,
+          );
+        }
+      }
+      await CashierShiftGate.remember(
+        shift != null && shift['status'] == 'closed' ? null : shift,
+      );
+      if (!mounted) return;
+      setState(() {});
+      if (CashierShiftGate.shift == null) {
+        await _promptOpeningCash();
+      }
+    } catch (_) {
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _promptOpeningCash({bool localOnly = false}) async {
+    final viaOwner = context.read<AuthProvider>().viaOwner;
+    final amount = await showDialog<num>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OpeningCashDialog(
+        leaveLabel: viaOwner ? 'Kembali ke menu owner' : 'Keluar',
+      ),
+    );
+    if (!mounted) return;
+    if (amount == null) {
+      if (viaOwner) {
+        await _returnToOwner();
+      } else {
+        await _logout();
+      }
+      return;
+    }
+    try {
+      if (localOnly) {
+        await CashierShiftGate.remember(
+          await CashierShiftGate.localOpen(amount < 0 ? 0 : amount),
+        );
+      } else {
+        final shift = await CashierShiftApi(context.read<DioClient>().dio).open(
+          openingCash: amount < 0 ? 0 : amount,
+        );
+        await CashierShiftGate.remember(shift);
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Buku kasir gagal dibuka.')),
+      );
+    }
+  }
+
+  void _startSyncWorker() {
+    _syncWorker?.dispose();
+    _syncWorker = SyncWorker(
+      syncService: context.read<SyncService>(),
+      connectivity: context.read<ConnectivityStatusProvider>(),
+    )..start();
+  }
+
+  Future<void> _retryBootstrap() async {
+    await _bootstrapAfterLogin();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _startRealtimeIfReady();
+    // Realtime mobile: FCM (new_order + order_updated + order_cancelled).
   }
 
   void _handleConnectivitySync() {
+    if (_isBootstrapping) return;
+
     final conn = context.read<ConnectivityStatusProvider>();
 
     if (conn.isChecking) return;
@@ -200,36 +606,37 @@ class _CashierHomePageState extends State<CashierHomePage>
     _lastOnlineState = isOnlineNow;
 
     if (isOnlineNow) {
-      Future.microtask(() async {
-        try {
-          await context.read<SyncService>().syncPendingOrders();
-          if (!mounted) return;
-
-          await Future.wait([
-            context.read<PaymentProvider>().load(),
-            context.read<ProcessProvider>().load(),
-            context.read<DoneProvider>().load(),
-          ]);
-        } catch (e) {
-          debugPrint('❌ auto sync on reconnect failed: $e');
-        }
-      });
+      Future.microtask(_syncAndReloadAllOrderTabs);
     }
   }
 
   Future<void> _confirmLogout() async {
-    // 🔥 ambil status pending dulu
     final hasPending = await context.read<SyncService>().hasPendingData();
+    await CashierShiftGate.restore();
+    final shiftStatus = CashierShiftGate.shift?['status']?.toString();
+    final bookStillOpen =
+        shiftStatus == 'open' || shiftStatus == 'recount';
+
+    final parts = <String>[];
+    if (bookStillOpen) {
+      parts.add(
+        'Buku kasir masih terbuka. Anda tetap bisa logout, tetapi hitungan laci belum ditutup.',
+      );
+    }
+    if (hasPending) {
+      parts.add(
+        'Masih ada data yang belum tersinkronisasi.\n\nLogout akan menghapus data tersebut.',
+      );
+    }
+    final content = parts.isEmpty
+        ? 'Apakah Anda yakin ingin logout?'
+        : parts.join('\n\n');
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Konfirmasi Logout'),
-        content: Text(
-          hasPending
-              ? '⚠️ Masih ada data yang belum tersinkronisasi.\n\nLogout akan menghapus data tersebut.'
-              : 'Apakah Anda yakin ingin logout?',
-        ),
+        content: Text(content),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -238,7 +645,7 @@ class _CashierHomePageState extends State<CashierHomePage>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color.fromARGB(255, 114, 9, 2),
-              foregroundColor: Colors.white, // 🔥 ini kuncinya
+              foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Logout'),
@@ -250,58 +657,6 @@ class _CashierHomePageState extends State<CashierHomePage>
     if (confirm == true) {
       await _logout();
     }
-  }
-
-  Future<void> _startRealtimeIfReady() async {
-    if (!mounted || _pusherStarted) return;
-
-    final auth = context.read<AuthProvider>();
-    final partnerId = auth.user?.partnerId;
-
-    if (partnerId == null) {
-      debugPrint('PUSHER: partnerId null, belum start');
-      return;
-    }
-
-    final notif = context.read<NotificationsProvider>();
-
-    try {
-      await _pusherSvc.start(
-        partnerId: partnerId,
-        onOrderCreated: (data) async {
-          // await SoundService.instance.playNotification();
-
-          await notif.pushFromPusher(data);
-
-          _refreshTabByRealtimeData(data);
-        },
-      );
-
-      _pusherStarted = true;
-      // debugPrint('✅ PUSHER STARTED partner=$partnerId');
-    } catch (e, st) {
-      debugPrint('❌ PUSHER start error: $e');
-      debugPrint('$st');
-    }
-  }
-
-  Future<void> _cancelApkDownload() async {
-    _apkUpdater.cancelDownload();
-
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _isDownloadingUpdate = false;
-      _activeUpdateIsForce = false;
-    });
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Download update dibatalkan')));
   }
 
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
@@ -333,19 +688,25 @@ class _CashierHomePageState extends State<CashierHomePage>
   void dispose() {
     try {
       context.read<ConnectivityStatusProvider>().onBackOnline = null;
+      context.read<ConnectivityStatusProvider>().onInitialOnline = null;
+      context.read<SyncService>().configureSyncCallbacks(
+        onSyncCompleted: null,
+        resolveCashierProcessId: null,
+      );
     } catch (_) {}
 
     _focusTimer?.cancel();
     _paymentReloadDebounce?.cancel();
     _processReloadDebounce?.cancel();
     _doneReloadDebounce?.cancel();
+    _allTabsReloadDebounce?.cancel();
     _resumeReloadDebounce?.cancel();
+    _purchaseStockRefreshDebounce?.cancel();
 
     _fcmMessageSub?.cancel();
     _fcmTapSub?.cancel();
 
-    _updateProgressNotifier.dispose();
-    _pusherSvc.stop();
+    _syncWorker?.dispose();
 
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -364,6 +725,67 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false,
+    );
+  }
+
+  Future<void> _confirmReturnToOwner() async {
+    await CashierShiftGate.restore();
+    final shiftStatus = CashierShiftGate.shift?['status']?.toString();
+    final bookStillOpen =
+        shiftStatus == 'open' || shiftStatus == 'recount';
+
+    if (bookStillOpen) {
+      if (!mounted) return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Kembali ke menu owner'),
+          content: const Text(
+            'Buku kasir masih terbuka. Anda tetap bisa kembali ke menu owner, tetapi hitungan laci belum ditutup.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(255, 114, 9, 2),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Kembali'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    await _returnToOwner();
+  }
+
+  Future<void> _returnToOwner() async {
+    await context.read<NotificationsProvider>().clear();
+    await context.read<PaymentProvider>().clearStateAndCache();
+    await context.read<ProcessProvider>().clearStateAndCache();
+    await context.read<DoneProvider>().clearStateAndCache();
+    await context.read<SyncService>().clearCashierSessionData();
+
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.returnToOwner();
+    if (!mounted) return;
+
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? 'Gagal kembali ke owner')),
+      );
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const OwnerHomePage()),
       (_) => false,
     );
   }
@@ -422,130 +844,18 @@ class _CashierHomePageState extends State<CashierHomePage>
     );
   }
 
-  Future<void> _showDownloadingDialog() async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Downloading Update'),
-        content: ValueListenableBuilder<double>(
-          valueListenable: _updateProgressNotifier,
-          builder: (context, progress, _) {
-            final isKnownProgress = progress >= 0 && progress <= 1;
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Sedang mengunduh APK versi terbaru...'),
-                const SizedBox(height: 16),
-                LinearProgressIndicator(
-                  value: isKnownProgress ? progress : null,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isKnownProgress
-                      ? '${(progress * 100).toStringAsFixed(0)}%'
-                      : 'Downloading...',
-                ),
-              ],
-            );
-          },
-        ),
-        actions: [
-          if (!_activeUpdateIsForce)
-            TextButton(
-              onPressed: _cancelApkDownload,
-              child: const Text('Batalkan'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _startApkUpdate(String apkUrl, {required bool force}) async {
-    if (apkUrl.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Link update tidak tersedia')),
-      );
-      return;
+  /// Update lewat link Play Store (`store_url` dari server).
+  Future<void> _openStoreUpdate(String storeUrl) async {
+    String? error;
+    if (storeUrl.trim().isEmpty) {
+      error = 'Link update tidak tersedia';
+    } else if (!await _storeUpdater.open(storeUrl)) {
+      error = 'Tidak bisa membuka Play Store';
     }
-
-    try {
-      if (mounted) {
-        setState(() {
-          _isDownloadingUpdate = true;
-          _activeUpdateIsForce = force;
-        });
-      }
-
-      _updateProgressNotifier.value = 0;
-
-      unawaited(_showDownloadingDialog());
-
-      await _apkUpdater.downloadAndInstall(
-        apkUrl: apkUrl,
-        onProgress: (received, total) {
-          if (!mounted) return;
-
-          if (total > 0) {
-            _updateProgressNotifier.value = received / total;
-          } else {
-            _updateProgressNotifier.value = -1;
-          }
-        },
-      );
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-    } on DioException catch (e) {
-      final wasCancelled = CancelToken.isCancel(e);
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-
-      if (!mounted) return;
-
-      if (!wasCancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              force
-                  ? 'Gagal mengunduh update. Silakan coba lagi.'
-                  : 'Gagal mengunduh update.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('apk update failed: $e');
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            force
-                ? 'Gagal mengunduh update. Silakan coba lagi.'
-                : 'Gagal mengunduh update.',
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isDownloadingUpdate = false;
-          _activeUpdateIsForce = false;
-        });
-      }
-    }
+    if (error == null || !mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error)));
   }
 
   Future<void> _handleManualUpdateTap() async {
@@ -581,15 +891,20 @@ class _CashierHomePageState extends State<CashierHomePage>
     );
 
     if (confirmed == true) {
-      await _startApkUpdate(storeUrl, force: force);
+      await _openStoreUpdate(storeUrl);
     }
+  }
+
+  bool _isCashierOriginatedOrder(Map<String, dynamic> data) {
+    return (data['order_by'] ?? '').toString().toUpperCase() == 'CASHIER';
   }
 
   void _listenFcmEvents() {
     _fcmMessageSub = PushNotificationService.instance.onMessageReceived.listen((
       data,
     ) async {
-      // debugPrint('🔔 FCM received event: $data');
+      if (!mounted) return;
+      if (_isBootstrapping) return;
 
       final type = (data['type'] ?? '').toString();
 
@@ -598,19 +913,56 @@ class _CashierHomePageState extends State<CashierHomePage>
         return;
       }
 
-      await context.read<NotificationsProvider>().pushFromFcm(data);
-      _refreshTabByRealtimeData(data);
+      if (type == 'order_updated' ||
+          type == 'order_cancelled' ||
+          _isCashierOriginatedOrder(data)) {
+        final status = (data['status'] ?? data['order_status'] ?? '')
+            .toString()
+            .toUpperCase();
+        if (status.isNotEmpty) {
+          _refreshTabByRealtimeData(data);
+        }
+        _debouncedSyncAndReloadAllOrderTabs();
+        return;
+      }
+
+      if (type == 'new_order') {
+        try {
+          await context.read<NotificationsProvider>().pushFromFcm(data);
+          _debouncedSyncAndReloadAllOrderTabs();
+        } catch (e, st) {
+          debugPrint('FCM foreground handler error: $e\n$st');
+        }
+      }
     });
 
     _fcmTapSub = PushNotificationService.instance.onMessageTapped.listen((
       data,
     ) async {
-      // debugPrint('👉 FCM tapped event: $data');
+      if (!mounted) return;
 
       final type = (data['type'] ?? '').toString();
 
       if (type == 'force_logout') {
         await _handleForceLogout(data);
+        return;
+      }
+
+      if (_isBootstrapping) {
+        _queuedFcmTap = data;
+        return;
+      }
+
+      if (type == 'order_updated' ||
+          type == 'order_cancelled' ||
+          _isCashierOriginatedOrder(data)) {
+        final status = (data['status'] ?? data['order_status'] ?? '')
+            .toString()
+            .toUpperCase();
+        if (status.isNotEmpty) {
+          _refreshTabByRealtimeData(data);
+        }
+        _debouncedSyncAndReloadAllOrderTabs();
         return;
       }
 
@@ -619,21 +971,13 @@ class _CashierHomePageState extends State<CashierHomePage>
     });
   }
 
-  void _openBarcode() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Sementara anda belum dapat menggunakan fitur ini...'),
-      ),
-    );
-  }
-
   void _debouncedReloadPayment() {
     _paymentReloadDebounce?.cancel();
     _paymentReloadDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       final vm = context.read<PaymentProvider>();
       vm.setQuery('');
-      unawaited(vm.load());
+      unawaited(vm.load(silent: true));
     });
   }
 
@@ -643,7 +987,7 @@ class _CashierHomePageState extends State<CashierHomePage>
       if (!mounted) return;
       final vm = context.read<ProcessProvider>();
       vm.setQuery('');
-      unawaited(vm.load());
+      unawaited(vm.load(silent: true));
     });
   }
 
@@ -652,8 +996,87 @@ class _CashierHomePageState extends State<CashierHomePage>
     _doneReloadDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       final vm = context.read<DoneProvider>();
-      unawaited(vm.load());
+      unawaited(vm.load(silent: true));
     });
+  }
+
+  Future<void> _reloadAllOrderTabsSequentially() {
+    return _reloadTabsInFlight ??= _reloadAllOrderTabsSequentiallyImpl().whenComplete(() {
+      _reloadTabsInFlight = null;
+    });
+  }
+
+  Future<void> _reloadAllOrderTabsSequentiallyImpl() async {
+    if (!mounted) return;
+
+    final coordinator = context.read<OrderTabCoordinator>();
+    final payVm = context.read<PaymentProvider>();
+    final procVm = context.read<ProcessProvider>();
+    final doneVm = context.read<DoneProvider>();
+
+    payVm.setQuery('');
+    procVm.setQuery('');
+    doneVm.setQuery('');
+
+    await coordinator.reloadAllTabs(
+      payment: payVm,
+      process: procVm,
+      done: doneVm,
+    );
+  }
+
+  void _debouncedSyncAndReloadAllOrderTabs() {
+    _allTabsReloadDebounce?.cancel();
+    _allTabsReloadDebounce = Timer(const Duration(milliseconds: 400), () {
+      unawaited(_syncAndReloadAllOrderTabs());
+    });
+  }
+
+  Future<void> _syncAndReloadAllOrderTabs() {
+    _syncAndReloadInFlight ??= _syncAndReloadAllOrderTabsImpl().whenComplete(() {
+      _syncAndReloadInFlight = null;
+    });
+    return _syncAndReloadInFlight!;
+  }
+
+  Future<void> _syncAndReloadAllOrderTabsImpl() async {
+    try {
+      final conn = context.read<ConnectivityStatusProvider>();
+      if (conn.isOnline && !conn.isChecking) {
+        await context.read<SyncService>().syncPendingOrders();
+      }
+    } catch (e) {
+      debugPrint('sync before tab reload failed: $e');
+    }
+
+    await _refreshConflictCount();
+
+    if (!mounted) return;
+    await _reloadAllOrderTabsSequentially();
+    _debouncedRefreshPurchaseStock();
+  }
+
+  void _debouncedRefreshPurchaseStock() {
+    _purchaseStockRefreshDebounce?.cancel();
+    _purchaseStockRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      unawaited(context.read<PurchaseProvider>().refreshSilently());
+    });
+  }
+
+  Future<void> _refreshConflictCount() async {
+    try {
+      final count = await context.read<BookingOrdersDao>().countUnresolvedConflicts();
+      if (!mounted) return;
+      setState(() => _conflictCount = count);
+    } catch (_) {}
+  }
+
+  Future<void> _openSyncConflicts() async {
+    await SyncConflictsSheet.show(context);
+    await _refreshConflictCount();
+    if (!mounted) return;
+    await _reloadAllOrderTabsSequentially();
   }
 
   void _refreshTabByRealtimeData(Map<String, dynamic> data) {
@@ -679,7 +1102,10 @@ class _CashierHomePageState extends State<CashierHomePage>
       return;
     }
 
-    if (status == 'PAID' || status == 'PROCESSED') {
+    if (status == 'PAID' ||
+        status == 'PROCESSED' ||
+        status == 'OPENBILL_CONFIRMATION' ||
+        status == 'OPENBILL_WAITING_ORDER') {
       _debouncedReloadProcess();
       return;
     }
@@ -785,6 +1211,17 @@ class _CashierHomePageState extends State<CashierHomePage>
     );
   }
 
+  /// After a "Bayar Sekarang" checkout: switch to the payment tab (index 1)
+  /// and ask it to open the payment sheet for that order.
+  void _openPayNow(String localOrderId) {
+    if (!mounted) return;
+    setState(() {
+      _index = 1;
+      _payNowLocalId = localOrderId;
+      _payNowRequestKey++;
+    });
+  }
+
   int? _pickOrderId(dynamic n) {
     try {
       // ✅ kasus notif kamu (IncomingOrderNotif)
@@ -835,6 +1272,12 @@ class _CashierHomePageState extends State<CashierHomePage>
     final appUpdateData = liveAppUpdate ?? auth.appUpdate;
     final hasAppUpdate = appUpdateData?['update_available'] == true;
 
+    if (_isBootstrapping) {
+      return _buildBootstrapScaffold(
+        viaOwner: auth.viaOwner,
+      );
+    }
+
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
     final shortestSide = media.size.shortestSide;
@@ -843,17 +1286,21 @@ class _CashierHomePageState extends State<CashierHomePage>
     // final useSideNav = isLandscape && isTablet;
     final useSideNav = isLandscape;
 
-    final paymentCount = context.watch<PaymentProvider>().items.length;
-    final processCount = context.watch<ProcessProvider>().items.length;
-    final doneCount = context.watch<DoneProvider>().items.length;
+    final paymentCount =
+        context.select<PaymentProvider, int>((p) => p.items.length);
+    final processCount =
+        context.select<ProcessProvider, int>((p) => p.items.length);
+    final doneCount = context.select<DoneProvider, int>((p) => p.items.length);
 
     final content = IndexedStack(
       index: _index,
       children: [
-        const purchase_tab.PurchaseTab(),
+        purchase_tab.PurchaseTab(onPayNow: _openPayNow),
         payment_tab.PaymentTab(
           focusOrderId: _focusOrderId,
           focusRequestKey: _focusRequestKey,
+          payNowLocalId: _payNowLocalId,
+          payNowRequestKey: _payNowRequestKey,
         ),
         process_tab.ProcessTab(
           focusOrderId: _focusOrderId,
@@ -872,10 +1319,17 @@ class _CashierHomePageState extends State<CashierHomePage>
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        await _handleBack();
+        if (context.read<AuthProvider>().viaOwner) {
+          await _confirmReturnToOwner();
+        } else {
+          await _handleBack();
+        }
       },
       child: Scaffold(
         drawer: _AppDrawer(
+          showReports: context.watch<PurchaseProvider>().partnerData?.canViewReports ==
+              true,
+          showCashBookOpenBadge: _cashBookStillOpen,
           onOpenProfile: () {
             Navigator.of(context).push(
               MaterialPageRoute(
@@ -888,27 +1342,35 @@ class _CashierHomePageState extends State<CashierHomePage>
               context,
             ).push(MaterialPageRoute(builder: (_) => const ReportsPage()));
           },
+          onOpenCashBook: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CashBookPage()),
+            );
+            if (mounted) await _ensureCashBook();
+          },
           onOpenPrinterSettings: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
             );
           },
-          onTapUpdate: hasAppUpdate && !_isDownloadingUpdate
-              ? _handleManualUpdateTap
-              : null,
+          onTapUpdate: hasAppUpdate ? _handleManualUpdateTap : null,
           showUpdateBadge: hasAppUpdate,
           onLogout: _confirmLogout,
+          onReturnToOwner: context.watch<AuthProvider>().viaOwner
+              ? _confirmReturnToOwner
+              : null,
         ),
         appBar: AppBar(
           leading: Builder(
             builder: (context) {
+              final showMenuDot = hasAppUpdate || _cashBookStillOpen;
               return IconButton(
                 onPressed: () => Scaffold.of(context).openDrawer(),
                 icon: Stack(
                   clipBehavior: Clip.none,
                   children: [
                     const Icon(Icons.menu),
-                    if (hasAppUpdate)
+                    if (showMenuDot)
                       Positioned(
                         right: 2,
                         top: 2,
@@ -941,6 +1403,15 @@ class _CashierHomePageState extends State<CashierHomePage>
             ],
           ),
           actions: [
+            if (_conflictCount > 0)
+              IconButton(
+                tooltip: 'Konflik sinkronisasi',
+                onPressed: _openSyncConflicts,
+                icon: Badge(
+                  label: Text('$_conflictCount'),
+                  child: const Icon(Icons.warning_amber_rounded),
+                ),
+              ),
             const OnlineStatusChip(),
             const PrinterStatusDot(),
             NotifBellButton(onTapItem: _handleNotifTap),
@@ -952,16 +1423,15 @@ class _CashierHomePageState extends State<CashierHomePage>
                   _SideNav(
                     currentIndex: _index,
                     onTap: _onTap,
-                    onBarcodeTap: _openBarcode,
                     iconOnly: true,
                     paymentCount: paymentCount,
                     processCount: processCount,
                     doneCount: doneCount,
                   ),
-                  Expanded(child: content),
+                  Expanded(child: _withShiftBanner(content)),
                 ],
               )
-            : content,
+            : _withShiftBanner(content),
         bottomNavigationBar: useSideNav
             ? null
             : BottomAppBar(
@@ -986,10 +1456,6 @@ class _CashierHomePageState extends State<CashierHomePage>
                           onTap: () => _onTap(1),
                           badge: paymentCount,
                         ),
-                        // _BarcodeNavItem(
-                        //   active: false,
-                        //   onTap: _openBarcode,
-                        // ),
                         _NavItem(
                           icon: Icons.sync_rounded,
                           label: 'Proses',
@@ -1012,13 +1478,170 @@ class _CashierHomePageState extends State<CashierHomePage>
       ),
     );
   }
+
+  Widget _buildBootstrapScaffold({required bool viaOwner}) {
+    const brand = Color(0xFFAE1504);
+    final hasError = (_bootstrapError ?? '').isNotEmpty;
+
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        if (viaOwner) {
+          await _confirmReturnToOwner();
+        } else {
+          await _handleBack();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: brand,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/cavaa_logo.png',
+                    height: 48,
+                    errorBuilder: (_, __, ___) => const Text(
+                      'Cavaa',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 28,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  if (!hasError) ...[
+                    const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      _bootstrapPhase,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Mohon tunggu, menyiapkan data kasir…',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ] else ...[
+                    Icon(
+                      _bootstrapSetupStep == null
+                          ? Icons.cloud_off_rounded
+                          : Icons.flag_rounded,
+                      color: Colors.white,
+                      size: 42,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      _bootstrapError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    if (_bootstrapSetupStep != null) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _openSetupStep,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: brand,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            _setupActionLabel(_bootstrapSetupStep!),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: _bootstrapSetupStep == null
+                          ? ElevatedButton(
+                              onPressed: _retryBootstrap,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: brand,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Coba lagi',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            )
+                          : OutlinedButton(
+                              onPressed: _retryBootstrap,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Coba lagi',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                    ),
+                    if (viaOwner) ...[
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: _confirmReturnToOwner,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Kembali ke Owner'),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SideNav extends StatelessWidget {
   const _SideNav({
     required this.currentIndex,
     required this.onTap,
-    required this.onBarcodeTap,
     this.iconOnly = false,
     this.paymentCount = 0,
     this.processCount = 0,
@@ -1027,7 +1650,6 @@ class _SideNav extends StatelessWidget {
 
   final int currentIndex;
   final ValueChanged<int> onTap;
-  final VoidCallback onBarcodeTap;
   final bool iconOnly;
   final int paymentCount;
   final int processCount;
@@ -1035,8 +1657,6 @@ class _SideNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const brand = Color(0xFFAE1504);
-
     final media = MediaQuery.of(context);
     final leftInset = media.padding.left;
 
@@ -1084,35 +1704,6 @@ class _SideNav extends StatelessWidget {
                   onTap: () => onTap(1),
                   iconOnly: iconOnly,
                   badge: paymentCount,
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Center(
-                    child: InkWell(
-                      onTap: onBarcodeTap,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        width: iconOnly ? 44 : 56,
-                        height: iconOnly ? 44 : 56,
-                        decoration: BoxDecoration(
-                          color: brand,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: brand.withOpacity(0.25),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.qr_code_scanner_rounded,
-                          color: Colors.white,
-                          size: iconOnly ? 22 : 28,
-                        ),
-                      ),
-                    ),
-                  ),
                 ),
                 _SideNavItem(
                   icon: Icons.sync_rounded,
@@ -1419,63 +2010,30 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _BarcodeNavItem extends StatelessWidget {
-  const _BarcodeNavItem({required this.onTap, this.active = false});
-
-  final VoidCallback onTap;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    const brand = Color(0xFFAE1504);
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Transform.translate(
-          offset: const Offset(0, -10),
-          child: Container(
-            height: 52,
-            width: 52,
-            decoration: BoxDecoration(
-              color: brand,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: brand.withOpacity(0.45),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.qr_code_scanner_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
+    required this.showReports,
+    required this.showCashBookOpenBadge,
     required this.onOpenProfile,
     required this.onOpenReports,
+    required this.onOpenCashBook,
     required this.onOpenPrinterSettings,
     required this.onLogout,
     required this.showUpdateBadge,
     this.onTapUpdate,
+    this.onReturnToOwner,
   });
 
+  final bool showReports;
+  final bool showCashBookOpenBadge;
   final VoidCallback onOpenProfile;
   final VoidCallback onOpenReports;
+  final VoidCallback onOpenCashBook;
   final VoidCallback onOpenPrinterSettings;
   final VoidCallback onLogout;
   final bool showUpdateBadge;
   final VoidCallback? onTapUpdate;
+  final VoidCallback? onReturnToOwner;
 
   String? _buildUserImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.trim().isEmpty) return null;
@@ -1561,9 +2119,11 @@ class _AppDrawer extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 7),
-                          const Text(
-                            'Cashier Account',
-                            style: TextStyle(
+                          Text(
+                            onReturnToOwner != null
+                                ? 'Cashier via Owner'
+                                : 'Cashier Account',
+                            style: const TextStyle(
                               fontSize: 13,
                               color: Colors.black54,
                             ),
@@ -1573,15 +2133,84 @@ class _AppDrawer extends StatelessWidget {
                     ),
                   ),
                   const Divider(),
+                  if (onReturnToOwner != null)
+                    ListTile(
+                      leading: const Icon(Icons.arrow_back, color: brand),
+                      title: const Text('Kembali ke Menu Owner'),
+                      subtitle: const Text('Keluar dari mode kasir'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onReturnToOwner?.call();
+                      },
+                    ),
                   ListTile(
-                    leading: const Icon(Icons.edit_document, color: brand),
-                    title: const Text('Laporan'),
-                    subtitle: const Text('Lihat laporan penjualan'),
+                    leading: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.point_of_sale, color: brand),
+                        if (showCashBookOpenBadge)
+                          Positioned(
+                            right: -2,
+                            top: -2,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    title: const Text('Buku kasir'),
+                    subtitle: Text(
+                      showCashBookOpenBadge
+                          ? 'Buku masih terbuka'
+                          : 'Kas masuk, kas keluar, tutup buku',
+                      style: TextStyle(
+                        color: showCashBookOpenBadge
+                            ? const Color(0xFFAE1504)
+                            : null,
+                        fontWeight:
+                            showCashBookOpenBadge ? FontWeight.w600 : null,
+                      ),
+                    ),
+                    trailing: showCashBookOpenBadge
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFAE1504).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Aktif',
+                              style: TextStyle(
+                                color: Color(0xFFAE1504),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          )
+                        : null,
                     onTap: () {
                       Navigator.of(context).pop();
-                      onOpenReports();
+                      onOpenCashBook();
                     },
                   ),
+                  if (showReports)
+                    ListTile(
+                      leading: const Icon(Icons.edit_document, color: brand),
+                      title: const Text('Laporan'),
+                      subtitle: const Text('Lihat laporan penjualan'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onOpenReports();
+                      },
+                    ),
                   ListTile(
                     leading: const Icon(Icons.print_outlined, color: brand),
                     title: const Text('Pairing Printer'),

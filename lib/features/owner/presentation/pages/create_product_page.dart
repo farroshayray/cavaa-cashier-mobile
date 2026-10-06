@@ -1,0 +1,1740 @@
+﻿import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '/features/auth/presentation/auth_provider.dart';
+import '../../data/owner_api.dart';
+import 'master_products_page.dart';
+import 'owner_home_page.dart';
+import 'product_form_shared.dart';
+import 'categories_page.dart';
+import 'promotions_page.dart';
+import '../widgets/owner_setup_progress.dart';
+import '../widgets/dock_inset.dart';
+
+const _brand = productBrand;
+const _bg = Color(0xFFF6F7F9);
+
+class _StoreStockChip extends StatelessWidget {
+  const _StoreStockChip({required this.label, this.filled = false});
+
+  final String label;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: filled ? _brand.withValues(alpha: 0.1) : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: filled ? _brand : Colors.black87,
+        ),
+      ),
+    );
+  }
+}
+
+enum ProductHubTab { store, catalog }
+
+class _HubSegmentTab extends StatelessWidget {
+  const _HubSegmentTab({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.flex = 1,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  final int flex;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? _brand : const Color(0xFF6B7280),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: selected ? _brand : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class CreateProductPage extends StatefulWidget {
+  const CreateProductPage({
+    super.key,
+    this.showSetupProgress = false,
+    this.initialTab = ProductHubTab.store,
+  });
+
+  final bool showSetupProgress;
+  /// `store` = Menu toko, `catalog` = Katalog.
+  final ProductHubTab initialTab;
+
+  /// Convenience for callers outside this library file.
+  static const tabStore = 'store';
+  static const tabCatalog = 'catalog';
+
+  factory CreateProductPage.forSetup({
+    required bool showSetupProgress,
+    required String tab,
+  }) {
+    return CreateProductPage(
+      showSetupProgress: showSetupProgress,
+      initialTab: tab == tabCatalog
+          ? ProductHubTab.catalog
+          : ProductHubTab.store,
+    );
+  }
+
+  @override
+  State<CreateProductPage> createState() => _CreateProductPageState();
+}
+
+class _CreateProductPageState extends State<CreateProductPage> {
+  bool _loading = true;
+  bool _refreshing = false;
+  String? _error;
+  List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _masters = [];
+  List<Map<String, dynamic>> _categories = [];
+  List<Map<String, dynamic>> _promotions = [];
+  int? _selectedCategoryId;
+  late ProductHubTab _hubTab;
+  final _catalogKey = GlobalKey<MasterProductsPageState>();
+  final _search = TextEditingController();
+  String _query = '';
+
+  List<Map<String, dynamic>> get _filteredProducts {
+    final selectedId = _selectedCategoryId;
+    return _products
+        .where(
+          (p) =>
+              (selectedId == null || productCategoryIdOf(p) == selectedId) &&
+              productMatchesQuery(p, _query),
+        )
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<({int id, String name, int count})> get _populatedCategories =>
+      populatedProductCategories(
+        products: _products,
+        categories: _categories,
+      );
+
+  void _ensureValidCategorySelection() {
+    final selected = _selectedCategoryId;
+    if (selected == null) return;
+    final stillExists = _populatedCategories.any((c) => c.id == selected);
+    if (!stillExists) _selectedCategoryId = null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _hubTab = widget.initialTab;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    } else {
+      setState(() => _refreshing = true);
+    }
+
+    try {
+      final api = ownerApiOf(context);
+      final results = await Future.wait([
+        api.listProducts(),
+        api.listMasterProducts(),
+      ]);
+
+      final storeData = results[0];
+      final masterData = results[1];
+      final storeList = storeData['products'];
+      final masterList = masterData['products'];
+      final cats = storeData['categories'] ?? masterData['categories'];
+      final promos = storeData['promotions'] ?? masterData['promotions'];
+
+      setState(() {
+        _products = storeList is List
+            ? storeList
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : [];
+        _masters = masterList is List
+            ? masterList
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : [];
+        _categories = cats is List
+            ? cats
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : [];
+        _promotions = promos is List
+            ? promos
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : [];
+        _ensureValidCategorySelection();
+        _error = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Gagal memuat produk toko');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _refreshing = false;
+        });
+      }
+    }
+  }
+
+  Set<int> get _assignedMasterIds => _products
+      .map((p) => int.tryParse('${p['master_product_id'] ?? ''}'))
+      .whereType<int>()
+      .toSet();
+
+  List<Map<String, dynamic>> get _assignableMasters {
+    final assigned = _assignedMasterIds;
+    return _masters.where((m) {
+      final id = int.tryParse('${m['id'] ?? ''}');
+      return id != null && !assigned.contains(id);
+    }).toList();
+  }
+
+  Future<void> _openEditor({Map<String, dynamic>? product}) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => StoreProductEditorPage(
+          product: product,
+          assignableMasters: _assignableMasters,
+          categories: _categories,
+          promotions: _promotions,
+          canManageStock: context.read<AuthProvider>().owner?.hasFeature('products_stocks') ?? false,
+        ),
+      ),
+    );
+    if (changed == true && mounted) {
+      await context.read<AuthProvider>().refreshOwner();
+      await _load(silent: true);
+    }
+  }
+
+  Future<void> _openCatalogEditor() async {
+    await _catalogKey.currentState?.openCreate();
+  }
+
+  Future<void> _onCatalogChanged() async {
+    if (!mounted) return;
+    await context.read<AuthProvider>().refreshOwner();
+    await _load(silent: true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final owner = context.watch<AuthProvider>().owner;
+    final selectedId =
+        owner?.onboarding?.selectedStoreId ?? owner?.selectedPartnerId;
+    final matchedStores = owner?.onboarding?.stores
+            .where((s) => s.id == selectedId)
+            .toList() ??
+        const [];
+    final storeName =
+        matchedStores.isNotEmpty ? matchedStores.first.name : 'Toko terpilih';
+    final onStoreTab = _hubTab == ProductHubTab.store;
+
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        title: const Text(
+          'Produk',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: _brand,
+        foregroundColor: Colors.white,
+        actions: [
+          if (_refreshing)
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      floatingActionButton: DockAwareFab(
+        child: FloatingActionButton.extended(
+          onPressed: _loading
+              ? null
+              : () => onStoreTab ? _openEditor() : _openCatalogEditor(),
+          backgroundColor: onStoreTab ? _brand : productCatalogAccent,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(onStoreTab ? 'Tambah ke toko' : 'Tambah katalog'),
+        ),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.showSetupProgress) ...[
+                  OwnerSetupStepHeader(
+                    stepKey: onStoreTab
+                        ? 'create_product'
+                        : 'create_master_product',
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                Text(
+                  'Toko: $storeName',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black.withValues(alpha: 0.65),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB).withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      _HubSegmentTab(
+                        label: 'Menu $storeName',
+                        icon: Icons.storefront_rounded,
+                        selected: onStoreTab,
+                        flex: 3,
+                        onTap: () =>
+                            setState(() => _hubTab = ProductHubTab.store),
+                      ),
+                      _HubSegmentTab(
+                        label: 'Katalog',
+                        icon: Icons.inventory_2_rounded,
+                        selected: !onStoreTab,
+                        flex: 2,
+                        onTap: () =>
+                            setState(() => _hubTab = ProductHubTab.catalog),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  onStoreTab
+                      ? 'Produk yang aktif di toko ini — atur stok & status jual.'
+                      : 'Template produk bersama — edit di sini ikut ke toko yang memakai.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.black.withValues(alpha: 0.5),
+                  ),
+                ),
+                if (_error != null && onStoreTab) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: onStoreTab
+                ? (_loading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: _brand),
+                      )
+                    : RefreshIndicator(
+                        color: _brand,
+                        onRefresh: () => _load(silent: true),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100)
+                              .withBottomInset(context),
+                          children: [
+                            Text(
+                              'Menu $storeName (${_filteredProducts.length})',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (_products.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              ProductSearchField(
+                                controller: _search,
+                                onChanged: (q) => setState(() => _query = q),
+                              ),
+                            ],
+                            if (_populatedCategories.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                height: 42,
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const BouncingScrollPhysics(),
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: ProductCategoryTab(
+                                        label: 'Semua',
+                                        count: _products.length,
+                                        selected: _selectedCategoryId == null,
+                                        onTap: () => setState(
+                                          () => _selectedCategoryId = null,
+                                        ),
+                                      ),
+                                    ),
+                                    ..._populatedCategories.map((c) {
+                                      final selected =
+                                          c.id == _selectedCategoryId;
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 8),
+                                        child: ProductCategoryTab(
+                                          label: c.name,
+                                          count: c.count,
+                                          selected: selected,
+                                          onTap: () => setState(
+                                            () => _selectedCategoryId = c.id,
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            if (_products.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.06),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Belum ada produk di toko. Tambah ke toko atau ambil dari katalog.',
+                                  style: TextStyle(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.55),
+                                  ),
+                                ),
+                              )
+                            else if (_filteredProducts.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.06),
+                                  ),
+                                ),
+                                child: Text(
+                                  _query.trim().isNotEmpty
+                                      ? 'Produk "${_query.trim()}" tidak ditemukan.'
+                                      : 'Tidak ada produk di kategori ini.',
+                                  style: TextStyle(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.55),
+                                  ),
+                                ),
+                              )
+                            else
+                              ..._filteredProducts.map(_buildStoreProductTile),
+                          ],
+                        ),
+                      ))
+                : MasterProductsPage(
+                    key: _catalogKey,
+                    embedded: true,
+                    onChanged: _onCatalogChanged,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoreProductTile(Map<String, dynamic> p) {
+    final cat = p['category'];
+    final catName = cat is Map ? cat['name']?.toString() : null;
+    final thumb = resolveProductImageUrl(p['pictures']);
+    final always =
+        p['always_available'] == true || p['always_available'] == 1;
+    final linked = p['stock_type']?.toString() == 'linked';
+    final rawQty = p['stock_quantity'];
+    final qty = rawQty is num
+        ? rawQty.toInt()
+        : int.tryParse('${rawQty ?? ''}');
+    final linkedQty = linked ? (qty ?? 0) : null;
+    final showQty = !linked && qty != null && (!always || qty > 0);
+    final showStockRow = linked || always || showQty;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.black.withValues(alpha: 0.06),
+        ),
+      ),
+      child: ListTile(
+        onTap: () => _openEditor(product: p),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: thumb == null
+              ? Container(
+                  width: 48,
+                  height: 48,
+                  color: _brand.withValues(alpha: 0.08),
+                  child: const Icon(
+                    Icons.shopping_bag_outlined,
+                    color: _brand,
+                  ),
+                )
+              : Image.network(
+                  thumb,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                ),
+        ),
+        title: Text(
+          p['name']?.toString() ?? '-',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              [
+                'Rp ${formatProductPrice(p['price'])}',
+                if (catName != null) catName,
+                if ((p['product_code']?.toString() ?? '').isNotEmpty)
+                  p['product_code'].toString(),
+              ].join(' · '),
+            ),
+            if (showStockRow) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (linked) ...[
+                    _StoreStockChip(
+                      label: 'Stok $linkedQty pcs',
+                    ),
+                    const _StoreStockChip(
+                      label: 'Resep',
+                      filled: true,
+                    ),
+                  ] else if (showQty)
+                    _StoreStockChip(
+                      label: 'Stok $qty pcs',
+                    ),
+                  if (always && !linked)
+                    const _StoreStockChip(
+                      label: 'Selalu tersedia',
+                      filled: true,
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+        isThreeLine: showStockRow,
+        trailing: Icon(
+          (p['is_active'] == true || p['is_active'] == 1)
+              ? Icons.check_circle_rounded
+              : Icons.pause_circle_filled_rounded,
+          color: (p['is_active'] == true || p['is_active'] == 1)
+              ? const Color(0xFF0B6E4F)
+              : Colors.black38,
+          size: 20,
+        ),
+      ),
+    );
+  }
+}
+
+
+/// "Ambil dari katalog": daftar katalog dengan kolom cari di atasnya.
+class _CatalogPickerSheet extends StatefulWidget {
+  const _CatalogPickerSheet({required this.masters});
+
+  final List<Map<String, dynamic>> masters;
+
+  @override
+  State<_CatalogPickerSheet> createState() => _CatalogPickerSheetState();
+}
+
+class _CatalogPickerSheetState extends State<_CatalogPickerSheet> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = widget.masters
+        .where((m) => productMatchesQuery(m, _query))
+        .toList();
+    return SafeArea(
+      child: Padding(
+        // Keep the search box above the keyboard.
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.65,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 10),
+                child: Text(
+                  'Ambil dari katalog',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ProductSearchField(
+                  controller: _search,
+                  autofocus: widget.masters.length > 8,
+                  onChanged: (q) => setState(() => _query = q),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Expanded(
+                child: matches.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Item "${_query.trim()}" tidak ditemukan di katalog.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.black.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: matches.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final m = matches[i];
+                          final code = m['product_code']?.toString() ?? '';
+                          return ListTile(
+                            title: Text(
+                              m['name']?.toString() ?? '-',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Rp ${formatProductPrice(m['price'])}'
+                              '${code.isNotEmpty ? ' · $code' : ''}',
+                            ),
+                            onTap: () => Navigator.pop(context, m),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class StoreProductEditorPage extends StatefulWidget {
+  const StoreProductEditorPage({
+    super.key,
+    this.product,
+    required this.assignableMasters,
+    required this.categories,
+    required this.promotions,
+    this.canManageStock = false,
+  });
+
+  final Map<String, dynamic>? product;
+  final List<Map<String, dynamic>> assignableMasters;
+  final List<Map<String, dynamic>> categories;
+  final List<Map<String, dynamic>> promotions;
+  final bool canManageStock;
+
+  @override
+  State<StoreProductEditorPage> createState() => _StoreProductEditorPageState();
+}
+
+class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
+  final _name = TextEditingController();
+  final _price = TextEditingController();
+  final _category = TextEditingController(text: 'Umum');
+  final _desc = TextEditingController();
+  final _code = TextEditingController();
+  final _stock = TextEditingController();
+  final _modalPrice = TextEditingController();
+
+  Map<String, dynamic>? _selectedMaster;
+  List<MenuOptionGroup> _groups = [];
+  List<Map<String, dynamic>> _existingImages = [];
+  final List<String> _pickedImages = [];
+  List<Map<String, dynamic>> _categories = [];
+  List<Map<String, dynamic>> _promotions = [];
+
+  int? _categoryId;
+  int? _promotionId;
+  bool _alwaysAvailable = true;
+  String _stockType = 'direct';
+  bool _stockEditable = true;
+  bool _isActive = true;
+  bool _isHot = false;
+  bool _loading = false;
+  bool _saving = false;
+  String? _error;
+  String _stockMode = 'always';
+  List<RecipeLine> _recipes = [];
+  List<Map<String, dynamic>> _ingredients = [];
+  num _lastUnitCost = 0;
+
+  bool get _isEdit => widget.product != null;
+  bool get _fromCatalog => _selectedMaster != null;
+  bool get _identityLocked => _isEdit || _fromCatalog;
+  int? get _productId => int.tryParse('${widget.product?['id'] ?? ''}');
+
+  @override
+  void initState() {
+    super.initState();
+    _categories = [...widget.categories];
+    _promotions = [...widget.promotions];
+    if (_isEdit) {
+      _loading = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadDetail());
+    }
+    if (widget.canManageStock) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadIngredients());
+    }
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _price.dispose();
+    _category.dispose();
+    _desc.dispose();
+    _code.dispose();
+    _stock.dispose();
+    _modalPrice.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadDetail() async {
+    final id = _productId;
+    if (id == null) {
+      setState(() => _loading = false);
+      return;
+    }
+    try {
+      final data = await ownerApiOf(context).getProduct(id);
+      final product = data['product'] is Map
+          ? Map<String, dynamic>.from(data['product'] as Map)
+          : Map<String, dynamic>.from(widget.product!);
+      final cats = data['categories'];
+      final promos = data['promotions'];
+      _applyProduct(product);
+      setState(() {
+        if (cats is List) {
+          _categories = cats
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+        }
+        if (promos is List) {
+          _promotions = promos
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+        }
+        _loading = false;
+      });
+    } catch (_) {
+      if (widget.product != null) _applyProduct(widget.product!);
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _applyProduct(Map<String, dynamic> product) {
+    final cat = product['category'];
+    _name.text = product['name']?.toString() ?? '';
+    _price.text = product['price'] is num
+        ? (product['price'] as num).toStringAsFixed(0)
+        : (product['price']?.toString() ?? '');
+    _category.text =
+        cat is Map ? (cat['name']?.toString() ?? 'Umum') : 'Umum';
+    _categoryId = cat is Map
+        ? int.tryParse('${cat['id'] ?? ''}')
+        : int.tryParse('${product['category_id'] ?? ''}');
+    _desc.text = product['description']?.toString() ?? '';
+    _code.text = product['product_code']?.toString() ?? '';
+    _promotionId = product['promo_id'] is int
+        ? product['promo_id'] as int
+        : int.tryParse('${product['promo_id'] ?? ''}');
+    _alwaysAvailable =
+        product['always_available'] == true || product['always_available'] == 1;
+    _stockType = product['stock_type']?.toString() ?? 'direct';
+    _stockEditable = product['stock_editable'] != false && _stockType != 'linked';
+    _recipes = recipeLinesFrom(product['recipes']);
+    if (_stockType == 'linked') {
+      _stockMode = 'linked';
+      _alwaysAvailable = false;
+      if (_recipes.isEmpty) _recipes = [RecipeLine()];
+    } else if (_alwaysAvailable) {
+      _stockMode = 'always';
+    } else {
+      _stockMode = 'direct';
+    }
+    final stockQty = product['stock_quantity'];
+    _stock.text = stockQty is num
+        ? stockQty.toStringAsFixed(0)
+        : (stockQty?.toString() ?? '');
+    final costRaw = product['unit_cost'] ?? product['modal_price'];
+    final cost = costRaw is num
+        ? costRaw
+        : num.tryParse('${costRaw ?? ''}') ?? 0;
+    _lastUnitCost = cost > 0 ? cost : 0;
+    _modalPrice.text = _lastUnitCost > 0
+        ? (_lastUnitCost == _lastUnitCost.roundToDouble()
+            ? _lastUnitCost.toStringAsFixed(0)
+            : _lastUnitCost.toString())
+        : '';
+    _isActive = product['is_active'] == true || product['is_active'] == 1;
+    _isHot =
+        product['is_hot_product'] == true || product['is_hot_product'] == 1;
+    _existingImages = pictureMaps(product['pictures']);
+    final opts = product['menu_options'];
+    _groups = opts is List
+        ? opts
+            .whereType<Map>()
+            .map((e) => MenuOptionGroup.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+        : [];
+  }
+
+  void _applyMaster(Map<String, dynamic> master) {
+    final cat = master['category'];
+    setState(() {
+      _selectedMaster = master;
+      _name.text = master['name']?.toString() ?? '';
+      _price.text = master['price'] is num
+          ? (master['price'] as num).toStringAsFixed(0)
+          : (master['price']?.toString() ?? '');
+      _category.text =
+          cat is Map ? (cat['name']?.toString() ?? 'Umum') : 'Umum';
+      _categoryId = master['category_id'] is int
+          ? master['category_id'] as int
+          : int.tryParse('${master['category_id'] ?? ''}');
+      _desc.text = master['description']?.toString() ?? '';
+      _code.text = master['product_code']?.toString() ?? '';
+      _promotionId = master['promo_id'] is int
+          ? master['promo_id'] as int
+          : int.tryParse('${master['promo_id'] ?? ''}');
+      _existingImages = pictureMaps(master['pictures']);
+      final opts = master['menu_options'];
+      _groups = opts is List
+          ? opts
+              .whereType<Map>()
+              .map(
+                (e) => MenuOptionGroup.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+          : [];
+      _pickedImages.clear();
+      _error = null;
+    });
+  }
+
+  void _clearMaster() {
+    setState(() {
+      _selectedMaster = null;
+      _name.clear();
+      _price.clear();
+      _category.text = 'Umum';
+      _categoryId = null;
+      _desc.clear();
+      _code.clear();
+      _promotionId = null;
+      _groups = [];
+      _existingImages = [];
+      _pickedImages.clear();
+      _error = null;
+    });
+  }
+
+  Future<void> _pickFromCatalog() async {
+    final masters = widget.assignableMasters;
+    if (masters.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tidak ada katalog yang bisa diambil. Buat produk baru atau kelola master dulu.',
+          ),
+        ),
+      );
+      return;
+    }
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _CatalogPickerSheet(masters: masters),
+    );
+      if (selected != null) {
+      // Prefer full detail if available from list; else fetch.
+      final id = int.tryParse('${selected['id'] ?? ''}');
+      if (id != null &&
+          (selected['menu_options'] == null ||
+              selected['menu_options'] is! List)) {
+        try {
+          final data = await ownerApiOf(context).getMasterProduct(id);
+          if (!mounted) return;
+          final product = data['product'];
+          if (product is Map) {
+            _applyMaster(Map<String, dynamic>.from(product));
+            return;
+          }
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      _applyMaster(selected);
+    }
+  }
+
+  bool _recipeReady(List<RecipeLine> lines) {
+    if (lines.isEmpty) return false;
+    for (final line in lines) {
+      final qty = num.tryParse(line.quantity.trim().replaceAll(',', '.'));
+      if (line.stockId == null || line.unitId == null || qty == null || qty <= 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> _loadIngredients() async {
+    try {
+      final data = await ownerApiOf(context).listStockIngredients();
+      final raw = data['ingredients'];
+      if (!mounted || raw is! List) return;
+      setState(() {
+        _ingredients = raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      });
+    } catch (_) {}
+  }
+
+  void _copyOptionIds(Map<String, dynamic> product) {
+    final groups = product['menu_options'];
+    if (groups is! List) return;
+    for (var gi = 0; gi < _groups.length && gi < groups.length; gi++) {
+      final saved = groups[gi];
+      if (saved is! Map) continue;
+      final options = saved['options'];
+      if (options is! List) continue;
+      for (var oi = 0; oi < _groups[gi].options.length && oi < options.length; oi++) {
+        final row = options[oi];
+        if (row is! Map) continue;
+        _groups[gi].options[oi].optionId ??= int.tryParse('${row['option_id']}');
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> _optionSettings() {
+    final optionSettings = <Map<String, dynamic>>[];
+    for (final g in _groups) {
+      for (final o in g.options) {
+        if (o.optionId == null) continue;
+        final modal = num.tryParse(o.modalPrice.trim().replaceAll(',', '.'));
+        optionSettings.add({
+          'option_id': o.optionId,
+          'always_available': o.alwaysAvailable,
+          'stock_type': o.stockType == 'linked' ? 'linked' : 'direct',
+          if (!o.alwaysAvailable && o.stockType != 'linked')
+            'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
+          if (o.stockType != 'linked' && modal != null && modal > 0)
+            'modal_price': modal,
+        });
+      }
+    }
+    return optionSettings;
+  }
+
+  num? _parsedModalPrice() {
+    final modal = num.tryParse(_modalPrice.text.trim().replaceAll(',', '.'));
+    if (modal == null || modal <= 0) return null;
+    return modal;
+  }
+
+  Future<void> _updateStockMode(
+    OwnerApi api,
+    int id,
+    num price,
+    int? stockQty,
+  ) async {
+    await api.updateProduct(
+      id: id,
+      price: price,
+      alwaysAvailable: _alwaysAvailable,
+      stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+      modalPrice: _stockType != 'linked' ? _parsedModalPrice() : null,
+      stockType: _stockType,
+      isActive: _isActive,
+      isHotProduct: _isHot,
+      promotionId: _promotionId,
+      clearPromotion: _promotionId == null,
+      optionSettings: _optionSettings(),
+    );
+  }
+
+  Future<void> _saveRecipes(OwnerApi api, int productId) async {
+    if (!widget.canManageStock) return;
+    if (_stockType == 'linked') {
+      await api.saveStockRecipe(
+        itemType: 'product',
+        itemId: productId,
+        items: _recipes.map((e) => e.toPayload()).toList(),
+      );
+    }
+    for (final g in _groups) {
+      for (final o in g.options) {
+        if (o.optionId == null || o.stockType != 'linked') continue;
+        await api.saveStockRecipe(
+          itemType: 'option',
+          itemId: o.optionId!,
+          items: o.recipes.map((e) => e.toPayload()).toList(),
+        );
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    final price = num.tryParse(_price.text.replaceAll('.', '').trim());
+    if (!_identityLocked && _name.text.trim().isEmpty) {
+      setState(() => _error = 'Nama produk wajib diisi');
+      return;
+    }
+    if (price == null) {
+      setState(() => _error = 'Harga wajib diisi');
+      return;
+    }
+    if (widget.canManageStock) {
+      _alwaysAvailable = _stockMode == 'always';
+      _stockType = _stockMode == 'linked' ? 'linked' : 'direct';
+      _stockEditable = _stockMode == 'direct';
+    }
+    final stockQty = int.tryParse(_stock.text.trim());
+    if (widget.canManageStock && _stockMode == 'linked') {
+      if (!_recipeReady(_recipes)) {
+        setState(() => _error = 'Resep produk wajib diisi');
+        return;
+      }
+    } else if (!_alwaysAvailable && _stockEditable && stockQty == null) {
+      setState(() => _error = 'Stok (pcs) wajib diisi');
+      return;
+    }
+    if (widget.canManageStock || !_alwaysAvailable || _groups.any((g) => g.options.any((o) => !o.alwaysAvailable))) {
+      for (final g in _groups) {
+        for (final o in g.options) {
+          if (widget.canManageStock && o.stockType == 'linked') {
+            if (!_recipeReady(o.recipes)) {
+              setState(() => _error = 'Resep opsi wajib diisi');
+              return;
+            }
+            continue;
+          }
+          if (o.alwaysAvailable || !o.stockEditable) continue;
+          if (int.tryParse(o.stockQuantity.trim()) == null) {
+            setState(() => _error = 'Stok opsi wajib diisi');
+            return;
+          }
+        }
+      }
+    }
+    if (!_identityLocked) {
+      for (final g in _groups) {
+        if (g.name.trim().isEmpty) {
+          setState(() => _error = 'Nama grup opsi wajib diisi');
+          return;
+        }
+      }
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final api = ownerApiOf(context);
+      if (_isEdit && _productId != null) {
+        final optionSettings = <Map<String, dynamic>>[];
+        for (final g in _groups) {
+          for (final o in g.options) {
+            if (o.optionId == null) continue;
+            final modal = num.tryParse(o.modalPrice.trim().replaceAll(',', '.'));
+            optionSettings.add({
+              'option_id': o.optionId,
+              'always_available': o.alwaysAvailable,
+              if (widget.canManageStock)
+                'stock_type': o.stockType == 'linked' ? 'linked' : 'direct',
+              if (!o.alwaysAvailable &&
+                  o.stockType != 'linked' &&
+                  (o.stockEditable || widget.canManageStock))
+                'stock_quantity': int.tryParse(o.stockQuantity.trim()) ?? 0,
+              if (o.stockType != 'linked' &&
+                  (o.stockEditable ||
+                      widget.canManageStock ||
+                      o.alwaysAvailable) &&
+                  modal != null &&
+                  modal > 0)
+                'modal_price': modal,
+            });
+          }
+        }
+        await api.updateProduct(
+          id: _productId!,
+          price: price,
+          alwaysAvailable: _alwaysAvailable,
+          stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+          modalPrice: _stockType != 'linked' ? _parsedModalPrice() : null,
+          stockType: widget.canManageStock ? _stockType : null,
+          isActive: _isActive,
+          isHotProduct: _isHot,
+          promotionId: _promotionId,
+          clearPromotion: _promotionId == null,
+          optionSettings: optionSettings,
+        );
+        await _saveRecipes(api, _productId!);
+      } else if (_fromCatalog) {
+        final masterId = int.tryParse('${_selectedMaster!['id'] ?? ''}');
+        if (masterId == null) {
+          setState(() {
+            _error = 'Produk katalog tidak valid';
+            _saving = false;
+          });
+          return;
+        }
+        final assigned = await api.assignProductsToStore(
+          [masterId],
+          price: price,
+          alwaysAvailable: _stockType == 'linked' ? true : _alwaysAvailable,
+          stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+          isActive: _isActive,
+          isHotProduct: _isHot,
+          promotionId: _promotionId,
+        );
+        final created = assigned['created_ids'];
+        final newId = created is List && created.isNotEmpty
+            ? int.tryParse('${created.first}')
+            : null;
+        if (newId != null) {
+          final detail = await api.getProduct(newId);
+          final product = detail['product'];
+          if (product is Map) {
+            _copyOptionIds(Map<String, dynamic>.from(product));
+          }
+          if (widget.canManageStock) {
+            await _updateStockMode(api, newId, price, stockQty);
+            await _saveRecipes(api, newId);
+          } else {
+            await api.updateProduct(
+              id: newId,
+              price: price,
+              alwaysAvailable: _alwaysAvailable,
+              stockQuantity: !_alwaysAvailable ? stockQty : null,
+              modalPrice: _parsedModalPrice(),
+              isActive: _isActive,
+              isHotProduct: _isHot,
+              promotionId: _promotionId,
+              clearPromotion: _promotionId == null,
+              optionSettings: _optionSettings(),
+            );
+          }
+        }
+      } else {
+        final created = await api.createProduct(
+          name: _name.text.trim(),
+          price: price,
+          description:
+              _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+          categoryId: _categoryId,
+          categoryName: _category.text.trim().isEmpty
+              ? 'Umum'
+              : _category.text.trim(),
+          promotionId: _promotionId,
+          alwaysAvailable: _stockType == 'linked' ? true : _alwaysAvailable,
+          stockQuantity: (!_alwaysAvailable && _stockType != 'linked') ? stockQty : null,
+          modalPrice: _stockType != 'linked' ? _parsedModalPrice() : null,
+          isActive: _isActive,
+          isHotProduct: _isHot,
+          menuOptions: _groups.map((e) => e.toJson()).toList(),
+          imagePaths: _pickedImages.isEmpty ? null : _pickedImages,
+        );
+        final product = created['product'];
+        final newId = product is Map ? int.tryParse('${product['id']}') : null;
+        if (product is Map) _copyOptionIds(Map<String, dynamic>.from(product));
+        if (newId != null) {
+          if (widget.canManageStock) {
+            await _updateStockMode(api, newId, price, stockQty);
+            await _saveRecipes(api, newId);
+          } else {
+            await api.updateProduct(
+              id: newId,
+              price: price,
+              alwaysAvailable: _alwaysAvailable,
+              stockQuantity: !_alwaysAvailable ? stockQty : null,
+              modalPrice: _parsedModalPrice(),
+              isActive: _isActive,
+              isHotProduct: _isHot,
+              promotionId: _promotionId,
+              clearPromotion: _promotionId == null,
+              optionSettings: _optionSettings(),
+            );
+          }
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isEdit
+                ? 'Produk toko diperbarui'
+                : _fromCatalog
+                    ? 'Produk dari katalog ditambahkan'
+                    : 'Produk berhasil dibuat',
+          ),
+        ),
+      );
+      Navigator.of(context).pop(true);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      setState(() {
+        _error = data is Map && data['message'] != null
+            ? data['message'].toString()
+            : 'Gagal menyimpan produk';
+      });
+    } catch (_) {
+      setState(() => _error = 'Gagal menyimpan produk');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _applyStockMode(String mode) {
+    _stockMode = mode;
+    _alwaysAvailable = mode == 'always';
+    _stockType = mode == 'linked' ? 'linked' : 'direct';
+    _stockEditable = mode == 'direct';
+    if (mode == 'linked' && _recipes.isEmpty) {
+      _recipes = [RecipeLine()];
+    }
+  }
+
+  Widget _productStockCard() {
+    final summary = productStockSummary(
+      mode: _stockMode,
+      quantity: _stock.text,
+      recipes: _recipes,
+      ingredients: _ingredients,
+      modalPrice: _modalPrice.text,
+    );
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: _saving
+            ? null
+            : () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ProductStockEditorPage(
+                      mode: _stockMode,
+                      quantity: _stock,
+                      modalPrice: _modalPrice,
+                      lastUnitCost: _lastUnitCost,
+                      recipes: _recipes,
+                      ingredients: _ingredients,
+                      sellPrice: num.tryParse(_price.text.replaceAll('.', '').trim()),
+                      onModeChanged: _applyStockMode,
+                      onRecipesChanged: (next) => _recipes = next,
+                    ),
+                  ),
+                );
+                if (mounted) setState(() {});
+              },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Stok produk',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      summary,
+                      style: TextStyle(color: Colors.black.withValues(alpha: 0.55)),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.black.withValues(alpha: 0.35)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        title: Text(
+          _isEdit ? 'Edit Produk Toko' : 'Tambah Produk Toko',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: _brand,
+        foregroundColor: Colors.white,
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: _brand))
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
+              children: [
+                if (!_isEdit) ...[
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _pickFromCatalog,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _brand,
+                      side: BorderSide(color: _brand.withValues(alpha: 0.35)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    label: const Text(
+                      'Ambil dari katalog',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (_fromCatalog) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                      decoration: BoxDecoration(
+                        color: _brand.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border:
+                            Border.all(color: _brand.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.link_rounded, color: _brand),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Dari katalog: ${_selectedMaster!['name'] ?? '-'}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: _brand,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _saving ? null : _clearMaster,
+                            child: const Text('Lepas'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                ],
+                ProductFormSectionCard(
+                  title: 'Info produk',
+                  subtitle: _identityLocked
+                      ? 'Identitas terkunci dari katalog'
+                      : 'Nama, kategori, harga, dan gambar',
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _name,
+                          enabled: !_identityLocked && !_saving,
+                          decoration: productFieldDecoration(
+                            label: 'Nama produk',
+                            helper: _identityLocked
+                                ? 'Terkunci (dari master)'
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_identityLocked)
+                          TextField(
+                            controller: _category,
+                            enabled: false,
+                            decoration: productFieldDecoration(
+                              label: 'Kategori',
+                              helper: 'Terkunci (dari master)',
+                            ),
+                          )
+                        else
+                          CategorySelectWithManage(
+                            categories: _categories,
+                            categoryId: _categoryId,
+                            categoryNameController: _category,
+                            enabled: !_saving,
+                            onChanged: (v) => setState(() => _categoryId = v),
+                            onCategoriesUpdated: (list) {
+                              setState(() {
+                                _categories = list;
+                                if (_categoryId != null &&
+                                    !_categories.any(
+                                      (c) =>
+                                          int.tryParse('${c['id']}') ==
+                                          _categoryId,
+                                    )) {
+                                  _categoryId = null;
+                                }
+                              });
+                            },
+                          ),
+                        if (_identityLocked) ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _code,
+                            enabled: false,
+                            decoration: productFieldDecoration(
+                              label: 'Kode produk',
+                              helper: 'Terkunci',
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _price,
+                          enabled: !_saving,
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => setState(() {}),
+                          decoration: productFieldDecoration(
+                            label: 'Harga toko',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _desc,
+                          enabled: !_identityLocked && !_saving,
+                          maxLines: 3,
+                          decoration: productFieldDecoration(
+                            label: 'Deskripsi',
+                            helper: _identityLocked
+                                ? 'Terkunci (dari master)'
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        if (!_identityLocked)
+                          ProductImagePickerRow(
+                            existing: _existingImages,
+                            pickedPaths: _pickedImages,
+                            enabled: !_saving,
+                            onPick: () async {
+                              final path = await pickProductImage();
+                              if (path == null) return;
+                              setState(() => _pickedImages.add(path));
+                            },
+                            onRemoveExisting: (i) =>
+                                setState(() => _existingImages.removeAt(i)),
+                            onRemovePicked: (i) =>
+                                setState(() => _pickedImages.removeAt(i)),
+                          )
+                        else if (_existingImages.isNotEmpty) ...[
+                          const Text(
+                            'Gambar (dari master)',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 8),
+                          ProductImagePickerRow(
+                            existing: _existingImages,
+                            pickedPaths: const [],
+                            enabled: false,
+                            onPick: () {},
+                            onRemoveExisting: (_) {},
+                            onRemovePicked: (_) {},
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ProductFormSectionCard(
+                  title: 'Promosi',
+                  subtitle: 'Opsional — diskon khusus produk ini',
+                  child: PromotionSelectWithManage(
+                    promotions: _promotions,
+                    promotionId: _promotionId,
+                    enabled: !_saving,
+                    onChanged: (v) => setState(() => _promotionId = v),
+                    onPromotionsUpdated: (list) {
+                      setState(() {
+                        _promotions = list;
+                        if (_promotionId != null &&
+                            !_promotions.any(
+                              (p) =>
+                                  int.tryParse('${p['id']}') == _promotionId,
+                            )) {
+                          _promotionId = null;
+                        }
+                      });
+                    },
+                  ),
+                ),
+                ProductFormSectionCard(
+                  title: 'Opsi / varian',
+                  subtitle: _identityLocked
+                      ? 'Struktur terkunci; stok opsi tetap bisa diubah'
+                      : 'Level, topping, dan pilihan lain',
+                  child: ProductMenuOptionsEditor(
+                    groups: _groups,
+                    showHeader: false,
+                    readOnly: _identityLocked,
+                    showOptionStock: true,
+                    canManageStock: widget.canManageStock,
+                    ingredients: _ingredients,
+                    onChanged: (next) => setState(() => _groups = next),
+                  ),
+                ),
+                ProductFormSectionCard(
+                  title: 'Stok',
+                  subtitle: widget.canManageStock
+                      ? 'Atur ketersediaan di toko ini'
+                      : 'Ketersediaan sederhana',
+                  child: widget.canManageStock
+                      ? _productStockCard()
+                      : Column(
+                          children: [
+                            ProductFormSwitchTile(
+                              title: 'Selalu tersedia',
+                              value: _alwaysAvailable,
+                              icon: Icons.all_inclusive_rounded,
+                              onChanged: _saving
+                                  ? null
+                                  : (v) =>
+                                      setState(() => _alwaysAvailable = v),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _modalPrice,
+                              enabled: !_saving,
+                              keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              decoration: productFieldDecoration(
+                                label: 'Harga modal / pcs',
+                                helper: _alwaysAvailable
+                                    ? 'Masuk ke HPP penjualan. Stok tidak dikurangi.'
+                                    : 'Opsional. Kosong = pakai HPP terakhir.',
+                                prefixText: 'Rp ',
+                              ),
+                            ),
+                            if (!_alwaysAvailable) ...[
+                              const SizedBox(height: 12),
+                              _stockEditable
+                                  ? TextField(
+                                      controller: _stock,
+                                      enabled: !_saving,
+                                      keyboardType: TextInputType.number,
+                                      decoration: productFieldDecoration(
+                                        label: 'Stok (pcs)',
+                                      ),
+                                    )
+                                  : InputDecorator(
+                                      decoration: productFieldDecoration(
+                                        label: 'Stok dari resep (pcs)',
+                                      ),
+                                      child: Text(
+                                        _stock.text.isEmpty
+                                            ? '0'
+                                            : _stock.text,
+                                      ),
+                                    ),
+                            ],
+                          ],
+                        ),
+                ),
+                ProductFormSectionCard(
+                  title: 'Status',
+                  child: Column(
+                    children: [
+                      ProductFormSwitchTile(
+                        title: 'Aktif di toko ini',
+                        value: _isActive,
+                        icon: Icons.check_circle_outline_rounded,
+                        onChanged: _saving
+                            ? null
+                            : (v) => setState(() => _isActive = v),
+                      ),
+                      ProductFormSwitchTile(
+                        title: 'Produk unggulan',
+                        value: _isHot,
+                        icon: Icons.local_fire_department_rounded,
+                        onChanged:
+                            _saving ? null : (v) => setState(() => _isHot = v),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_error != null) ...[
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 8),
+                ],
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _brand,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            _isEdit
+                                ? 'Simpan Perubahan'
+                                : _fromCatalog
+                                    ? 'Tambahkan ke Toko'
+                                    : 'Simpan Produk',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}

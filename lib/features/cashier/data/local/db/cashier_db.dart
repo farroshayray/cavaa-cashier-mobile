@@ -10,20 +10,14 @@ import 'tables/cached_option_groups_table.dart';
 import 'tables/cached_option_items_table.dart';
 import 'tables/cached_tables_table.dart';
 import 'tables/cached_payment_methods_table.dart';
-import 'tables/cached_payment_orders_table.dart';
-import 'tables/cached_payment_order_items_table.dart';
-import 'tables/cached_payment_order_item_options_table.dart';
-
-
-import 'tables/local_orders_table.dart';
-import 'tables/local_order_items_table.dart';
-import 'tables/local_order_item_options_table.dart';
-import 'tables/local_payments_table.dart';
-import 'tables/sync_queue_table.dart';
-import 'tables/cached_process_orders_table.dart';
-import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
-import 'tables/cached_done_orders_table.dart';
-import '/features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
+import 'tables/cached_partner_settings_table.dart';
+import 'tables/booking_orders_table.dart';
+import 'tables/order_details_table.dart';
+import 'tables/order_detail_options_table.dart';
+import 'tables/order_payments_table.dart';
+import 'tables/sync_conflicts_table.dart';
+import 'tables/sync_meta_table.dart';
+import '/features/cashier/data/sync/legacy_session_migrator.dart';
 
 part 'cashier_db.g.dart';
 
@@ -43,27 +37,22 @@ LazyDatabase _openConnection() {
     CachedOptionItems,
     CachedTables,
     CachedPaymentMethods,
-    LocalOrders,
-    LocalOrderItems,
-    LocalOrderItemOptions,
-    LocalPayments,
-    SyncQueue,
-    CachedPaymentOrders,
-    CachedProcessOrders,
-    CachedPaymentOrderItems,
-    CachedPaymentOrderItemOptions,
-    CachedDoneOrders,
-  ],
-  daos: [
-    CachedProcessOrdersDao,
-    CachedDoneOrdersDao,
+    CachedPartnerSettings,
+    BookingOrders,
+    OrderDetails,
+    OrderDetailOptions,
+    OrderPayments,
+    SyncConflicts,
+    SyncMeta,
   ],
 )
 class CashierDb extends _$CashierDb {
   CashierDb() : super(_openConnection());
 
+  CashierDb.forTesting(super.executor);
+
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -71,23 +60,49 @@ class CashierDb extends _$CashierDb {
           await m.createAll();
         },
         onUpgrade: (m, from, to) async {
-          await m.deleteTable('cached_payment_methods');
-          await m.deleteTable('cached_tables');
-          await m.deleteTable('cached_option_items');
-          await m.deleteTable('cached_option_groups');
-          await m.deleteTable('cached_products');
-          await m.deleteTable('cached_categories');
-          await m.deleteTable('local_orders');
-          await m.deleteTable('local_order_items');
-          await m.deleteTable('local_order_item_options');
-          await m.deleteTable('local_payments');
-          await m.deleteTable('sync_queue');
-          await m.deleteTable('cached_payment_orders');
-          await m.deleteTable('cached_payment_order_items');
-          await m.deleteTable('cached_payment_order_item_options');
-          await m.deleteTable('cached_process_orders');
-          await m.deleteTable('cached_done_orders');
-          await m.createAll();
+          if (from < 12) {
+            await m.database.customStatement(
+              'ALTER TABLE local_orders ADD COLUMN cash_rounding_amount REAL',
+            );
+            await m.database.customStatement(
+              'ALTER TABLE local_orders ADD COLUMN cash_rounding_unit INTEGER',
+            );
+          }
+          if (from < 13) {
+            await m.createTable(cachedPartnerSettings);
+          }
+          if (from < 14) {
+            await m.createTable(bookingOrders);
+            await m.createTable(orderDetails);
+            await m.createTable(orderDetailOptions);
+            await m.createTable(orderPayments);
+            await m.createTable(syncConflicts);
+            await m.createTable(syncMeta);
+          }
+          if (from < 15) {
+            await LegacySessionMigrator.migrateBeforeDrop(m.database);
+            await LegacySessionMigrator.dropLegacyTables(m.database);
+          }
+          if (from < 16) {
+            // Re-pull order headers so SERVED updated_at matches server
+            // (payment sync used to bump updated_at to now() locally).
+            await m.database.customStatement(
+              "DELETE FROM sync_meta WHERE key = 'last_sync_token'",
+            );
+          }
+          if (from < 17) {
+            await m.database.customStatement(
+              'ALTER TABLE cached_partner_settings ADD COLUMN logo TEXT',
+            );
+            await m.database.customStatement(
+              'ALTER TABLE cached_partner_settings ADD COLUMN print_receipt_logo INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (from < 18) {
+            await m.database.customStatement(
+              'ALTER TABLE cached_partner_settings ADD COLUMN can_order_notes INTEGER NOT NULL DEFAULT 0',
+            );
+          }
         },
       );
 }

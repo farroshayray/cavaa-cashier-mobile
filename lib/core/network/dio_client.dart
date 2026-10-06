@@ -10,6 +10,8 @@ import '../config/app_config.dart';
 import '../storage/secure_storage_service.dart';
 import '../navigation/app_navigator.dart';
 import '../services/app_update_provider.dart';
+import '../services/connectivity_status_provider.dart';
+import 'api_debug_log.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 
 const _forcedLogoutMessageKey = 'forced_logout_message';
@@ -18,6 +20,7 @@ class DioClient {
   final Dio dio;
   final SecureStorageService storage;
   final AppUpdateProvider? appUpdateProvider;
+  final ConnectivityStatusProvider? connectivity;
 
   bool _isHandlingUnauthorized = false;
 
@@ -26,7 +29,11 @@ class DioClient {
   String? _versionName;
   bool _appInfoLoaded = false;
 
-  DioClient(this.storage, {this.appUpdateProvider})
+  DioClient(
+    this.storage, {
+    this.appUpdateProvider,
+    this.connectivity,
+  })
     : dio = Dio(
         BaseOptions(
           baseUrl: Env.baseUrl,
@@ -55,52 +62,83 @@ class DioClient {
           }
 
           final token = await storage.getToken();
-          final isLogin = options.path.contains('/api/v1/mobile/cashier/login');
+          final isPublicAuth = options.path.contains('/api/v1/mobile/cashier/login') ||
+              options.path.contains('/api/v1/mobile/owner/auth/login') ||
+              options.path.contains('/api/v1/mobile/owner/auth/google');
 
-          if (!isLogin && token != null && token.isNotEmpty) {
+          if (!isPublicAuth && token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
 
-          // debugPrint('➡️ [REQ] ${options.method} ${options.path}');
-          // debugPrint('➡️ [REQ HEADERS] ${options.headers}');
-          // debugPrint('➡️ [REQ DATA] ${options.data}');
+          ApiDebugLog.httpRequest(
+            method: options.method,
+            path: options.uri.toString(),
+            headers: Map<String, dynamic>.from(options.headers),
+            body: options.data,
+          );
+
           handler.next(options);
         },
         onResponse: (response, handler) {
+          if ((response.statusCode ?? 0) < 500) {
+            connectivity?.markServerReachable();
+          }
+
           _captureAppUpdate(response);
-          // debugPrint('✅ [RES] ${response.requestOptions.path}');
-          // debugPrint('✅ [RES DATA] ${response.data}');
+          ApiDebugLog.httpResponse(
+            method: response.requestOptions.method,
+            path: response.requestOptions.uri.toString(),
+            statusCode: response.statusCode,
+            data: response.data,
+          );
           handler.next(response);
         },
         onError: (e, handler) async {
           final path = e.requestOptions.path;
-          final isLogin = path.contains('/api/v1/mobile/cashier/login');
+          final isLogin = path.contains('/api/v1/mobile/cashier/login') ||
+              path.contains('/api/v1/mobile/owner/auth/login') ||
+              path.contains('/api/v1/mobile/owner/auth/google');
           final isVersionCheck = path.contains(
             '/api/v1/mobile/cashier/version-check',
           );
           final statusCode = e.response?.statusCode;
 
+          ApiDebugLog.httpError(
+            method: e.requestOptions.method,
+            path: e.requestOptions.uri.toString(),
+            statusCode: statusCode,
+            data: e.response?.data,
+            message: e.message,
+          );
+
           debugPrint('❌ DIO ERROR path=$path status=$statusCode');
+
+          if (_isServerDownError(e)) {
+            connectivity?.markServerDown(
+              reason: 'path=$path status=$statusCode type=${e.type.name}',
+            );
+          }
 
           if (isLogin || isVersionCheck) {
             return handler.next(e);
           }
 
           final data = e.response?.data;
+          final errorCode = data is Map ? data['code']?.toString() : null;
           final isInactiveAccount =
-              statusCode == 403 &&
-              data is Map &&
-              data['code']?.toString() == 'account_inactive';
-          final forcedLogoutMessage = data is Map
-              ? _buildForcedLogoutMessage(data)
-              : null;
+              statusCode == 403 && errorCode == 'account_inactive';
+          final isOwnerLoginDisabled =
+              statusCode == 403 && errorCode == 'owner_login_disabled';
+          // Only force-logout on true account suspension — not work-schedule / validation 403s.
+          final forcedLogoutMessage =
+              isInactiveAccount && data is Map ? _buildForcedLogoutMessage(data) : null;
           final shouldShowForcedLogoutMessage =
-              isInactiveAccount ||
-              (statusCode == 403 &&
-                  forcedLogoutMessage != null &&
-                  forcedLogoutMessage.isNotEmpty);
+              isInactiveAccount &&
+              (forcedLogoutMessage?.isNotEmpty ?? false);
 
-          if ((statusCode == 401 || shouldShowForcedLogoutMessage) &&
+          if ((statusCode == 401 ||
+                  shouldShowForcedLogoutMessage ||
+                  isOwnerLoginDisabled) &&
               !_isHandlingUnauthorized) {
             _isHandlingUnauthorized = true;
 
@@ -110,10 +148,14 @@ class DioClient {
               if (shouldShowForcedLogoutMessage &&
                   forcedLogoutMessage != null) {
                 await _saveForcedLogoutMessage(forcedLogoutMessage);
+              } else if (isOwnerLoginDisabled && data is Map) {
+                final message = data['message']?.toString();
+                if (message != null && message.isNotEmpty) {
+                  await _saveForcedLogoutMessage(message);
+                }
               }
 
-              await storage.deleteToken();
-              await storage.deleteCachedUser();
+              await storage.clearAllAuth();
 
               final nav = appNavigatorKey.currentState;
 
@@ -124,7 +166,9 @@ class DioClient {
                       builder: (_) => LoginPage(
                         initialErrorMessage: shouldShowForcedLogoutMessage
                             ? forcedLogoutMessage
-                            : null,
+                            : isOwnerLoginDisabled && data is Map
+                                ? data['message']?.toString()
+                                : null,
                       ),
                     ),
                     (_) => false,
@@ -179,6 +223,22 @@ class DioClient {
   String? get platform => _platform;
   int? get versionCode => _versionCode;
   String? get versionName => _versionName;
+
+  bool _isServerDownError(DioException error) {
+    final statusCode = error.response?.statusCode;
+    // Any HTTP response means the server is reachable enough for auth/API errors.
+    if (statusCode != null) {
+      return statusCode == 500 ||
+          statusCode == 502 ||
+          statusCode == 503 ||
+          statusCode == 504;
+    }
+
+    return error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.receiveTimeout;
+  }
 
   void _captureAppUpdate(Response response) {
     final provider = appUpdateProvider;

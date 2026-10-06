@@ -9,9 +9,13 @@ import 'package:provider/provider.dart';
 
 import '/core/config/env.dart';
 import '/core/network/dio_client.dart';
+import '/features/auth/presentation/auth_provider.dart';
 import '/features/cashier/data/models/purchase_models.dart';
 import '/features/cashier/data/report_api.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
+import '/features/cashier/presentation/utils/report_xlsx_converter.dart';
+import '/features/owner/presentation/widgets/dock_inset.dart';
+import 'stock_reports_hub_page.dart';
 
 part 'reports_filters.dart';
 part 'reports_sold_products_sheet.dart';
@@ -133,6 +137,14 @@ class _ReportsPageState extends State<ReportsPage> {
     }
   }
 
+  bool get _canChooseCashierScope {
+    final auth = context.read<AuthProvider>();
+    return auth.isOwner || auth.viaOwner;
+  }
+
+  _CashierScope get _effectiveCashierScope =>
+      _canChooseCashierScope ? _cashierScope : _CashierScope.self;
+
   String _cashierScopeLabel(_CashierScope scope) {
     switch (scope) {
       case _CashierScope.self:
@@ -144,7 +156,9 @@ class _ReportsPageState extends State<ReportsPage> {
 
   List<_ReportPaymentFilterOption> get _availablePaymentFilterOptions {
     final purchaseProvider = context.read<PurchaseProvider>();
-    final options = purchaseProvider.paymentOptions;
+    final options = purchaseProvider.allPaymentOptions
+        .where((option) => option.kind != PayKind.openbill)
+        .toList();
 
     if (options.isEmpty) {
       return const [
@@ -213,7 +227,8 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   String get _activeFilterSummary {
-    return '${_cashierScopeLabel(_cashierScope)} | $_paymentFilterLabel';
+    if (!_canChooseCashierScope) return _paymentFilterLabel;
+    return '${_cashierScopeLabel(_effectiveCashierScope)} | $_paymentFilterLabel';
   }
 
   String get _activeRangeLabel {
@@ -246,7 +261,7 @@ class _ReportsPageState extends State<ReportsPage> {
       final response = await api.getSummary(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
-        cashierScope: _cashierScopeValue(_cashierScope),
+        cashierScope: _cashierScopeValue(_effectiveCashierScope),
         paymentFilters: _activePaymentFilterKeys,
       );
 
@@ -280,12 +295,13 @@ class _ReportsPageState extends State<ReportsPage> {
     try {
       final dioClient = context.read<DioClient>();
       final api = ReportApi(dioClient.dio);
-      final bytes = await api.exportSummary(
+      final csvBytes = await api.exportSummary(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
-        cashierScope: _cashierScopeValue(_cashierScope),
+        cashierScope: _cashierScopeValue(_effectiveCashierScope),
         paymentFilters: _activePaymentFilterKeys,
       );
+      final bytes = csvBytesToXlsx(csvBytes);
 
       final dir = await getApplicationDocumentsDirectory();
       final folder = Directory('${dir.path}/report_exports');
@@ -294,7 +310,7 @@ class _ReportsPageState extends State<ReportsPage> {
       }
 
       final fileName =
-          'laporan_${_formatApiDate(_activeRange.start)}_${_formatApiDate(_activeRange.end)}_${_cashierScopeValue(_cashierScope)}${_activePaymentFilterKeys.isEmpty ? '' : '_filtered'}.csv';
+          'laporan_${_formatApiDate(_activeRange.start)}_${_formatApiDate(_activeRange.end)}_${_cashierScopeValue(_effectiveCashierScope)}${_activePaymentFilterKeys.isEmpty ? '' : '_filtered'}.xlsx';
       final file = File('${folder.path}/$fileName');
 
       if (await file.exists()) {
@@ -418,7 +434,7 @@ class _ReportsPageState extends State<ReportsPage> {
       builder: (context) => _TransactionReportSheet(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
-        cashierScope: _cashierScopeValue(_cashierScope),
+        cashierScope: _cashierScopeValue(_effectiveCashierScope),
         paymentFilters: _activePaymentFilterKeys,
         rangeLabel: _activeRangeLabel,
         filterLabel: _activeFilterSummary,
@@ -434,7 +450,7 @@ class _ReportsPageState extends State<ReportsPage> {
       builder: (context) => _SoldProductsReportSheet(
         from: _formatApiDate(_activeRange.start),
         to: _formatApiDate(_activeRange.end),
-        cashierScope: _cashierScopeValue(_cashierScope),
+        cashierScope: _cashierScopeValue(_effectiveCashierScope),
         paymentFilters: _activePaymentFilterKeys,
         rangeLabel: _activeRangeLabel,
         filterLabel: _activeFilterSummary,
@@ -442,9 +458,25 @@ class _ReportsPageState extends State<ReportsPage> {
     );
   }
 
+  Future<void> _openStockReports() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StockReportsHubPage(
+          from: _formatApiDate(_activeRange.start),
+          to: _formatApiDate(_activeRange.end),
+          rangeLabel: _activeRangeLabel,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFAE1504);
+    final auth = context.watch<AuthProvider>();
+    final canChooseCashierScope = auth.isOwner || auth.viaOwner;
+    final canViewStockReports = auth.viaOwner &&
+        (auth.owner?.hasFeature('products_stocks') ?? false);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -452,15 +484,17 @@ class _ReportsPageState extends State<ReportsPage> {
       body: RefreshIndicator(
         onRefresh: _loadSummary,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16).withBottomInset(context),
           children: [
             const _ReportsHeroCard(),
             const SizedBox(height: 16),
-            _CashierFilterSection(
-              selectedScope: _cashierScope,
-              onChanged: _updateCashierScope,
-            ),
-            const SizedBox(height: 16),
+            if (canChooseCashierScope) ...[
+              _CashierFilterSection(
+                selectedScope: _cashierScope,
+                onChanged: _updateCashierScope,
+              ),
+              const SizedBox(height: 16),
+            ],
             _DateFilterSection(
               selectedLabel: _periodTitle(_selectedPeriod),
               rangeLabel: _activeRangeLabel,
@@ -475,6 +509,8 @@ class _ReportsPageState extends State<ReportsPage> {
                   ? 'Mengambil data laporan dari server.'
                   : 'Filter aktif: $_activeFilterSummary.',
               omzet: _formatCurrency(_summary?.omzet ?? 0),
+              totalCogs: _formatCurrency(_summary?.totalCogs ?? 0),
+              grossProfit: _formatCurrency(_summary?.grossProfit ?? 0),
               totalTransactions: '${_summary?.totalTransactions ?? 0} Order',
               averageTransaction: _formatCurrency(
                 _summary?.averageTransaction ?? 0,
@@ -487,6 +523,8 @@ class _ReportsPageState extends State<ReportsPage> {
             _QuickReportSection(
               onTransactionTap: _openTransactionReportModal,
               onSoldProductsTap: _openSoldProductsModal,
+              onStockReportsTap:
+                  canViewStockReports ? _openStockReports : null,
             ),
             const SizedBox(height: 16),
             _RecentActivitySection(
@@ -500,21 +538,23 @@ class _ReportsPageState extends State<ReportsPage> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: brand,
-        foregroundColor: Colors.white,
-        onPressed: (_isLoading || _isExporting) ? null : _exportReport,
-        icon: _isExporting
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Icon(Icons.file_download_outlined),
-        label: Text(_isExporting ? 'Exporting...' : 'Export CSV'),
+      floatingActionButton: DockAwareFab(
+        child: FloatingActionButton.extended(
+          backgroundColor: brand,
+          foregroundColor: Colors.white,
+          onPressed: (_isLoading || _isExporting) ? null : _exportReport,
+          icon: _isExporting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Icon(Icons.file_download_outlined),
+          label: Text(_isExporting ? 'Exporting...' : 'Export Excel'),
+        ),
       ),
     );
   }
@@ -559,7 +599,7 @@ class _ReportsHeroCard extends StatelessWidget {
           ),
           SizedBox(height: 10),
           Text(
-            'Ringkasan laporan, filter kasir, dan export CSV sekarang siap untuk mobile cashier.',
+            'Ringkasan laporan, filter kasir, dan export Excel sekarang siap untuk mobile cashier.',
             style: TextStyle(color: Colors.white, height: 1.4),
           ),
         ],
@@ -573,6 +613,8 @@ class _SummarySection extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.omzet,
+    required this.totalCogs,
+    required this.grossProfit,
     required this.totalTransactions,
     required this.averageTransaction,
     required this.cashVsNonCash,
@@ -582,6 +624,8 @@ class _SummarySection extends StatelessWidget {
   final String title;
   final String subtitle;
   final String omzet;
+  final String totalCogs;
+  final String grossProfit;
   final String totalTransactions;
   final String averageTransaction;
   final String cashVsNonCash;
@@ -643,6 +687,31 @@ class _SummarySection extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _SummaryCard(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'HPP',
+                  value: totalCogs,
+                  isLoading: isLoading,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SummaryCard(
+                  icon: Icons.trending_up_rounded,
+                  label: 'Laba kotor',
+                  value: grossProfit,
+                  isLoading: isLoading,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -652,10 +721,12 @@ class _QuickReportSection extends StatelessWidget {
   const _QuickReportSection({
     required this.onTransactionTap,
     required this.onSoldProductsTap,
+    this.onStockReportsTap,
   });
 
   final VoidCallback onTransactionTap;
   final VoidCallback onSoldProductsTap;
+  final VoidCallback? onStockReportsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -682,6 +753,16 @@ class _QuickReportSection extends StatelessWidget {
               'Ringkasan produk terlaris dan jumlah penjualan untuk periode terpilih.',
           onTap: onSoldProductsTap,
         ),
+        if (onStockReportsTap != null) ...[
+          const SizedBox(height: 10),
+          _MenuCard(
+            icon: Icons.warehouse_outlined,
+            title: 'Laporan Stok',
+            subtitle:
+                'Mutasi bahan baku, selisih opname, dan kartu stok detail per bahan.',
+            onTap: onStockReportsTap,
+          ),
+        ],
       ],
     );
   }
@@ -1023,7 +1104,7 @@ class _EmptyStateCard extends StatelessWidget {
         ? errorMessage!
         : hasData
         ? isExporting
-              ? 'File CSV sedang disiapkan. Anda bisa menunggu sampai proses export selesai.'
+              ? 'File Excel sedang disiapkan. Anda bisa menunggu sampai proses export selesai.'
               : 'Data yang tampil saat ini menggunakan filter: $activeFilterLabel.'
         : 'Pilih periode dan filter yang sesuai untuk mulai melihat data laporan.';
 
@@ -1150,6 +1231,8 @@ class _EmptyStateCard extends StatelessWidget {
 class _ReportSummaryData {
   const _ReportSummaryData({
     required this.omzet,
+    required this.totalCogs,
+    required this.grossProfit,
     required this.totalTransactions,
     required this.averageTransaction,
     required this.cashAmount,
@@ -1157,6 +1240,8 @@ class _ReportSummaryData {
   });
 
   final num omzet;
+  final num totalCogs;
+  final num grossProfit;
   final int totalTransactions;
   final num averageTransaction;
   final num cashAmount;
@@ -1178,6 +1263,8 @@ class _ReportSummaryData {
 
     return _ReportSummaryData(
       omzet: _asNum(summary['omzet']),
+      totalCogs: _asNum(summary['total_cogs']),
+      grossProfit: _asNum(summary['gross_profit']),
       totalTransactions: _asNum(summary['total_transactions']).toInt(),
       averageTransaction: _asNum(summary['average_transaction']),
       cashAmount: _asNum(cash['amount']),
@@ -1354,10 +1441,10 @@ class _ReportPaymentFilterOption {
           groupOrder: 0,
           icon: Icons.payments_outlined,
         );
-      case PayKind.paylater:
+      case PayKind.openbill:
         return const _ReportPaymentFilterOption(
-          key: 'paylater',
-          label: 'PAYLATER',
+          key: 'openbill',
+          label: 'OPENBILL',
           groupOrder: 0,
           icon: Icons.payments_outlined,
         );

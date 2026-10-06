@@ -1,0 +1,1131 @@
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import '/core/network/dio_client.dart';
+import '/features/auth/data/models/owner_model.dart';
+
+class OwnerApi {
+  final DioClient client;
+
+  OwnerApi(this.client);
+
+  Future<Map<String, dynamic>> createStore({
+    required String name,
+    required String address,
+    String? city,
+    String? province,
+    String? contactPhone,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/stores',
+      data: {
+        'name': name,
+        'address': address,
+        if (city != null && city.isNotEmpty) 'city': city,
+        if (province != null && province.isNotEmpty) 'province': province,
+        if (contactPhone != null && contactPhone.isNotEmpty)
+          'contact_phone': contactPhone,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listCarousels() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/carousels');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> getStore(int storeId) async {
+    final res = await client.dio.get('/api/v1/mobile/owner/stores/$storeId');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateStore({
+    required int storeId,
+    required String name,
+    required String address,
+    String? city,
+    String? province,
+    String? district,
+    String? village,
+    bool isActive = true,
+    bool isCashierActive = true,
+    bool? allowCustomerPayAtCashier,
+    bool isOpenbill = false,
+    String? userWifi,
+    String? passWifi,
+    bool isWifiShown = false,
+    bool showReceiptLogo = false,
+    bool isPpnActive = false,
+    num? ppn,
+    int cashRoundingUnit = 0,
+    int cashVarianceTolerance = 0,
+    String? contactPerson,
+    String? contactPhone,
+    String? whatsapp,
+    String? gmapsUrl,
+    String? instagram,
+    List<int>? manualPaymentIds,
+    String? logoPath,
+    String? backgroundPath,
+    bool removeLogo = false,
+    bool removeBackground = false,
+  }) async {
+    final map = <String, dynamic>{
+      'name': name,
+      'address': address,
+      if (city != null) 'city': city,
+      if (province != null) 'province': province,
+      if (district != null) 'district': district,
+      if (village != null) 'village': village,
+      'is_active': isActive ? 1 : 0,
+      'is_cashier_active': isCashierActive ? 1 : 0,
+      if (allowCustomerPayAtCashier != null)
+        'allow_customer_pay_at_cashier': allowCustomerPayAtCashier ? 1 : 0,
+      'is_openbill': isOpenbill ? 1 : 0,
+      if (userWifi != null) 'user_wifi': userWifi,
+      if (passWifi != null) 'pass_wifi': passWifi,
+      'is_wifi_shown': isWifiShown ? 1 : 0,
+      'show_receipt_logo': showReceiptLogo ? 1 : 0,
+      'is_ppn_active': isPpnActive ? 1 : 0,
+      if (ppn != null) 'ppn': ppn,
+      'cash_rounding_unit': cashRoundingUnit,
+      'cash_variance_tolerance': cashVarianceTolerance,
+      if (contactPerson != null) 'contact_person': contactPerson,
+      if (contactPhone != null) 'contact_phone': contactPhone,
+      if (whatsapp != null) 'whatsapp': whatsapp,
+      if (gmapsUrl != null) 'gmaps_url': gmapsUrl,
+      if (instagram != null) 'instagram': instagram,
+      // Multipart cannot send nested lists reliably; send JSON string.
+      if (manualPaymentIds != null)
+        'manual_payment_ids': jsonEncode(manualPaymentIds),
+      if (removeLogo) 'remove_logo': 1,
+      if (removeBackground) 'remove_background_picture': 1,
+    };
+
+    if (logoPath != null && logoPath.isNotEmpty) {
+      map['logo'] = await MultipartFile.fromFile(
+        logoPath,
+        filename: 'logo.jpg',
+      );
+    }
+    if (backgroundPath != null && backgroundPath.isNotEmpty) {
+      map['image'] = await MultipartFile.fromFile(
+        backgroundPath,
+        filename: 'background.jpg',
+      );
+    }
+
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/stores/$storeId',
+      data: FormData.fromMap(map),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<OwnerModel> selectStore(int storeId) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/stores/select',
+      data: {'store_id': storeId},
+    );
+    final data = Map<String, dynamic>.from(res.data as Map);
+    final user = data['user'];
+    if (user is! Map) {
+      throw Exception('Invalid select store response');
+    }
+    return OwnerModel.fromJson(Map<String, dynamic>.from(user));
+  }
+
+  Future<Map<String, dynamic>> listProducts() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/products');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> getProduct(int id) async {
+    final res = await client.dio.get('/api/v1/mobile/owner/products/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createProduct({
+    required String name,
+    required num price,
+    String? description,
+    String? categoryName,
+    int? categoryId,
+    int? promotionId,
+    bool alwaysAvailable = true,
+    int? stockQuantity,
+    num? modalPrice,
+    bool isActive = true,
+    bool isHotProduct = false,
+    List<Map<String, dynamic>>? menuOptions,
+    List<String>? imagePaths,
+  }) async {
+    final map = <String, dynamic>{
+      'name': name,
+      'price': price,
+      if (description != null) 'description': description,
+      if (categoryId != null) 'category_id': categoryId,
+      if (categoryId == null) 'category_name': categoryName ?? 'Umum',
+      if (promotionId != null) 'promotion_id': promotionId,
+      'always_available': alwaysAvailable ? 1 : 0,
+      if (!alwaysAvailable && stockQuantity != null)
+        'stock_quantity': stockQuantity,
+      if (modalPrice != null && modalPrice > 0) 'modal_price': modalPrice,
+      'is_active': isActive ? 1 : 0,
+      'is_hot_product': isHotProduct ? 1 : 0,
+      if (menuOptions != null) 'menu_options': jsonEncode(menuOptions),
+    };
+    if (imagePaths != null) {
+      for (var i = 0; i < imagePaths.length; i++) {
+        map['images[$i]'] = await MultipartFile.fromFile(imagePaths[i]);
+      }
+    }
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/products',
+      data: FormData.fromMap(map),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateProduct({
+    required int id,
+    required num price,
+    bool? alwaysAvailable,
+    int? stockQuantity,
+    num? modalPrice,
+    String? stockType,
+    bool? isActive,
+    bool? isHotProduct,
+    int? promotionId,
+    bool clearPromotion = false,
+    List<Map<String, dynamic>>? optionSettings,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/products/$id',
+      data: FormData.fromMap({
+        'price': price,
+        if (alwaysAvailable != null)
+          'always_available': alwaysAvailable ? 1 : 0,
+        if (alwaysAvailable == false && stockQuantity != null)
+          'stock_quantity': stockQuantity,
+        if (modalPrice != null && modalPrice > 0) 'modal_price': modalPrice,
+        if (stockType != null) 'stock_type': stockType,
+        if (isActive != null) 'is_active': isActive ? 1 : 0,
+        if (isHotProduct != null) 'is_hot_product': isHotProduct ? 1 : 0,
+        if (clearPromotion)
+          'promotion_id': ''
+        else if (promotionId != null)
+          'promotion_id': promotionId,
+        if (optionSettings != null)
+          'option_settings': jsonEncode(optionSettings),
+      }),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> assignProductsToStore(
+    List<int> masterProductIds, {
+    num? price,
+    bool? alwaysAvailable,
+    int? stockQuantity,
+    bool? isActive,
+    bool? isHotProduct,
+    int? promotionId,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/products/assign',
+      data: {
+        'master_product_ids': masterProductIds,
+        if (price != null) 'price': price,
+        if (alwaysAvailable != null) 'always_available': alwaysAvailable,
+        if (alwaysAvailable == false && stockQuantity != null)
+          'stock_quantity': stockQuantity,
+        if (isActive != null) 'is_active': isActive,
+        if (isHotProduct != null) 'is_hot_product': isHotProduct,
+        if (promotionId != null) 'promotion_id': promotionId,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listMasterProducts() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/master-products');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> getMasterProduct(int id) async {
+    final res =
+        await client.dio.get('/api/v1/mobile/owner/master-products/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createMasterProduct({
+    required String name,
+    required num price,
+    String? description,
+    String? categoryName,
+    int? categoryId,
+    int? promotionId,
+    List<Map<String, dynamic>>? menuOptions,
+    List<String>? imagePaths,
+  }) async {
+    final map = <String, dynamic>{
+      'name': name,
+      'price': price,
+      if (description != null) 'description': description,
+      if (categoryId != null) 'category_id': categoryId,
+      if (categoryId == null) 'category_name': categoryName ?? 'Umum',
+      if (promotionId != null) 'promotion_id': promotionId,
+      if (menuOptions != null) 'menu_options': jsonEncode(menuOptions),
+    };
+    if (imagePaths != null) {
+      for (var i = 0; i < imagePaths.length; i++) {
+        map['images[$i]'] = await MultipartFile.fromFile(imagePaths[i]);
+      }
+    }
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/master-products',
+      data: FormData.fromMap(map),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateMasterProduct({
+    required int id,
+    required String name,
+    required num price,
+    String? description,
+    String? categoryName,
+    int? categoryId,
+    int? promotionId,
+    bool clearPromotion = false,
+    List<Map<String, dynamic>>? menuOptions,
+    List<String>? imagePaths,
+    List<String>? keepImageFilenames,
+    bool applyPriceAllOutlets = false,
+    bool applyPromotionAllOutlets = false,
+  }) async {
+    final map = <String, dynamic>{
+      'name': name,
+      'price': price,
+      if (description != null) 'description': description,
+      if (categoryId != null) 'category_id': categoryId,
+      if (categoryId == null) 'category_name': categoryName ?? 'Umum',
+      if (clearPromotion)
+        'promotion_id': ''
+      else if (promotionId != null)
+        'promotion_id': promotionId,
+      if (menuOptions != null) 'menu_options': jsonEncode(menuOptions),
+      'keep_image_filenames': jsonEncode(keepImageFilenames ?? const []),
+      'apply_price_all_outlets': applyPriceAllOutlets ? 1 : 0,
+      'apply_promotion_all_outlets': applyPromotionAllOutlets ? 1 : 0,
+    };
+    if (imagePaths != null) {
+      for (var i = 0; i < imagePaths.length; i++) {
+        map['images[$i]'] = await MultipartFile.fromFile(imagePaths[i]);
+      }
+    }
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/master-products/$id',
+      data: FormData.fromMap(map),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteMasterProduct(int id) async {
+    final res =
+        await client.dio.delete('/api/v1/mobile/owner/master-products/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listCategories({String? q}) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/categories',
+      queryParameters: {
+        if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createCategory({
+    required String name,
+    String? description,
+    String? imagePath,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/categories',
+      data: FormData.fromMap({
+        'category_name': name,
+        if (description != null) 'description': description,
+        if (imagePath != null && imagePath.isNotEmpty)
+          'image': await MultipartFile.fromFile(imagePath),
+      }),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateCategory({
+    required int id,
+    required String name,
+    String? description,
+    String? imagePath,
+    bool removeImage = false,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/categories/$id',
+      data: FormData.fromMap({
+        'category_name': name,
+        if (description != null) 'description': description,
+        'remove_image': removeImage ? 1 : 0,
+        if (imagePath != null && imagePath.isNotEmpty)
+          'image': await MultipartFile.fromFile(imagePath),
+      }),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteCategory(int id) async {
+    final res = await client.dio.delete('/api/v1/mobile/owner/categories/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> reorderCategories(
+    List<Map<String, dynamic>> orders,
+  ) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/categories/reorder',
+      data: {'orders': orders},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listPromotions({
+    String? q,
+    String? type,
+  }) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/promotions',
+      queryParameters: {
+        if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+        if (type != null && type.isNotEmpty) 'type': type,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> getPromotion(int id) async {
+    final res = await client.dio.get('/api/v1/mobile/owner/promotions/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createPromotion({
+    required String name,
+    required String type,
+    required num value,
+    bool usesExpiry = false,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String>? activeDays,
+    bool isActive = true,
+    String? description,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/promotions',
+      data: {
+        'promotion_name': name,
+        'promotion_type': type,
+        'promotion_value': value,
+        'uses_expiry': usesExpiry,
+        if (usesExpiry && startDate != null)
+          'start_date': _formatDateTime(startDate),
+        if (usesExpiry && endDate != null)
+          'end_date': _formatDateTime(endDate),
+        if (activeDays != null && activeDays.isNotEmpty)
+          'active_days': activeDays,
+        'is_active': isActive,
+        if (description != null) 'description': description,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updatePromotion({
+    required int id,
+    required String name,
+    required String type,
+    required num value,
+    bool usesExpiry = false,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String>? activeDays,
+    bool isActive = true,
+    String? description,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/promotions/$id',
+      data: {
+        'promotion_name': name,
+        'promotion_type': type,
+        'promotion_value': value,
+        'uses_expiry': usesExpiry,
+        if (usesExpiry && startDate != null)
+          'start_date': _formatDateTime(startDate),
+        if (usesExpiry && endDate != null)
+          'end_date': _formatDateTime(endDate),
+        'active_days': activeDays ?? <String>[],
+        'is_active': isActive,
+        if (description != null) 'description': description,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deletePromotion(int id) async {
+    final res = await client.dio.delete('/api/v1/mobile/owner/promotions/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+  }
+
+  Future<Map<String, dynamic>> listPaymentMethods() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/payment-methods');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createPaymentMethod({
+    required String paymentType,
+    required String providerName,
+    required String providerAccountName,
+    String? providerAccountNo,
+    String? additionalInfo,
+    String? imagePath,
+    bool isActive = true,
+  }) async {
+    final form = FormData.fromMap({
+      'payment_type': paymentType,
+      'provider_name': providerName,
+      'provider_account_name': providerAccountName,
+      if (providerAccountNo != null && providerAccountNo.isNotEmpty)
+        'provider_account_no': providerAccountNo,
+      if (additionalInfo != null && additionalInfo.isNotEmpty)
+        'additional_info': additionalInfo,
+      'is_active': isActive ? 1 : 0,
+      if (imagePath != null && imagePath.isNotEmpty)
+        'images': await MultipartFile.fromFile(
+          imagePath,
+          filename: imagePath.split(RegExp(r'[\\/]')).last,
+        ),
+    });
+
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/payment-methods',
+      data: form,
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updatePaymentMethod({
+    required int id,
+    required String paymentType,
+    required String providerName,
+    required String providerAccountName,
+    String? providerAccountNo,
+    String? additionalInfo,
+    String? imagePath,
+    bool isActive = true,
+    bool removeQris = false,
+  }) async {
+    final form = FormData.fromMap({
+      'payment_type': paymentType,
+      'provider_name': providerName,
+      'provider_account_name': providerAccountName,
+      if (providerAccountNo != null && providerAccountNo.isNotEmpty)
+        'provider_account_no': providerAccountNo,
+      if (additionalInfo != null && additionalInfo.isNotEmpty)
+        'additional_info': additionalInfo,
+      'is_active': isActive ? 1 : 0,
+      'remove_qris': removeQris ? 1 : 0,
+      if (imagePath != null && imagePath.isNotEmpty)
+        'images': await MultipartFile.fromFile(
+          imagePath,
+          filename: imagePath.split(RegExp(r'[\\/]')).last,
+        ),
+    });
+
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/payment-methods/$id',
+      data: form,
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deletePaymentMethod(int id) async {
+    final res = await client.dio.delete(
+      '/api/v1/mobile/owner/payment-methods/$id',
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> assignPaymentMethods(List<int> ids) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/payment-methods/assign',
+      data: {'manual_payment_ids': ids},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listEmployees({
+    String? role,
+    String? status,
+    String? q,
+  }) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/employees',
+      queryParameters: {
+        if (role != null && role.isNotEmpty) 'role': role,
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (q != null && q.isNotEmpty) 'q': q,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> checkEmployeeUsername({
+    required String username,
+    int? excludeId,
+  }) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/employees/check-username',
+      queryParameters: {
+        'username': username,
+        if (excludeId != null) 'exclude_id': excludeId,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createEmployee({
+    required String name,
+    required String username,
+    required String email,
+    required String password,
+    required int partnerId,
+    required String role,
+    bool isActive = true,
+    bool enforceWorkSchedule = false,
+    Map<String, dynamic>? workSchedule,
+    List<Map<String, dynamic>>? scheduleBlocks,
+    List<int>? kitchenCategoryIds,
+    List<String>? permissions,
+    String? imagePath,
+  }) async {
+    final form = FormData.fromMap({
+      'name': name,
+      'username': username,
+      'email': email,
+      'password': password,
+      'password_confirmation': password,
+      'partner_id': partnerId,
+      'role': role,
+      'is_active': isActive ? 1 : 0,
+      'enforce_work_schedule': enforceWorkSchedule ? 1 : 0,
+      if (scheduleBlocks != null) 'schedule_blocks': jsonEncode(scheduleBlocks),
+      if (workSchedule != null) 'work_schedule': jsonEncode(workSchedule),
+      if (kitchenCategoryIds != null)
+        'kitchen_category_ids': jsonEncode(kitchenCategoryIds),
+      if (permissions != null) 'permissions': jsonEncode(permissions),
+      if (imagePath != null && imagePath.isNotEmpty)
+        'image': await MultipartFile.fromFile(
+          imagePath,
+          filename: imagePath.split(RegExp(r'[\\/]')).last,
+        ),
+    });
+
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/employees',
+      data: form,
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateEmployee({
+    required int id,
+    required String name,
+    required String username,
+    required String email,
+    required int partnerId,
+    required String role,
+    String? password,
+    bool isActive = true,
+    bool enforceWorkSchedule = false,
+    Map<String, dynamic>? workSchedule,
+    List<Map<String, dynamic>>? scheduleBlocks,
+    List<int>? kitchenCategoryIds,
+    List<String>? permissions,
+    String? imagePath,
+    bool removeImage = false,
+  }) async {
+    final form = FormData.fromMap({
+      'name': name,
+      'username': username,
+      'email': email,
+      'partner_id': partnerId,
+      'role': role,
+      'is_active': isActive ? 1 : 0,
+      'enforce_work_schedule': enforceWorkSchedule ? 1 : 0,
+      'remove_image': removeImage ? 1 : 0,
+      if (password != null && password.isNotEmpty) ...{
+        'password': password,
+        'password_confirmation': password,
+      },
+      if (scheduleBlocks != null) 'schedule_blocks': jsonEncode(scheduleBlocks),
+      if (workSchedule != null) 'work_schedule': jsonEncode(workSchedule),
+      if (kitchenCategoryIds != null)
+        'kitchen_category_ids': jsonEncode(kitchenCategoryIds),
+      if (permissions != null) 'permissions': jsonEncode(permissions),
+      if (imagePath != null && imagePath.isNotEmpty)
+        'image': await MultipartFile.fromFile(
+          imagePath,
+          filename: imagePath.split(RegExp(r'[\\/]')).last,
+        ),
+    });
+
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/employees/$id',
+      data: form,
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteEmployee(int id) async {
+    final res = await client.dio.delete('/api/v1/mobile/owner/employees/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listWorkScheduleProfiles() async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/work-schedule-profiles',
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createWorkScheduleProfile({
+    required String name,
+    required List<Map<String, dynamic>> scheduleBlocks,
+    bool isActive = true,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/work-schedule-profiles',
+      data: {
+        'name': name,
+        'schedule_blocks': scheduleBlocks,
+        'is_active': isActive,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateWorkScheduleProfile({
+    required int id,
+    required String name,
+    required List<Map<String, dynamic>> scheduleBlocks,
+    bool isActive = true,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/work-schedule-profiles/$id',
+      data: {
+        'name': name,
+        'schedule_blocks': scheduleBlocks,
+        'is_active': isActive,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteWorkScheduleProfile(int id) async {
+    final res = await client.dio.delete(
+      '/api/v1/mobile/owner/work-schedule-profiles/$id',
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listTables() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/tables');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createTable({
+    required String tableNo,
+    required String tableClass,
+    String? newTableClass,
+    String? description,
+    String status = 'available',
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/tables',
+      data: {
+        'table_no': tableNo,
+        'table_class': tableClass,
+        if (newTableClass != null && newTableClass.isNotEmpty)
+          'new_table_class': newTableClass,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        'status': status,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateTable({
+    required int id,
+    required String tableNo,
+    required String tableClass,
+    String? newTableClass,
+    String? description,
+    String status = 'available',
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/tables/$id',
+      data: {
+        'table_no': tableNo,
+        'table_class': tableClass,
+        if (newTableClass != null && newTableClass.isNotEmpty)
+          'new_table_class': newTableClass,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        'status': status,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteTable(int id) async {
+    final res = await client.dio.delete('/api/v1/mobile/owner/tables/$id');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> getTableBarcode(int id) async {
+    final res = await client.dio.get('/api/v1/mobile/owner/tables/$id/barcode');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listTransferBanks() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/billing/banks');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> submitManualPayment({
+    required String type,
+    required int itemId,
+    String? period,
+    required int bankId,
+    required String proofPath,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/billing/manual-payments',
+      data: FormData.fromMap({
+        'type': type,
+        'item_id': itemId,
+        'bank_id': bankId,
+        if (period != null && period.isNotEmpty) 'period': period,
+        'payment_proof': await MultipartFile.fromFile(
+          proofPath,
+          filename: 'bukti.jpg',
+        ),
+      }),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> createCheckoutLink({
+    required String type,
+    required int itemId,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/checkout-links',
+      data: {
+        'type': type,
+        'item_id': itemId,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listPlans() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/plans');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> confirmPlanPurchase({
+    required String productId,
+    required String purchaseToken,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/plans/confirm',
+      data: {
+        'product_id': productId,
+        'purchase_token': purchaseToken,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> startPlanTrial(int planId) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/plans/$planId/trial',
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> startAddonTrial(int addonId) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/addons/$addonId/trial',
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listAddons() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/addons');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> transferPlayPurchases(
+    List<({String productId, String purchaseToken})> purchases,
+  ) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/billing/transfer',
+      data: {
+        'purchases': purchases
+            .map((purchase) => {
+                  'product_id': purchase.productId,
+                  'purchase_token': purchase.purchaseToken,
+                })
+            .toList(),
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> confirmAddonPurchase({
+    required String productId,
+    required String purchaseToken,
+    String? packageName,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/addons/confirm',
+      data: {
+        'product_id': productId,
+        'purchase_token': purchaseToken,
+        if (packageName != null && packageName.isNotEmpty)
+          'package_name': packageName,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> restoreAddonPurchases(
+    List<Map<String, String>> purchases,
+  ) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/addons/restore',
+      data: {'purchases': purchases},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> cashierShiftSummary({String? date}) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/cashier-shifts',
+      queryParameters: {
+        if (date != null && date.isNotEmpty) 'date': date,
+      },
+    );
+    final data = res.data;
+    if (data is Map && data['summary'] is Map) {
+      return Map<String, dynamic>.from(data['summary'] as Map);
+    }
+    return {};
+  }
+
+  Future<Map<String, dynamic>> updateCashierShiftSettings({
+    String? visibility,
+    int? varianceTolerance,
+    int? partnerId,
+  }) async {
+    final res = await client.dio.patch(
+      '/api/v1/mobile/owner/cashier-shifts/settings',
+      data: {
+        if (visibility != null) 'cashier_shift_visibility': visibility,
+        if (varianceTolerance != null)
+          'cash_variance_tolerance': varianceTolerance,
+        if (partnerId != null) 'partner_id': partnerId,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> cashierShiftDetail(int id) async {
+    final res = await client.dio.get('/api/v1/mobile/owner/cashier-shifts/$id');
+    final data = res.data;
+    if (data is Map && data['shift'] is Map) {
+      return Map<String, dynamic>.from(data['shift'] as Map);
+    }
+    return {};
+  }
+
+  Future<void> approveCashierShift(int id, {String? note}) async {
+    await client.dio.post('/api/v1/mobile/owner/cashier-shifts/$id/approve', data: {
+      if (note != null) 'note': note,
+    });
+  }
+
+  Future<void> rejectCashierShift(int id) async {
+    await client.dio.post('/api/v1/mobile/owner/cashier-shifts/$id/reject');
+  }
+
+  Future<Map<String, dynamic>> listStocks({String? location}) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/stocks',
+      queryParameters: {
+        if (location != null) 'location': location,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<void> createStock({
+    required String stockName,
+    required int unitId,
+    String? description,
+  }) async {
+    await client.dio.post('/api/v1/mobile/owner/stocks', data: {
+      'stock_name': stockName,
+      'unit_id': unitId,
+      if (description != null && description.isNotEmpty) 'description': description,
+    });
+  }
+
+  Future<void> setStockMinimum({
+    required int id,
+    required num? quantity,
+    int? unitId,
+  }) async {
+    await client.dio.post('/api/v1/mobile/owner/stocks/$id/minimum', data: {
+      'quantity': quantity,
+      if (unitId != null) 'unit_id': unitId,
+    });
+  }
+
+  Future<void> deleteStock(int id) async {
+    await client.dio.delete('/api/v1/mobile/owner/stocks/$id');
+  }
+
+  Future<Map<String, dynamic>> submitStockMovement(
+    Map<String, dynamic> body,
+  ) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/stocks/movements',
+      data: body,
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> listStockIngredients() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/stocks/ingredients');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> loadStockRecipe({
+    required String itemType,
+    required int itemId,
+  }) async {
+    final res = await client.dio.get(
+      '/api/v1/mobile/owner/stocks/recipes',
+      queryParameters: {
+        'item_type': itemType,
+        'item_id': itemId,
+      },
+    );
+    final data = res.data;
+    if (data is Map && data['recipe'] is List) {
+      return (data['recipe'] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    return [];
+  }
+
+  Future<void> saveStockRecipe({
+    required String itemType,
+    required int itemId,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    await client.dio.post('/api/v1/mobile/owner/stocks/recipes', data: {
+      'item_type': itemType,
+      'item_id': itemId,
+      'recipe_items': items,
+    });
+  }
+
+  OwnerModel? parseUser(Map<String, dynamic> data) {
+    final user = data['user'];
+    if (user is Map) {
+      return OwnerModel.fromJson(Map<String, dynamic>.from(user));
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>> checkReferral(String code) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/referral/check',
+      data: {'code': code},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> applyReferral(String code) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/referral/apply',
+      data: {'code': code},
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> skipReferral() async {
+    final res = await client.dio.post('/api/v1/mobile/owner/referral/skip');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> cavaaPoints() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/cavaa-points');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> purchaseWithPoints({
+    required String kind,
+    required int id,
+    required String mode,
+    String? period,
+    int? days,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/cavaa-points/purchase',
+      data: {
+        'kind': kind,
+        'id': id,
+        'mode': mode,
+        if (period != null) 'period': period,
+        if (days != null) 'days': days,
+      },
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+}

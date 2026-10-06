@@ -12,7 +12,11 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  await PushNotificationService.instance.init();
+  try {
+    await PushNotificationService.instance.init();
+  } catch (e) {
+    debugPrint('Push notification init skipped: $e');
+  }
 
   runApp(const CavaaApp());
 }

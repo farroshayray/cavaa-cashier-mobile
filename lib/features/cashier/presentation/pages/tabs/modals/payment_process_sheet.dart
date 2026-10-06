@@ -1,10 +1,15 @@
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/core/config/env.dart';
+import '/core/utils/open_url.dart';
+import '/features/cashier/data/cashier_shift_api.dart';
 import '/features/cashier/data/orders_api.dart';
+import '/features/cashier/data/sync/payment_submit_recovery.dart';
 import '/core/storage/secure_storage_service.dart';
+import '/features/cashier/presentation/printing/receipt_order_enricher.dart';
 import '/features/cashier/presentation/printing/receipt_printer.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
@@ -12,7 +17,22 @@ import '/features/cashier/data/models/printer_device.dart';
 import '/features/cashier/data/models/orders_repository.dart';
 import '/core/services/connectivity_status_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
+import '/features/cashier/presentation/providers/purchase_provider.dart';
+import '/features/cashier/presentation/printing/offline_print_enricher.dart';
+import '/features/cashier/utils/cash_rounding_helpers.dart';
 
+Map<String, dynamic> _normalizePaymentInstruction(Map<String, dynamic> raw) {
+  final type = (raw['payment_type'] ?? raw['type'] ?? '').toString();
+  return {
+    'payment_type': type,
+    'provider_name': raw['provider_name'],
+    'provider_account_name': raw['provider_account_name'],
+    'provider_account_no': raw['provider_account_no'],
+    'qris_image_url': raw['qris_image_url'],
+    'qris_image_local_path': raw['qris_image_local_path'],
+    'additional_info': raw['additional_info'],
+  };
+}
 
 class PaymentProcessSheet extends StatefulWidget {
   const PaymentProcessSheet({
@@ -52,6 +72,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   XFile? _cashierProofImage;
   String? _cashierProofError;
   String _lastPaymentId = '';
+  String? _selectedPaymentMethod;
+  Map<String, dynamic>? _enrichedSelectedInstruction;
 
   @override
   void initState() {
@@ -97,15 +119,13 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     cloned['booking_order_code'] ??= cloned['client_order_code'] ?? '-';
     cloned['customer_name'] ??= 'Guest';
     cloned['employee_name'] ??= '-';
-    cloned['store_name'] ??= 'CAVAA';
-    cloned['store_address'] ??= '';
-    cloned['store_is_wifi_shown'] ??= 0;
-    cloned['store_wifi_user'] ??= '';
-    cloned['store_wifi_password'] ??= '';
-
     cloned['order_details'] ??= <dynamic>[];
 
-    return cloned;
+    final printable = enrichOfflinePrintOrder(cloned);
+    final partner = context.read<PurchaseProvider>().partnerData;
+    partner?.applyReceiptLogo(printable);
+    partner?.applyReceiptWifi(printable);
+    return printable;
   }
 
   bool get _isCaseA {
@@ -117,59 +137,271 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   bool get _isCaseB {
     if (_order == null) return false;
     final latestPayment = _order!['latest_payment'];
-    final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+    final cpi = latestPayment is Map
+        ? latestPayment['owner_manual_payment']
+        : null;
 
-    return (_order!['order_status'] ?? '').toString() == 'UNPAID' &&
-        cpi is Map;
+    return (_order!['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
   }
 
   bool get _isCaseC => !_isCaseA && !_isCaseB;
 
-  bool get _needsCashValidation {
+  bool get _isOpenbillOrder {
     if (_order == null) return false;
-    return _isCaseA || _isCaseB || ((_order!['payment_method'] ?? '').toString() == 'CASH');
+    final status = (_order!['order_status'] ?? '').toString();
+    return _toBool(_order!['openbill_flag']) ||
+        (_order!['payment_method'] ?? '').toString() == 'OPENBILL' ||
+        status.startsWith('OPENBILL');
+  }
+
+  bool get _canChooseFinalPaymentMethod {
+    if (_order == null) return false;
+    final status = (_order!['order_status'] ?? '').toString();
+    final latestPayment = _order!['latest_payment'];
+    final hasPendingManualInstruction =
+        status == 'UNPAID' &&
+        latestPayment is Map &&
+        latestPayment['owner_manual_payment'] is Map;
+
+    return status == 'UNPAID' && !hasPendingManualInstruction;
+  }
+
+  List<Map<String, dynamic>> get _availablePaymentMethods {
+    if (_order == null) return const [];
+    final raw = _order!['available_payment_methods'];
+    if (raw is! List) return const [];
+
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  String get _effectivePaymentType {
+    if (_isCaseA) {
+      final paymentRequest = _order?['payment_request'];
+      if (paymentRequest is Map) {
+        return (paymentRequest['payment_type'] ?? 'CASH').toString();
+      }
+    }
+
+    if (_isCaseB) {
+      final latestPayment = _order?['latest_payment'];
+      if (latestPayment is Map) {
+        return (latestPayment['payment_type'] ??
+                _order?['payment_method'] ??
+                'CASH')
+            .toString();
+      }
+    }
+
+    if (_canChooseFinalPaymentMethod) {
+      if (_selectedPaymentMethod == null ||
+          _selectedPaymentMethod!.trim().isEmpty) {
+        return '';
+      }
+
+      final selected = _availablePaymentMethods
+          .cast<Map<String, dynamic>?>()
+          .firstWhere(
+            (item) => item?['value']?.toString() == _selectedPaymentMethod,
+            orElse: () => null,
+          );
+
+      return (selected?['type'] ?? _selectedPaymentMethod ?? '').toString();
+    }
+
+    return (_order?['payment_method'] ?? 'CASH').toString();
+  }
+
+  bool get _isQrisXenditFromPicker {
+    if (_order == null) return false;
+    if (_isCaseA || _isCaseB) return false;
+    if (!_canChooseFinalPaymentMethod) return false;
+    return _effectivePaymentType == 'QRIS';
+  }
+
+  bool get _needsPaidAmountValidation {
+    if (_order == null || _isQrisXenditFromPicker) return false;
+
+    final status = (_order!['order_status'] ?? '').toString();
+    if (status == 'PAYMENT REQUEST' || _isCaseB) return true;
+
+    if (_canChooseFinalPaymentMethod) {
+      return _selectedPaymentMethod != null &&
+          _selectedPaymentMethod!.trim().isNotEmpty;
+    }
+
+    return (_order!['payment_method'] ?? 'CASH').toString() == 'CASH';
+  }
+
+  num _billTotalForPaymentType(String? paymentType) {
+    if (_order == null) return 0;
+    final order = _order!;
+
+    if (order['grand_total_local'] != null && paymentType == 'CASH') {
+      return _num(order['grand_total_local']).ceil();
+    }
+
+    final subtotal = _num(order['total_order_value']);
+    final isPpnActive = _toBool(order['is_ppn_active']);
+    final ppnPercent = _num(order['ppn']);
+    final baseTotal = isPpnActive
+        ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+        : subtotal.ceil();
+
+    if (paymentType == 'CASH') {
+      return baseTotal + _cashRoundingAmountForOrder(order, baseTotal);
+    }
+
+    return baseTotal;
+  }
+
+  num get _currentBillTotal {
+    final type = _effectivePaymentType;
+    return _billTotalForPaymentType(type.isEmpty ? null : type);
   }
 
   bool get _paidInvalid {
-    if (!_needsCashValidation) return false;
+    if (!_needsPaidAmountValidation) return false;
     if (!_showCashValidation) return false;
 
-    final paid = _num(_paidCtrl.text);
+    final paid = _moneyInputNum(_paidCtrl.text);
     return paid <= 0;
   }
 
   bool get _paidInsufficient {
-    if (!_needsCashValidation) return false;
+    if (!_needsPaidAmountValidation) return false;
     if (!_showCashValidation) return false;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid = _num(_paidCtrl.text);
+    final total = _currentBillTotal;
+    final paid = _moneyInputNum(_paidCtrl.text);
     return paid > 0 && paid < total;
   }
 
-  bool get _cashInputValid {
-    if (!_needsCashValidation) return true;
+  bool get _paidAmountValid {
+    if (!_needsPaidAmountValidation) return true;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid = _num(_paidCtrl.text);
+    final total = _currentBillTotal;
+    final paid = _moneyInputNum(_paidCtrl.text);
 
     return paid > 0 && paid >= total;
   }
 
-  bool _validateCashInputBeforeConfirm() {
-    if (!_needsCashValidation) return true;
+  String? _paymentTypeForValue(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final selected = _availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['value']?.toString() == value,
+          orElse: () => null,
+        );
+    return (selected?['type'] ?? value).toString();
+  }
+
+  void _applyPaidAmountForMethodType(String? type) {
+    if (_order == null) return;
+    if (type == 'QRIS' &&
+        _canChooseFinalPaymentMethod &&
+        !_isCaseA &&
+        !_isCaseB) {
+      _paidCtrl.text = '';
+      _change = 0;
+      return;
+    }
+    if (type == 'CASH') {
+      _paidCtrl.text = '';
+      _change = 0;
+      return;
+    }
+    final total = _billTotalForPaymentType(type);
+    _paidCtrl.text = _formatMoneyInput(total);
+    _recalcChange();
+  }
+
+  Future<void> _syncEnrichedSelectedInstruction() async {
+    if (_selectedPaymentMethod == null || _order == null) {
+      _enrichedSelectedInstruction = null;
+      return;
+    }
+
+    final selected = _availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['value']?.toString() == _selectedPaymentMethod,
+          orElse: () => null,
+        );
+    if (selected == null) {
+      _enrichedSelectedInstruction = null;
+      return;
+    }
+
+    try {
+      final enriched = await context
+          .read<PaymentProvider>()
+          .enrichPaymentMethodInstruction(Map<String, dynamic>.from(selected));
+      if (!mounted) return;
+      setState(() => _enrichedSelectedInstruction = enriched);
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _enrichedSelectedInstruction = _normalizePaymentInstruction(
+          Map<String, dynamic>.from(selected),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onPaymentMethodChanged(String? value) async {
+    final type = _paymentTypeForValue(value);
+    setState(() {
+      _selectedPaymentMethod = value;
+      _cashierProofImage = null;
+      _cashierProofError = null;
+      _enrichedSelectedInstruction = null;
+      _applyPaidAmountForMethodType(type);
+    });
+    if (value != null) {
+      await _syncEnrichedSelectedInstruction();
+    }
+  }
+
+  bool get _canConfirm {
+    if (_canChooseFinalPaymentMethod && !_isCaseA && !_isCaseB) {
+      if (_selectedPaymentMethod == null ||
+          _selectedPaymentMethod!.trim().isEmpty) {
+        return false;
+      }
+    }
+
+    return _paidAmountValid;
+  }
+
+  String get _selectedPaymentMethodLabel {
+    if (_selectedPaymentMethod == null) return '-';
+    final selected = _availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['value']?.toString() == _selectedPaymentMethod,
+          orElse: () => null,
+        );
+    return (selected?['label'] ?? _selectedPaymentMethod ?? '-').toString();
+  }
+
+  bool _validatePaidAmountBeforeConfirm() {
+    if (!_needsPaidAmountValidation) return true;
 
     setState(() => _showCashValidation = true);
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid = _num(_paidCtrl.text);
+    final total = _currentBillTotal;
+    final paid = _moneyInputNum(_paidCtrl.text);
 
     if (paid <= 0) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           const SnackBar(
-            content: Text('Uang diterima belum diisi'),
+            content: Text('Nominal pembayaran belum diisi'),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -182,9 +414,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
         context: context,
         useRootNavigator: true,
         builder: (_) => AlertDialog(
-          title: const Text('Uang tidak cukup'),
+          title: const Text('Nominal tidak cukup'),
           content: Text(
-            'Uang diterima Rp ${_rupiah(paid)}\n'
+            'Nominal diterima Rp ${_rupiah(paid)}\n'
             'Total tagihan Rp ${_rupiah(total)}\n\n'
             'Silakan periksa kembali nominal pembayaran.',
           ),
@@ -204,10 +436,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   Future<void> _pickCashierProof({required ImageSource source}) async {
     try {
-      final file = await _picker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
+      final file = await _picker.pickImage(source: source, imageQuality: 85);
 
       if (file == null) return;
 
@@ -283,6 +512,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       _cashierProofImage = null;
       _cashierProofError = null;
       _lastPaymentId = '';
+      _selectedPaymentMethod = null;
+      _enrichedSelectedInstruction = null;
 
       final latestPayment = o['latest_payment'];
       if (latestPayment is Map && latestPayment['id'] != null) {
@@ -292,15 +523,45 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       // mirip web: kalau PAYMENT REQUEST dan ada payment_request → auto isi paid = total
       final status = (o['order_status'] ?? '').toString();
       final pr = o['payment_request'];
-      final total = _grandTotalFromOrder(o);
       final method = (o['payment_method'] ?? '').toString();
+      final availableMethods = _availablePaymentMethods;
 
-      final hasManual = pr != null;
-      if ((method == 'CASH' || hasManual) && status == 'PAYMENT REQUEST') {
-        _paidCtrl.text = total.toStringAsFixed(0);
-        _recalcChange(); // biar kembalian langsung ke-update
+      if (_canChooseFinalPaymentMethod) {
+        final currentMethod = (o['payment_method'] ?? '').toString().trim();
+        final matchedCurrent = availableMethods.any(
+          (item) => item['value']?.toString() == currentMethod,
+        );
+
+        if (matchedCurrent) {
+          _selectedPaymentMethod = currentMethod;
+        } else if (availableMethods.length == 1) {
+          _selectedPaymentMethod = availableMethods.first['value']?.toString();
+        } else {
+          _selectedPaymentMethod = null;
+        }
+
+        if (_selectedPaymentMethod != null) {
+          _applyPaidAmountForMethodType(
+            _paymentTypeForValue(_selectedPaymentMethod),
+          );
+        }
       }
 
+      if (status == 'PAYMENT REQUEST') {
+        final prType = pr is Map
+            ? (pr['payment_type'] ?? method).toString()
+            : method;
+        _applyPaidAmountForMethodType(prType);
+      } else if (_isCaseB) {
+        _applyPaidAmountForMethodType(
+          (latestPayment is Map ? latestPayment['payment_type'] : null)
+              ?.toString(),
+        );
+      }
+
+      if (_selectedPaymentMethod != null) {
+        await _syncEnrichedSelectedInstruction();
+      }
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -309,8 +570,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   }
 
   void _recalcChange() {
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid = _num(_paidCtrl.text);
+    final total = _currentBillTotal;
+    final paid = _moneyInputNum(_paidCtrl.text);
     final change = (paid - total);
 
     setState(() {
@@ -320,7 +581,9 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboard = MediaQuery.of(context).viewInsets.bottom; // ✅ tinggi keyboard
+    final keyboard = MediaQuery.of(
+      context,
+    ).viewInsets.bottom; // ✅ tinggi keyboard
     final safe = MediaQuery.of(context).padding.bottom;
 
     return SafeArea(
@@ -342,22 +605,32 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
                       : _error != null
-                          ? _ErrorView(message: _error!, onRetry: _fetch)
-                          : _Body(
-                            order: _order!,
-                            paidCtrl: _paidCtrl,
-                            change: _change,
-                            cashierProofImage: _cashierProofImage,
-                            cashierProofError: _cashierProofError,
-                            onPickImage: _showImageSourcePicker,
-                            onRemoveImage: _removeCashierProof,
-                            paidInvalid: _paidInvalid,
-                            paidInsufficient: _paidInsufficient,
-                          ),
+                      ? _ErrorView(message: _error!, onRetry: _fetch)
+                      : _order == null
+                      ? _ErrorView(
+                          message: 'Detail order tidak tersedia.',
+                          onRetry: _fetch,
+                        )
+                      : _Body(
+                          order: _order!,
+                          selectedPaymentMethod: _selectedPaymentMethod,
+                          enrichedSelectedInstruction:
+                              _enrichedSelectedInstruction,
+                          availablePaymentMethods: _availablePaymentMethods,
+                          onPaymentMethodChanged: _onPaymentMethodChanged,
+                          paidCtrl: _paidCtrl,
+                          change: _change,
+                          cashierProofImage: _cashierProofImage,
+                          cashierProofError: _cashierProofError,
+                          onPickImage: _showImageSourcePicker,
+                          onRemoveImage: _removeCashierProof,
+                          paidInvalid: _paidInvalid,
+                          paidInsufficient: _paidInsufficient,
+                        ),
                 ),
                 _Footer2(
                   paying: _paying,
-                  ready: _cashInputValid,
+                  ready: _canConfirm,
                   onBack: () => Navigator.of(context).pop(false),
                   onConfirm: () async => _confirmAndPay(),
                 ),
@@ -372,12 +645,33 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
   Future<void> _confirmAndPay() async {
     if (_paying) return;
 
-    final valid = _validateCashInputBeforeConfirm();
+    if (_canChooseFinalPaymentMethod &&
+        !_isCaseA &&
+        !_isCaseB &&
+        (_selectedPaymentMethod == null ||
+            _selectedPaymentMethod!.trim().isEmpty)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Pilih metode pembayaran terlebih dahulu'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+
+    final valid = _validatePaidAmountBeforeConfirm();
     if (!valid) return;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid = _num(_paidCtrl.text);
-    final change = (paid - total) > 0 ? (paid - total) : 0;
+    final total = _currentBillTotal;
+    final paid = _needsPaidAmountValidation
+        ? _moneyInputNum(_paidCtrl.text)
+        : total;
+    final change = _needsPaidAmountValidation && (paid - total) > 0
+        ? (paid - total)
+        : 0;
+    final isQrisXendit = _isQrisXenditFromPicker;
 
     final action = await showDialog<_PaymentCompletionAction>(
       context: context,
@@ -385,31 +679,30 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       builder: (_) => AlertDialog(
         title: const Text('Konfirmasi Pembayaran'),
         content: Text(
-          'Uang diterima Rp ${_rupiah(paid)}\n'
-          'Total tagihan Rp ${_rupiah(total)}\n'
-          'Kembalian Rp ${_rupiah(change)}\n\n'
-          'Lanjutkan proses pembayaran?',
+          isQrisXendit
+              ? 'Metode: QRIS (Xendit)\n'
+                    'Total tagihan Rp ${_rupiah(total)}\n\n'
+                    'Invoice pembayaran akan dibuka. Lanjutkan?'
+              : 'Metode: ${_isCaseA || _isCaseB ? (_order?['payment_method'] ?? '-') : _selectedPaymentMethodLabel}\n'
+                    'Nominal diterima Rp ${_rupiah(paid)}\n'
+                    'Total tagihan Rp ${_rupiah(total)}\n'
+                    'Kembalian Rp ${_rupiah(change)}\n\n'
+                    'Lanjutkan proses pembayaran?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(
-              context,
-              _PaymentCompletionAction.cancel,
-            ),
+            onPressed: () =>
+                Navigator.pop(context, _PaymentCompletionAction.cancel),
             child: const Text('Batal'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(
-              context,
-              _PaymentCompletionAction.withoutPrint,
-            ),
+            onPressed: () =>
+                Navigator.pop(context, _PaymentCompletionAction.withoutPrint),
             child: const Text('Simpan'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(
-              context,
-              _PaymentCompletionAction.withPrint,
-            ),
+            onPressed: () =>
+                Navigator.pop(context, _PaymentCompletionAction.withPrint),
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -424,24 +717,60 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     );
 
     if (action == null || action == _PaymentCompletionAction.cancel) return;
+    if (!CashierShiftGate.canTakePayment) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(CashierShiftGate.blockedMessage)),
+      );
+      return;
+    }
 
     final shouldPrint = action == _PaymentCompletionAction.withPrint;
 
     setState(() => _paying = true);
 
+    final isOnline =
+        context.read<ConnectivityStatusProvider>().isOnline &&
+        !widget.forceOffline;
+
     try {
       final repo = widget.ordersRepo;
-      final isOnline =
-          context.read<ConnectivityStatusProvider>().isOnline && !widget.forceOffline;
 
       if (isOnline) {
-        await widget.ordersRepo.paymentOrder(
+        final payResp = await widget.ordersRepo.paymentOrder(
           id: widget.orderId,
           paidAmount: paid,
           changeAmount: change,
+          paymentMethod: _canChooseFinalPaymentMethod
+              ? _selectedPaymentMethod
+              : null,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
-          cashierProofImagePath: _isCaseB ? _cashierProofImage?.path : null,
-        ).timeout(const Duration(seconds: 15));
+          cashierProofImagePath: _cashierProofImage?.path,
+        );
+
+        final redirect = payResp['redirect'];
+        if (redirect is String && redirect.trim().isNotEmpty) {
+          if (!mounted) return;
+          setState(() => _paying = false);
+          await openExternalUrl(redirect);
+          if (!mounted) return;
+          Navigator.of(context).pop(true);
+          return;
+        }
+
+        if (!mounted) return;
+        await context.read<PaymentProvider>().afterPaymentSuccess(
+          serverId: widget.orderId,
+          orderSnapshot: _order,
+          apiResponse: payResp,
+          offline: false,
+          reloadTabs: false,
+          backgroundSync: false,
+          paidAmount: paid,
+          changeAmount: change,
+          paymentMethod: _canChooseFinalPaymentMethod
+              ? _selectedPaymentMethod
+              : null,
+        );
       } else {
         final offlineOrder = Map<String, dynamic>.from(_order!);
         if (widget.forceOffline) {
@@ -451,8 +780,25 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           order: offlineOrder,
           paidAmount: paid,
           changeAmount: change,
+          selectedPaymentMethod: _canChooseFinalPaymentMethod
+              ? _selectedPaymentMethod
+              : null,
           cashierProofImagePath: _cashierProofImage?.path,
           lastPaymentId: _isCaseB ? _lastPaymentId : null,
+        );
+
+        if (!mounted) return;
+        await context.read<PaymentProvider>().afterPaymentSuccess(
+          serverId: widget.orderId,
+          orderSnapshot: offlineOrder,
+          offline: true,
+          reloadTabs: false,
+          backgroundSync: false,
+          paidAmount: paid,
+          changeAmount: change,
+          paymentMethod: _canChooseFinalPaymentMethod
+              ? _selectedPaymentMethod
+              : null,
         );
       }
 
@@ -462,9 +808,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           Map<String, dynamic> printOrder;
 
           if (isOnline) {
-            printOrder = await repo
-                .fetchPrintDetail(widget.orderId)
-                .timeout(const Duration(seconds: 15));
+            printOrder = await repo.fetchPrintDetail(widget.orderId);
           } else {
             printOrder = _buildOfflinePrintableOrder(
               _order!,
@@ -473,11 +817,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
             );
           }
 
-          await _printReceiptWithOrder(
-            printOrder,
-            paid: paid,
-            change: change,
-          );
+          await _printReceiptWithOrder(printOrder, paid: paid, change: change);
         } catch (e) {
           printError = e.toString();
         }
@@ -488,7 +828,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       await showDialog<void>(
         context: context,
         useRootNavigator: true,
-        builder: (_) => AlertDialog(
+        builder: (dialogCtx) => AlertDialog(
           title: Text(
             !shouldPrint
                 ? 'Pembayaran berhasil'
@@ -505,7 +845,7 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogCtx),
               child: const Text('OK'),
             ),
           ],
@@ -516,6 +856,65 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
+
+      if (isOnline && isPaymentSubmitTimeout(e)) {
+        final recovery = await recoverPaymentAfterSubmitFailure(
+          fetchOrderDetail: widget.ordersRepo.fetchOrderDetail,
+          serverId: widget.orderId,
+        );
+        if (!mounted) return;
+
+        if (recovery.succeeded && recovery.orderDetail != null) {
+          await context.read<PaymentProvider>().afterPaymentSuccess(
+            serverId: widget.orderId,
+            orderSnapshot: recovery.orderDetail,
+            apiResponse: recovery.orderDetail,
+            offline: false,
+            reloadTabs: false,
+            backgroundSync: false,
+            paidAmount: paid,
+            changeAmount: change,
+            paymentMethod: _canChooseFinalPaymentMethod
+                ? _selectedPaymentMethod
+                : null,
+          );
+
+          if (!mounted) return;
+          await showDialog<void>(
+            context: context,
+            useRootNavigator: true,
+            builder: (dialogCtx) => AlertDialog(
+              title: const Text('Pembayaran berhasil'),
+              content: const Text(
+                'Pembayaran tersimpan di server (koneksi lambat saat konfirmasi).',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+
+          if (!mounted) return;
+          Navigator.of(context).pop(true);
+          return;
+        }
+
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                recovery.message ?? 'Gagal menyimpan pembayaran: $e',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
+
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -529,8 +928,6 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     }
   }
 
-
-
   Future<void> _printReceipt() async {
     if (_order == null) return;
     if (_printing) return;
@@ -539,8 +936,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     final ok = await _validateBeforePrint();
     if (!ok) return;
 
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid  = _num(_paidCtrl.text);
+    final total = _currentBillTotal;
+    final paid = _moneyInputNum(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
     setState(() => _printing = true);
@@ -550,11 +947,8 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       final p = pm.defaultPrinter;
       if (p == null) throw Exception('Default printer belum dipilih');
 
-      // 1) build bytes
       final bytes = await ReceiptPrinter().buildReceiptBytes(
-        order: _order!,
-        paidAmount: paid,
-        changeAmount: change,
+        order: _orderForReceiptPrint(_order!, paid: paid, change: change),
       );
 
       // 2) kirim via printer manager (yang pegang koneksi)
@@ -563,23 +957,22 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
       if (!mounted) return;
       setState(() => _printed = true);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Struk berhasil diprint')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Struk berhasil diprint')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal print: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal print: $e')));
     } finally {
       if (mounted) setState(() => _printing = false);
     }
   }
 
-
   Future<bool> _validateBeforePrint() async {
-    final total = _order == null ? 0 : _grandTotalFromOrder(_order!);
-    final paid  = _num(_paidCtrl.text);
+    final total = _currentBillTotal;
+    final paid = _moneyInputNum(_paidCtrl.text);
     final change = (paid - total) > 0 ? (paid - total) : 0;
 
     // kalau metode non-cash, biasanya paidCtrl kosong, tapi kamu mungkin tetap mau allow print
@@ -604,7 +997,10 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
             'Silakan periksa kembali nominal pembayaran.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
           ],
         ),
       );
@@ -624,8 +1020,14 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
           'Cetak struk sekarang?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ya, print')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ya, print'),
+          ),
         ],
       ),
     );
@@ -643,20 +1045,29 @@ class _PaymentProcessSheetState extends State<PaymentProcessSheet> {
     if (p == null) throw Exception('Default printer belum dipilih');
 
     final bytes = await ReceiptPrinter().buildReceiptBytes(
-      order: order,
-      paidAmount: paid,
-      changeAmount: change,
+      order: _orderForReceiptPrint(order, paid: paid, change: change),
     );
 
     await pm.write(bytes);
   }
+
+  Map<String, dynamic> _orderForReceiptPrint(
+    Map<String, dynamic> order, {
+    required num paid,
+    required num change,
+  }) {
+    final enriched = enrichReceiptOrder(order);
+    enriched['payment'] = {
+      if (enriched['payment'] is Map)
+        ...Map<String, dynamic>.from(enriched['payment'] as Map),
+      'paid_amount': paid,
+      'change_amount': change,
+    };
+    return enriched;
+  }
 }
 
-enum _PaymentCompletionAction {
-  withPrint,
-  withoutPrint,
-  cancel,
-}
+enum _PaymentCompletionAction { withPrint, withoutPrint, cancel }
 
 class _Header extends StatelessWidget {
   const _Header({required this.title, required this.onClose});
@@ -669,12 +1080,17 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       decoration: BoxDecoration(
         color: const Color(0xFFF7F8FA),
-        border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.08))),
+        border: Border(
+          bottom: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
           ),
           IconButton(
             onPressed: onClose,
@@ -690,6 +1106,10 @@ class _Header extends StatelessWidget {
 class _Body extends StatelessWidget {
   const _Body({
     required this.order,
+    required this.selectedPaymentMethod,
+    required this.enrichedSelectedInstruction,
+    required this.availablePaymentMethods,
+    required this.onPaymentMethodChanged,
     required this.paidCtrl,
     required this.change,
     required this.cashierProofImage,
@@ -701,6 +1121,10 @@ class _Body extends StatelessWidget {
   });
 
   final Map<String, dynamic> order;
+  final String? selectedPaymentMethod;
+  final Map<String, dynamic>? enrichedSelectedInstruction;
+  final List<Map<String, dynamic>> availablePaymentMethods;
+  final Future<void> Function(String?) onPaymentMethodChanged;
   final TextEditingController paidCtrl;
   final num change;
   final XFile? cashierProofImage;
@@ -708,7 +1132,7 @@ class _Body extends StatelessWidget {
   final Future<void> Function() onPickImage;
   final VoidCallback onRemoveImage;
   final bool paidInvalid;
-  final bool paidInsufficient;  
+  final bool paidInsufficient;
 
   @override
   Widget build(BuildContext context) {
@@ -716,11 +1140,12 @@ class _Body extends StatelessWidget {
     final name = (order['customer_name'] ?? '-').toString();
     final status = (order['order_status'] ?? '-').toString();
     final method = (order['payment_method'] ?? '-').toString();
-    final total = _calcGrandTotalFromMap(order);
+    final isOpenbill =
+        _toBool(order['openbill_flag']) ||
+        method == 'OPENBILL' ||
+        status.startsWith('OPENBILL');
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
-    final roundingAmount = _num(order['cash_rounding_amount']);
-    
 
     // ✅ TARUH DI SINI (bukan di dalam children)
     final paymentRequest = order['payment_request'];
@@ -729,12 +1154,65 @@ class _Body extends StatelessWidget {
         paymentRequest is Map;
 
     final latestPayment = order['latest_payment'];
-    final cpi = latestPayment is Map ? latestPayment['owner_manual_payment'] : null;
+    final cpi = latestPayment is Map
+        ? latestPayment['owner_manual_payment']
+        : null;
+    final canChooseFinalPaymentMethod =
+        (order['order_status'] ?? '').toString() == 'UNPAID' &&
+        !(latestPayment is Map && latestPayment['owner_manual_payment'] is Map);
 
     final hasCashierPaymentInstruction =
         (order['order_status'] ?? '').toString() == 'UNPAID' && cpi is Map;
 
-    final showCashInput = method == 'CASH' || method == 'PAYLATER' || hasPaymentRequest || hasCashierPaymentInstruction;
+    final selectedPaymentType = availablePaymentMethods
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['value']?.toString() == selectedPaymentMethod,
+          orElse: () => null,
+        )?['type']
+        ?.toString();
+
+    final effectiveMethodType = hasPaymentRequest
+        ? ((paymentRequest is Map ? paymentRequest['payment_type'] : null) ??
+                  method)
+              .toString()
+        : hasCashierPaymentInstruction
+        ? ((latestPayment is Map ? latestPayment['payment_type'] : null) ??
+                  method)
+              .toString()
+        : (canChooseFinalPaymentMethod ? (selectedPaymentType ?? '') : method);
+
+    final selectedPaymentInstruction =
+        enrichedSelectedInstruction ??
+        availablePaymentMethods.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['value']?.toString() == selectedPaymentMethod,
+          orElse: () => null,
+        );
+
+    final isCashPayment = effectiveMethodType == 'CASH';
+
+    final basePayable = _basePayableFromOrder(order);
+    final cashRoundingUnit = _num(order['cash_rounding_unit']).toInt();
+    final effectiveCashRounding = isCashPayment
+        ? _cashRoundingAmountForOrder(order, basePayable)
+        : 0;
+    final orderInfoTotal = isCashPayment
+        ? basePayable + effectiveCashRounding
+        : basePayable;
+
+    final isQrisXendit =
+        effectiveMethodType == 'QRIS' &&
+        canChooseFinalPaymentMethod &&
+        !hasPaymentRequest &&
+        !hasCashierPaymentInstruction;
+    final showAmountInput =
+        !isQrisXendit &&
+        (hasPaymentRequest ||
+            hasCashierPaymentInstruction ||
+            isCashPayment ||
+            (canChooseFinalPaymentMethod &&
+                selectedPaymentMethod != null &&
+                selectedPaymentMethod!.trim().isNotEmpty));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
@@ -745,67 +1223,421 @@ class _Body extends StatelessWidget {
             code: code,
             name: name,
             status: status,
-            method: method,
-            total: total,
+            method:
+                canChooseFinalPaymentMethod &&
+                    selectedPaymentType != null &&
+                    selectedPaymentType.isNotEmpty
+                ? '${isOpenbill ? 'OPENBILL' : method} -> $selectedPaymentType'
+                : method,
+            total: orderInfoTotal,
             isPpnActive: isPpnActive,
             ppnPercent: ppnPercent,
-            roundingAmount: roundingAmount,
+            showCashRoundingDetails: isCashPayment,
+            basePayable: basePayable,
+            roundingAmount: effectiveCashRounding,
+            cashRoundingUnit: cashRoundingUnit,
           ),
           const SizedBox(height: 12),
 
+          if (canChooseFinalPaymentMethod &&
+              !hasPaymentRequest &&
+              !hasCashierPaymentInstruction) ...[
+            _GroupedPaymentMethodPicker(
+              items: availablePaymentMethods,
+              selectedValue: selectedPaymentMethod,
+              onChanged: onPaymentMethodChanged,
+            ),
+            const SizedBox(height: 12),
+          ],
+
           if (hasPaymentRequest) ...[
             _PaymentRequestCard(
-              paymentRequest: (order['payment_request'] as Map).cast<String, dynamic>(),
+              paymentRequest: (order['payment_request'] as Map)
+                  .cast<String, dynamic>(),
             ),
             const SizedBox(height: 12),
           ] else if (hasCashierPaymentInstruction) ...[
             _CashierPaymentInstructionCard(
-              paymentInstruction: Map<String, dynamic>.from(cpi),
+              paymentInstruction: _normalizePaymentInstruction(
+                Map<String, dynamic>.from(cpi),
+              ),
               cashierProofImage: cashierProofImage,
               cashierProofError: cashierProofError,
               onPickImage: onPickImage,
               onRemoveImage: onRemoveImage,
             ),
             const SizedBox(height: 12),
+          ] else if (canChooseFinalPaymentMethod &&
+              selectedPaymentInstruction != null &&
+              effectiveMethodType.isNotEmpty &&
+              effectiveMethodType != 'CASH') ...[
+            if (effectiveMethodType == 'QRIS')
+              _HintCard(
+                icon: Icons.qr_code_2_rounded,
+                title: 'QRIS (Xendit)',
+                message:
+                    'Invoice QRIS akan dibuka setelah Anda menekan Simpan. '
+                    'Minta customer scan dan bayar melalui halaman pembayaran.',
+              )
+            else
+              _CashierPaymentInstructionCard(
+                paymentInstruction: _normalizePaymentInstruction(
+                  Map<String, dynamic>.from(selectedPaymentInstruction),
+                ),
+                cashierProofImage: cashierProofImage,
+                cashierProofError: cashierProofError,
+                onPickImage: onPickImage,
+                onRemoveImage: onRemoveImage,
+              ),
+            const SizedBox(height: 12),
           ],
 
           _ItemsCard(order: order),
           const SizedBox(height: 12),
 
-          if (showCashInput)
-            _CashInputCard(
-              total: total,
+          if (showAmountInput)
+            _PaidAmountCard(
+              total: _calcBillTotalFromMap(order, effectiveMethodType),
+              basePayable: basePayable,
+              roundingAmount: effectiveCashRounding,
+              cashRoundingUnit: cashRoundingUnit,
               paidCtrl: paidCtrl,
               change: change,
+              isCash: isCashPayment,
               invalid: paidInvalid,
               insufficient: paidInsufficient,
-            )
-          else
-            _HintCard(
-              icon: Icons.info_outline_rounded,
-              title: 'Pembayaran non-cash',
-              message: _paymentMethodMessage(order),
             ),
         ],
       ),
     );
   }
 
-  num _calcGrandTotalFromMap(Map<String, dynamic> order) {
-    if (order['grand_total_local'] != null) {
+  num _calcBillTotalFromMap(Map<String, dynamic> order, String paymentType) {
+    if (order['grand_total_local'] != null && paymentType == 'CASH') {
       return _num(order['grand_total_local']).ceil();
     }
+
     final subtotal = _num(order['total_order_value']);
     final isPpnActive = _toBool(order['is_ppn_active']);
     final ppnPercent = _num(order['ppn']);
-    final roundingAmount = _num(order['cash_rounding_amount']);
-
     final baseTotal = isPpnActive
         ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
         : subtotal.ceil();
-    return baseTotal + roundingAmount;
+
+    if (paymentType == 'CASH') {
+      return baseTotal + _cashRoundingAmountForOrder(order, baseTotal);
+    }
+
+    return baseTotal;
+  }
+}
+
+class _PaymentMethodGroupData {
+  const _PaymentMethodGroupData({
+    required this.title,
+    required this.icon,
+    required this.items,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<Map<String, dynamic>> items;
+}
+
+List<_PaymentMethodGroupData> _groupPaymentMethods(
+  List<Map<String, dynamic>> items,
+) {
+  final cash = <Map<String, dynamic>>[];
+  final qrisOnline = <Map<String, dynamic>>[];
+  final transfer = <Map<String, dynamic>>[];
+  final ewallet = <Map<String, dynamic>>[];
+  final qrisManual = <Map<String, dynamic>>[];
+
+  for (final item in items) {
+    final type = (item['type'] ?? '').toString();
+    switch (type) {
+      case 'CASH':
+        cash.add(item);
+        break;
+      case 'QRIS':
+        qrisOnline.add(item);
+        break;
+      case 'manual_tf':
+        transfer.add(item);
+        break;
+      case 'manual_ewallet':
+        ewallet.add(item);
+        break;
+      case 'manual_qris':
+        qrisManual.add(item);
+        break;
+    }
   }
 
+  return [
+    if (cash.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'Cash',
+        icon: Icons.payments_outlined,
+        items: cash,
+      ),
+    if (qrisOnline.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'QRIS Online (Xendit)',
+        icon: Icons.qr_code_scanner_rounded,
+        items: qrisOnline,
+      ),
+    if (transfer.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'Transfer Bank',
+        icon: Icons.account_balance_outlined,
+        items: transfer,
+      ),
+    if (ewallet.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'E-Wallet',
+        icon: Icons.account_balance_wallet_outlined,
+        items: ewallet,
+      ),
+    if (qrisManual.isNotEmpty)
+      _PaymentMethodGroupData(
+        title: 'QRIS Statis',
+        icon: Icons.qr_code_2_rounded,
+        items: qrisManual,
+      ),
+  ];
+}
+
+IconData _paymentMethodIcon(String type) {
+  switch (type) {
+    case 'CASH':
+      return Icons.payments_outlined;
+    case 'QRIS':
+      return Icons.qr_code_scanner_rounded;
+    case 'manual_tf':
+      return Icons.account_balance_outlined;
+    case 'manual_ewallet':
+      return Icons.account_balance_wallet_outlined;
+    case 'manual_qris':
+      return Icons.qr_code_2_rounded;
+    default:
+      return Icons.payments_outlined;
+  }
+}
+
+class _GroupedPaymentMethodPicker extends StatelessWidget {
+  const _GroupedPaymentMethodPicker({
+    required this.items,
+    required this.selectedValue,
+    required this.onChanged,
+  });
+
+  final List<Map<String, dynamic>> items;
+  final String? selectedValue;
+  final Future<void> Function(String?) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const brand = Color(0xFFAE1504);
+    final groups = _groupPaymentMethods(items);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFD),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: brand.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.credit_card_rounded,
+                  color: brand,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Pilih Metode Pembayaran',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          for (var gi = 0; gi < groups.length; gi++) ...[
+            if (gi > 0) const SizedBox(height: 12),
+            _PaymentMethodGroupSection(
+              brand: brand,
+              group: groups[gi],
+              selectedValue: selectedValue,
+              onChanged: onChanged,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentMethodGroupSection extends StatelessWidget {
+  const _PaymentMethodGroupSection({
+    required this.brand,
+    required this.group,
+    required this.selectedValue,
+    required this.onChanged,
+  });
+
+  final Color brand;
+  final _PaymentMethodGroupData group;
+  final String? selectedValue;
+  final Future<void> Function(String?) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(group.icon, size: 16, color: Colors.black.withOpacity(0.55)),
+            const SizedBox(width: 6),
+            Text(
+              group.title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.black.withOpacity(0.65),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...group.items.map((item) {
+          final value = item['value']?.toString();
+          final label = (item['label'] ?? item['type'] ?? '-').toString();
+          final type = (item['type'] ?? '').toString();
+          final active = value != null && value == selectedValue;
+          final subtitle = type == 'manual_tf' || type == 'manual_ewallet'
+              ? (item['provider_account_no'] ?? '').toString().trim()
+              : null;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _PaymentMethodOptionCard(
+              brand: brand,
+              title: label,
+              subtitle: subtitle != null && subtitle.isNotEmpty
+                  ? subtitle
+                  : null,
+              icon: _paymentMethodIcon(type),
+              active: active,
+              onTap: value == null ? null : () => onChanged(value),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _PaymentMethodOptionCard extends StatelessWidget {
+  const _PaymentMethodOptionCard({
+    required this.brand,
+    required this.title,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final Color brand;
+  final String title;
+  final IconData icon;
+  final bool active;
+  final VoidCallback? onTap;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: active ? brand : Colors.black.withOpacity(0.10),
+            width: active ? 1.5 : 1,
+          ),
+          color: active ? brand.withOpacity(0.06) : Colors.white,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: active
+                    ? brand.withOpacity(0.12)
+                    : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: active ? brand : Colors.black.withOpacity(0.55),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: active ? brand : Colors.black87,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.58),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(
+              active
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: active ? brand : Colors.black.withOpacity(0.35),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _OrderInfoCard extends StatelessWidget {
@@ -818,6 +1650,9 @@ class _OrderInfoCard extends StatelessWidget {
     required this.isPpnActive,
     required this.ppnPercent,
     required this.roundingAmount,
+    this.showCashRoundingDetails = false,
+    this.basePayable = 0,
+    this.cashRoundingUnit = 0,
   });
 
   final String code;
@@ -828,6 +1663,9 @@ class _OrderInfoCard extends StatelessWidget {
   final bool isPpnActive;
   final num ppnPercent;
   final num roundingAmount;
+  final bool showCashRoundingDetails;
+  final num basePayable;
+  final int cashRoundingUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -858,32 +1696,77 @@ class _OrderInfoCard extends StatelessWidget {
               children: [
                 Text(
                   'PPN',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
                 ),
                 const Spacer(),
                 Text(
                   '${_formatPercent(ppnPercent)}%',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
           ],
 
-          if (roundingAmount > 0) ...[
+          if (showCashRoundingDetails && roundingAmount > 0) ...[
+            Row(
+              children: [
+                Text(
+                  'Sebelum Pembulatan',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Rp ${_rupiah(basePayable)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Text(
                   'Pembulatan Cash',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                  ),
                 ),
                 const Spacer(),
                 Text(
-                  'Rp ${_rupiah(roundingAmount)}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  '+ Rp ${_rupiah(roundingAmount)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: brand,
+                  ),
                 ),
               ],
             ),
+            if (cashRoundingUnit > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                _cashRoundingDescription(cashRoundingUnit),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.black.withOpacity(0.45),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
           ],
 
@@ -891,15 +1774,22 @@ class _OrderInfoCard extends StatelessWidget {
             children: [
               Text(
                 'Total Tagihan',
-                style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
               ),
               const Spacer(),
               Text(
                 'Rp ${_rupiah(total)}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: brand),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: brand,
+                ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -908,7 +1798,15 @@ class _OrderInfoCard extends StatelessWidget {
   Widget _kv(String k, String v, {bool mono = false}) {
     return Row(
       children: [
-        Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+        Expanded(
+          child: Text(
+            k,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.55),
+            ),
+          ),
+        ),
         const SizedBox(width: 12),
         Flexible(
           child: Text(
@@ -936,12 +1834,19 @@ class _PaymentRequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = (paymentRequest['payment_type_label'] ?? '-').toString();
     final provider = (paymentRequest['manual_provider_name'] ?? '-').toString();
-    final accName = (paymentRequest['manual_provider_account_name'] ?? '-').toString();
-    final accNo = (paymentRequest['manual_provider_account_no'] ?? '').toString().trim();
+    final accName = (paymentRequest['manual_provider_account_name'] ?? '-')
+        .toString();
+    final accNo = (paymentRequest['manual_provider_account_no'] ?? '')
+        .toString()
+        .trim();
 
-    final proof = (paymentRequest['manual_payment_image'] ?? '').toString().trim();
+    final proof = (paymentRequest['manual_payment_image'] ?? '')
+        .toString()
+        .trim();
     final proofLocalPath =
-        (paymentRequest['manual_payment_image_local_path'] ?? '').toString().trim();
+        (paymentRequest['manual_payment_image_local_path'] ?? '')
+            .toString()
+            .trim();
 
     final proofUrl = _normalizeProofUrl(proof);
     final localFile = proofLocalPath.isNotEmpty ? File(proofLocalPath) : null;
@@ -960,7 +1865,10 @@ class _PaymentRequestCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Pembayaran Manual Terdeteksi', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Pembayaran Manual Terdeteksi',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 10),
           _row('Tipe', type),
           _row('Provider', provider),
@@ -973,14 +1881,17 @@ class _PaymentRequestCard extends StatelessWidget {
             Row(
               children: [
                 const Expanded(
-                  child: Text('Bukti bayar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    'Bukti bayar',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
                 ),
                 if (proofUrl.isNotEmpty)
                   TextButton.icon(
                     onPressed: () => _openUrl(proofUrl),
                     icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     label: const Text('Lihat Bukti'),
-                  )
+                  ),
               ],
             ),
 
@@ -990,11 +1901,11 @@ class _PaymentRequestCard extends StatelessWidget {
                 onTap: effectiveProofPath.isEmpty
                     ? null
                     : () => _showZoomableImagePreview(
-                          context,
-                          title: 'Bukti Bayar',
-                          localFile: hasLocalFile ? localFile : null,
-                          imageUrl: hasLocalFile ? null : proofUrl,
-                        ),
+                        context,
+                        title: 'Bukti Bayar',
+                        localFile: hasLocalFile ? localFile : null,
+                        imageUrl: hasLocalFile ? null : proofUrl,
+                      ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
                   child: Stack(
@@ -1007,7 +1918,10 @@ class _PaymentRequestCard extends StatelessWidget {
                         right: 10,
                         bottom: 10,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.65),
                             borderRadius: BorderRadius.circular(999),
@@ -1015,7 +1929,11 @@ class _PaymentRequestCard extends StatelessWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                              Icon(
+                                Icons.zoom_in_rounded,
+                                color: Colors.white,
+                                size: 16,
+                              ),
                               SizedBox(width: 6),
                               Text(
                                 'Perbesar',
@@ -1040,15 +1958,21 @@ class _PaymentRequestCard extends StatelessWidget {
                   hasLocalFile
                       ? 'Bukti bayar tersimpan sebagai file PDF lokal.'
                       : 'Bukti berbentuk PDF. Klik “Lihat Bukti” untuk membuka.',
-                  style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.6)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.6),
+                  ),
                 ),
               ),
           ] else ...[
             Text(
               'Tidak ada bukti bayar.',
-              style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.6)),
-            )
-          ]
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.6),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1059,13 +1983,24 @@ class _PaymentRequestCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+          Expanded(
+            child: Text(
+              k,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.55),
+              ),
+            ),
+          ),
           const SizedBox(width: 12),
           Flexible(
             child: Text(
               v,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -1087,7 +2022,9 @@ class _PaymentRequestCard extends StatelessWidget {
         fit: BoxFit.contain,
         errorBuilder: (_, __, ___) => Container(
           color: Colors.white,
-          child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+          child: const Center(
+            child: Icon(Icons.broken_image_outlined, size: 34),
+          ),
         ),
       );
     }
@@ -1098,7 +2035,9 @@ class _PaymentRequestCard extends StatelessWidget {
         fit: BoxFit.contain,
         errorBuilder: (_, __, ___) => Container(
           color: Colors.white,
-          child: const Center(child: Icon(Icons.broken_image_outlined, size: 34)),
+          child: const Center(
+            child: Icon(Icons.broken_image_outlined, size: 34),
+          ),
         ),
       );
     }
@@ -1129,17 +2068,25 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = (paymentInstruction['payment_type'] ?? '').toString();
     final provider = (paymentInstruction['provider_name'] ?? '-').toString();
-    final accName = (paymentInstruction['provider_account_name'] ?? '-').toString();
-    final accNo = (paymentInstruction['provider_account_no'] ?? '').toString().trim();
+    final accName = (paymentInstruction['provider_account_name'] ?? '-')
+        .toString();
+    final accNo = (paymentInstruction['provider_account_no'] ?? '')
+        .toString()
+        .trim();
 
     final qris = (paymentInstruction['qris_image_url'] ?? '').toString().trim();
-    final qrisLocalPath =
-        (paymentInstruction['qris_image_local_path'] ?? '').toString().trim();
+    final qrisLocalPath = (paymentInstruction['qris_image_local_path'] ?? '')
+        .toString()
+        .trim();
 
     final qrisUrl = _normalizeProofUrl(qris);
     final showAccNo = type == 'manual_tf' || type == 'manual_ewallet';
-    final showQris = type == 'manual_qris' &&
+    final showQris =
+        type == 'manual_qris' &&
         (qrisLocalPath.isNotEmpty || qrisUrl.isNotEmpty);
+    final additionalInfo = (paymentInstruction['additional_info'] ?? '')
+        .toString()
+        .trim();
 
     final localFile = qrisLocalPath.isNotEmpty ? File(qrisLocalPath) : null;
 
@@ -1153,19 +2100,26 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Instruksi Pembayaran Manual', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Instruksi Pembayaran Manual',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 10),
           _row('Tipe', _manualTypeLabel(type)),
           _row('Provider', provider),
           _row('Nama Akun', accName),
           if (showAccNo && accNo.isNotEmpty) _row('No Akun', accNo),
+          if (additionalInfo.isNotEmpty) _row('Catatan', additionalInfo),
 
           if (showQris) ...[
             const SizedBox(height: 10),
             Row(
               children: [
                 const Expanded(
-                  child: Text('QRIS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    'QRIS',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: qrisUrl.isEmpty ? null : () => _openUrl(qrisUrl),
@@ -1176,13 +2130,19 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
             ),
             InkWell(
               borderRadius: BorderRadius.circular(14),
-              onTap: (localFile != null && localFile.existsSync()) || qrisUrl.isNotEmpty
+              onTap:
+                  (localFile != null && localFile.existsSync()) ||
+                      qrisUrl.isNotEmpty
                   ? () => _showZoomableImagePreview(
-                        context,
-                        title: 'QRIS',
-                        localFile: (localFile != null && localFile.existsSync()) ? localFile : null,
-                        imageUrl: (localFile != null && localFile.existsSync()) ? null : qrisUrl,
-                      )
+                      context,
+                      title: 'QRIS',
+                      localFile: (localFile != null && localFile.existsSync())
+                          ? localFile
+                          : null,
+                      imageUrl: (localFile != null && localFile.existsSync())
+                          ? null
+                          : qrisUrl,
+                    )
                   : null,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
@@ -1196,7 +2156,10 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
                       right: 10,
                       bottom: 10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.65),
                           borderRadius: BorderRadius.circular(999),
@@ -1204,7 +2167,11 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                            Icon(
+                              Icons.zoom_in_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
                             SizedBox(width: 6),
                             Text(
                               'Perbesar',
@@ -1228,7 +2195,18 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
           const Divider(),
           const SizedBox(height: 10),
 
-          const Text('Upload Bukti Bayar', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Upload Bukti Bayar (Opsional)',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Bukti pembayaran boleh dikosongkan jika tidak diperlukan.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.55),
+            ),
+          ),
           const SizedBox(height: 8),
 
           Row(
@@ -1246,7 +2224,8 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
             ],
           ),
 
-          if (cashierProofError != null && cashierProofError!.trim().isNotEmpty) ...[
+          if (cashierProofError != null &&
+              cashierProofError!.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               cashierProofError!,
@@ -1303,13 +2282,24 @@ class _CashierPaymentInstructionCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)))),
+          Expanded(
+            child: Text(
+              k,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.55),
+              ),
+            ),
+          ),
           const SizedBox(width: 12),
           Flexible(
             child: Text(
               v,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -1347,16 +2337,23 @@ class _ItemsCard extends StatelessWidget {
           const SizedBox(height: 10),
 
           if (details.isEmpty)
-            Text('Tidak ada item.', style: TextStyle(color: Colors.black.withOpacity(0.6)))
+            Text(
+              'Tidak ada item.',
+              style: TextStyle(color: Colors.black.withOpacity(0.6)),
+            )
           else
             ...details.map((it) {
               final m = (it as Map).cast<String, dynamic>();
               final qty = _num(m['quantity']).toInt();
               final basePrice = _num(m['base_price']);
               final promoAmount = _num(m['promo_amount']);
-              final name = (m['product_name'] ??
-                      (m['partner_product'] is Map ? (m['partner_product']['name'] ?? 'Produk') : 'Produk'))
-                  .toString();
+              final promoType = (m['promo_type'] ?? '').toString().trim();
+              final name =
+                  (m['product_name'] ??
+                          (m['partner_product'] is Map
+                              ? (m['partner_product']['name'] ?? 'Produk')
+                              : 'Produk'))
+                      .toString();
 
               final note = (m['customer_note'] ?? '').toString().trim();
               final lineTotal = (basePrice - promoAmount) * qty;
@@ -1375,15 +2372,38 @@ class _ItemsCard extends StatelessWidget {
                     if (note.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text('($note)', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55))),
+                        child: Text(
+                          '($note)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black.withOpacity(0.55),
+                          ),
+                        ),
+                      ),
+                    if (promoAmount > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '- Promo${promoType.isNotEmpty ? ' $promoType' : ''}: -Rp ${_rupiah(promoAmount * qty)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
 
                     if (opts.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       ...opts.map((o) {
                         final om = (o as Map).cast<String, dynamic>();
-                        final optName = (om['option'] is Map ? (om['option']['name'] ?? '-') : '-').toString();
-                        final parentName = (om['option'] is Map &&
+                        final optName =
+                            (om['option'] is Map
+                                    ? (om['option']['name'] ?? '-')
+                                    : '-')
+                                .toString();
+                        final parentName =
+                            (om['option'] is Map &&
                                 (om['option']['parent'] is Map) &&
                                 om['option']['parent']['name'] != null)
                             ? om['option']['parent']['name'].toString()
@@ -1394,7 +2414,10 @@ class _ItemsCard extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 2),
                           child: Text(
                             '- $parentName: $optName × $qty = Rp ${_rupiah(price)}',
-                            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.65)),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black.withOpacity(0.65),
+                            ),
                           ),
                         );
                       }),
@@ -1407,6 +2430,236 @@ class _ItemsCard extends StatelessWidget {
                 ),
               );
             }).toList(),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaidAmountCard extends StatelessWidget {
+  const _PaidAmountCard({
+    required this.total,
+    required this.basePayable,
+    required this.roundingAmount,
+    required this.cashRoundingUnit,
+    required this.paidCtrl,
+    required this.change,
+    required this.isCash,
+    required this.invalid,
+    required this.insufficient,
+  });
+
+  final num total;
+  final num basePayable;
+  final num roundingAmount;
+  final int cashRoundingUnit;
+  final TextEditingController paidCtrl;
+  final num change;
+  final bool isCash;
+  final bool invalid;
+  final bool insufficient;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasError = invalid || insufficient;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFD),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasError ? Colors.red : Colors.black.withOpacity(0.08),
+          width: hasError ? 1.3 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            isCash ? 'Pembayaran Cash' : 'Nominal Pembayaran',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              Text('Nominal Diterima', style: TextStyle(fontSize: 12)),
+              SizedBox(width: 4),
+              Text(
+                '*',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: paidCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [_MoneyThousandsInputFormatter()],
+            decoration: InputDecoration(
+              hintText: 'cth: ${_rupiah(total)}',
+              prefixText: 'Rp ',
+              helperText: invalid
+                  ? 'Nominal pembayaran wajib diisi'
+                  : insufficient
+                  ? 'Nominal diterima kurang dari total tagihan'
+                  : 'Bisa disesuaikan jika customer membayar lebih',
+              helperStyle: TextStyle(
+                color: hasError ? Colors.red : Colors.black54,
+              ),
+              filled: true,
+              fillColor: const Color(0xFFF7F8FA),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: hasError ? Colors.red : Colors.black.withOpacity(0.10),
+                  width: hasError ? 1.4 : 1.0,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: hasError ? Colors.red : const Color(0xFFAE1504),
+                  width: 1.4,
+                ),
+              ),
+            ),
+          ),
+          if (isCash && roundingAmount > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8F6),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFAE1504).withOpacity(0.18),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 16,
+                        color: Color(0xFFAE1504),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Rincian Pembulatan Cash',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black.withOpacity(0.75),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        'Sebelum pembulatan',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'Rp ${_rupiah(basePayable)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        'Pembulatan cash',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '+ Rp ${_rupiah(roundingAmount)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFAE1504),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (cashRoundingUnit > 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _cashRoundingDescription(cashRoundingUnit),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.black.withOpacity(0.5),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                'Total Tagihan',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Rp ${_rupiah(total)}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'Kembalian',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.55),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Rp ${_rupiah(change)}',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1445,15 +2698,15 @@ class _CashInputCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Pembayaran Cash', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Pembayaran Cash',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 12),
 
           Row(
             children: const [
-              Text(
-                'Uang Diterima',
-                style: TextStyle(fontSize: 12),
-              ),
+              Text('Uang Diterima', style: TextStyle(fontSize: 12)),
               SizedBox(width: 4),
               Text(
                 '*',
@@ -1470,13 +2723,14 @@ class _CashInputCard extends StatelessWidget {
           TextField(
             controller: paidCtrl,
             keyboardType: TextInputType.number,
+            inputFormatters: [_MoneyThousandsInputFormatter()],
             decoration: InputDecoration(
               hintText: 'cth: 100000',
               helperText: invalid
                   ? 'Uang diterima wajib diisi'
                   : insufficient
-                      ? 'Nominal uang diterima kurang dari total tagihan'
-                      : null,
+                  ? 'Nominal uang diterima kurang dari total tagihan'
+                  : null,
               helperStyle: TextStyle(
                 color: hasError ? Colors.red : Colors.black54,
               ),
@@ -1513,7 +2767,10 @@ class _CashInputCard extends StatelessWidget {
 
           Text(
             'Kembalian',
-            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.55),
+            ),
           ),
           const SizedBox(height: 6),
           Container(
@@ -1532,7 +2789,10 @@ class _CashInputCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             'Total tagihan: Rp ${_rupiah(total)}',
-            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.60)),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.60),
+            ),
           ),
         ],
       ),
@@ -1541,7 +2801,11 @@ class _CashInputCard extends StatelessWidget {
 }
 
 class _HintCard extends StatelessWidget {
-  const _HintCard({required this.icon, required this.title, required this.message});
+  const _HintCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
   final IconData icon;
   final String title;
   final String message;
@@ -1564,9 +2828,15 @@ class _HintCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 4),
-                Text(message, style: TextStyle(color: Colors.black.withOpacity(0.65))),
+                Text(
+                  message,
+                  style: TextStyle(color: Colors.black.withOpacity(0.65)),
+                ),
               ],
             ),
           ),
@@ -1608,11 +2878,21 @@ class _Footer extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: brand, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brand,
+                foregroundColor: Colors.white,
+              ),
               onPressed: primaryBusy ? null : () async => onPrimary(),
               child: primaryBusy
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(primaryLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      primaryLabel,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
             ),
           ),
         ],
@@ -1662,8 +2942,15 @@ class _Footer2 extends StatelessWidget {
               ),
               onPressed: paying ? null : () async => onConfirm(),
               child: paying
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Konfirmasi', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text(
+                      'Konfirmasi',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
             ),
           ),
         ],
@@ -1671,8 +2958,6 @@ class _Footer2 extends StatelessWidget {
     );
   }
 }
-
-
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});
@@ -1775,10 +3060,7 @@ Future<void> _showZoomableImagePreview(
 }
 
 class _PreviewImageContent extends StatelessWidget {
-  const _PreviewImageContent({
-    this.localFile,
-    this.imageUrl,
-  });
+  const _PreviewImageContent({this.localFile, this.imageUrl});
 
   final File? localFile;
   final String? imageUrl;
@@ -1815,9 +3097,7 @@ class _PreviewImageContent extends StatelessWidget {
   Widget _previewBroken() {
     return const SizedBox(
       height: 280,
-      child: Center(
-        child: Icon(Icons.broken_image_outlined, size: 48),
-      ),
+      child: Center(child: Icon(Icons.broken_image_outlined, size: 48)),
     );
   }
 }
@@ -1836,6 +3116,37 @@ bool _toBool(dynamic v) {
   return s == '1' || s == 'true';
 }
 
+int _normalizeCashRoundingUnit(int unit) {
+  const allowed = [0, 100, 500, 1000];
+  return allowed.contains(unit) ? unit : 0;
+}
+
+int _roundedCashPayable(num baseTotal, int unit) {
+  final base = baseTotal.ceil();
+  final normalizedUnit = _normalizeCashRoundingUnit(unit);
+  if (normalizedUnit <= 0 || base <= 0) return base;
+  return ((base / normalizedUnit).ceil()) * normalizedUnit;
+}
+
+num _cashRoundingAmountForOrder(Map<String, dynamic> order, num baseTotal) {
+  return CashRoundingHelpers.cashRoundingAmountForOrder(order, baseTotal);
+}
+
+num _basePayableFromOrder(Map<String, dynamic> order) {
+  final subtotal = _num(order['total_order_value']);
+  final isPpnActive = _toBool(order['is_ppn_active']);
+  final ppnPercent = _num(order['ppn']);
+  return isPpnActive
+      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
+      : subtotal.ceil();
+}
+
+String _cashRoundingDescription(int unit) {
+  final normalized = _normalizeCashRoundingUnit(unit);
+  if (normalized <= 0) return '';
+  return 'Total dibulatkan ke atas sesuai kelipatan Rp ${_rupiah(normalized)}';
+}
+
 String _rupiah(num n) {
   final s = n.toInt().toString();
   final buf = StringBuffer();
@@ -1845,6 +3156,38 @@ String _rupiah(num n) {
     if (idxFromEnd > 1 && idxFromEnd % 3 == 1) buf.write('.');
   }
   return buf.toString();
+}
+
+String _formatMoneyInput(num n) => _rupiah(n);
+
+num _moneyInputNum(String value) {
+  final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digitsOnly.isEmpty) return 0;
+  return num.tryParse(digitsOnly) ?? 0;
+}
+
+class _MoneyThousandsInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    final value = num.tryParse(digitsOnly);
+    if (value == null) {
+      return oldValue;
+    }
+
+    final formatted = _formatMoneyInput(value);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
 }
 
 String _formatPercent(num n) {
@@ -1878,21 +3221,6 @@ String _paymentMethodMessage(Map<String, dynamic> order) {
   return 'Order ini menggunakan metode $method. Modal ini menampilkan detail pembayaran (jika ada).';
 }
 
-num _grandTotalFromOrder(Map<String, dynamic> order) {
-  if (order['grand_total_local'] != null) {
-    return _num(order['grand_total_local']).ceil();
-  }
-  final subtotal = _num(order['total_order_value']);
-  final isPpnActive = _toBool(order['is_ppn_active']);
-  final ppnPercent = _num(order['ppn']);
-  final roundingAmount = _num(order['cash_rounding_amount']);
-
-  final baseTotal = isPpnActive
-      ? (subtotal + (subtotal * ppnPercent / 100)).ceil()
-      : subtotal.ceil();
-  return baseTotal + roundingAmount;
-}
-
 String _manualTypeLabel(String type) {
   if (type == 'manual_tf') return 'Transfer Manual';
   if (type == 'manual_ewallet') return 'E-Wallet';
@@ -1902,7 +3230,15 @@ String _manualTypeLabel(String type) {
 
 String _normalizeProofUrl(String proof) {
   if (proof.isEmpty) return '';
-  if (proof.startsWith('http')) return proof;
+  if (proof.startsWith('http')) {
+    final uri = Uri.tryParse(proof);
+    if (uri != null &&
+        !uri.path.contains('/storage/') &&
+        uri.path.contains('owner_manual_payments')) {
+      return '${uri.origin}/storage${uri.path.startsWith('/') ? uri.path : '/${uri.path}'}';
+    }
+    return proof;
+  }
 
   final cleaned = proof.replaceFirst(RegExp(r'^\/?storage\/?'), '');
   return '${Env.baseUrl}/storage/$cleaned';

@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '/core/network/dio_client.dart';
+import '/core/storage/secure_storage_service.dart';
 import '/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
@@ -28,6 +29,23 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await prefs.setBool('force_logout_pending', true);
     await prefs.setString('force_logout_payload', jsonEncode(data));
     // debugPrint('🚪 force_logout saved in background');
+    return;
+  }
+
+  if (type == 'order_updated' || type == 'order_cancelled') {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('orders_stale', true);
+    return;
+  }
+
+  if (type == 'new_order' &&
+      (data['order_by'] ?? '').toString().toUpperCase() == 'CASHIER') {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('orders_stale', true);
+    return;
+  }
+
+  if (type == 'billing_approved' || type == 'billing_rejected') {
     return;
   }
 
@@ -240,6 +258,19 @@ class PushNotificationService {
     return null;
   }
 
+  static const String ordersStaleKey = 'orders_stale';
+
+  Future<bool> consumeOrdersStaleFlag() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stale = prefs.getBool(ordersStaleKey) ?? false;
+
+    if (stale) {
+      await prefs.setBool(ordersStaleKey, false);
+    }
+
+    return stale;
+  }
+
   Future<Map<String, dynamic>?> consumePendingForceLogout() async {
     final prefs = await SharedPreferences.getInstance();
     final pending = prefs.getBool('force_logout_pending') ?? false;
@@ -277,6 +308,10 @@ class PushNotificationService {
 
       if (type == 'force_logout') {
         // debugPrint('🚪 force_logout received in foreground');
+        return;
+      }
+
+      if (type == 'order_updated' || type == 'order_cancelled') {
         return;
       }
 
@@ -354,8 +389,12 @@ class PushNotificationService {
   }
 
   Future<void> _printInitialToken() async {
-    await _messaging.getToken();
-    // debugPrint('✅ FCM TOKEN ASLI: $token');
+    try {
+      await _messaging.getToken();
+      // debugPrint('✅ FCM TOKEN ASLI: $token');
+    } catch (e) {
+      debugPrint('FCM getToken skipped: $e');
+    }
   }
 
   void _listenTokenRefresh() {
@@ -366,11 +405,16 @@ class PushNotificationService {
   }
 
   Future<String?> getFcmToken() async {
-    return _messaging.getToken();
+    try {
+      return await _messaging.getToken();
+    } catch (e) {
+      debugPrint('FCM getToken failed: $e');
+      return null;
+    }
   }
 
   Future<void> syncCurrentTokenToBackend() async {
-    final token = await _messaging.getToken();
+    final token = await getFcmToken();
     if (token == null || token.isEmpty) {
       // debugPrint('⚠️ FCM token kosong.');
       return;
@@ -389,9 +433,13 @@ class PushNotificationService {
       }
 
       final deviceName = await getDeviceName();
+      final role = await SecureStorageService().getAuthRole();
+      final path = role == 'owner'
+          ? '/api/v1/mobile/owner/device-token'
+          : '/api/v1/mobile/cashier/device-token';
 
       final response = await dioClient.dio.post(
-        '/api/v1/mobile/cashier/device-token',
+        path,
         data: {
           'token': token,
           'platform': 'Android',

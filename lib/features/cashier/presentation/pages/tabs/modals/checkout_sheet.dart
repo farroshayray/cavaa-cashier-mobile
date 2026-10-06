@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/data/models/checkout_exceptions.dart';
@@ -137,23 +138,10 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     final ppnActive = vm.isPpnActive;
     final ppnPercent = vm.ppnPercent;
     final ppnAmount = vm.cartPpnAmount;
-    final roundingAmount = vm.roundingAmountForPayment(_selectedPay);
-    final grandTotal = vm.payableTotalForPayment(_selectedPay);
+    final grandTotal = vm.cartGrandTotalRounded;
 
-    final instantPayments = payOptions.where((o) {
-      return o.kind == PayKind.cashierCash || o.kind == PayKind.onlineQris || o.kind == PayKind.paylater;
-    }).toList();
-
-    final manualTfPayments = payOptions.where((o) {
-      return o.kind == PayKind.manual && o.manualType == 'manual_tf';
-    }).toList();
-
-    final manualEwalletPayments = payOptions.where((o) {
-      return o.kind == PayKind.manual && o.manualType == 'manual_ewallet';
-    }).toList();
-
-    final manualQrisPayments = payOptions.where((o) {
-      return o.kind == PayKind.manual && o.manualType == 'manual_qris';
+    final purchasePayments = payOptions.where((o) {
+      return o.kind == PayKind.cashierCash || o.kind == PayKind.openbill;
     }).toList();
 
     return SafeArea(
@@ -214,7 +202,6 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                       ppnActive: ppnActive,
                       ppnPercent: ppnPercent,
                       ppnAmount: ppnAmount,
-                      roundingAmount: roundingAmount,
                       grandTotal: grandTotal,
                     ),
                     const SizedBox(height: 14),
@@ -377,43 +364,11 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               'Metode pembayaran belum tersedia.',
                               style: TextStyle(color: Colors.black.withOpacity(0.55)),
                             )
-                          else ...[
-                            if (instantPayments.isNotEmpty) ...[
-                              _PaymentGroupTitle(title: 'Pembayaran Instan'),
-                              const SizedBox(height: 8),
-                              ...instantPayments.map((opt) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildPaymentCard(opt, brand),
-                                  )),
-                              const SizedBox(height: 8),
-                            ],
-                            if (manualTfPayments.isNotEmpty) ...[
-                              _PaymentGroupTitle(title: 'Transfer Bank'),
-                              const SizedBox(height: 8),
-                              ...manualTfPayments.map((opt) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildPaymentCard(opt, brand),
-                                  )),
-                              const SizedBox(height: 8),
-                            ],
-                            if (manualEwalletPayments.isNotEmpty) ...[
-                              _PaymentGroupTitle(title: 'E-Wallet'),
-                              const SizedBox(height: 8),
-                              ...manualEwalletPayments.map((opt) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildPaymentCard(opt, brand),
-                                  )),
-                              const SizedBox(height: 8),
-                            ],
-                            if (manualQrisPayments.isNotEmpty) ...[
-                              _PaymentGroupTitle(title: 'QRIS Manual'),
-                              const SizedBox(height: 8),
-                              ...manualQrisPayments.map((opt) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildPaymentCard(opt, brand),
-                                  )),
-                            ],
-                          ],
+                          else
+                            ...purchasePayments.map((opt) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _buildPaymentCard(opt, brand),
+                                )),
                           if (_paymentInvalid) ...[
                             const SizedBox(height: 4),
                             const Text(
@@ -487,7 +442,10 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               final redirect = resp['redirect'];
                               final isXenditQris = selectedPay.kind == PayKind.onlineQris;
 
-                              final refreshTarget = isXenditQris ? '' : 'payment';
+                              final isOpenbill = _isOpenbillCheckout(selectedPay, resp);
+                              final refreshTarget = isXenditQris
+                                  ? ''
+                                  : (isOpenbill ? 'process' : 'payment');
 
                               if (isXenditQris && redirect is String && redirect.isNotEmpty) {
                                 if (mounted) {
@@ -504,6 +462,11 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                                 Navigator.pop(context, {
                                   'success': true,
                                   'refresh_target': refreshTarget,
+                                  if (resp['offline'] == true) 'offline': true,
+                                  // Lets the purchase tab jump straight to
+                                  // payment for "Bayar Sekarang" orders.
+                                  'local_order_id': resp['local_order_id'],
+                                  'pay_now': !isOpenbill && !isXenditQris,
                                 });
                               }
                             } on StockInsufficientException catch (e) {
@@ -512,13 +475,13 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                               if (mounted) {
                                 await context.read<PurchaseProvider>().load();
                               }
-                            } catch (_) {
+                            } catch (e) {
                               if (!mounted) return;
                               ScaffoldMessenger.of(context)
                                 ..hideCurrentSnackBar()
                                 ..showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Gagal memproses pembayaran. Coba lagi.'),
+                                  SnackBar(
+                                    content: Text(_checkoutErrorMessage(e)),
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
@@ -599,7 +562,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     IconData icon;
     switch (opt.kind) {
       case PayKind.cashierCash:
-      case PayKind.paylater:
+      case PayKind.openbill:
         icon = Icons.payments_outlined;
         break;
       case PayKind.onlineQris:
@@ -858,7 +821,6 @@ class _TotalCard extends StatelessWidget {
     required this.ppnActive,
     required this.ppnPercent,
     required this.ppnAmount,
-    required this.roundingAmount,
     required this.grandTotal,
   });
 
@@ -866,7 +828,6 @@ class _TotalCard extends StatelessWidget {
   final bool ppnActive;
   final num ppnPercent;
   final num ppnAmount;
-  final num roundingAmount;
   final num grandTotal;
 
   @override
@@ -915,8 +876,6 @@ class _TotalCard extends StatelessWidget {
             row('PPN (${ppnPercent.toStringAsFixed(ppnPercent % 1 == 0 ? 0 : 2)}%)',
                 'Rp ${_rupiah(ppnAmount)}'),
           ],
-          if (roundingAmount > 0)
-            row('Pembulatan Cash', 'Rp ${_rupiah(roundingAmount)}'),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 6),
             child: Divider(height: 1),
@@ -1100,6 +1059,38 @@ class _ProductThumb extends StatelessWidget {
           const Icon(Icons.broken_image_outlined),
     );
   }
+}
+
+bool _isOpenbillCheckout(
+  PaymentOption payment,
+  Map<String, dynamic> resp,
+) {
+  if (payment.isOpenbill) return true;
+
+  final data = resp['data'];
+  final status = (data is Map ? data['order_status'] : null) ??
+      resp['order_status'] ??
+      resp['orderStatus'];
+  final normalized = status?.toString().toUpperCase() ?? '';
+  return normalized == 'OPENBILL_CONFIRMATION' ||
+      normalized == 'OPENBILL_WAITING_ORDER';
+}
+
+String _checkoutErrorMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map && data['message'] != null) {
+      final message = data['message'].toString().trim();
+      if (message.isNotEmpty) return message;
+    }
+  }
+
+  if (error is Exception) {
+    final message = error.toString().replaceFirst('Exception: ', '').trim();
+    if (message.isNotEmpty) return message;
+  }
+
+  return 'Gagal memproses pembayaran. Coba lagi.';
 }
 
 String _rupiah(num n) {

@@ -21,6 +21,7 @@ import 'features/cashier/data/preference/printer_manager.dart';
 import '/features/cashier/data/preference/printer_prefs.dart';
 import '/features/cashier/presentation/providers/notifications_provider.dart';
 
+import '/features/cashier/presentation/providers/edit_order_provider.dart';
 import '/features/cashier/presentation/providers/payment_provider.dart';
 import '/features/cashier/presentation/providers/process_provider.dart';
 import '/features/cashier/presentation/providers/done_provider.dart';
@@ -29,12 +30,10 @@ import '/features/cashier/data/models/orders_repository.dart';
 
 import 'features/cashier/data/local/db/cashier_db.dart';
 import 'core/services/connectivity_status_provider.dart';
-import 'features/cashier/data/local/db/daos/local_orders_dao.dart';
-import 'features/cashier/data/local/db/daos/cached_payment_orders_dao.dart';
 import 'features/cashier/data/local/db/daos/cached_payment_methods_dao.dart';
-import '/features/cashier/data/local/db/daos/cached_process_orders_dao.dart';
-import 'features/cashier/data/local/db/daos/cached_done_orders_dao.dart';
-import '/features/cashier/data/local/db/sync/local_reconciliation_service.dart';
+import '/features/cashier/data/local/db/daos/booking_orders_dao.dart';
+import '/features/cashier/data/sync/order_tab_coordinator.dart';
+import '/features/cashier/data/sync/sync_api.dart';
 import 'core/services/app_update_provider.dart';
 import '/core/services/push_notification_service.dart';
 
@@ -52,6 +51,7 @@ class _CavaaAppState extends State<CavaaApp> {
   late final SecureStorageService storage;
   late final DioClient dioClient;
   late final AppUpdateProvider appUpdateProvider;
+  late final ConnectivityStatusProvider connectivityStatusProvider;
   late final CashierDb cashierDb;
 
   late final AuthApi authApi;
@@ -62,12 +62,10 @@ class _CavaaAppState extends State<CavaaApp> {
 
   late final OrdersApi ordersApi;
   late final OrdersRepository ordersRepo;
-  late final LocalOrdersDao localOrdersDao;
-  late final CachedPaymentOrdersDao cachedPaymentOrdersDao;
   late final CachedPaymentMethodsDao cachedPaymentMethodsDao;
-  late final CachedProcessOrdersDao cachedProcessOrdersDao;
-  late final CachedDoneOrdersDao cachedDoneOrdersDao;
-  late final LocalReconciliationService reconciliationService;
+  late final BookingOrdersDao bookingOrdersDao;
+  late final SyncApi syncApi;
+  late final SyncService syncService;
 
   @override
   void initState() {
@@ -75,31 +73,39 @@ class _CavaaAppState extends State<CavaaApp> {
 
     storage = SecureStorageService();
     appUpdateProvider = AppUpdateProvider();
-    dioClient = DioClient(storage, appUpdateProvider: appUpdateProvider);
+    connectivityStatusProvider = ConnectivityStatusProvider()..init();
+    dioClient = DioClient(
+      storage,
+      appUpdateProvider: appUpdateProvider,
+      connectivity: connectivityStatusProvider,
+    );
     PushNotificationService.instance.configure(dioClient: dioClient);
     cashierDb = CashierDb();
-    localOrdersDao = LocalOrdersDao(cashierDb);
-    cachedPaymentOrdersDao = CachedPaymentOrdersDao(cashierDb);
     cachedPaymentMethodsDao = CachedPaymentMethodsDao(cashierDb);
-    cachedProcessOrdersDao = CachedProcessOrdersDao(cashierDb);
-    cachedDoneOrdersDao = CachedDoneOrdersDao(cashierDb);
-    reconciliationService = LocalReconciliationService(
-      localOrdersDao: localOrdersDao,
-      cachedPaymentOrdersDao: cachedPaymentOrdersDao,
-      cachedProcessOrdersDao: cachedProcessOrdersDao,
-      cachedDoneOrdersDao: cachedDoneOrdersDao,
+    bookingOrdersDao = BookingOrdersDao(cashierDb);
+    syncApi = SyncApi(dioClient.dio);
+    ordersApi = OrdersApi(dioClient.dio);
+    syncService = SyncService(
+      bookingOrdersDao: bookingOrdersDao,
+      syncApi: syncApi,
+      db: cashierDb,
+      ordersApi: ordersApi,
     );
 
     authApi = AuthApi(dioClient);
     authRepo = AuthRepository(api: authApi, storage: storage);
 
     purchaseApi = PurchaseApi(dioClient.dio);
-    purchaseRepo = PurchaseRepository(api: purchaseApi, db: cashierDb);
+    purchaseRepo = PurchaseRepository(
+      api: purchaseApi,
+      db: cashierDb,
+      syncApi: syncApi,
+    );
 
-    ordersApi = OrdersApi(dioClient.dio);
     ordersRepo = OrdersRepository(api: ordersApi);
 
     () async {
+      await syncService.ensureDeviceId();
       final initial = await _appLinks.getInitialLink();
       if (!mounted) return;
       if (initial != null) _handleUri(initial);
@@ -117,7 +123,6 @@ class _CavaaAppState extends State<CavaaApp> {
 
       await paymentProvider.load();
 
-      // coba langsung
       await processProvider.load();
     } catch (e) {
       debugPrint('❌ refresh after payment failed: $e');
@@ -147,6 +152,7 @@ class _CavaaAppState extends State<CavaaApp> {
   @override
   void dispose() {
     _sub?.cancel();
+    connectivityStatusProvider.dispose();
     cashierDb.close();
     super.dispose();
   }
@@ -156,64 +162,70 @@ class _CavaaAppState extends State<CavaaApp> {
     return MultiProvider(
       providers: [
         Provider<DioClient>.value(value: dioClient),
+        Provider<CashierDb>.value(value: cashierDb),
+        Provider<BookingOrdersDao>.value(value: bookingOrdersDao),
         ChangeNotifierProvider<AppUpdateProvider>.value(
           value: appUpdateProvider,
         ),
-        ChangeNotifierProvider(
-          create: (_) => ConnectivityStatusProvider()..init(),
+        ChangeNotifierProvider<ConnectivityStatusProvider>.value(
+          value: connectivityStatusProvider,
         ),
 
         Provider(
-          create: (_) => SyncService(
-            localOrdersDao: localOrdersDao,
-            purchaseApi: purchaseApi,
-            ordersRepo: ordersRepo,
-            cachedPaymentOrdersDao: cachedPaymentOrdersDao,
-            cachedProcessOrdersDao: cachedProcessOrdersDao,
-            cachedDoneOrdersDao: cachedDoneOrdersDao,
-            reconciliationService: reconciliationService,
+          create: (_) => OrderTabCoordinator(
+            bookingOrdersDao: bookingOrdersDao,
           ),
         ),
 
-        // ChangeNotifierProvider(create: (_) => NotificationsProvider()),
+        Provider<SyncService>.value(value: syncService),
+
         ChangeNotifierProvider(
           create: (_) => NotificationsProvider()..loadFromStorage(),
         ),
         ChangeNotifierProvider(create: (_) => AuthProvider(authRepo)),
 
         ChangeNotifierProvider(
-          create: (_) => PurchaseProvider(
+          create: (ctx) => PurchaseProvider(
             repo: purchaseRepo,
-            localOrdersDao: localOrdersDao,
+            bookingOrdersDao: bookingOrdersDao,
+            connectivity: ctx.read<ConnectivityStatusProvider>(),
+            syncService: syncService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => EditOrderProvider(
+            ordersRepo: ordersRepo,
+            bookingOrdersDao: bookingOrdersDao,
+            tabCoordinator: OrderTabCoordinator(
+              bookingOrdersDao: bookingOrdersDao,
+            ),
           ),
         ),
         ChangeNotifierProvider(
           create: (ctx) => PaymentProvider(
             repo: ordersRepo,
-            localOrdersDao: localOrdersDao,
-            cachedPaymentOrdersDao: cachedPaymentOrdersDao,
             cachedPaymentMethodsDao: cachedPaymentMethodsDao,
-            cachedProcessOrdersDao: cachedProcessOrdersDao,
-            cachedDoneOrdersDao: cachedDoneOrdersDao,
             connectivity: ctx.read<ConnectivityStatusProvider>(),
+            bookingOrdersDao: bookingOrdersDao,
+            tabCoordinator: ctx.read<OrderTabCoordinator>(),
+            syncService: syncService,
           ),
         ),
         ChangeNotifierProvider(
           create: (ctx) => ProcessProvider(
             ordersRepo,
-            localOrdersDao,
-            cachedProcessOrdersDao,
-            cachedDoneOrdersDao,
-            cachedPaymentOrdersDao,
             ctx.read<ConnectivityStatusProvider>(),
+            bookingOrdersDao,
+            ctx.read<OrderTabCoordinator>(),
+            ctx.read<AuthProvider>(),
+            syncService: syncService,
           ),
         ),
         ChangeNotifierProvider(
           create: (ctx) => DoneProvider(
             ordersRepo,
-            localOrdersDao,
-            cachedDoneOrdersDao,
             ctx.read<ConnectivityStatusProvider>(),
+            bookingOrdersDao,
           ),
         ),
         ChangeNotifierProvider(
