@@ -17,10 +17,18 @@ class PurchasePayload {
     required this.partnerData,
   });
 
-  static List<PaymentOption> buildPurchasePaymentOptions(PartnerData? partnerData) {
+  /// Options in the checkout sheet. "Bayar Sekarang" means "pay now in the
+  /// payment tab", not "pay cash": the actual method (cash, QRIS, manual) is
+  /// picked in the payment sheet, which already hides cash when the store
+  /// turned it off. So it only needs *some* method to pay with
+  /// ([hasPayableMethod]), not cash specifically.
+  static List<PaymentOption> buildPurchasePaymentOptions(
+    PartnerData? partnerData, {
+    required bool hasPayableMethod,
+  }) {
     final paymentOptions = <PaymentOption>[];
 
-    if (partnerData?.isCashierActive == true) {
+    if (hasPayableMethod) {
       paymentOptions.add(
         const PaymentOption(
           kind: PayKind.cashierCash,
@@ -124,9 +132,12 @@ class PurchasePayload {
       partnerData = PartnerData.fromJson(Map<String, dynamic>.from(partnerRaw));
     }
 
-    final paymentOptions = buildPurchasePaymentOptions(partnerData);
     final allPaymentOptionsForCache =
         buildAllPaymentOptionsForCache(json, partnerData: partnerData);
+    final paymentOptions = buildPurchasePaymentOptions(
+      partnerData,
+      hasPayableMethod: allPaymentOptionsForCache.any((o) => !o.isOpenbill),
+    );
 
     return PurchasePayload(
       products: products,

@@ -287,9 +287,14 @@ class PurchaseCacheMapper {
     );
   }
 
-  static List<PaymentOption> purchasePaymentOptionsFromPartner(PartnerData? partner) {
+  /// Offline counterpart of [PurchasePayload.buildPurchasePaymentOptions]:
+  /// "Bayar Sekarang" needs any payable method, not cash specifically.
+  static List<PaymentOption> purchasePaymentOptionsFromPartner(
+    PartnerData? partner, {
+    required bool hasPayableMethod,
+  }) {
     final options = <PaymentOption>[];
-    if (partner?.isCashierActive == true) {
+    if (hasPayableMethod) {
       options.add(
         const PaymentOption(
           kind: PayKind.cashierCash,
@@ -336,11 +341,14 @@ class PurchaseCacheMapper {
     final partnerData = partnerSettings == null
         ? null
         : fromCachedPartnerSettings(partnerSettings);
-    final paymentOptions = purchasePaymentOptionsFromPartner(partnerData);
     final allPaymentOptionsForCache = payments
         .map(fromCachedPayment)
         .where((p) => p.kind != PayKind.openbill)
         .toList();
+    final paymentOptions = purchasePaymentOptionsFromPartner(
+      partnerData,
+      hasPayableMethod: allPaymentOptionsForCache.isNotEmpty,
+    );
 
     return PurchasePayload(
       products: mappedProducts,
