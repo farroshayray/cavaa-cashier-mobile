@@ -58,6 +58,10 @@ class _CashierHomePageState extends State<CashierHomePage>
   // ===== Focus/highlight order =====
   int? _focusOrderId;
   int _focusRequestKey = 0;
+
+  /// "Bayar Sekarang" checkout: local uuid of the order to open for payment.
+  String? _payNowLocalId;
+  int _payNowRequestKey = 0;
   Timer? _focusTimer;
   Timer? _paymentReloadDebounce;
   Timer? _processReloadDebounce;
@@ -1207,6 +1211,17 @@ class _CashierHomePageState extends State<CashierHomePage>
     );
   }
 
+  /// After a "Bayar Sekarang" checkout: switch to the payment tab (index 1)
+  /// and ask it to open the payment sheet for that order.
+  void _openPayNow(String localOrderId) {
+    if (!mounted) return;
+    setState(() {
+      _index = 1;
+      _payNowLocalId = localOrderId;
+      _payNowRequestKey++;
+    });
+  }
+
   int? _pickOrderId(dynamic n) {
     try {
       // ✅ kasus notif kamu (IncomingOrderNotif)
@@ -1280,10 +1295,12 @@ class _CashierHomePageState extends State<CashierHomePage>
     final content = IndexedStack(
       index: _index,
       children: [
-        const purchase_tab.PurchaseTab(),
+        purchase_tab.PurchaseTab(onPayNow: _openPayNow),
         payment_tab.PaymentTab(
           focusOrderId: _focusOrderId,
           focusRequestKey: _focusRequestKey,
+          payNowLocalId: _payNowLocalId,
+          payNowRequestKey: _payNowRequestKey,
         ),
         process_tab.ProcessTab(
           focusOrderId: _focusOrderId,

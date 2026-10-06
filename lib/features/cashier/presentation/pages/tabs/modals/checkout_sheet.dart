@@ -463,6 +463,10 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                                   'success': true,
                                   'refresh_target': refreshTarget,
                                   if (resp['offline'] == true) 'offline': true,
+                                  // Lets the purchase tab jump straight to
+                                  // payment for "Bayar Sekarang" orders.
+                                  'local_order_id': resp['local_order_id'],
+                                  'pay_now': !isOpenbill && !isXenditQris,
                                 });
                               }
                             } on StockInsufficientException catch (e) {

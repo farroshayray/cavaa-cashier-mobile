@@ -14,7 +14,11 @@ import '../../../presentation/providers/process_provider.dart';
 import '/core/services/connectivity_status_provider.dart';
 
 class PurchaseTab extends StatefulWidget {
-  const PurchaseTab({super.key});
+  const PurchaseTab({super.key, this.onPayNow});
+
+  /// Called with the order's local uuid after a "Bayar Sekarang" checkout,
+  /// so the host can jump to the payment tab and open the payment sheet.
+  final ValueChanged<String>? onPayNow;
 
   @override
   State<PurchaseTab> createState() => _PurchaseTabState();
@@ -42,12 +46,14 @@ class _PurchaseTabState extends State<PurchaseTab> {
 
   @override
   Widget build(BuildContext context) {
-    return const _PurchaseView();
+    return _PurchaseView(onPayNow: widget.onPayNow);
   }
 }
 
 class _PurchaseView extends StatelessWidget {
-  const _PurchaseView();
+  const _PurchaseView({this.onPayNow});
+
+  final ValueChanged<String>? onPayNow;
 
   @override
   Widget build(BuildContext context) {
@@ -152,11 +158,11 @@ class _PurchaseView extends StatelessWidget {
         ),
 
         // ✅ Mini cart bar (Shopee style)
-        const Positioned(
+        Positioned(
           left: 12,
           right: 12,
           bottom: 12,
-          child: _MiniCartBar(),
+          child: _MiniCartBar(onPayNow: onPayNow),
         ),
       ],
     );
@@ -164,7 +170,9 @@ class _PurchaseView extends StatelessWidget {
 }
 
 class _MiniCartBar extends StatelessWidget {
-  const _MiniCartBar();
+  const _MiniCartBar({this.onPayNow});
+
+  final ValueChanged<String>? onPayNow;
 
   @override
   Widget build(BuildContext context) {
@@ -209,7 +217,12 @@ class _MiniCartBar extends StatelessWidget {
                       value: purchaseVm,
                       child: SizedBox(
                         height: MediaQuery.of(context).size.height * 0.85,
-                        child: const CartSheet(),
+                        // Same checkout flow as the Checkout button, run from
+                        // this (still mounted) context once the cart closes.
+                        child: CartSheet(
+                          onCheckout: () =>
+                              runPurchaseCheckout(context, onPayNow: onPayNow),
+                        ),
                       ),
                     ),
                   );
@@ -298,76 +311,8 @@ class _MiniCartBar extends StatelessWidget {
                     vertical: 14,
                   ),
                 ),
-                onPressed: () async {
-                  final purchaseVm = context.read<PurchaseProvider>();
-                  final rootCtx = Navigator.of(
-                    context,
-                    rootNavigator: true,
-                  ).context;
-
-                  final result =
-                      await showModalBottomSheet<Map<String, dynamic>>(
-                        context: rootCtx,
-                        useRootNavigator: true,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => ChangeNotifierProvider.value(
-                          value: purchaseVm,
-                          child: SizedBox(
-                            height: MediaQuery.of(rootCtx).size.height * 0.92,
-                            child: CheckoutSheet(
-                              onSubmit:
-                                  ({
-                                    required customerName,
-                                    required table,
-                                    required payment,
-                                  }) async {
-                                    final resp = await context
-                                        .read<PurchaseProvider>()
-                                        .checkout(
-                                          customerName: customerName,
-                                          table: table,
-                                          paymentMethod:
-                                              payment.backendPaymentMethod,
-                                          payment: payment,
-                                        );
-
-                                    return resp;
-                                  },
-                            ),
-                          ),
-                        ),
-                      );
-
-                  if (result != null && context.mounted) {
-                    final purchaseVm = context.read<PurchaseProvider>();
-                    purchaseVm.notifyListeners();
-
-                    final refreshTarget = (result['refresh_target'] ?? '')
-                        .toString();
-                    final isSuccess = result['success'] == true;
-                    final checkoutOffline = result['offline'] == true;
-                    final isOnline = context
-                        .read<ConnectivityStatusProvider>()
-                        .isOnline;
-
-                    if (isSuccess && refreshTarget == 'payment') {
-                      await context.read<PaymentProvider>().load();
-                      if (checkoutOffline || !isOnline) {
-                        await purchaseVm.refreshPendingStockOnly();
-                      } else {
-                        await purchaseVm.load();
-                      }
-                    } else if (isSuccess && refreshTarget == 'process') {
-                      await context.read<ProcessProvider>().load();
-                      if (checkoutOffline || !isOnline) {
-                        await purchaseVm.refreshPendingStockOnly();
-                      } else {
-                        await purchaseVm.load();
-                      }
-                    }
-                  }
-                },
+                onPressed: () =>
+                    runPurchaseCheckout(context, onPayNow: onPayNow),
                 child: const Text(
                   'Checkout',
                   style: TextStyle(fontWeight: FontWeight.w900),
@@ -1053,5 +998,73 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
     return minHeight != oldDelegate.minHeight ||
         maxHeight != oldDelegate.maxHeight ||
         child != oldDelegate.child;
+  }
+}
+
+/// Opens the checkout sheet and, once the order is saved, refreshes the tabs
+/// it lands in. Shared by the Checkout button and the cart sheet.
+///
+/// Orders are always saved locally first (see [PurchaseProvider.checkout]),
+/// so the returned local uuid identifies the order online and offline. For
+/// "Bayar Sekarang" orders it's passed to [onPayNow] so the host can open the
+/// payment sheet for it.
+Future<void> runPurchaseCheckout(
+  BuildContext context, {
+  ValueChanged<String>? onPayNow,
+}) async {
+  final purchaseVm = context.read<PurchaseProvider>();
+  final rootCtx = Navigator.of(context, rootNavigator: true).context;
+
+  final result = await showModalBottomSheet<Map<String, dynamic>>(
+    context: rootCtx,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => ChangeNotifierProvider.value(
+      value: purchaseVm,
+      child: SizedBox(
+        height: MediaQuery.of(rootCtx).size.height * 0.92,
+        child: CheckoutSheet(
+          onSubmit: ({
+            required customerName,
+            required table,
+            required payment,
+          }) {
+            return purchaseVm.checkout(
+              customerName: customerName,
+              table: table,
+              paymentMethod: payment.backendPaymentMethod,
+              payment: payment,
+            );
+          },
+        ),
+      ),
+    ),
+  );
+
+  if (result == null || !context.mounted) return;
+  purchaseVm.notifyListeners();
+
+  final refreshTarget = (result['refresh_target'] ?? '').toString();
+  final isSuccess = result['success'] == true;
+  final checkoutOffline = result['offline'] == true;
+  final isOnline = context.read<ConnectivityStatusProvider>().isOnline;
+
+  Future<void> refreshCatalog() => checkoutOffline || !isOnline
+      ? purchaseVm.refreshPendingStockOnly()
+      : purchaseVm.load();
+
+  if (isSuccess && refreshTarget == 'payment') {
+    await context.read<PaymentProvider>().load();
+    final localOrderId = (result['local_order_id'] ?? '').toString().trim();
+    if (result['pay_now'] == true && localOrderId.isNotEmpty) {
+      onPayNow?.call(localOrderId);
+    }
+    if (!context.mounted) return;
+    await refreshCatalog();
+  } else if (isSuccess && refreshTarget == 'process') {
+    await context.read<ProcessProvider>().load();
+    if (!context.mounted) return;
+    await refreshCatalog();
   }
 }

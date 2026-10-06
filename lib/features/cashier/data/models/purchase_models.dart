@@ -25,7 +25,7 @@ class PurchasePayload {
         const PaymentOption(
           kind: PayKind.cashierCash,
           value: 'CASH',
-          label: 'Tunai',
+          label: 'Bayar Sekarang',
         ),
       );
     }

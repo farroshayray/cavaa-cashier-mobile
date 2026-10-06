@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/features/cashier/presentation/providers/purchase_provider.dart';
-import 'checkout_sheet.dart';
 import '/features/cashier/data/models/purchase_models.dart';
-import '/core/utils/open_url.dart';
 
 class CartSheet extends StatelessWidget {
-  const CartSheet({super.key});
+  const CartSheet({super.key, this.onCheckout});
+
+  /// Runs the shared checkout flow (opened from the purchase tab). Called
+  /// after this sheet has closed.
+  final VoidCallback? onCheckout;
 
   @override
   Widget build(BuildContext context) {
@@ -110,58 +112,13 @@ class CartSheet extends StatelessWidget {
                     onPressed: items.isEmpty || hasBlockingStockWarnings
                       ? null
                       : () async {
-                          final purchaseVm = context.read<PurchaseProvider>();
-
                           // tutup CartSheet terlebih dahulu
                           Navigator.pop(context);
 
                           // tunggu 1 frame supaya animasi pop selesai
                           await Future.delayed(const Duration(milliseconds: 150));
 
-                          // gunakan root navigator
-                          final rootCtx = Navigator.of(context, rootNavigator: true).context;
-
-                          await showModalBottomSheet(
-                            context: rootCtx,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => ChangeNotifierProvider.value(
-                              value: purchaseVm,
-                              child: SizedBox(
-                                height: MediaQuery.of(rootCtx).size.height * 0.92,
-                                child: CheckoutSheet(
-                                  onSubmit: ({required customerName, required table, required payment}) async {
-                                    final resp = await context.read<PurchaseProvider>().checkout(
-                                      customerName: customerName,
-                                      table: table,
-                                      paymentMethod: payment.backendPaymentMethod,
-                                      payment: payment,
-                                    );
-
-                                    // 2) redirect hanya kalau ONLINE QRIS (xendit)
-                                    if (payment.kind == PayKind.onlineQris) {
-                                      final redirect = resp["redirect"];
-                                      if (redirect is String && redirect.isNotEmpty) {
-                                        Navigator.of(context, rootNavigator: true).pop();
-                                        await openInAppUrl(redirect);
-                                      } else {
-                                        throw Exception("URL pembayaran QRIS tidak ditemukan");
-                                      }
-                                    } else {
-                                      // CASH atau MANUAL
-                                      Navigator.of(context, rootNavigator: true).pop();
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Checkout ${payment.label} dibuat')),
-                                      );
-                                    }
-
-                                    return resp;
-                                  },
-                                ),
-                              ),
-                            ),
-                          );
+                          onCheckout?.call();
                         },
 
                     child: Text(

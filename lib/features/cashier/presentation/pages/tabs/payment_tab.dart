@@ -21,10 +21,22 @@ import '/features/cashier/data/sync/sync_error_classifier.dart';
 import '/features/cashier/utils/cash_rounding_helpers.dart';
 
 class PaymentTab extends StatefulWidget {
-  const PaymentTab({super.key, this.focusOrderId, this.focusRequestKey = 0});
+  const PaymentTab({
+    super.key,
+    this.focusOrderId,
+    this.focusRequestKey = 0,
+    this.payNowLocalId,
+    this.payNowRequestKey = 0,
+  });
 
   final int? focusOrderId;
   final int focusRequestKey;
+
+  /// Local uuid of an order just checked out with "Bayar Sekarang": it is
+  /// highlighted and its payment sheet opened. Works for unsynced (offline)
+  /// orders too, which have no server id yet.
+  final String? payNowLocalId;
+  final int payNowRequestKey;
 
   @override
   State<PaymentTab> createState() => _PaymentTabState();
@@ -51,15 +63,24 @@ class _PaymentTabState extends State<PaymentTab> {
     return _PaymentView(
       focusOrderId: widget.focusOrderId,
       focusRequestKey: widget.focusRequestKey,
+      payNowLocalId: widget.payNowLocalId,
+      payNowRequestKey: widget.payNowRequestKey,
     );
   }
 }
 
 class _PaymentView extends StatefulWidget {
-  const _PaymentView({this.focusOrderId, this.focusRequestKey = 0});
+  const _PaymentView({
+    this.focusOrderId,
+    this.focusRequestKey = 0,
+    this.payNowLocalId,
+    this.payNowRequestKey = 0,
+  });
 
   final int? focusOrderId;
   final int focusRequestKey;
+  final String? payNowLocalId;
+  final int payNowRequestKey;
 
   @override
   State<_PaymentView> createState() => _PaymentViewState();
@@ -72,6 +93,7 @@ class _PaymentViewState extends State<_PaymentView> {
   final ScrollController _listCtrl = ScrollController();
 
   int? _blinkOrderId;
+  String? _blinkLocalId;
   Timer? _blinkTimer;
   Timer? _searchDebounce;
   int? _lastHandledFocus;
@@ -100,6 +122,15 @@ class _PaymentViewState extends State<_PaymentView> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _goToAndBlink(id);
+      });
+    }
+
+    final payNowId = widget.payNowLocalId;
+    if (widget.payNowRequestKey != oldWidget.payNowRequestKey &&
+        payNowId != null &&
+        payNowId.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_payNow(payNowId));
       });
     }
   }
@@ -204,7 +235,22 @@ class _PaymentViewState extends State<_PaymentView> {
     });
   }
 
-  Future<void> _goToAndBlink(int orderId) async {
+  Future<void> _goToAndBlink(int orderId) => _goToAndBlinkWhere(
+    (item) => _toId(item['id']) == orderId,
+    blinkOrderId: orderId,
+  );
+
+  static String _localUuidOf(Map<String, dynamic> item) =>
+      (item['local_client_uuid'] ?? item['local_id'] ?? '').toString().trim();
+
+  /// Scrolls to the first item matching [match] and highlights it, by server
+  /// id ([blinkOrderId]) or, for unsynced orders, by local uuid
+  /// ([blinkLocalId]).
+  Future<void> _goToAndBlinkWhere(
+    bool Function(Map<String, dynamic> item) match, {
+    int? blinkOrderId,
+    String? blinkLocalId,
+  }) async {
     final vm = context.read<PaymentProvider>();
 
     if (vm.items.isEmpty) {
@@ -213,9 +259,14 @@ class _PaymentViewState extends State<_PaymentView> {
 
     if (!mounted) return;
 
+    // estimateGroupedScrollOffset looks cards up by id; map the match onto a
+    // sentinel id so the same helper works for local-only orders.
+    const matchId = -1;
+    int toMatchId(Map<String, dynamic> e) => match(e) ? matchId : 0;
+
     PaymentSection? targetSection;
     for (final item in vm.items) {
-      if (_toId(item['id']) == orderId) {
+      if (match(item)) {
         targetSection = classifyPaymentSection(item);
         break;
       }
@@ -237,7 +288,7 @@ class _PaymentViewState extends State<_PaymentView> {
         grouped,
         isSectionExpanded: _isPaymentSectionExpanded,
       );
-      var idx = flatItems.indexWhere((e) => _toId(e['id']) == orderId);
+      var idx = flatItems.indexWhere(match);
 
       if (idx < 0 && _sectionFilter != null) {
         setState(() => _sectionFilter = null);
@@ -246,14 +297,14 @@ class _PaymentViewState extends State<_PaymentView> {
           grouped,
           isSectionExpanded: _isPaymentSectionExpanded,
         );
-        idx = flatItems.indexWhere((e) => _toId(e['id']) == orderId);
+        idx = flatItems.indexWhere(match);
       }
       if (idx < 0) return;
 
       final targetOffset = estimateGroupedScrollOffset(
         sections: grouped,
-        orderId: orderId,
-        toId: _toId,
+        orderId: matchId,
+        toId: toMatchId,
         isSectionExpanded: _isPaymentSectionExpanded,
       );
 
@@ -268,9 +319,17 @@ class _PaymentViewState extends State<_PaymentView> {
       });
 
       _blinkTimer?.cancel();
-      setState(() => _blinkOrderId = orderId);
+      setState(() {
+        _blinkOrderId = blinkOrderId;
+        _blinkLocalId = blinkLocalId;
+      });
       _blinkTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted) setState(() => _blinkOrderId = null);
+        if (mounted) {
+          setState(() {
+            _blinkOrderId = null;
+            _blinkLocalId = null;
+          });
+        }
       });
     }
 
@@ -281,13 +340,130 @@ class _PaymentViewState extends State<_PaymentView> {
     }
   }
 
+  /// "Bayar Sekarang" checkout: find the new order by its local uuid (present
+  /// online and offline, since checkout always saves locally first),
+  /// highlight it and open its payment sheet.
+  Future<void> _payNow(String localUuid) async {
+    final vm = context.read<PaymentProvider>();
+
+    // An active search could hide the new order.
+    if (vm.query.isNotEmpty || _searchCtrl.text.isNotEmpty) {
+      _searchDebounce?.cancel();
+      _searchCtrl.clear();
+      vm.setQuery('');
+    }
+
+    bool match(Map<String, dynamic> item) => _localUuidOf(item) == localUuid;
+
+    Map<String, dynamic>? findItem() {
+      for (final item in vm.items) {
+        if (match(item)) return item;
+      }
+      return null;
+    }
+
+    // A background sync may be reshuffling the list; retry briefly.
+    var item = findItem();
+    for (var attempt = 0; item == null && attempt < 4; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      if (!mounted) return;
+      await vm.load();
+      if (!mounted) return;
+      item = findItem();
+    }
+
+    if (item == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pesanan tersimpan. Buka dari tab Pembayaran.'),
+        ),
+      );
+      return;
+    }
+
+    final serverId = _toId(item['id']);
+    await _goToAndBlinkWhere(
+      match,
+      blinkOrderId: serverId > 0 ? serverId : null,
+      blinkLocalId: localUuid,
+    );
+
+    // Let the scroll settle before the sheet slides up.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+
+    // Use the freshest row: a sync may have given it a server id meanwhile.
+    final latest = findItem() ?? item;
+    await _openPaymentProcess(latest);
+  }
+
+  /// Opens the payment sheet for [data], then syncs and reloads the tabs.
+  /// Used by the card's process button and by "Bayar Sekarang".
+  Future<void> _openPaymentProcess(Map<String, dynamic> data) async {
+    final id = _toId(data['id']);
+    if (!CashierShiftGate.canTakePayment) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(CashierShiftGate.blockedMessage)),
+      );
+      return;
+    }
+    final syncStatus = (data['sync_status'] ?? '').toString();
+    if (syncStatus == 'PENDING_DELETE') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order ini sedang menunggu penghapusan.')),
+      );
+      return;
+    }
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.92,
+        child: PaymentProcessSheet(
+          orderId: id,
+          forceOffline: syncStatus == 'STOCK_CONFLICT',
+          loadDetail: (_) =>
+              context.read<PaymentProvider>().getOrderDetailFromListItem(data),
+          ordersRepo: context.read<PaymentProvider>().repo,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      debugPrint('payment_tab sheetClosed sync+reload');
+      try {
+        final connectivity = context.read<ConnectivityStatusProvider>();
+        if (connectivity.isOnline) {
+          await context.read<SyncService>().syncPendingOrders();
+        }
+      } catch (e) {
+        debugPrint('payment_tab sync after sheet failed: $e');
+      }
+
+      if (!mounted) return;
+
+      await context.read<OrderTabCoordinator>().reloadAllTabs(
+        payment: context.read<PaymentProvider>(),
+        process: context.read<ProcessProvider>(),
+        done: context.read<DoneProvider>(),
+      );
+    }
+  }
+
   Widget _buildPaymentCard(
     BuildContext context,
     Map<String, dynamic> data,
     int i,
   ) {
     final id = _toId(data['id']);
-    final blinking = (_blinkOrderId != null && _blinkOrderId == id);
+    final blinking =
+        (_blinkOrderId != null && _blinkOrderId == id) ||
+        (_blinkLocalId != null && _blinkLocalId == _localUuidOf(data));
     final syncStatus = (data['sync_status'] ?? '').toString();
     final canDelete =
         canDeleteUnpaidOrder(data) &&
@@ -319,61 +495,7 @@ class _PaymentViewState extends State<_PaymentView> {
             await _openPaymentOrderDetail(context, data, id);
           },
           onDelete: () => confirmDeleteUnpaidOrder(context, data),
-          onProcess: () async {
-            if (!CashierShiftGate.canTakePayment) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(CashierShiftGate.blockedMessage)),
-              );
-              return;
-            }
-            final syncStatus = (data['sync_status'] ?? '').toString();
-            if (syncStatus == 'PENDING_DELETE') {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Order ini sedang menunggu penghapusan.'),
-                ),
-              );
-              return;
-            }
-
-            final result = await showModalBottomSheet<bool>(
-              context: context,
-              useRootNavigator: true,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => SizedBox(
-                height: MediaQuery.of(context).size.height * 0.92,
-                child: PaymentProcessSheet(
-                  orderId: id,
-                  forceOffline: syncStatus == 'STOCK_CONFLICT',
-                  loadDetail: (_) => context
-                      .read<PaymentProvider>()
-                      .getOrderDetailFromListItem(data),
-                  ordersRepo: context.read<PaymentProvider>().repo,
-                ),
-              ),
-            );
-
-            if (result == true && context.mounted) {
-              debugPrint('payment_tab sheetClosed sync+reload');
-              try {
-                final connectivity = context.read<ConnectivityStatusProvider>();
-                if (connectivity.isOnline) {
-                  await context.read<SyncService>().syncPendingOrders();
-                }
-              } catch (e) {
-                debugPrint('payment_tab sync after sheet failed: $e');
-              }
-
-              if (!context.mounted) return;
-
-              await context.read<OrderTabCoordinator>().reloadAllTabs(
-                payment: context.read<PaymentProvider>(),
-                process: context.read<ProcessProvider>(),
-                done: context.read<DoneProvider>(),
-              );
-            }
-          },
+          onProcess: () => _openPaymentProcess(data),
         ),
       ),
     );
