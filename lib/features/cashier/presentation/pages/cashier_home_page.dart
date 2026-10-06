@@ -948,6 +948,9 @@ class _CashierHomePageState extends State<CashierHomePage>
         return;
       }
 
+      // Owner billing notices are not orders.
+      if (type.startsWith('billing_')) return;
+
       if (_isBootstrapping) {
         _queuedFcmTap = data;
         return;

@@ -35,6 +35,7 @@ import 'promotions_page.dart';
 import 'owner_account_page.dart';
 import 'owner_addons_page.dart';
 import 'owner_cavaa_points_page.dart';
+import 'owner_payment_revision_page.dart';
 import '../widgets/owner_mobile_carousel.dart';
 import '../widgets/dock_inset.dart';
 
@@ -72,7 +73,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   bool _selectingStore = false;
   List<Map<String, dynamic>> _carousels = [];
   StreamSubscription<Map<String, dynamic>>? _billingNotifSub;
+  StreamSubscription<Map<String, dynamic>>? _billingTapSub;
   int _pendingCashBooks = 0;
+  List<Map<String, dynamic>> _billingRevisions = [];
   String _cashBookStoreName = '';
   List<Map<String, dynamic>> _otherCashBookStores = [];
   final _menuScroll = ScrollController();
@@ -119,9 +122,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     _billingNotifSub = PushNotificationService.instance.onMessageReceived
         .listen((data) {
           final type = (data['type'] ?? '').toString();
-          if (type == 'billing_approved' || type == 'billing_rejected') {
+          if (type == 'billing_approved' ||
+              type == 'billing_rejected' ||
+              type == 'billing_revision') {
             if (!mounted) return;
+            // A rejection withdraws access, so refresh both.
             context.read<AuthProvider>().refreshOwner();
+            _loadBillingRevisions();
             return;
           }
           if (type != 'new_order') return;
@@ -131,6 +138,15 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           if (!mounted) return;
           context.read<NotificationsProvider>().pushFromFcm(data);
         });
+    // Tapping "Pembayaran perlu direvisi" opens the revision page.
+    _billingTapSub = PushNotificationService.instance.onMessageTapped.listen((
+      data,
+    ) {
+      if ((data['type'] ?? '').toString() != 'billing_revision') return;
+      if (!mounted) return;
+      context.read<AuthProvider>().refreshOwner();
+      _openBillingRevisions();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<NotificationsProvider>().loadFromStorage();
@@ -149,8 +165,31 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     }
   }
 
+  /// Rejected manual payments waiting for the owner (home notice card).
+  Future<void> _loadBillingRevisions() async {
+    if (!mounted || context.read<AuthProvider>().authRole != 'owner') return;
+    try {
+      final items = await ownerApiOf(context).billingRevisions();
+      if (!mounted) return;
+      setState(() => _billingRevisions = items);
+    } catch (_) {}
+  }
+
+  Future<void> _openBillingRevisions() => _pushSection(
+    const OwnerPaymentRevisionPage(),
+    icon: Icons.receipt_long_rounded,
+    tooltip: 'Revisi pembayaran',
+    after: () async {
+      if (!mounted) return;
+      await context.read<AuthProvider>().refreshOwner();
+      await _loadBillingRevisions();
+    },
+  );
+
   Future<void> _loadPendingCashBooks() async {
     if (!mounted || context.read<AuthProvider>().authRole != 'owner') return;
+    // Loaded alongside (same refresh points: open, resume, pull-to-refresh).
+    unawaited(_loadBillingRevisions());
     try {
       final summary = await ownerApiOf(context).cashierShiftSummary();
       final pending = summary['pending'];
@@ -173,6 +212,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _billingNotifSub?.cancel();
+    _billingTapSub?.cancel();
     _menuScroll.dispose();
     super.dispose();
   }
@@ -982,6 +1022,16 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 ),
               ),
             ),
+            if (_billingRevisions.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                sliver: SliverToBoxAdapter(
+                  child: _BillingRevisionNotice(
+                    items: _billingRevisions,
+                    onTap: _openBillingRevisions,
+                  ),
+                ),
+              ),
             if (_pendingCashBooks > 0 || _otherCashBookStores.isNotEmpty)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -1436,6 +1486,78 @@ class _CashBookNotice extends StatelessWidget {
                           ),
                         ),
                       ],
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: _brand.withValues(alpha: 0.8),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rejected manual payments: like the cash book notice, tapping opens the
+/// page where the owner revises or deletes them.
+class _BillingRevisionNotice extends StatelessWidget {
+  const _BillingRevisionNotice({required this.items, required this.onTap});
+
+  final List<Map<String, dynamic>> items;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final names = items
+        .map((e) => (e['item_name'] ?? '').toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .join(', ');
+    final note = items.first['admin_note']?.toString().trim() ?? '';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF1EE),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _brand.withValues(alpha: 0.25)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.receipt_long_rounded, color: _brand),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        items.length == 1
+                            ? 'Pembayaran perlu direvisi'
+                            : '${items.length} pembayaran perlu direvisi',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        [
+                          if (names.isNotEmpty) '$names dinonaktifkan',
+                          if (items.length == 1 && note.isNotEmpty) note,
+                        ].join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.black.withValues(alpha: 0.62),
+                        ),
+                      ),
                     ],
                   ),
                 ),

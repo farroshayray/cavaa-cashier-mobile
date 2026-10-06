@@ -17,6 +17,8 @@ class OwnerManualCheckoutPage extends StatefulWidget {
     required this.amount,
     this.period,
     this.periodLabel,
+    this.revisionId,
+    this.adminNote,
   });
 
   final String type;
@@ -25,6 +27,15 @@ class OwnerManualCheckoutPage extends StatefulWidget {
   final int amount;
   final String? period;
   final String? periodLabel;
+
+  /// Set when re-sending proof for a payment the admin rejected: the proof
+  /// goes to that payment instead of creating a new one.
+  final int? revisionId;
+
+  /// The admin's rejection note, shown above the form in revision mode.
+  final String? adminNote;
+
+  bool get isRevision => revisionId != null;
 
   @override
   State<OwnerManualCheckoutPage> createState() =>
@@ -90,18 +101,27 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
     if (path == null || bankId == null || _banks.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
-      final res = await ownerApiOf(context).submitManualPayment(
-        type: widget.type,
-        itemId: widget.itemId,
-        period: widget.period,
-        bankId: bankId,
-        proofPath: path,
-      );
+      final api = ownerApiOf(context);
+      final revisionId = widget.revisionId;
+      final res = revisionId != null
+          ? await api.resubmitBillingRevision(
+              type: widget.type,
+              id: revisionId,
+              bankId: bankId,
+              proofPath: path,
+            )
+          : await api.submitManualPayment(
+              type: widget.type,
+              itemId: widget.itemId,
+              period: widget.period,
+              bankId: bankId,
+              proofPath: path,
+            );
       if (!mounted) return;
       Navigator.pop(
         context,
         res['message']?.toString() ??
-            'Bukti terkirim. Setelah disetujui, tarik halaman untuk memperbarui akses.',
+            'Pembayaran diterima, sudah aktif. Admin akan memverifikasi bukti transfer.',
       );
     } catch (e) {
       if (!mounted) return;
@@ -154,13 +174,18 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
       appBar: AppBar(
         backgroundColor: _brand,
         foregroundColor: Colors.white,
-        title: const Text('Transfer bank'),
+        title: Text(widget.isRevision ? 'Kirim ulang bukti' : 'Transfer bank'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24).withBottomInset(context),
               children: [
+                if (widget.isRevision &&
+                    (widget.adminNote?.trim().isNotEmpty ?? false)) ...[
+                  BillingAdminNoteCard(note: widget.adminNote!.trim()),
+                  const SizedBox(height: 12),
+                ],
                 _card(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -302,7 +327,11 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
                             ),
                           ),
                           child: Text(
-                            _sending ? 'Mengirim...' : 'Kirim bukti',
+                            _sending
+                                ? 'Mengirim...'
+                                : widget.isRevision
+                                ? 'Kirim ulang bukti'
+                                : 'Kirim bukti',
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ),
@@ -325,6 +354,52 @@ class _OwnerManualCheckoutPageState extends State<OwnerManualCheckoutPage> {
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: child,
+    );
+  }
+}
+
+/// The admin's reason for rejecting a manual payment.
+class BillingAdminNoteCard extends StatelessWidget {
+  const BillingAdminNoteCard({super.key, required this.note});
+
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1EE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0x33AE1504)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.feedback_outlined, color: Color(0xFFAE1504), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Catatan admin',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF8E1103),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  note,
+                  style: const TextStyle(color: Color(0xFF8E1103), height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

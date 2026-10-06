@@ -45,7 +45,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  if (type == 'billing_approved' || type == 'billing_rejected') {
+  // Billing notices are not cashier orders; the owner app reloads them itself.
+  if (type == 'billing_approved' ||
+      type == 'billing_rejected' ||
+      type == 'billing_revision') {
     return;
   }
 

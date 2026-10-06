@@ -844,6 +844,45 @@ class OwnerApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  /// Manual payments the admin rejected, waiting for the owner to revise.
+  Future<List<Map<String, dynamic>>> billingRevisions() async {
+    final res = await client.dio.get('/api/v1/mobile/owner/billing/revisions');
+    final raw = (res.data is Map) ? (res.data as Map)['revisions'] : null;
+    return raw is List
+        ? raw
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  /// Sends new proof for a rejected payment; access is granted again.
+  Future<Map<String, dynamic>> resubmitBillingRevision({
+    required String type,
+    required int id,
+    required int bankId,
+    required String proofPath,
+  }) async {
+    final res = await client.dio.post(
+      '/api/v1/mobile/owner/billing/revisions/$type/$id/resubmit',
+      data: FormData.fromMap({
+        'bank_id': bankId,
+        'payment_proof': await MultipartFile.fromFile(
+          proofPath,
+          filename: 'bukti.jpg',
+        ),
+      }),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<void> deleteBillingRevision({
+    required String type,
+    required int id,
+  }) async {
+    await client.dio.delete('/api/v1/mobile/owner/billing/revisions/$type/$id');
+  }
+
   Future<Map<String, dynamic>> createCheckoutLink({
     required String type,
     required int itemId,

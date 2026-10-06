@@ -13,6 +13,7 @@ import '/features/auth/presentation/auth_provider.dart';
 import '/features/owner/presentation/pages/owner_home_page.dart';
 import '/features/owner/presentation/pages/owner_manual_checkout_page.dart';
 import '/features/owner/presentation/pages/owner_cavaa_points_page.dart';
+import '/features/owner/presentation/pages/owner_payment_revision_page.dart';
 import '../widgets/dock_inset.dart';
 
 const _monthShort = [
@@ -332,6 +333,11 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
   String? _error;
   List<Map<String, dynamic>> _addons = [];
   List<Map<String, dynamic>> _plans = [];
+
+  /// `plan:<id>` / `addon:<id>` with a rejected payment awaiting revision:
+  /// these get "Revisi pembayaran" instead of a buy button, so the owner
+  /// fixes that payment rather than paying twice.
+  final Set<String> _revisionKeys = {};
   Map<String, dynamic>? _currentPlan;
   List<Map<String, dynamic>> _overlapping = [];
   bool _playConfigured = false;
@@ -384,7 +390,11 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
     _billingNotifSub = PushNotificationService.instance.onMessageReceived.listen(
       (data) {
         final type = (data['type'] ?? '').toString();
-        if (type != 'billing_approved' && type != 'billing_rejected') return;
+        if (type != 'billing_approved' &&
+            type != 'billing_rejected' &&
+            type != 'billing_revision') {
+          return;
+        }
         if (mounted) _load();
       },
     );
@@ -439,6 +449,17 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       _readBilling(plansRes);
       _readPoints(res);
       _readPoints(plansRes);
+
+      // Best effort: without it the page still works (server blocks double
+      // payment anyway).
+      try {
+        final revisions = await api.billingRevisions();
+        _revisionKeys
+          ..clear()
+          ..addAll(revisions.map((r) => '${r['type']}:${r['item_id']}'));
+      } catch (e) {
+        debugPrint('billingRevisions (load) gagal: $e');
+      }
 
       final ids = {
         ..._addons.map((a) => (a['play_product_id'] ?? '').toString()),
@@ -564,6 +585,18 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
       return const _ExpiryLine('Termasuk paket');
     }
     return null;
+  }
+
+  bool _needsRevision(String kind, Map<String, dynamic> item) =>
+      _revisionKeys.contains('$kind:${item['id']}');
+
+  Future<void> _openRevisions() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const OwnerPaymentRevisionPage()),
+    );
+    if (!mounted) return;
+    await context.read<AuthProvider>().refreshOwner();
+    if (mounted) await _load();
   }
 
   bool _canPayPlan(Map<String, dynamic> plan, bool hasSku) {
@@ -1475,7 +1508,9 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                 width: double.infinity,
                 height: 44,
                 child: FilledButton(
-                  onPressed: !isCurrent && _canPayPlan(plan, hasSku) && !_busy
+                  onPressed: _needsRevision('plan', plan) && !_busy
+                      ? _openRevisions
+                      : !isCurrent && _canPayPlan(plan, hasSku) && !_busy
                       ? () {
                           final productId =
                               (plan['play_product_id'] ?? '').toString();
@@ -1501,7 +1536,9 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                     ),
                   ),
                   child: Text(
-                    _planCtaFor(plan, isCurrent: isCurrent, hasSku: hasSku),
+                    _needsRevision('plan', plan)
+                        ? 'Revisi pembayaran'
+                        : _planCtaFor(plan, isCurrent: isCurrent, hasSku: hasSku),
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
@@ -1712,6 +1749,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                         final overlap =
                             addon['overlapping_subscription'] == true;
                         final expiry = _addonExpiryLine(addon, isSub: isSub);
+                        final needsRevision = _needsRevision('addon', addon);
 
                         final card = Padding(
                           padding: const EdgeInsets.only(bottom: 14),
@@ -1729,22 +1767,28 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                             statusLabel: expiry == null ? status : '',
                             expiry: expiry,
                             overlapping: overlap,
-                            ctaLabel: _ctaLabel(
-                              covered: covered,
-                              owned: owned,
-                              isSub: isSub,
-                            ),
-                            canBuy: canBuy &&
-                                !_busy &&
-                                (_allowManual || _allowPlay),
-                            onBuy: () => _startPurchase(
-                              kind: 'addon',
-                              item: addon,
-                              hasPlaySku:
-                                  (addon['play_product_id'] ?? '')
-                                      .toString()
-                                      .isNotEmpty,
-                            ),
+                            ctaLabel: needsRevision
+                                ? 'Revisi pembayaran'
+                                : _ctaLabel(
+                                    covered: covered,
+                                    owned: owned,
+                                    isSub: isSub,
+                                  ),
+                            canBuy: needsRevision
+                                ? !_busy
+                                : canBuy &&
+                                      !_busy &&
+                                      (_allowManual || _allowPlay),
+                            onBuy: needsRevision
+                                ? _openRevisions
+                                : () => _startPurchase(
+                                    kind: 'addon',
+                                    item: addon,
+                                    hasPlaySku:
+                                        (addon['play_product_id'] ?? '')
+                                            .toString()
+                                            .isNotEmpty,
+                                  ),
                             trialLabel: _trialLabel(addon),
                             onTrial: _busy
                                 ? null
