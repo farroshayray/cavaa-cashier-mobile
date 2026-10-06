@@ -2,7 +2,6 @@ import 'dart:async';
 import '/core/config/env.dart';
 import '/core/network/dio_client.dart';
 import '/core/services/app_update_provider.dart';
-import 'package:dio/dio.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,7 +27,7 @@ import '/features/cashier/presentation/providers/done_provider.dart';
 import '/features/cashier/data/preference/printer_manager.dart';
 
 import '/core/services/push_notification_service.dart';
-import '/core/services/in_app_apk_updater.dart';
+import '/core/services/store_updater.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'tabs/purchase_tab.dart' as purchase_tab;
@@ -50,13 +49,7 @@ class CashierHomePage extends StatefulWidget {
 
 class _CashierHomePageState extends State<CashierHomePage>
     with WidgetsBindingObserver {
-  final InAppApkUpdater _apkUpdater = InAppApkUpdater();
-  final ValueNotifier<double> _updateProgressNotifier = ValueNotifier<double>(
-    0,
-  );
-
-  bool _isDownloadingUpdate = false;
-  bool _activeUpdateIsForce = false;
+  final StoreUpdater _storeUpdater = StoreUpdater();
 
   // ===== UI =====
   DateTime? _lastBackPressed;
@@ -662,25 +655,6 @@ class _CashierHomePageState extends State<CashierHomePage>
     }
   }
 
-  Future<void> _cancelApkDownload() async {
-    _apkUpdater.cancelDownload();
-
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _isDownloadingUpdate = false;
-      _activeUpdateIsForce = false;
-    });
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Download update dibatalkan')));
-  }
-
   int _toId(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
 
   Future<int?> _resolveTabIndexByOrderId(int orderId) async {
@@ -727,8 +701,6 @@ class _CashierHomePageState extends State<CashierHomePage>
 
     _fcmMessageSub?.cancel();
     _fcmTapSub?.cancel();
-
-    _updateProgressNotifier.dispose();
 
     _syncWorker?.dispose();
 
@@ -868,130 +840,18 @@ class _CashierHomePageState extends State<CashierHomePage>
     );
   }
 
-  Future<void> _showDownloadingDialog() async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Downloading Update'),
-        content: ValueListenableBuilder<double>(
-          valueListenable: _updateProgressNotifier,
-          builder: (context, progress, _) {
-            final isKnownProgress = progress >= 0 && progress <= 1;
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Sedang mengunduh APK versi terbaru...'),
-                const SizedBox(height: 16),
-                LinearProgressIndicator(
-                  value: isKnownProgress ? progress : null,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isKnownProgress
-                      ? '${(progress * 100).toStringAsFixed(0)}%'
-                      : 'Downloading...',
-                ),
-              ],
-            );
-          },
-        ),
-        actions: [
-          if (!_activeUpdateIsForce)
-            TextButton(
-              onPressed: _cancelApkDownload,
-              child: const Text('Batalkan'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _startApkUpdate(String apkUrl, {required bool force}) async {
-    if (apkUrl.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Link update tidak tersedia')),
-      );
-      return;
+  /// Update lewat link Play Store (`store_url` dari server).
+  Future<void> _openStoreUpdate(String storeUrl) async {
+    String? error;
+    if (storeUrl.trim().isEmpty) {
+      error = 'Link update tidak tersedia';
+    } else if (!await _storeUpdater.open(storeUrl)) {
+      error = 'Tidak bisa membuka Play Store';
     }
-
-    try {
-      if (mounted) {
-        setState(() {
-          _isDownloadingUpdate = true;
-          _activeUpdateIsForce = force;
-        });
-      }
-
-      _updateProgressNotifier.value = 0;
-
-      unawaited(_showDownloadingDialog());
-
-      await _apkUpdater.downloadAndInstall(
-        apkUrl: apkUrl,
-        onProgress: (received, total) {
-          if (!mounted) return;
-
-          if (total > 0) {
-            _updateProgressNotifier.value = received / total;
-          } else {
-            _updateProgressNotifier.value = -1;
-          }
-        },
-      );
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-    } on DioException catch (e) {
-      final wasCancelled = CancelToken.isCancel(e);
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-
-      if (!mounted) return;
-
-      if (!wasCancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              force
-                  ? 'Gagal mengunduh update. Silakan coba lagi.'
-                  : 'Gagal mengunduh update.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('apk update failed: $e');
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            force
-                ? 'Gagal mengunduh update. Silakan coba lagi.'
-                : 'Gagal mengunduh update.',
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isDownloadingUpdate = false;
-          _activeUpdateIsForce = false;
-        });
-      }
-    }
+    if (error == null || !mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error)));
   }
 
   Future<void> _handleManualUpdateTap() async {
@@ -1027,7 +887,7 @@ class _CashierHomePageState extends State<CashierHomePage>
     );
 
     if (confirmed == true) {
-      await _startApkUpdate(storeUrl, force: force);
+      await _openStoreUpdate(storeUrl);
     }
   }
 
@@ -1476,9 +1336,7 @@ class _CashierHomePageState extends State<CashierHomePage>
               MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
             );
           },
-          onTapUpdate: hasAppUpdate && !_isDownloadingUpdate
-              ? _handleManualUpdateTap
-              : null,
+          onTapUpdate: hasAppUpdate ? _handleManualUpdateTap : null,
           showUpdateBadge: hasAppUpdate,
           onLogout: _confirmLogout,
           onReturnToOwner: context.watch<AuthProvider>().viaOwner

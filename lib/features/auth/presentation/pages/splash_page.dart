@@ -2,8 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:dio/dio.dart';
-import 'dart:async';
 
 import '../auth_provider.dart';
 import '../../../cashier/presentation/pages/cashier_home_page.dart';
@@ -14,7 +12,7 @@ import 'owner_set_password_page.dart';
 import '/core/network/version_api.dart';
 import '/core/network/dio_client.dart';
 import '/core/services/app_update_provider.dart';
-import '/core/services/in_app_apk_updater.dart';
+import '/core/services/store_updater.dart';
 
 enum UpdateAction { later, update }
 
@@ -26,21 +24,12 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> {
-  final InAppApkUpdater _apkUpdater = InAppApkUpdater();
-  final ValueNotifier<double> _progressNotifier = ValueNotifier<double>(0);
-
-  bool _activeUpdateIsForce = false;
+  final StoreUpdater _storeUpdater = StoreUpdater();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
-  }
-
-  @override
-  void dispose() {
-    _progressNotifier.dispose();
-    super.dispose();
   }
 
   Future<void> _boot() async {
@@ -78,16 +67,17 @@ class _SplashPageState extends State<SplashPage> {
 
       if (updateAvailable && !forceUpdate) {
         final action = await _showOptionalUpdateDialog(versionData);
-        if (action == UpdateAction.update) {
-          await _startApkUpdate(storeUrl, force: false);
-          return;
-        }
+        // Optional update: open the store, then carry on into the app so
+        // coming back without updating doesn't leave the user stuck here.
+        if (action == UpdateAction.update) await _openStoreUpdate(storeUrl);
       }
 
       if (forceUpdate && updateAvailable) {
-        final action = await _showForceUpdateDialog(versionData);
-        if (action == UpdateAction.update) {
-          await _startApkUpdate(storeUrl, force: true);
+        // Required update: keep asking. The dialog is back on screen when the
+        // user returns from the store without updating.
+        while (mounted) {
+          final action = await _showForceUpdateDialog(versionData);
+          if (action == UpdateAction.update) await _openStoreUpdate(storeUrl);
         }
         return;
       }
@@ -115,147 +105,20 @@ class _SplashPageState extends State<SplashPage> {
     );
   }
 
-  Future<void> _showDownloadingDialog() async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Downloading Update'),
-        content: ValueListenableBuilder<double>(
-          valueListenable: _progressNotifier,
-          builder: (context, progress, _) {
-            final isKnownProgress = progress >= 0 && progress <= 1;
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Sedang mengunduh APK versi terbaru...'),
-                const SizedBox(height: 16),
-                LinearProgressIndicator(
-                  value: isKnownProgress ? progress : null,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isKnownProgress
-                      ? '${(progress * 100).toStringAsFixed(0)}%'
-                      : 'Downloading...',
-                ),
-              ],
-            );
-          },
-        ),
-        actions: [
-          if (!_activeUpdateIsForce)
-            TextButton(
-              onPressed: _cancelApkDownload,
-              child: const Text('Batalkan'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _cancelApkDownload() async {
-    _apkUpdater.cancelDownload();
-
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _activeUpdateIsForce = false;
-    });
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Download update dibatalkan')));
-  }
-
-  Future<void> _startApkUpdate(String apkUrl, {required bool force}) async {
-    if (apkUrl.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Link update tidak tersedia')),
-      );
+  Future<void> _openStoreUpdate(String storeUrl) async {
+    if (storeUrl.trim().isEmpty) {
+      _snack('Link update tidak tersedia');
       return;
     }
+    final opened = await _storeUpdater.open(storeUrl);
+    if (!opened) _snack('Tidak bisa membuka Play Store');
+  }
 
-    try {
-      if (mounted) {
-        setState(() {
-          _activeUpdateIsForce = force;
-        });
-      }
-
-      _progressNotifier.value = 0;
-
-      unawaited(_showDownloadingDialog());
-
-      await _apkUpdater.downloadAndInstall(
-        apkUrl: apkUrl,
-        onProgress: (received, total) {
-          if (!mounted) return;
-
-          if (total > 0) {
-            final progress = received / total;
-            _progressNotifier.value = progress;
-          } else {
-            _progressNotifier.value = -1;
-          }
-        },
-      );
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-    } on DioException catch (e) {
-      final wasCancelled = CancelToken.isCancel(e);
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-
-      if (!mounted) return;
-
-      if (!wasCancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              force
-                  ? 'Gagal mengunduh update. Silakan coba lagi.'
-                  : 'Gagal mengunduh update.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('apk update failed: $e');
-
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            force
-                ? 'Gagal mengunduh update. Silakan coba lagi.'
-                : 'Gagal mengunduh update.',
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _activeUpdateIsForce = false;
-        });
-      }
-    }
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<UpdateAction?> _showForceUpdateDialog(
