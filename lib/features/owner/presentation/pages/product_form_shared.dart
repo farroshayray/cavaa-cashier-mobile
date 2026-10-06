@@ -3,9 +3,30 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '/core/config/env.dart';
+import '/features/auth/presentation/auth_provider.dart';
+import '../../data/owner_tour_store.dart';
 import '../widgets/dock_inset.dart';
+import '../widgets/owner_tour.dart';
+
+/// Shows [steps] as a one-time tour named [tour] for the signed-in owner,
+/// once the page has settled. Skipped if the page is no longer on top (e.g.
+/// the user already moved on); it will then show the next time instead.
+Future<void> _showFormTourOnce(
+  BuildContext context,
+  String tour,
+  List<OwnerTourStep> steps,
+) async {
+  final ownerId = context.read<AuthProvider>().owner?.id ?? 0;
+  if (await OwnerTourStore.isDone(ownerId, tour: tour)) return;
+  // Let the page finish its entry transition.
+  await Future<void>.delayed(const Duration(milliseconds: 450));
+  if (!context.mounted || ModalRoute.of(context)?.isCurrent != true) return;
+  await showOwnerTour(context, steps);
+  await OwnerTourStore.markDone(ownerId, tour: tour);
+}
 
 const productBrand = Color(0xFFAE1504);
 const productCatalogAccent = Color(0xFF334155);
@@ -1284,6 +1305,9 @@ class _OptionGroupEditorPageState extends State<OptionGroupEditorPage> {
   late final TextEditingController _name;
   late final TextEditingController _provisionValue;
   late final TextEditingController _description;
+  final _tourNameKey = GlobalKey();
+  final _tourRuleKey = GlobalKey();
+  final _tourAddOptionKey = GlobalKey();
 
   @override
   void initState() {
@@ -1291,6 +1315,52 @@ class _OptionGroupEditorPageState extends State<OptionGroupEditorPage> {
     _name = TextEditingController(text: widget.group.name);
     _provisionValue = TextEditingController(text: widget.group.provisionValue);
     _description = TextEditingController(text: widget.group.description);
+    // Locked groups (from the catalog) show neither the rules nor "Tambah".
+    if (!widget.readOnly) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showFormTourOnce(context, OwnerTourStore.optionGroup, [
+          OwnerTourStep(
+            targets: [
+              OwnerTourTarget(
+                key: _tourNameKey,
+                text: 'Nama grup, mis. Level Pedas atau Topping',
+                side: OwnerTourSide.below,
+                align: OwnerTourAlign.start,
+                anchor: 0.2,
+                padding: 2,
+              ),
+            ],
+          ),
+          OwnerTourStep(
+            targets: [
+              OwnerTourTarget(
+                key: _tourRuleKey,
+                text:
+                    'Atur berapa pilihan yang boleh/wajib diambil pelanggan: '
+                    'opsional, maksimal, minimal, atau tepat',
+                side: OwnerTourSide.below,
+                padding: 4,
+              ),
+            ],
+          ),
+          OwnerTourStep(
+            primaryLabel: 'Mengerti',
+            targets: [
+              OwnerTourTarget(
+                key: _tourAddOptionKey,
+                text: 'Tambah pilihan di grup ini, mis. Pedas, Sedang',
+                shape: OwnerTourShape.pill,
+                side: OwnerTourSide.below,
+                align: OwnerTourAlign.end,
+                anchor: 0.7,
+                padding: 3,
+              ),
+            ],
+          ),
+        ]);
+      });
+    }
   }
 
   @override
@@ -1334,6 +1404,7 @@ class _OptionGroupEditorPageState extends State<OptionGroupEditorPage> {
             child: Column(
               children: [
                 TextField(
+                  key: _tourNameKey,
                   controller: _name,
                   enabled: !widget.readOnly,
                   decoration: productFieldDecoration(
@@ -1352,24 +1423,29 @@ class _OptionGroupEditorPageState extends State<OptionGroupEditorPage> {
                   ),
                 ] else ...[
                   const SizedBox(height: 14),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Aturan pilihan',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  // Title + chips, highlighted together by the tour.
+                  Column(
+                    key: _tourRuleKey,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final entry in provisionChoices.entries)
-                        _ProvisionChip(
-                          label: entry.value,
-                          selected: group.provision == entry.key,
-                          onTap: () => setState(() => group.provision = entry.key),
-                        ),
+                      const Text(
+                        'Aturan pilihan',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final entry in provisionChoices.entries)
+                            _ProvisionChip(
+                              label: entry.value,
+                              selected: group.provision == entry.key,
+                              onTap: () =>
+                                  setState(() => group.provision = entry.key),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                   if (group.provision != 'OPTIONAL') ...[
@@ -1399,6 +1475,7 @@ class _OptionGroupEditorPageState extends State<OptionGroupEditorPage> {
             trailing: widget.readOnly
                 ? null
                 : TextButton.icon(
+                    key: _tourAddOptionKey,
                     onPressed: () {
                       final option = MenuOptionItem();
                       setState(() => group.options.add(option));
@@ -1596,6 +1673,9 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
   late final TextEditingController _price;
   late final TextEditingController _quantity;
   late final TextEditingController _modalPrice;
+  final _tourNameKey = GlobalKey();
+  final _tourPriceKey = GlobalKey();
+  final _tourStockKey = GlobalKey();
 
   @override
   void initState() {
@@ -1604,6 +1684,47 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
     _price = TextEditingController(text: widget.option.price);
     _quantity = TextEditingController(text: widget.option.stockQuantity);
     _modalPrice = TextEditingController(text: widget.option.modalPrice);
+    if (!widget.readOnly) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showFormTourOnce(context, OwnerTourStore.optionItem, [
+          OwnerTourStep(
+            primaryLabel: widget.showOptionStock ? 'Selanjutnya' : 'Mengerti',
+            targets: [
+              OwnerTourTarget(
+                key: _tourNameKey,
+                text: 'Nama pilihan, mis. Extra keju',
+                side: OwnerTourSide.below,
+                align: OwnerTourAlign.start,
+                anchor: 0.2,
+                padding: 2,
+              ),
+              OwnerTourTarget(
+                key: _tourPriceKey,
+                text: 'Harga tambahan untuk pilihan ini, isi 0 jika gratis',
+                side: OwnerTourSide.below,
+                align: OwnerTourAlign.start,
+                anchor: 0.2,
+                padding: 2,
+              ),
+            ],
+          ),
+          // Only when the store tracks option stock (card hidden otherwise;
+          // the engine then skips this step).
+          OwnerTourStep(
+            primaryLabel: 'Mengerti',
+            targets: [
+              OwnerTourTarget(
+                key: _tourStockKey,
+                text: 'Atur stok khusus pilihan ini',
+                side: OwnerTourSide.above,
+                padding: 2,
+              ),
+            ],
+          ),
+        ]);
+      });
+    }
   }
 
   @override
@@ -1659,6 +1780,7 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
             child: Column(
               children: [
                 TextField(
+                  key: _tourNameKey,
                   controller: _name,
                   enabled: !widget.readOnly,
                   decoration: productFieldDecoration(label: 'Nama opsi'),
@@ -1666,6 +1788,7 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  key: _tourPriceKey,
                   controller: _price,
                   enabled: !widget.readOnly,
                   keyboardType: TextInputType.number,
@@ -1680,6 +1803,7 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
           ),
           if (widget.showOptionStock && widget.canManageStock)
             ProductFormSectionCard(
+              key: _tourStockKey,
               title: 'Stok opsi',
               child: Column(
                 children: [
@@ -1739,6 +1863,7 @@ class _OptionItemEditorPageState extends State<OptionItemEditorPage> {
             )
           else if (widget.showOptionStock)
             ProductFormSectionCard(
+              key: _tourStockKey,
               title: 'Stok opsi',
               child: Column(
                 children: [

@@ -11,6 +11,8 @@ import 'categories_page.dart';
 import 'promotions_page.dart';
 import '../widgets/owner_setup_progress.dart';
 import '../widgets/dock_inset.dart';
+import '../widgets/owner_tour.dart';
+import '../../data/owner_tour_store.dart';
 
 const _brand = productBrand;
 const _bg = Color(0xFFF6F7F9);
@@ -45,6 +47,7 @@ enum ProductHubTab { store, catalog }
 
 class _HubSegmentTab extends StatelessWidget {
   const _HubSegmentTab({
+    super.key,
     required this.label,
     required this.icon,
     required this.selected,
@@ -157,6 +160,9 @@ class _CreateProductPageState extends State<CreateProductPage> {
   final _catalogKey = GlobalKey<MasterProductsPageState>();
   final _search = TextEditingController();
   String _query = '';
+  final _tourStoreTabKey = GlobalKey();
+  final _tourCatalogTabKey = GlobalKey();
+  final _tourAddKey = GlobalKey();
 
   List<Map<String, dynamic>> get _filteredProducts {
     final selectedId = _selectedCategoryId;
@@ -192,7 +198,68 @@ class _CreateProductPageState extends State<CreateProductPage> {
   void initState() {
     super.initState();
     _hubTab = widget.initialTab;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _load();
+      await _maybeHubTour();
+    });
+  }
+
+  /// Setup step "Produk": explain the two tabs, then point at "Tambah ke
+  /// toko". Shown once per owner, only when opened from the setup flow.
+  Future<void> _maybeHubTour() async {
+    if (!widget.showSetupProgress || !mounted) return;
+    if (_hubTab != ProductHubTab.store || _error != null) return;
+    final ownerId = context.read<AuthProvider>().owner?.id ?? 0;
+    if (await OwnerTourStore.isDone(ownerId, tour: OwnerTourStore.productHub)) {
+      return;
+    }
+    // Let the page finish its entry transition.
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+
+    final result = await showOwnerTour(context, [
+      OwnerTourStep(
+        targets: [
+          OwnerTourTarget(
+            key: _tourStoreTabKey,
+            text: 'Produk yang dijual di toko ini',
+            shape: OwnerTourShape.pill,
+            side: OwnerTourSide.below,
+            align: OwnerTourAlign.start,
+            anchor: 0.3,
+            padding: 3,
+          ),
+          OwnerTourTarget(
+            key: _tourCatalogTabKey,
+            text: 'Template produk, bisa dipakai di semua tokomu',
+            shape: OwnerTourShape.pill,
+            side: OwnerTourSide.below,
+            align: OwnerTourAlign.end,
+            anchor: 0.6,
+            padding: 3,
+          ),
+        ],
+      ),
+      OwnerTourStep(
+        primaryLabel: 'Tambah ke toko',
+        secondaryLabel: 'Nanti',
+        targets: [
+          OwnerTourTarget(
+            key: _tourAddKey,
+            text: 'Mulai tambah produk pertamamu',
+            shape: OwnerTourShape.pill,
+            side: OwnerTourSide.above,
+            align: OwnerTourAlign.end,
+            anchor: 0.7,
+            padding: 4,
+          ),
+        ],
+      ),
+    ]);
+
+    await OwnerTourStore.markDone(ownerId, tour: OwnerTourStore.productHub);
+    if (!mounted || result != OwnerTourResult.finished) return;
+    if (_hubTab == ProductHubTab.store && !_loading) await _openEditor();
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -340,7 +407,12 @@ class _CreateProductPageState extends State<CreateProductPage> {
         ],
       ),
       floatingActionButton: DockAwareFab(
-        child: FloatingActionButton.extended(
+        // Tour key sits outside the FAB's Hero (so a hero flight can't
+        // duplicate it) but inside the dock padding (so only the button is
+        // highlighted).
+        child: KeyedSubtree(
+          key: _tourAddKey,
+          child: FloatingActionButton.extended(
           onPressed: _loading
               ? null
               : () => onStoreTab ? _openEditor() : _openCatalogEditor(),
@@ -348,6 +420,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
           foregroundColor: Colors.white,
           icon: const Icon(Icons.add_rounded),
           label: Text(onStoreTab ? 'Tambah ke toko' : 'Tambah katalog'),
+        ),
         ),
       ),
       body: Column(
@@ -383,6 +456,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                   child: Row(
                     children: [
                       _HubSegmentTab(
+                        key: _tourStoreTabKey,
                         label: 'Menu $storeName',
                         icon: Icons.storefront_rounded,
                         selected: onStoreTab,
@@ -391,6 +465,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
                             setState(() => _hubTab = ProductHubTab.store),
                       ),
                       _HubSegmentTab(
+                        key: _tourCatalogTabKey,
                         label: 'Katalog',
                         icon: Icons.inventory_2_rounded,
                         selected: !onStoreTab,
@@ -791,6 +866,14 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
   List<Map<String, dynamic>> _ingredients = [];
   num _lastUnitCost = 0;
 
+  final _scroll = ScrollController();
+  final _tourCatalogKey = GlobalKey();
+  final _tourCategoryKey = GlobalKey();
+  final _tourOptionsKey = GlobalKey();
+  final _tourStockKey = GlobalKey();
+  final _tourActiveKey = GlobalKey();
+  final _tourHotKey = GlobalKey();
+
   bool get _isEdit => widget.product != null;
   bool get _fromCatalog => _selectedMaster != null;
   bool get _identityLocked => _isEdit || _fromCatalog;
@@ -808,10 +891,114 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
     if (widget.canManageStock) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadIngredients());
     }
+    if (!_isEdit) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeEditorTour());
+    }
+  }
+
+  /// First time an owner opens "Tambah Produk Toko": walk through the main
+  /// parts of the form. The list is lazy, so each step scrolls its target
+  /// into view (and builds it) before it is measured.
+  Future<void> _maybeEditorTour() async {
+    if (!mounted || _isEdit) return;
+    final ownerId = context.read<AuthProvider>().owner?.id ?? 0;
+    if (await OwnerTourStore.isDone(
+      ownerId,
+      tour: OwnerTourStore.productEditor,
+    )) {
+      return;
+    }
+    // Let the page finish its entry transition.
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted || _loading || ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+
+    Future<void> show(GlobalKey key) => scrollTargetIntoView(_scroll, key);
+
+    await showOwnerTour(context, [
+      OwnerTourStep(
+        beforeShow: () => show(_tourCatalogKey),
+        targets: [
+          OwnerTourTarget(
+            key: _tourCatalogKey,
+            text: 'Pakai produk dari katalog, tak perlu isi ulang',
+            shape: OwnerTourShape.pill,
+            side: OwnerTourSide.below,
+            align: OwnerTourAlign.start,
+            anchor: 0.25,
+            padding: 3,
+          ),
+          OwnerTourTarget(
+            key: _tourCategoryKey,
+            text: 'Tambah atau ubah kategori menu',
+            shape: OwnerTourShape.pill,
+            side: OwnerTourSide.below,
+            align: OwnerTourAlign.end,
+            anchor: 0.6,
+            padding: 3,
+          ),
+        ],
+      ),
+      OwnerTourStep(
+        beforeShow: () => show(_tourOptionsKey),
+        targets: [
+          OwnerTourTarget(
+            key: _tourOptionsKey,
+            text: 'Level, topping, ukuran, beserta harga tambahan',
+            side: OwnerTourSide.above,
+            padding: 2,
+          ),
+        ],
+      ),
+      OwnerTourStep(
+        beforeShow: () => show(_tourStockKey),
+        targets: [
+          OwnerTourTarget(
+            key: _tourStockKey,
+            text: 'Atur ketersediaan: selalu ada, jumlah pcs, atau resep',
+            side: OwnerTourSide.above,
+            padding: 2,
+          ),
+        ],
+      ),
+      OwnerTourStep(
+        beforeShow: () => show(_tourActiveKey),
+        primaryLabel: 'Mengerti',
+        targets: [
+          OwnerTourTarget(
+            key: _tourActiveKey,
+            text: 'Matikan untuk menyembunyikan dari kasir',
+            side: OwnerTourSide.above,
+            align: OwnerTourAlign.start,
+            anchor: 0.2,
+            padding: 2,
+          ),
+          OwnerTourTarget(
+            key: _tourHotKey,
+            text: 'Tampil paling atas (Hot Products) di kasir',
+            side: OwnerTourSide.below,
+            align: OwnerTourAlign.start,
+            anchor: 0.2,
+            padding: 2,
+          ),
+        ],
+      ),
+    ]);
+
+    await OwnerTourStore.markDone(ownerId, tour: OwnerTourStore.productEditor);
+    if (mounted && _scroll.hasClients) {
+      await _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   @override
   void dispose() {
+    _scroll.dispose();
     _name.dispose();
     _price.dispose();
     _category.dispose();
@@ -1415,10 +1602,12 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))
           : ListView(
+              controller: _scroll,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28).withBottomInset(context),
               children: [
                 if (!_isEdit) ...[
                   OutlinedButton.icon(
+                    key: _tourCatalogKey,
                     onPressed: _saving ? null : _pickFromCatalog,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _brand,
@@ -1494,6 +1683,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                           )
                         else
                           CategorySelectWithManage(
+                            manageKey: _tourCategoryKey,
                             categories: _categories,
                             categoryId: _categoryId,
                             categoryNameController: _category,
@@ -1603,6 +1793,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                   ),
                 ),
                 ProductFormSectionCard(
+                  key: _tourOptionsKey,
                   title: 'Opsi / varian',
                   subtitle: _identityLocked
                       ? 'Struktur terkunci; stok opsi tetap bisa diubah'
@@ -1618,6 +1809,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                   ),
                 ),
                 ProductFormSectionCard(
+                  key: _tourStockKey,
                   title: 'Stok',
                   subtitle: widget.canManageStock
                       ? 'Atur ketersediaan di toko ini'
@@ -1680,6 +1872,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                   child: Column(
                     children: [
                       ProductFormSwitchTile(
+                        key: _tourActiveKey,
                         title: 'Aktif di toko ini',
                         value: _isActive,
                         icon: Icons.check_circle_outline_rounded,
@@ -1688,6 +1881,7 @@ class _StoreProductEditorPageState extends State<StoreProductEditorPage> {
                             : (v) => setState(() => _isActive = v),
                       ),
                       ProductFormSwitchTile(
+                        key: _tourHotKey,
                         title: 'Produk unggulan',
                         value: _isHot,
                         icon: Icons.local_fire_department_rounded,

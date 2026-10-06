@@ -857,6 +857,7 @@ class CategorySelectWithManage extends StatelessWidget {
     required this.onChanged,
     required this.onCategoriesUpdated,
     this.enabled = true,
+    this.manageKey,
   });
 
   final List<Map<String, dynamic>> categories;
@@ -865,6 +866,9 @@ class CategorySelectWithManage extends StatelessWidget {
   final ValueChanged<int?> onChanged;
   final ValueChanged<List<Map<String, dynamic>>> onCategoriesUpdated;
   final bool enabled;
+
+  /// Optional key on the "Kelola kategori" button (used by the product tour).
+  final GlobalKey? manageKey;
 
   Future<void> _manage(BuildContext context) async {
     final result = await openCategoryManager(context);
@@ -892,6 +896,7 @@ class CategorySelectWithManage extends StatelessWidget {
               ),
             ),
             TextButton.icon(
+              key: manageKey,
               onPressed: enabled ? () => _manage(context) : null,
               style: TextButton.styleFrom(
                 foregroundColor: _brand,

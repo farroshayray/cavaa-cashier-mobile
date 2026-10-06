@@ -218,6 +218,101 @@ void main() {
     }
   });
 
+  testWidgets('scrollTargetIntoView builds and reveals a far-off lazy item', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    final target = GlobalKey();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            controller: controller,
+            children: [
+              for (var i = 0; i < 40; i++)
+                SizedBox(
+                  key: i == 35 ? target : null,
+                  height: 120,
+                  child: Text('item $i'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Far below the first screen: not built yet.
+    expect(target.currentContext, isNull);
+
+    final done = scrollTargetIntoView(controller, target);
+    await tester.pumpAndSettle();
+    await done;
+
+    expect(target.currentContext, isNotNull);
+    final rect = tester.getRect(find.byKey(target));
+    final screen = tester.getRect(find.byType(ListView));
+    expect(rect.top, greaterThanOrEqualTo(screen.top));
+    expect(rect.bottom, lessThanOrEqualTo(screen.bottom));
+  });
+
+  testWidgets('a step behind beforeShow counts as upcoming', (tester) async {
+    final a = GlobalKey();
+    final lazy = GlobalKey();
+    var showLazy = false;
+    OwnerTourResult? result;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            body: Column(
+              children: [
+                const SizedBox(height: 120),
+                Container(key: a, width: 80, height: 40, color: Colors.red),
+                const SizedBox(height: 120),
+                if (showLazy)
+                  Container(key: lazy, width: 80, height: 40, color: Colors.blue),
+                TextButton(
+                  onPressed: () async {
+                    result = await showOwnerTour(context, [
+                      OwnerTourStep(
+                        targets: [OwnerTourTarget(key: a, text: 'Satu')],
+                      ),
+                      OwnerTourStep(
+                        // Like scrolling a lazy list: the target only
+                        // exists once this has run.
+                        beforeShow: () async => setState(() => showLazy = true),
+                        primaryLabel: 'Selesai',
+                        targets: [OwnerTourTarget(key: lazy, text: 'Dua')],
+                      ),
+                    ]);
+                  },
+                  child: const Text('mulai'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('mulai'));
+    await tester.pumpAndSettle();
+    expect(find.text('Satu'), findsOneWidget);
+
+    // Not the last step even though "Dua" isn't built yet.
+    await tester.tap(find.text('Selanjutnya'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dua'), findsOneWidget);
+    expect(result, isNull);
+
+    await tester.tap(find.text('Selesai'));
+    await tester.pumpAndSettle();
+    expect(result, OwnerTourResult.finished);
+  });
+
   testWidgets('steps advance, missing targets are skipped', (tester) async {
     final a = GlobalKey();
     final b = GlobalKey();

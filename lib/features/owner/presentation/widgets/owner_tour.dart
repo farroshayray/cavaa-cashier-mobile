@@ -62,6 +62,43 @@ class OwnerTourStep {
   final Future<void> Function()? beforeShow;
 }
 
+/// Scrolls [controller] until the widget behind [key] is on screen, for use in
+/// [OwnerTourStep.beforeShow].
+///
+/// Lazy lists (`ListView(children:)`, builders) don't build far-off children,
+/// so their key has no context yet: step down about a viewport at a time until
+/// it appears (or the end is reached), then centre it with
+/// [Scrollable.ensureVisible].
+Future<void> scrollTargetIntoView(
+  ScrollController controller,
+  GlobalKey key, {
+  double alignment = 0.45,
+}) async {
+  if (!controller.hasClients) return;
+  for (var i = 0; i < 8 && key.currentContext == null; i++) {
+    final pos = controller.position;
+    if (pos.pixels >= pos.maxScrollExtent - 1) break;
+    await controller.animateTo(
+      (pos.pixels + pos.viewportDimension * 0.7).clamp(
+        pos.minScrollExtent,
+        pos.maxScrollExtent,
+      ),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+    // Let the newly revealed children build.
+    await WidgetsBinding.instance.endOfFrame;
+  }
+  final ctx = key.currentContext;
+  if (ctx == null || !ctx.mounted) return;
+  await Scrollable.ensureVisible(
+    ctx,
+    alignment: alignment,
+    duration: const Duration(milliseconds: 320),
+    curve: Curves.easeOutCubic,
+  );
+}
+
 /// Shows a spotlight tour over the whole screen. Each step highlights one or
 /// more widgets (by [GlobalKey]) and points a line from each to a short
 /// caption. Steps whose targets aren't on screen are skipped.
@@ -520,10 +557,16 @@ class _OwnerTourState extends State<_OwnerTour>
     ];
   }
 
-  /// Indexes of steps with at least one target on screen.
+  /// Indexes of steps that will (probably) show: a target is on screen, or
+  /// the step has a [OwnerTourStep.beforeShow] that may bring it on screen
+  /// (e.g. scrolling a lazy list so the target gets built). Steps that turn
+  /// out empty are still skipped by [_goTo].
   List<int> get _available => [
     for (var i = 0; i < widget.steps.length; i++)
-      if (widget.steps[i].targets.any((t) => t.key.currentContext != null)) i,
+      if (i == _index ||
+          widget.steps[i].beforeShow != null ||
+          widget.steps[i].targets.any((t) => t.key.currentContext != null))
+        i,
   ];
 
   bool get _isLast => !_available.any((i) => i > _index);
