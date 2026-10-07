@@ -35,12 +35,12 @@ class AuthApi {
 
       return LoginResponse.fromJson(Map<String, dynamic>.from(data));
     } on DioException catch (e) {
-      debugPrint('LOGIN API DIO ERROR: $e');
-      debugPrint('LOGIN API DIO STATUS: ${e.response?.statusCode}');
-      debugPrint('LOGIN API DIO DATA: ${e.response?.data}');
+      // debugPrint('LOGIN API DIO ERROR: $e');
+      // debugPrint('LOGIN API DIO STATUS: ${e.response?.statusCode}');
+      // debugPrint('LOGIN API DIO DATA: ${e.response?.data}');
       rethrow;
     } catch (e) {
-      debugPrint('LOGIN API ERROR: $e');
+      // debugPrint('LOGIN API ERROR: $e');
       rethrow;
     }
   }

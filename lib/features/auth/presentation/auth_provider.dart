@@ -56,7 +56,7 @@ class AuthProvider extends ChangeNotifier {
       } on DioException catch (e) {
         await _handleBootstrapAuthError(e, isOwnerFlow: true);
       } catch (e) {
-        debugPrint('bootstrap owner fetchMe failed: $e');
+        // debugPrint('bootstrap owner fetchMe failed: $e');
         notifyListeners();
       }
       return;
@@ -74,9 +74,9 @@ class AuthProvider extends ChangeNotifier {
     } on DioException catch (e) {
       await _handleBootstrapAuthError(e, isOwnerFlow: false);
     } catch (e) {
-      debugPrint(
-        'bootstrap fetchMe failed, keep logged in with cached token: $e',
-      );
+      // debugPrint(
+      //   'bootstrap fetchMe failed, keep logged in with cached token: $e',
+      // );
       notifyListeners();
     }
   }
@@ -85,7 +85,7 @@ class AuthProvider extends ChangeNotifier {
     DioException e, {
     required bool isOwnerFlow,
   }) async {
-    debugPrint('bootstrap fetchMe dio failed: $e');
+    // debugPrint('bootstrap fetchMe dio failed: $e');
 
     final data = e.response?.data;
     final shouldLogoutWithMessage =
@@ -143,8 +143,8 @@ class AuthProvider extends ChangeNotifier {
 
       return true;
     } on DioException catch (e) {
-      debugPrint('LOGIN DIO ERROR: $e');
-      debugPrint('LOGIN DIO RESPONSE: ${e.response?.data}');
+      // debugPrint('LOGIN DIO ERROR: $e');
+      // debugPrint('LOGIN DIO RESPONSE: ${e.response?.data}');
 
       final data = e.response?.data;
       if (data is Map && data['message'] != null) {
@@ -162,7 +162,7 @@ class AuthProvider extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      debugPrint('LOGIN ERROR: $e');
+      // debugPrint('LOGIN ERROR: $e');
       errorMessage = 'Login gagal';
       return false;
     } finally {
@@ -412,7 +412,7 @@ class AuthProvider extends ChangeNotifier {
       await repo.saveCachedUser(me.user);
       notifyListeners();
     } catch (e) {
-      debugPrint('fetchMe error: $e');
+      // debugPrint('fetchMe error: $e');
       rethrow;
     }
   }
@@ -423,7 +423,7 @@ class AuthProvider extends ChangeNotifier {
       isLoggedIn = true;
       notifyListeners();
     } catch (e) {
-      debugPrint('fetchOwnerMe error: $e');
+      // debugPrint('fetchOwnerMe error: $e');
       rethrow;
     }
   }

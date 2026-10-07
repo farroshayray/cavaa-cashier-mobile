@@ -173,7 +173,7 @@ class ProcessProvider extends ChangeNotifier {
     try {
       await _prefetchProcessDetails(snapshot);
     } catch (e) {
-      debugPrint('ProcessProvider prefetch process details failed: $e');
+      // debugPrint('ProcessProvider prefetch process details failed: $e');
     }
   }
 
@@ -203,7 +203,7 @@ class ProcessProvider extends ChangeNotifier {
         final detail = await repo.fetchOrderDetail(serverId);
         await bookingOrdersDao.upsertFromServer(detail);
       } catch (e) {
-        debugPrint('ProcessProvider prefetch detail failed for $serverId: $e');
+        // debugPrint('ProcessProvider prefetch detail failed for $serverId: $e');
       }
     }
   }
@@ -1195,7 +1195,7 @@ class ProcessProvider extends ChangeNotifier {
       await bookingOrdersDao.upsertFromServer(fresh);
       detail = fresh;
     } catch (e) {
-      debugPrint('ProcessProvider serve mirror fetch failed for $serverId: $e');
+      // debugPrint('ProcessProvider serve mirror fetch failed for $serverId: $e');
       final cached = await _getMirrorDetailMap(serverId);
       if (cached != null) {
         detail = cached;

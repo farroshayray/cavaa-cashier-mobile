@@ -211,7 +211,7 @@ class PaymentProvider extends ChangeNotifier {
         await bookingOrdersDao.upsertFromServer(detail);
         changed = true;
       } catch (e) {
-        debugPrint('PaymentProvider openbill reconcile failed for $serverId: $e');
+        // debugPrint('PaymentProvider openbill reconcile failed for $serverId: $e');
       }
     }
 
@@ -323,11 +323,11 @@ class PaymentProvider extends ChangeNotifier {
       if (isOpenBillOrder(snapshot)) 'openbill_flag': true,
     };
 
-    debugPrint(
-      'afterPaymentSuccess resolved_status=$nextStatus '
-      'openbill=${isOpenBillOrder(snapshot)} serverId=$serverId '
-      'reloadTabs=$reloadTabs backgroundSync=$backgroundSync',
-    );
+    // debugPrint(
+    //   'afterPaymentSuccess resolved_status=$nextStatus '
+    //   'openbill=${isOpenBillOrder(snapshot)} serverId=$serverId '
+    //   'reloadTabs=$reloadTabs backgroundSync=$backgroundSync',
+    // );
 
     final clientUuid = (snapshot['local_client_uuid'] ??
             snapshot['local_id'] ??
@@ -349,9 +349,9 @@ class PaymentProvider extends ChangeNotifier {
       }
 
       if (serverId <= 0) {
-        debugPrint(
-          'afterPaymentSuccess skipped transition: no serverId or clientUuid',
-        );
+        // debugPrint(
+        //   'afterPaymentSuccess skipped transition: no serverId or clientUuid',
+        // );
         return;
       }
 

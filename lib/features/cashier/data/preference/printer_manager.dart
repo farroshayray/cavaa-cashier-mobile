@@ -202,7 +202,7 @@ class PrinterManager extends ChangeNotifier {
       connectedPrinter = p;
       notifyListeners();
     } catch (e) {
-      debugPrint('❌ PRINTER CONNECT ERROR: $e');
+      // debugPrint('❌ PRINTER CONNECT ERROR: $e');
       connState = PrinterConnState.error;
       connMessage = e.toString();
       connectedPrinter = null;

@@ -128,9 +128,9 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
 
       groupedTables.putIfAbsent(groupName, () => []).add(table);
     }
-    debugPrint(
-      'Datadebug: ${availableTables.map((t) => '${t.id}-${t.tableNo}-${t.tableClass}').toList()}'
-    );
+    // debugPrint(
+    //   'Datadebug: ${availableTables.map((t) => '${t.id}-${t.tableNo}-${t.tableClass}').toList()}'
+    // );
 
     final payOptions = vm.paymentOptions;
 

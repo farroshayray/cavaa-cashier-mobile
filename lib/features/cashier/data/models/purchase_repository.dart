@@ -49,7 +49,7 @@ class PurchaseRepository {
           return _saveMasterJson(Map<String, dynamic>.from(master));
         }
       } catch (e) {
-        debugPrint('fetchPurchaseData via /sync master failed: $e');
+        // debugPrint('fetchPurchaseData via /sync master failed: $e');
       }
     }
 
@@ -57,7 +57,7 @@ class PurchaseRepository {
       final json = await api.getProducts();
       return _saveMasterJson(json);
     } catch (e) {
-      debugPrint('fetchPurchaseData online failed: $e');
+      // debugPrint('fetchPurchaseData online failed: $e');
 
       final cached = await _masterCache.loadFromLocalCache();
       if (cached != null) {

@@ -33,7 +33,7 @@ class SoundService {
       await _player.stop();
       await _player.play(AssetSource('sounds/notify.mp3'));
     } catch (e) {
-      debugPrint('Sound error: $e');
+      // debugPrint('Sound error: $e');
     }
   }
 }

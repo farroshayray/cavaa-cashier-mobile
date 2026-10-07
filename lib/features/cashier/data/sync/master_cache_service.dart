@@ -46,9 +46,9 @@ class MasterCacheService {
       );
     }
 
-    debugPrint(
-      'MasterCacheService saved: products=${productRows.length} tables=${tableRows.length}',
-    );
+    // debugPrint(
+    //   'MasterCacheService saved: products=${productRows.length} tables=${tableRows.length}',
+    // );
 
     await ManualPaymentImageCache.prefetchPaymentOptions(
       db: db,
@@ -102,10 +102,10 @@ class MasterCacheService {
       );
     }
 
-    debugPrint(
-      'MasterCacheService merged: products=${productRows.length} '
-      'categories=${categoryRows.length}',
-    );
+    // debugPrint(
+    //   'MasterCacheService merged: products=${productRows.length} '
+    //   'categories=${categoryRows.length}',
+    // );
 
     if (payload.allPaymentOptionsForCache.isNotEmpty) {
       await ManualPaymentImageCache.prefetchPaymentOptions(

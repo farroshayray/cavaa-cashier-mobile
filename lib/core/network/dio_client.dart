@@ -111,7 +111,7 @@ class DioClient {
             message: e.message,
           );
 
-          debugPrint('❌ DIO ERROR path=$path status=$statusCode');
+          // debugPrint('❌ DIO ERROR path=$path status=$statusCode');
 
           if (_isServerDownError(e)) {
             connectivity?.markServerDown(
@@ -179,7 +179,7 @@ class DioClient {
               }
             } catch (err, st) {
               debugPrint('❌ 401 handler failed: $err');
-              debugPrint('$st');
+              // debugPrint('$st');
             } finally {
               _isHandlingUnauthorized = false;
             }
@@ -200,9 +200,9 @@ class DioClient {
     _versionName = info.version;
     _appInfoLoaded = true;
 
-    debugPrint(
-      'App info loaded: platform=$_platform, versionCode=$_versionCode, versionName=$_versionName',
-    );
+    // debugPrint(
+    //   'App info loaded: platform=$_platform, versionCode=$_versionCode, versionName=$_versionName',
+    // );
   }
 
   void setAppInfo({
@@ -215,9 +215,9 @@ class DioClient {
     _versionName = versionName;
     _appInfoLoaded = true;
 
-    debugPrint(
-      'App info set manually: platform=$_platform, versionCode=$_versionCode, versionName=$_versionName',
-    );
+    // debugPrint(
+    //   'App info set manually: platform=$_platform, versionCode=$_versionCode, versionName=$_versionName',
+    // );
   }
 
   String? get platform => _platform;
@@ -254,7 +254,7 @@ class DioClient {
         provider.setUpdate(Map<String, dynamic>.from(data));
       }
     } catch (e) {
-      debugPrint('Failed to parse X-App-Update header: $e');
+      // debugPrint('Failed to parse X-App-Update header: $e');
     }
   }
 

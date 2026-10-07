@@ -152,7 +152,7 @@ class PurchaseProvider extends ChangeNotifier {
     try {
       _pendingStockLines = await bookingOrdersDao.getPendingStockLines();
     } catch (e) {
-      debugPrint('Failed to load local pending stock usage: $e');
+      // debugPrint('Failed to load local pending stock usage: $e');
       _pendingStockLines = [];
     }
   }
@@ -203,7 +203,7 @@ class PurchaseProvider extends ChangeNotifier {
       );
       notifyListeners();
     } catch (e) {
-      debugPrint('PurchaseProvider.refreshSilently failed: $e');
+      // debugPrint('PurchaseProvider.refreshSilently failed: $e');
     }
   }
 
@@ -335,7 +335,7 @@ class PurchaseProvider extends ChangeNotifier {
       try {
         await syncService!.syncPendingOrders();
       } catch (e) {
-        debugPrint('checkout post-sync failed: $e');
+        // debugPrint('checkout post-sync failed: $e');
       }
     }
 

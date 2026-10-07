@@ -458,7 +458,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
           ..clear()
           ..addAll(revisions.map((r) => '${r['type']}:${r['item_id']}'));
       } catch (e) {
-        debugPrint('billingRevisions (load) gagal: $e');
+        // debugPrint('billingRevisions (load) gagal: $e');
       }
 
       final ids = {
@@ -484,7 +484,7 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
                     .where(ids.contains),
               );
           } catch (e) {
-            debugPrint('queryPastPurchases (load) gagal: $e');
+            // debugPrint('queryPastPurchases (load) gagal: $e');
           }
         }
       }
@@ -1162,13 +1162,13 @@ class _OwnerAddonsPageState extends State<OwnerAddonsPage> {
         return;
       }
     } catch (e) {
-      debugPrint('queryPastPurchases gagal: $e');
+      // debugPrint('queryPastPurchases gagal: $e');
     }
     try {
       await _iap.restorePurchases();
       return;
     } catch (e) {
-      debugPrint('restorePurchases gagal: $e');
+      // debugPrint('restorePurchases gagal: $e');
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

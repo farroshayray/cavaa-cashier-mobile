@@ -82,7 +82,7 @@ class _SplashPageState extends State<SplashPage> {
         return;
       }
     } catch (e) {
-      debugPrint('version check failed: $e');
+      // debugPrint('version check failed: $e');
     }
 
     await auth.bootstrap();

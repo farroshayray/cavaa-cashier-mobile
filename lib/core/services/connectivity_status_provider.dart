@@ -43,7 +43,7 @@ class ConnectivityStatusProvider extends ChangeNotifier {
         unawaited(_updateFromResults(results));
       });
     } catch (e) {
-      debugPrint('Connectivity init error: $e');
+      // debugPrint('Connectivity init error: $e');
       _setStatus(
         hasNetwork: true,
         isServerReachable: true,
@@ -75,9 +75,9 @@ class ConnectivityStatusProvider extends ChangeNotifier {
   void markServerDown({String? reason}) {
     if (!_hasNetwork || !_isServerReachable) return;
 
-    debugPrint(
-      'Server marked unreachable${reason == null ? '' : ': $reason'}',
-    );
+    // debugPrint(
+    //   'Server marked unreachable${reason == null ? '' : ': $reason'}',
+    // );
     _setStatus(
       hasNetwork: _hasNetwork,
       isServerReachable: false,
@@ -107,7 +107,7 @@ class ConnectivityStatusProvider extends ChangeNotifier {
       );
       return reachable;
     } catch (e) {
-      debugPrint('Server health check failed: $e');
+      // debugPrint('Server health check failed: $e');
       _setStatus(
         hasNetwork: true,
         isServerReachable: false,
@@ -163,7 +163,7 @@ class ConnectivityStatusProvider extends ChangeNotifier {
         try {
           await onInitialOnline?.call();
         } catch (e) {
-          debugPrint('Connectivity onInitialOnline error: $e');
+          // debugPrint('Connectivity onInitialOnline error: $e');
         }
       });
       return;
@@ -174,7 +174,7 @@ class ConnectivityStatusProvider extends ChangeNotifier {
         try {
           await onBackOnline?.call();
         } catch (e) {
-          debugPrint('Connectivity onBackOnline error: $e');
+          // debugPrint('Connectivity onBackOnline error: $e');
         }
       });
     }

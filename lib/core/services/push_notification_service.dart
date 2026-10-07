@@ -396,7 +396,7 @@ class PushNotificationService {
       await _messaging.getToken();
       // debugPrint('✅ FCM TOKEN ASLI: $token');
     } catch (e) {
-      debugPrint('FCM getToken skipped: $e');
+      // debugPrint('FCM getToken skipped: $e');
     }
   }
 
@@ -411,7 +411,7 @@ class PushNotificationService {
     try {
       return await _messaging.getToken();
     } catch (e) {
-      debugPrint('FCM getToken failed: $e');
+      // debugPrint('FCM getToken failed: $e');
       return null;
     }
   }
@@ -450,9 +450,9 @@ class PushNotificationService {
         },
       );
 
-      debugPrint('✅ Sync token success: ${response.data}');
+      // debugPrint('✅ Sync token success: ${response.data}');
     } catch (e) {
-      debugPrint('❌ Failed sync FCM token: $e');
+      // debugPrint('❌ Failed sync FCM token: $e');
     }
   }
 }

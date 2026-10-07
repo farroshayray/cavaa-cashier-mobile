@@ -183,7 +183,7 @@ class _PaymentViewState extends State<_PaymentView> {
         try {
           await context.read<PaymentProvider>().load();
         } catch (e) {
-          debugPrint('❌ payment reload after reconnect failed: $e');
+          // debugPrint('❌ payment reload after reconnect failed: $e');
         }
       });
     }
@@ -435,14 +435,14 @@ class _PaymentViewState extends State<_PaymentView> {
     );
 
     if (result == true && mounted) {
-      debugPrint('payment_tab sheetClosed sync+reload');
+      // debugPrint('payment_tab sheetClosed sync+reload');
       try {
         final connectivity = context.read<ConnectivityStatusProvider>();
         if (connectivity.isOnline) {
           await context.read<SyncService>().syncPendingOrders();
         }
       } catch (e) {
-        debugPrint('payment_tab sync after sheet failed: $e');
+        // debugPrint('payment_tab sync after sheet failed: $e');
       }
 
       if (!mounted) return;
