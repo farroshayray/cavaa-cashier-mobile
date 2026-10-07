@@ -507,6 +507,9 @@ class OwnerApi {
     String? additionalInfo,
     String? imagePath,
     bool isActive = true,
+    String feeType = 'none',
+    double feeValue = 0,
+    int? settlementManualPaymentId,
   }) async {
     final form = FormData.fromMap({
       'payment_type': paymentType,
@@ -517,6 +520,10 @@ class OwnerApi {
       if (additionalInfo != null && additionalInfo.isNotEmpty)
         'additional_info': additionalInfo,
       'is_active': isActive ? 1 : 0,
+      // Biaya transaksi (ditanggung merchant) & rekening penerima QRIS.
+      'fee_type': feeType,
+      'fee_value': feeType == 'none' ? 0 : feeValue,
+      'settlement_manual_payment_id': settlementManualPaymentId?.toString() ?? '',
       if (imagePath != null && imagePath.isNotEmpty)
         'images': await MultipartFile.fromFile(
           imagePath,
@@ -541,6 +548,9 @@ class OwnerApi {
     String? imagePath,
     bool isActive = true,
     bool removeQris = false,
+    String feeType = 'none',
+    double feeValue = 0,
+    int? settlementManualPaymentId,
   }) async {
     final form = FormData.fromMap({
       'payment_type': paymentType,
@@ -551,6 +561,10 @@ class OwnerApi {
       if (additionalInfo != null && additionalInfo.isNotEmpty)
         'additional_info': additionalInfo,
       'is_active': isActive ? 1 : 0,
+      // Biaya transaksi (ditanggung merchant) & rekening penerima QRIS.
+      'fee_type': feeType,
+      'fee_value': feeType == 'none' ? 0 : feeValue,
+      'settlement_manual_payment_id': settlementManualPaymentId?.toString() ?? '',
       'remove_qris': removeQris ? 1 : 0,
       if (imagePath != null && imagePath.isNotEmpty)
         'images': await MultipartFile.fromFile(

@@ -3,11 +3,14 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '/core/config/env.dart';
 import '/features/auth/presentation/auth_provider.dart';
+import '/features/cashier/presentation/pages/opening_cash_dialog.dart'
+    show RupiahAmountFormatter;
 import 'owner_home_page.dart';
 import '../widgets/owner_setup_progress.dart';
 import '../widgets/dock_inset.dart';
@@ -109,6 +112,13 @@ class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
       builder: (_) => _PaymentEditorSheet(
         method: method,
         prefillType: prefillType,
+        // Rekening penerima QRIS: metode transfer / e-wallet milik owner.
+        settlementOptions: _methods
+            .where((m) =>
+                (m['payment_type'] == 'manual_tf' ||
+                    m['payment_type'] == 'manual_ewallet') &&
+                '${m['id']}' != '${method?['id']}')
+            .toList(),
       ),
     );
     if (changed == true && mounted) {
@@ -648,6 +658,37 @@ class _PaymentMethodCard extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if ((method['settlement_label']?.toString().isNotEmpty ??
+                          false)) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Masuk ke ${method['settlement_label']}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ],
+                      if ((method['fee_label']?.toString().isNotEmpty ??
+                          false)) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _brand.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'Biaya ${method['fee_label']}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: _brand,
+                            ),
+                          ),
+                        ),
+                      ],
                       if (type == 'manual_qris' && qrisUrl != null) ...[
                         const SizedBox(height: 10),
                         ClipRRect(
@@ -750,10 +791,15 @@ String? _resolveQrisUrl(Map<String, dynamic> method) {
 }
 
 class _PaymentEditorSheet extends StatefulWidget {
-  const _PaymentEditorSheet({this.method, this.prefillType});
+  const _PaymentEditorSheet({
+    this.method,
+    this.prefillType,
+    this.settlementOptions = const [],
+  });
 
   final Map<String, dynamic>? method;
   final String? prefillType;
+  final List<Map<String, dynamic>> settlementOptions;
 
   @override
   State<_PaymentEditorSheet> createState() => _PaymentEditorSheetState();
@@ -764,7 +810,10 @@ class _PaymentEditorSheetState extends State<_PaymentEditorSheet> {
   late final TextEditingController _accountName;
   late final TextEditingController _accountNo;
   late final TextEditingController _additionalInfo;
+  late final TextEditingController _feeValue;
   late String _type;
+  String _feeType = 'none';
+  int? _settlementId;
   late bool _isActive;
   String? _existingQrisUrl;
   String? _pickedImagePath;
@@ -799,6 +848,44 @@ class _PaymentEditorSheetState extends State<_PaymentEditorSheet> {
         ? true
         : (m['is_active'] == true || m['is_active'] == 1);
     _existingQrisUrl = m == null ? null : _resolveQrisUrl(m);
+
+    final feeType = m?['fee_type']?.toString();
+    _feeType = (feeType == 'fixed' || feeType == 'percent') ? feeType! : 'none';
+    final feeValue = double.tryParse('${m?['fee_value'] ?? 0}') ?? 0;
+    _feeValue = TextEditingController(
+      text: _feeType == 'none'
+          ? ''
+          : _feeType == 'fixed'
+              ? const RupiahAmountFormatter()
+                  .formatEditUpdate(
+                    TextEditingValue.empty,
+                    TextEditingValue(text: feeValue.round().toString()),
+                  )
+                  .text
+              : _formatPercent(feeValue),
+    );
+    final settlement = int.tryParse('${m?['settlement_manual_payment_id'] ?? ''}');
+    _settlementId = widget.settlementOptions
+            .any((o) => int.tryParse('${o['id']}') == settlement)
+        ? settlement
+        : null;
+  }
+
+  static String _formatPercent(double v) {
+    final s = v.toStringAsFixed(4);
+    return s.contains('.')
+        ? s.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '')
+        : s;
+  }
+
+  /// Nilai biaya: rupiah (titik ribuan diabaikan) atau persen (koma/titik desimal).
+  double? _parsedFee() {
+    final raw = _feeValue.text.trim();
+    if (raw.isEmpty) return null;
+    if (_feeType == 'fixed') {
+      return double.tryParse(raw.replaceAll('.', '').replaceAll(',', ''));
+    }
+    return double.tryParse(raw.replaceAll(',', '.'));
   }
 
   @override
@@ -807,6 +894,7 @@ class _PaymentEditorSheetState extends State<_PaymentEditorSheet> {
     _accountName.dispose();
     _accountNo.dispose();
     _additionalInfo.dispose();
+    _feeValue.dispose();
     super.dispose();
   }
 
@@ -842,6 +930,17 @@ class _PaymentEditorSheetState extends State<_PaymentEditorSheet> {
       }
     }
 
+    final fee = _feeType == 'none' ? 0.0 : _parsedFee();
+    if (fee == null || fee < 0) {
+      setState(() => _error = 'Nilai biaya transaksi wajib diisi');
+      return;
+    }
+    if (_feeType == 'percent' && fee > 100) {
+      setState(() => _error = 'Persentase biaya maksimal 100%');
+      return;
+    }
+    final settlementId = _type == 'manual_qris' ? _settlementId : null;
+
     setState(() {
       _saving = true;
       _error = null;
@@ -864,6 +963,9 @@ class _PaymentEditorSheetState extends State<_PaymentEditorSheet> {
           imagePath: _pickedImagePath,
           isActive: _isActive,
           removeQris: _removeQris,
+          feeType: _feeType,
+          feeValue: fee,
+          settlementManualPaymentId: settlementId,
         );
       } else {
         await api.createPaymentMethod(
@@ -877,6 +979,9 @@ class _PaymentEditorSheetState extends State<_PaymentEditorSheet> {
               : _additionalInfo.text.trim(),
           imagePath: _pickedImagePath,
           isActive: _isActive,
+          feeType: _feeType,
+          feeValue: fee,
+          settlementManualPaymentId: settlementId,
         );
       }
       if (!mounted) return;
@@ -1063,6 +1168,110 @@ class _PaymentEditorSheetState extends State<_PaymentEditorSheet> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
+                      ),
+                    ),
+                    if (_type == 'manual_qris') ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int?>(
+                        initialValue: _settlementId,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Rekening penerima QRIS',
+                          helperText: widget.settlementOptions.isEmpty
+                              ? 'Tambahkan metode transfer bank / e-wallet dulu'
+                              : 'Rekening tempat dana QRIS ini masuk',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Tidak ditautkan'),
+                          ),
+                          for (final o in widget.settlementOptions)
+                            DropdownMenuItem<int?>(
+                              value: int.tryParse('${o['id']}'),
+                              child: Text(
+                                '${o['payment_type'] == 'manual_ewallet' ? 'E-Wallet' : 'Bank'} · '
+                                '${o['provider_name'] ?? ''}'
+                                '${(o['provider_account_no'] ?? '').toString().isNotEmpty ? ' · ${o['provider_account_no']}' : ''}',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: _saving
+                            ? null
+                            : (v) => setState(() => _settlementId = v),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Biaya transaksi',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final opt in const [
+                          ['none', 'Tanpa biaya'],
+                          ['fixed', 'Nominal (Rp)'],
+                          ['percent', 'Persen (%)'],
+                        ])
+                          ChoiceChip(
+                            label: Text(opt[1]),
+                            selected: _feeType == opt[0],
+                            selectedColor: _brand.withValues(alpha: 0.12),
+                            labelStyle: TextStyle(
+                              color: _feeType == opt[0] ? _brand : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            onSelected: _saving
+                                ? null
+                                : (_) => setState(() {
+                                      if (_feeType != opt[0]) _feeValue.clear();
+                                      _feeType = opt[0];
+                                    }),
+                          ),
+                      ],
+                    ),
+                    if (_feeType != 'none') ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _feeValue,
+                        keyboardType: TextInputType.numberWithOptions(
+                          decimal: _feeType == 'percent',
+                        ),
+                        inputFormatters: _feeType == 'fixed'
+                            ? const [RupiahAmountFormatter()]
+                            : [
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'^\d{0,3}([.,]\d{0,4})?'),
+                                ),
+                              ],
+                        decoration: InputDecoration(
+                          labelText: _feeType == 'fixed'
+                              ? 'Biaya per transaksi'
+                              : 'Persentase per transaksi',
+                          prefixText: _feeType == 'fixed' ? 'Rp ' : null,
+                          suffixText: _feeType == 'percent' ? '%' : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Text(
+                      'Ditanggung merchant: pelanggan bayar sesuai tagihan, '
+                      'biaya mengurangi pendapatan bersih.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withValues(alpha: 0.5),
                       ),
                     ),
                     const SizedBox(height: 8),
